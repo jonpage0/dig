@@ -195,7 +195,7 @@ test('dig cards and the open dig total provider costs per unit, count incomplete
   assert.equal(panelOf(ui).textContent, 'RetrievalsEvery provider call saved with this dig, from its reports and the conversations that worked on it.No provider call has been saved with this dig yet.', 'No calls make no cost claim');
 });
 
-test('the conversation total covers its digs and its own unclaimed calls, never other threads, and keeps focus through a live update', async () => {
+test('the conversation figures cover its digs and its own unclaimed calls, name but never count other threads, and keep focus through a live update', async () => {
   const other = item('B', { session: 'thread-2', calls: [priced('other-dig', usd(4))] });
   const own = { ...unclaimedCall, id: 'own-live', session: 'thread-1', cost: null, knownCost: usd(0.25) };
   const worker = { ...unclaimedCall, id: 'worker-live', session: 'worker-thread', cost: usd(9) };
@@ -204,14 +204,21 @@ test('the conversation total covers its digs and its own unclaimed calls, never 
   const host = scriptedHost([before, after]);
   const ui = await loadApp(host);
   host.ontoolresult({ structuredContent: { view: 'panel', thread: 'thread-1' } });
-  assert.match(ui.$('panel-cost').textContent, /Provider-reported subtotal: \$0\.7500; total unknown · 1 of 2 tool calls incompletely priced/);
+  const figure = label => [...ui.$('panel-figures').walk()].find(e => e.className === 'metric' && e.textContent.startsWith(label))?.textContent;
+  assert.equal(figure('Retrievals'), 'Retrievals22 with results');
+  assert.equal(figure('Provider cost'), 'Provider cost$0.75001 of 2 retrievals incompletely priced');
+  assert.match(ui.$('panel-figures').textContent, /Not included: 1 retrieval by workers or other conversations that no saved report has claimed yet\./);
+  assert.match(ui.$('panel-figures').textContent, /retained calls only · excludes Codex model costs/);
   assert.equal(ui.$('live-caveat').hidden, false);
   byKey(ui.$('panel-digs'), 'trail:/project/A:A').focus();
   await ui.poll();
-  assert.match(ui.$('panel-cost').textContent, /Provider-reported subtotal: \$9\.7500; total unknown · 1 of 3 tool calls incompletely priced/);
+  // The worker's call joins the conversation's figures once a report of its dig claims it.
+  assert.equal(figure('Retrievals'), 'Retrievals33 with results');
+  assert.equal(figure('Provider cost'), 'Provider cost$9.75001 of 3 retrievals incompletely priced');
+  assert.doesNotMatch(ui.$('panel-figures').textContent, /Not included/);
   assert.equal(ui.document.activeElement, byKey(ui.$('panel-digs'), 'trail:/project/A:A'));
   host.ontoolresult({ structuredContent: { view: 'panel', thread: null } });
-  assert.equal(ui.$('panel-cost').hidden, true);
+  assert.equal(ui.$('panel-figures').hidden, true);
 });
 
 test('a live update refreshes the open dig’s provider costs without replacing its document or focus', async () => {

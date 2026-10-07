@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.28 — 2026-10-07
+
+- **Figures at the top of the conversation panel.** The panel beside a conversation now opens with four small figures for that conversation's research: retrievals, sources, failed or stopped, and provider cost. They count the same calls as the conversation's cost did, and say how many retrievals by workers or other conversations are not included until a saved report claims them.
+
 ## 0.2.27 — 2026-10-07
 
 - **A short README for installing from GitHub:** what you need, how to install, set up, use, update and uninstall, and what stays on your computer. Setup details for each source moved to [docs/sources.md](docs/sources.md).

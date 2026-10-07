@@ -54,10 +54,14 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 .panel-heading h2 { margin: 0 0 4px; font-size: 16px; }
 .panel-list { display: grid; gap: 10px; }
 .section-title { margin: 20px 0 8px; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
-.cost-summary { margin-block: 12px 16px; }
-.cost-summary p { margin-block: 0; }
-.cost-summary p + p { margin-top: 4px; }
-.cost-total { font-size: 13px; font-variant-numeric: tabular-nums; }
+/* The conversation panel's figures: Usage's compact two-by-two figures, sized for the narrow panel. */
+.panel-figures { display: grid; gap: 8px; margin-block: 12px 16px; }
+.panel-figures p { margin: 0; }
+.panel-figures .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.panel-figures .metric { padding: 8px 10px; }
+.panel-figures .metric-value { font-size: 16px; }
+.panel-figures .cost-unit + .cost-unit { font-size: 13px; }
+.panel-figures .usage-scope { font-size: 11px; }
 .call { border-top: 1px solid var(--border); padding-block: 12px; }
 .call p { margin-block: 0 8px; font-size: 12px; }
 .call .btn { font-size: 12px; }
@@ -379,7 +383,7 @@ body.panel-mode .detail-heading h2 { font-size: 17px; }
   </div>
   <section id="panel" hidden>
     <div class="panel-heading"><h2 id="panel-scope">This conversation</h2><p class="meta">Research started here, with its saved reports and retrievals.</p></div>
-    <div id="panel-cost" class="cost-summary" hidden></div>
+    <section id="panel-figures" class="panel-figures" aria-label="This conversation’s retrievals and provider cost" hidden></section>
     <div id="panel-digs" class="panel-list"></div>
     <h3 class="section-title">Retrievals not yet in a saved report or answer</h3>
     <p class="meta" id="live-caveat" hidden>Workers run in their own conversations. Until a report claims their retrievals, they are labeled “another conversation or worker” and left out of this conversation’s provider costs.</p>

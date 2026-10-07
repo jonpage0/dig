@@ -392,10 +392,14 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 .panel-heading h2 { margin: 0 0 4px; font-size: 16px; }
 .panel-list { display: grid; gap: 10px; }
 .section-title { margin: 20px 0 8px; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
-.cost-summary { margin-block: 12px 16px; }
-.cost-summary p { margin-block: 0; }
-.cost-summary p + p { margin-top: 4px; }
-.cost-total { font-size: 13px; font-variant-numeric: tabular-nums; }
+/* The conversation panel's figures: Usage's compact two-by-two figures, sized for the narrow panel. */
+.panel-figures { display: grid; gap: 8px; margin-block: 12px 16px; }
+.panel-figures p { margin: 0; }
+.panel-figures .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.panel-figures .metric { padding: 8px 10px; }
+.panel-figures .metric-value { font-size: 16px; }
+.panel-figures .cost-unit + .cost-unit { font-size: 13px; }
+.panel-figures .usage-scope { font-size: 11px; }
 .call { border-top: 1px solid var(--border); padding-block: 12px; }
 .call p { margin-block: 0 8px; font-size: 12px; }
 .call .btn { font-size: 12px; }
@@ -732,7 +736,7 @@ c-16 3 -1617 460 -3560 1016 -1942 556 -3535 1011 -3539 1011 -4 0 -4 3 0 7 5
   </div>
   <section id="panel" hidden>
     <div class="panel-heading"><h2 id="panel-scope">This conversation</h2><p class="meta">Research started here, with its saved reports and retrievals.</p></div>
-    <div id="panel-cost" class="cost-summary" hidden></div>
+    <section id="panel-figures" class="panel-figures" aria-label="This conversation’s retrievals and provider cost" hidden></section>
     <div id="panel-digs" class="panel-list"></div>
     <h3 class="section-title">Retrievals not yet in a saved report or answer</h3>
     <p class="meta" id="live-caveat" hidden>Workers run in their own conversations. Until a report claims their retrievals, they are labeled “another conversation or worker” and left out of this conversation’s provider costs.</p>
@@ -23244,7 +23248,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
 
   // src/version.mjs
-  var VERSION = "0.2.27";
+  var VERSION = "0.2.28";
 
   // src/app.mjs
   var POLL_MS = 2e3;
@@ -23373,10 +23377,25 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const total = costLine(item2.calls);
     return total ? node("p", "meta", total) : null;
   };
-  function showCost(element, calls) {
-    const total = costLine(calls);
-    element.hidden = !total;
-    element.replaceChildren(...total ? [node("p", "eyebrow", COST_SCOPE), node("p", "cost-total", total), node("p", "meta", COST_CAVEAT)] : []);
+  function showPanelFigures(element, calls, reports, elsewhere) {
+    element.hidden = !calls.length && !reports.length;
+    if (element.hidden) {
+      element.replaceChildren();
+      return;
+    }
+    const counts = outcomeCounts(calls);
+    rebuild(element, [
+      node(
+        "dl",
+        "metrics",
+        metric("Retrievals", num(counts.total), `${num(counts.results)} with results`),
+        metric("Sources", num(sourceRows(calls, reports).length), `${plural(reports.length, "report")} saved`),
+        metric("Failed or stopped", num(counts.failed), counts.total ? `${Math.round(counts.failed / counts.total * 100)}% of retrievals` : "None yet"),
+        costMetric(costSummary(calls), counts.total)
+      ),
+      elsewhere ? node("p", "meta", `Not included: ${plural(elsewhere, "retrieval")} by workers or other conversations that no saved report has claimed yet.`) : null,
+      node("p", "meta usage-scope", `${COST_SCOPE}. ${COST_CAVEAT}`)
+    ].filter(Boolean));
   }
   function card(item2) {
     const opener = keyed(button("card-open", item2.title, () => showDig(item2).catch((e) => notify(e.message, true))), `dig:${item2.project}:${item2.id}`);
@@ -23419,7 +23438,8 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const mine = thread ? snapshot.items.filter((item2) => item2.session === thread) : [];
     text($("panel-scope"), thread ? "This conversation" : "Conversation not identified");
     rebuild($("panel-digs"), !thread ? [node("p", "empty", "Codex did not identify this conversation to Dig, so the trail cannot pick out its research. Use Library to browse everything.")] : mine.length ? mine.map(trailCard) : [node("p", "empty", "No research started in this conversation yet. It appears here as soon as it starts.")]);
-    showCost($("panel-cost"), thread ? [...mine.flatMap((item2) => item2.calls), ...snapshot.live.filter((receipt) => receipt.session === thread)] : []);
+    const elsewhere = thread ? snapshot.live.filter((receipt) => receipt.session !== thread).length : 0;
+    showPanelFigures($("panel-figures"), thread ? [...mine.flatMap((item2) => item2.calls), ...snapshot.live.filter((receipt) => receipt.session === thread)] : [], mine.flatMap((item2) => item2.reportDetails ?? []), elsewhere);
     const live = snapshot.live.slice(0, PANEL_LIVE_LIMIT);
     $("live-caveat").hidden = !live.some((receipt) => !thread || receipt.session !== thread);
     rebuild($("panel-live"), live.length ? live.map(liveRow) : [node("p", "meta", "None right now.")]);

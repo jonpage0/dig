@@ -1,7 +1,7 @@
 import { App, applyDocumentTheme, applyHostStyleVariables } from '@modelcontextprotocol/ext-apps';
 import { OpenAIExtensions } from '@openai/mcp-extensions/app';
 import { $, attr, button, externalLink, keyed, node, rebuild, tag, text } from './ui/dom.mjs';
-import { COST_CAVEAT, COST_SCOPE, absTime, basename, clock, costTotal, plural, shortDate } from './ui/format.mjs';
+import { COST_CAVEAT, COST_SCOPE, absTime, basename, clock, costTotal, num, plural, shortDate } from './ui/format.mjs';
 import { costSummary } from './providers/library/cost.ts';
 import { MODULES } from './providers/modules.ts';
 import { createCatalog, fileKind } from './ui/catalog.mjs';
@@ -12,7 +12,7 @@ import { callWord } from './status.mjs';
 import { renderSettings } from './ui/settings.mjs';
 import { renderAccounts } from './ui/accounts.mjs';
 import { renderSources } from './ui/sources.mjs';
-import { renderUsage, usageOf } from './ui/usage.mjs';
+import { costMetric, metric, outcomeCounts, renderUsage, sourceRows, usageOf } from './ui/usage.mjs';
 import { VERSION } from './version.mjs';
 
 const POLL_MS = 2000;
@@ -118,11 +118,25 @@ const snippet = item => (item.snippet ? firstParagraph(item.snippet) || item.sni
 const countsLine = item => `${plural(item.reports.length, 'report')} · ${plural(item.calls.length, 'retrieval')}`;
 const costLine = calls => costTotal(costSummary(calls), calls.length);
 const cardCost = item => { const total = costLine(item.calls); return total ? node('p', 'meta', total) : null; };
-// A total always carries its scope and caveat; with no retained calls the block is hidden rather than reading as no charge.
-function showCost(element, calls) {
-  const total = costLine(calls);
-  element.hidden = !total;
-  element.replaceChildren(...(total ? [node('p', 'eyebrow', COST_SCOPE), node('p', 'cost-total', total), node('p', 'meta', COST_CAVEAT)] : []));
+/**
+ * The figures at the top of the conversation panel, over the same calls as the conversation's cost: its digs' calls
+ * (a worker's once it names the dig or its report claims it) and its own unclaimed calls, never another thread's.
+ * `elsewhere` counts unclaimed calls from workers and other conversations, which are named but not counted. With no
+ * calls and no reports the block is hidden rather than reading as no charge.
+ */
+function showPanelFigures(element, calls, reports, elsewhere) {
+  element.hidden = !calls.length && !reports.length;
+  if (element.hidden) { element.replaceChildren(); return; }
+  const counts = outcomeCounts(calls);
+  rebuild(element, [
+    node('dl', 'metrics',
+      metric('Retrievals', num(counts.total), `${num(counts.results)} with results`),
+      metric('Sources', num(sourceRows(calls, reports).length), `${plural(reports.length, 'report')} saved`),
+      metric('Failed or stopped', num(counts.failed), counts.total ? `${Math.round((counts.failed / counts.total) * 100)}% of retrievals` : 'None yet'),
+      costMetric(costSummary(calls), counts.total)),
+    elsewhere ? node('p', 'meta', `Not included: ${plural(elsewhere, 'retrieval')} by workers or other conversations that no saved report has claimed yet.`) : null,
+    node('p', 'meta usage-scope', `${COST_SCOPE}. ${COST_CAVEAT}`),
+  ].filter(Boolean));
 }
 
 function card(item) {
@@ -161,8 +175,8 @@ function renderPanel() {
   const mine = thread ? snapshot.items.filter(item => item.session === thread) : [];
   text($('panel-scope'), thread ? 'This conversation' : 'Conversation not identified');
   rebuild($('panel-digs'), !thread ? [node('p', 'empty', 'Codex did not identify this conversation to Dig, so the trail cannot pick out its research. Use Library to browse everything.')] : mine.length ? mine.map(trailCard) : [node('p', 'empty', 'No research started in this conversation yet. It appears here as soon as it starts.')]);
-  // This conversation's cost: calls its digs claim (workers' included once their reports claim them) and its own unclaimed calls, never another thread's.
-  showCost($('panel-cost'), thread ? [...mine.flatMap(item => item.calls), ...snapshot.live.filter(receipt => receipt.session === thread)] : []);
+  const elsewhere = thread ? snapshot.live.filter(receipt => receipt.session !== thread).length : 0;
+  showPanelFigures($('panel-figures'), thread ? [...mine.flatMap(item => item.calls), ...snapshot.live.filter(receipt => receipt.session === thread)] : [], mine.flatMap(item => item.reportDetails ?? []), elsewhere);
   const live = snapshot.live.slice(0, PANEL_LIVE_LIMIT);
   $('live-caveat').hidden = !live.some(receipt => !thread || receipt.session !== thread);
   rebuild($('panel-live'), live.length ? live.map(liveRow) : [node('p', 'meta', 'None right now.')]);
