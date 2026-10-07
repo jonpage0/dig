@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · YouTube"
+  short_description: "Videos researched through their full transcripts"
+  icon_small: "../../assets/skills/square-play.svg"
+  icon_large: "../../assets/skills/square-play.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:youtube to find what YouTube creators say about this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:youtube mention.
+  allow_implicit_invocation: false

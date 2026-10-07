@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · X post"
+  short_description: "Read an X post exactly and what surrounds it"
+  icon_small: "../../assets/skills/message-square-quote.svg"
+  icon_large: "../../assets/skills/message-square-quote.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:x-post to read this X post and what surrounds it."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:x-post mention.
+  allow_implicit_invocation: false

@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Commerce"
+  short_description: "Amazon products, reviews and price history"
+  icon_small: "../../assets/skills/shopping-cart.svg"
+  icon_large: "../../assets/skills/shopping-cart.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:commerce to research this product on Amazon."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:commerce mention.
+  allow_implicit_invocation: false

@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · X judge"
+  short_description: "Weigh X claims by reach and type; hunt primary sources"
+  icon_small: "../../assets/skills/scale.svg"
+  icon_large: "../../assets/skills/scale.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:x-judge to judge what X is saying about this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:x-judge mention.
+  allow_implicit_invocation: false

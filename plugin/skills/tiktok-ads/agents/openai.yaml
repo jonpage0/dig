@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · TikTok ads"
+  short_description: "TikTok Creative Center ads and the public Ad Library"
+  icon_small: "../../assets/skills/megaphone.svg"
+  icon_large: "../../assets/skills/megaphone.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:tiktok-ads to see which TikTok ads perform in this space."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:tiktok-ads mention.
+  allow_implicit_invocation: false

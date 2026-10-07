@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · DataForSEO"
+  short_description: "Paid SERP, keyword and backlink data from DataForSEO"
+  icon_small: "../../assets/skills/chart-no-axes-combined.svg"
+  icon_large: "../../assets/skills/chart-no-axes-combined.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:dataforseo to pull search-market data for this keyword."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:dataforseo mention.
+  allow_implicit_invocation: false

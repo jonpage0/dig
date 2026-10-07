@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · China social"
+  short_description: "Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu and more"
+  icon_small: "../../assets/skills/languages.svg"
+  icon_large: "../../assets/skills/languages.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:china-social to research Chinese social discussion of this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:china-social mention.
+  allow_implicit_invocation: false

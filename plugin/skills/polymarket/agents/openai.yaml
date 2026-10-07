@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Polymarket"
+  short_description: "Prediction-market odds, volume and movement"
+  icon_small: "../../assets/skills/chart-candlestick.svg"
+  icon_large: "../../assets/skills/chart-candlestick.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:polymarket to check what prediction markets imply about this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:polymarket mention.
+  allow_implicit_invocation: false

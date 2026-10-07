@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · YouTube transcript summary"
+  short_description: "Summarize one saved YouTube transcript with quotes"
+  icon_small: "../../assets/skills/captions.svg"
+  icon_large: "../../assets/skills/captions.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:youtube-summarizer to summarize this saved transcript."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:youtube-summarizer mention.
+  allow_implicit_invocation: false

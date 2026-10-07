@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Saved to Dig</title>
+<style>
+/*OPENAI_STYLES*/
+:root {
+  --muted-foreground: color-mix(in srgb, var(--foreground) 70%, var(--background));
+  --ring: var(--color-ring-primary, var(--foreground));
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: transparent; -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+.saved { display: grid; gap: 10px; padding: 14px 16px; }
+.head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.tile { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: linear-gradient(45deg, #1d4a80, #3d86d4); }
+.glyph { width: 20px; height: 20px; fill: none; stroke: #ffffff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.heading { min-width: 0; }
+.eyebrow { margin: 0; font-size: 12px; color: var(--muted-foreground); }
+.title { margin: 2px 0 0; font-size: 15px; line-height: 1.35; font-weight: var(--font-weight-medium, 500); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.summary { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted-foreground); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0; font-size: 12px; color: var(--muted-foreground); }
+/* The status tag: a lowercase word on a borderless fill; the word carries the meaning and the pattern repeats it. */
+.state { display: inline-block; padding: 0 6px; border-radius: 4px; background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); font-size: 11px; line-height: 18px; font-weight: var(--font-weight-medium, 500); white-space: nowrap; }
+.state[data-pattern=solid] { background: color-mix(in srgb, var(--foreground) 14%, transparent); }
+.state[data-pattern=stripes] { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--foreground) 10%, transparent) 0 1.5px, transparent 1.5px 5px), color-mix(in srgb, var(--foreground) 7%, transparent); }
+.state[data-pattern=warning] { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--destructive) 22%, transparent) 0 1.5px, transparent 1.5px 5px), color-mix(in srgb, var(--destructive) 10%, transparent); }
+.state[data-pattern=dots] { background: radial-gradient(circle, color-mix(in srgb, var(--foreground) 30%, transparent) 0 .7px, transparent 1.1px) 1px 1px / 5px 5px; color: var(--muted-foreground); }
+.actions { display: flex; gap: 6px; }
+.btn { min-height: 30px; padding-inline: 10px; font-size: 13px; }
+.note { margin: 0; font-size: 12px; color: var(--muted-foreground); }
+.note.error { border-inline-start: 3px solid var(--destructive); padding-inline-start: 10px; color: var(--foreground); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<article class="saved" aria-labelledby="title" aria-busy="true" id="card">
+  <div class="head">
+    <span class="tile" id="tile" aria-hidden="true"></span>
+    <div class="heading">
+      <p class="eyebrow" id="eyebrow">Saving to Dig…</p>
+      <h1 class="title" id="title"></h1>
+    </div>
+  </div>
+  <p class="summary" id="summary" hidden></p>
+  <div class="foot" id="foot" hidden>
+    <p class="meta" id="meta"></p>
+    <div class="actions">
+      <button class="btn" type="button" id="open" hidden>Open in Dig</button>
+      <button class="btn btn-ghost" type="button" id="file" hidden>Open file</button>
+    </div>
+  </div>
+  <p class="note" id="note" role="status" aria-live="polite" hidden></p>
+</article>
+<!--APP_SCRIPT-->
+</body>
+</html>

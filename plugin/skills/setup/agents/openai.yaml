@@ -1,0 +1,7 @@
+interface:
+  display_name: "Dig · Setup"
+  short_description: "Choose sources and check credentials and prerequisites"
+  icon_small: "../../assets/skills/sliders-horizontal.svg"
+  icon_large: "../../assets/skills/sliders-horizontal.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:setup to choose my Dig sources and check what each needs."

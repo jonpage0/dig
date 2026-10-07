@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · GitHub"
+  short_description: "Discover, compare and inspect public repositories"
+  icon_small: "../../assets/skills/folder-git-2.svg"
+  icon_large: "../../assets/skills/folder-git-2.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:github to find and compare repositories that solve this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:github mention.
+  allow_implicit_invocation: false

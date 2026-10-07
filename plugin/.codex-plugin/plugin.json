@@ -1,0 +1,37 @@
+{
+  "name": "dig",
+  "version": "0.2.27",
+  "description": "Source-specific research tools and methods with a native retained-evidence library.",
+  "author": {
+    "name": "Jon Page"
+  },
+  "license": "MIT",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Dig",
+    "shortDescription": "Research, retained.",
+    "longDescription": "Research web documents, repositories, papers, social platforms, commerce and prediction markets with source-specific methods. Retain original responses, save grounded reports and inspect the evidence in a native library. The initiating conversation chooses sources and composes only when needed.",
+    "developerName": "Jon Page",
+    "category": "Research",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "logo": "./assets/logo.png",
+    "logoDark": "./assets/logo-dark.png",
+    "composerIcon": "./assets/icon.png",
+    "brandColor": "#2d68aa",
+    "defaultPrompt": [
+      "Research this question with Dig and keep the original evidence.",
+      "What have I already researched about this topic in Dig?",
+      "Set up Dig's research sources."
+    ]
+  },
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/setup/SKILL.md"
+    }
+  }
+}

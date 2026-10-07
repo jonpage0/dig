@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Papers"
+  short_description: "Scholarly literature, citations and open full text"
+  icon_small: "../../assets/skills/graduation-cap.svg"
+  icon_large: "../../assets/skills/graduation-cap.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:papers to find the research literature on this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:papers mention.
+  allow_implicit_invocation: false

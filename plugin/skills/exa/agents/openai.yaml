@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Exa"
+  short_description: "Web document search, extraction and similar pages"
+  icon_small: "../../assets/skills/scan-search.svg"
+  icon_large: "../../assets/skills/scan-search.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:exa to find the best web documents on this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:exa mention.
+  allow_implicit_invocation: false

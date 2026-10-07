@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · TikTok"
+  short_description: "Public TikTok videos, captions and transcripts"
+  icon_small: "../../assets/skills/clapperboard.svg"
+  icon_large: "../../assets/skills/clapperboard.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:tiktok to research TikTok videos about this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:tiktok mention.
+  allow_implicit_invocation: false

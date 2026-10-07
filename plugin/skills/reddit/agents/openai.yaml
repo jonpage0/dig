@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Reddit"
+  short_description: "Public Reddit threads and comments"
+  icon_small: "../../assets/skills/messages-square.svg"
+  icon_large: "../../assets/skills/messages-square.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:reddit to research what Reddit says about this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:reddit mention.
+  allow_implicit_invocation: false

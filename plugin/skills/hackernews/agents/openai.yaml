@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Hacker News"
+  short_description: "Hacker News stories, comments, Ask HN and Show HN"
+  icon_small: "../../assets/skills/newspaper.svg"
+  icon_large: "../../assets/skills/newspaper.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:hackernews to research what Hacker News says about this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:hackernews mention.
+  allow_implicit_invocation: false

@@ -1,0 +1,30 @@
+{
+  "name": "dig",
+  "version": "0.2.27",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "node --import ./scripts/typescript.mjs scripts/build.mjs",
+    "test": "node --import ./scripts/typescript.mjs --test test/*.test.mjs src/providers/*.test.ts src/providers/tools/*.test.ts",
+    "check": "npm run build && npm test",
+    "preview": "node --import ./scripts/typescript.mjs scripts/preview.mjs",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@iarna/toml": "2.2.5",
+    "@modelcontextprotocol/ext-apps": "1.7.5",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@openai/mcp-extensions": "0.1.0",
+    "@sinclair/typebox": "0.34.52",
+    "marked": "18.0.7",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "expect": "30.5.2"
+  }
+}

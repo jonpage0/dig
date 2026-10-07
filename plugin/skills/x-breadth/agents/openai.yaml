@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · X breadth"
+  short_description: "Find X posts, handles and angles as widely as possible"
+  icon_small: "../../assets/skills/radar.svg"
+  icon_large: "../../assets/skills/radar.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:x-breadth to find the range of X posts about this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:x-breadth mention.
+  allow_implicit_invocation: false

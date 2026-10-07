@@ -1,0 +1,7 @@
+interface:
+  display_name: "Dig"
+  short_description: "Research a question across sources and keep the evidence"
+  icon_small: "../../assets/skills/shovel.svg"
+  icon_large: "../../assets/skills/shovel.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Research this question with Dig and keep the original evidence."

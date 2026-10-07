@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Telegram"
+  short_description: "Public Telegram channels and posts"
+  icon_small: "../../assets/skills/send.svg"
+  icon_large: "../../assets/skills/send.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:telegram to read this public Telegram channel."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:telegram mention.
+  allow_implicit_invocation: false

@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · LinkedIn"
+  short_description: "Public LinkedIn profiles, companies and posts"
+  icon_small: "../../assets/skills/briefcase-business.svg"
+  icon_large: "../../assets/skills/briefcase-business.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:linkedin to research this company or person on LinkedIn."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:linkedin mention.
+  allow_implicit_invocation: false

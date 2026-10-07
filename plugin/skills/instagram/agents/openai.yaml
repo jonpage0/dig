@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Instagram"
+  short_description: "Public Instagram Reels, accounts and transcripts"
+  icon_small: "../../assets/skills/camera.svg"
+  icon_large: "../../assets/skills/camera.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:instagram to research Instagram Reels about this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:instagram mention.
+  allow_implicit_invocation: false

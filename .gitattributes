@@ -1,0 +1,4 @@
+# Bundled SDK template strings preserve intentional whitespace-only lines.
+plugin/dist/** linguist-generated=true whitespace=-blank-at-eol
+# Patch context includes whitespace-only lines; preserve the upstream patch bytes.
+plugin/bridges/papers/*.patch whitespace=-blank-at-eol

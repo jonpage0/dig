@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Perplexity"
+  short_description: "Citation-grounded web answers and current facts"
+  icon_small: "../../assets/skills/globe.svg"
+  icon_large: "../../assets/skills/globe.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:perplexity to check the current facts on this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:perplexity mention.
+  allow_implicit_invocation: false

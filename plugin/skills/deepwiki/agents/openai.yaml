@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · DeepWiki"
+  short_description: "Architecture and Q&A for one public GitHub repository"
+  icon_small: "../../assets/skills/book-open-text.svg"
+  icon_large: "../../assets/skills/book-open-text.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:deepwiki to explain how this repository is structured."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:deepwiki mention.
+  allow_implicit_invocation: false

@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · TikHub Reddit"
+  short_description: "Reddit scouting, full comment trees and enrichment"
+  icon_small: "../../assets/skills/list-tree.svg"
+  icon_large: "../../assets/skills/list-tree.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:tikhub-reddit to dig into the Reddit threads about this."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:tikhub-reddit mention.
+  allow_implicit_invocation: false

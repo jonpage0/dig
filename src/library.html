@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dig — research library</title>
+<style>
+/*OPENAI_STYLES*/
+:root {
+  --muted-foreground: color-mix(in srgb, var(--foreground) 70%, var(--background));
+  --ring: var(--color-ring-primary, var(--foreground));
+  --reading-width: 74ch;
+}
+* { box-sizing: border-box; }
+body { -webkit-font-smoothing: antialiased; }
+main { max-width: 1280px; margin-inline: auto; padding: 20px 24px 88px; }
+[hidden] { display: none !important; }
+a { color: var(--color-text-info, var(--foreground)); text-underline-offset: .18em; }
+h2, h3, h4, h5, h6 { line-height: 1.4; }
+button, input, select, summary { -webkit-tap-highlight-color: transparent; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.btn { min-height: 32px; padding-inline: 10px; }
+.masthead { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand h1 { margin: 0; font-size: 18px; font-weight: var(--font-weight-medium, 500); }
+.tagline { margin: 0; font-size: 12px; color: var(--muted-foreground); }
+.nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav [aria-current=page] { color: var(--foreground); background: var(--card); }
+.meta { font-size: 12px; color: var(--muted-foreground); }
+.path { margin-block: 8px 0; overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: 12px; }
+.eyebrow { margin: 0; font-size: 12px; font-weight: var(--font-weight-medium, 500); color: var(--muted-foreground); }
+.notice-row { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--background); }
+.notice-row.has-notice { padding-block: 12px; border-bottom: 1px solid var(--border); }
+.notice { flex: 1 1 240px; font-size: 13px; }
+.notice.error { border-inline-start: 3px solid var(--destructive); padding-inline-start: 12px; }
+.library-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-block: 20px 16px; }
+.search { flex: 1 1 240px; max-width: 480px; min-height: 36px; padding-block: 6px; }
+.stats { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted-foreground); font-size: 12px; }
+.stat { display: inline-flex; gap: 4px; }
+.stat strong { color: var(--foreground); font-weight: var(--font-weight-medium, 500); font-variant-numeric: tabular-nums; }
+.library-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.research-card, .trail-card { position: relative; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); }
+.research-card:hover, .trail-card:hover { background: var(--card); }
+.card-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.research-card h2, .trail-card h3 { margin: 8px 0; font-size: 15px; font-weight: var(--font-weight-medium, 500); }
+.btn.card-open { display: inline; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: start; white-space: normal; }
+.btn.card-open:hover { background: none; }
+.card-open::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
+.card-open:focus-visible { outline: none; }
+.card-open:focus-visible::after { outline: 2px solid var(--ring); outline-offset: 2px; }
+.summary { margin: 10px 0 12px; font-size: 13px; color: var(--muted-foreground); }
+.empty { grid-column: 1 / -1; padding: 24px 0; color: var(--muted-foreground); }
+.panel-heading { margin: 20px 0 12px; }
+.panel-heading h2 { margin: 0 0 4px; font-size: 16px; }
+.panel-list { display: grid; gap: 10px; }
+.section-title { margin: 20px 0 8px; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
+.cost-summary { margin-block: 12px 16px; }
+.cost-summary p { margin-block: 0; }
+.cost-summary p + p { margin-top: 4px; }
+.cost-total { font-size: 13px; font-variant-numeric: tabular-nums; }
+.call { border-top: 1px solid var(--border); padding-block: 12px; }
+.call p { margin-block: 0 8px; font-size: 12px; }
+.call .btn { font-size: 12px; }
+.detail-heading { margin-block: 16px; }
+.detail-heading h2 { max-width: 80ch; margin: 12px 0 8px; font-size: 20px; font-weight: var(--font-weight-medium, 500); overflow-wrap: anywhere; }
+.detail-heading > .btn { margin-inline-start: -10px; }
+.files { display: flex; gap: 4px; flex-wrap: wrap; margin-block: 0 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.file-tab { border-color: transparent; border-radius: 8px; background: transparent; color: var(--muted-foreground); white-space: normal; text-align: start; }
+.file-tab[aria-current=true] { color: var(--foreground); background: var(--card); }
+.document { min-width: 0; overflow-wrap: anywhere; }
+.document-head { margin-bottom: 16px; }
+.document-head .btn { margin-top: 8px; }
+.file-details { font-size: 12px; color: var(--muted-foreground); }
+.file-details summary, .card-more summary, .card-yaml summary, .raw-json summary { width: fit-content; cursor: var(--cursor-interaction, pointer); }
+.file-details summary { min-height: 24px; }
+.doc-facts { margin: 0 0 16px; font-size: 12px; color: var(--muted-foreground); }
+.fact-label { font-weight: var(--font-weight-medium, 500); }
+.sep { color: var(--muted-foreground); }
+.source-card { max-width: var(--reading-width); margin: 0 0 24px; padding: 14px 16px; border-radius: var(--radius); background: var(--card); }
+.source-card .meta { margin: 4px 0 8px; }
+.card-title { margin: 12px 0 6px; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
+.card-list { margin: 4px 0; padding-inline-start: 20px; font-size: 13px; }
+.card-more, .card-yaml { margin-top: 8px; font-size: 12px; }
+.prose { max-width: var(--reading-width); font-size: var(--font-text-md-size, 14px); line-height: 1.65; }
+.prose h4 { margin: 24px 0 8px; font-size: 18px; font-weight: var(--font-weight-medium, 500); }
+.prose h5 { margin: 20px 0 8px; font-size: 16px; font-weight: var(--font-weight-medium, 500); }
+.prose h6 { margin: 16px 0 8px; font-size: 14px; font-weight: var(--font-weight-medium, 500); }
+.prose p { margin-block: 10px; }
+.prose ul, .prose ol { padding-inline-start: 22px; }
+.prose li { margin-block: 4px; }
+.prose blockquote { margin: 16px 0; padding-inline-start: 16px; border-inline-start: 2px solid var(--input); color: var(--muted-foreground); }
+.prose code, .doc-facts code { padding: 1px 4px; border-radius: 4px; background: var(--card); font: .9em ui-monospace, monospace; }
+.prose hr { margin-block: 20px; border: 0; border-top: 1px solid var(--border); }
+pre.code { overflow-x: auto; margin-block: 12px; padding: 12px 14px; border-radius: var(--radius); background: var(--card); font: 12px/1.6 ui-monospace, monospace; white-space: pre; }
+pre.code code { padding: 0; background: none; font: inherit; }
+.link-target { font-size: .85em; color: var(--muted-foreground); }
+.literal-html, .image-ref { font: 12px ui-monospace, monospace; color: var(--muted-foreground); }
+.task { font-family: ui-monospace, monospace; }
+.table-scroll { overflow-x: auto; margin-block: 16px; }
+table { min-width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: start; vertical-align: top; }
+th { font-weight: var(--font-weight-medium, 500); white-space: nowrap; }
+[data-align=right] { text-align: end; font-variant-numeric: tabular-nums; }
+[data-align=center] { text-align: center; }
+.raw { margin: 12px 0 0; font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
+.sentence { margin: 0 0 8px; font-weight: var(--font-weight-medium, 500); }
+.call-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin-block: 16px; font-size: 12px; }
+.call-facts dt { color: var(--muted-foreground); }
+.call-facts dd { margin: 0; }
+pre.args { margin: 0; font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; }
+.raw-json { margin-top: 16px; font-size: 13px; }
+.evidence-items { padding-inline-start: 20px; }
+.evidence-item { margin-block: 16px; }
+.evidence-item p { margin-block: 4px; }
+.item-title { font-weight: var(--font-weight-medium, 500); }
+.item-excerpt { font-size: 13px; }
+.outcomes { margin: 6px 0; padding-inline-start: 18px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.settings { display: grid; gap: 20px; max-width: 720px; margin-top: 20px; }
+.settings-group { display: grid; gap: 16px; margin: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); }
+.settings-group legend { padding-inline: 6px; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
+.setting { display: grid; gap: 6px; }
+.setting p { margin: 0; }
+.field-label { margin-bottom: 0; font-size: 13px; }
+.settings .form-control, .settings .form-select { min-height: 34px; padding-block: 6px; }
+.form-check-input:checked { border-color: var(--foreground); background: var(--foreground); }
+.check { width: fit-content; min-height: 28px; font-size: 13px; cursor: var(--cursor-interaction, pointer); }
+.readiness, .setup-sections { display: grid; gap: 12px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+[aria-invalid=true] { border-color: var(--destructive) !important; }
+.foot { display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: baseline; margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+.library-location { flex-basis: 100%; }
+.library-location summary { width: fit-content; cursor: var(--cursor-interaction, pointer); }
+html { scroll-behavior: smooth; }
+.logo-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.page-heading { margin-block: 16px 20px; }
+.page-heading h2 { margin: 12px 0 8px; font-size: 20px; font-weight: var(--font-weight-medium, 500); }
+.page-heading p { max-width: 80ch; margin-block: 0 4px; }
+.summary-line { font-size: 14px; }
+/* Accounts and keys: a section title with Edit keys.env beside it, what keys.env is and where it lives, then the
+   accounts fold. */
+.keys-section { display: grid; gap: 8px; margin-bottom: 28px; }
+.keys-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.keys-head h3 { margin: 0; font-size: 18px; font-weight: var(--font-weight-medium, 500); }
+.keys-section > p { max-width: 80ch; margin: 0; }
+.keys-text { font-size: 13px; }
+.keys-section .path { color: var(--muted-foreground); }
+.keys-head .btn, .readiness .btn { min-height: 28px; font-size: 13px; }
+.sources-status { margin: 0 0 16px; }
+.sources-status:empty { display: none; }
+/* The index: one row per group, label column then the group's sources in a wrapping line. */
+.toc { margin-bottom: 32px; border-block: 1px solid var(--border); }
+.toc-row { display: grid; grid-template-columns: 168px minmax(0, 1fr); align-items: start; gap: 4px 16px; padding-block: 8px; }
+.toc-row + .toc-row { border-top: 1px solid var(--border); }
+.toc-title { margin: 0; font-size: 12px; line-height: 28px; font-weight: var(--font-weight-medium, 500); color: var(--muted-foreground); }
+.toc-list { display: flex; flex-wrap: wrap; gap: 2px 4px; margin: 0; padding: 0; list-style: none; }
+.btn.toc-link { gap: 7px; min-height: 28px; padding-inline: 4px 8px; color: var(--foreground); font-size: 13px; }
+.toc-name { white-space: nowrap; }
+/* The list and each group's cards share one column track, so a group of one lines up beside another. */
+#sources-list, .source-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; align-items: start; }
+#sources-list { row-gap: 32px; }
+.source-group { grid-column: 1 / -1; min-width: 0; }
+.source-group.single { grid-column: auto; }
+.source-group.single .source-grid { grid-template-columns: minmax(0, 1fr); }
+/* Section titles sit between the page title (20px) and the source cards' titles (15px). */
+.group-title { margin: 0 0 12px; font-size: 18px; font-weight: var(--font-weight-medium, 500); color: var(--foreground); }
+.source { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); scroll-margin-top: 72px; }
+.source p { margin: 0; }
+.source-head { display: flex; align-items: center; gap: 12px; }
+.source-name { flex: 1; min-width: 0; }
+.source h4 { margin: 0; font-size: 15px; font-weight: var(--font-weight-medium, 500); }
+.source h4:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 4px; }
+.providers { margin-top: 2px; }
+.providers a { color: inherit; }
+.source .about { font-size: 13px; line-height: 1.55; }
+.mark { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 10px; background: #fff; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 10%); }
+.mark.small { width: 20px; height: 20px; border-radius: 5px; }
+.mark svg { width: 22px; height: 22px; }
+.mark.small svg { width: 13px; height: 13px; }
+.mark svg.glyph { fill: none; stroke: #2d68aa; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.switch-label { display: inline-flex; align-items: center; gap: 8px; flex: none; font-size: 12px; cursor: var(--cursor-interaction, pointer); }
+.switch { appearance: none; position: relative; width: 36px; height: 20px; margin: 0; flex: none; border: 1px solid var(--input); border-radius: 999px; background: var(--muted); cursor: inherit; transition: background-color .15s, border-color .15s; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--background); box-shadow: 0 0 0 1px var(--input); transition: transform .15s; }
+.switch:checked { border-color: var(--foreground); background: var(--foreground); }
+.switch:checked::after { box-shadow: none; transform: translateX(16px); }
+.switch:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.switch:disabled { opacity: .4; cursor: not-allowed; }
+.switch-text { min-width: 2.2em; font-weight: var(--font-weight-medium, 500); }
+/* A fold whose summary reads as a button: a border, a hover fill, its title, a gist of what is inside and a chevron
+   that turns when it opens. Its contents sit inside the same border. */
+.fold { border: 1px solid var(--input); border-radius: calc(var(--radius) - 4px); }
+.fold > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-height: 36px; padding: 6px 10px 6px 12px; border-radius: inherit; list-style: none; cursor: var(--cursor-interaction, pointer); transition: background-color .15s; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary:hover { background: var(--card); }
+.fold[open] > summary { border-bottom: 1px solid var(--border); border-end-start-radius: 0; border-end-end-radius: 0; }
+.fold-title { font-size: 13px; font-weight: var(--font-weight-medium, 500); }
+.fold-gist { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--muted-foreground); }
+.chevron { width: 16px; height: 16px; flex: none; margin-inline-start: auto; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; transition: rotate .15s; }
+.fold[open] > summary .chevron { rotate: 180deg; }
+.fold-body { display: grid; gap: 12px; padding: 12px; }
+.setup-section { display: grid; gap: 6px; }
+.setup-title { font-size: 12px; font-weight: var(--font-weight-medium, 500); }
+/* A section title, its (i) button and any controls on one row; the note opens over the content beneath the row. */
+.setup-head { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; min-height: 28px; }
+.head-actions { display: flex; gap: 8px; margin-inline-start: auto; }
+.btn.info, .info { display: inline-grid; place-items: center; width: 24px; height: 24px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted-foreground); cursor: var(--cursor-interaction, pointer); }
+.info::before { content: "i"; display: grid; place-items: center; width: 16px; height: 16px; border: 1px solid currentColor; border-radius: 50%; font: italic 600 11px/1 Georgia, "Times New Roman", serif; }
+.info:hover, .info[aria-expanded=true] { color: var(--foreground); }
+.info:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.note { position: absolute; top: calc(100% + 4px); inset-inline: 0; z-index: 4; margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: calc(var(--radius) - 4px); background: var(--card); color: var(--foreground); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); font-size: 12px; line-height: 1.5; }
+/* Each key, setting or local tool: its presence chip, then the name with "optional" where nothing needs it, and the
+   details under the name. The list's first column is as wide as its widest chip, so every name starts at one edge
+   while each chip keeps its own width. */
+.setup-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 8px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.key-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: baseline; row-gap: 2px; }
+.key-line { display: contents; }
+.key-row .state { justify-self: start; }
+.key-label, .setup-detail { grid-column: 2; min-width: 0; }
+.key-name { font: 11.5px ui-monospace, monospace; overflow-wrap: anywhere; }
+.key-optional { margin-inline-start: 6px; color: var(--muted-foreground); }
+.setup-detail { color: var(--muted-foreground); overflow-wrap: anywhere; }
+/* Suggested worker per method: the method's name, then its model and effort side by side. */
+.worker-row { display: grid; gap: 4px; }
+.worker-row + .worker-row { margin-top: 6px; }
+.worker-name { font-size: 12px; font-weight: var(--font-weight-medium, 500); }
+.worker-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 12px; }
+.readiness .field-label { font-size: 12px; color: var(--muted-foreground); }
+.readiness .form-control, .readiness .form-select { min-height: 30px; padding-block: 4px; font-size: 13px; }
+.save-state { font-size: 12px; color: var(--muted-foreground); }
+.save-state:empty { display: none; }
+.field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.status-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+/* Status tags: a word on a patterned fill with no border, so they read as labels rather than buttons. The word
+   carries the meaning and the fill repeats it, never colour alone: solid for set, ready or done, stripes for partly,
+   orange stripes for missing, needs setup or not done, dots for not set, off or nothing yet. Sources' chips name a
+   readiness state; other tags name their pattern. */
+.state { display: inline-block; padding: 0 6px; border-radius: 4px; background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); font-size: 11px; line-height: 18px; font-weight: var(--font-weight-medium, 500); white-space: nowrap; }
+.state[data-state=ready], .state[data-state=set], .state[data-pattern=solid] { background: color-mix(in srgb, var(--foreground) 14%, transparent); }
+.state[data-state=partial], .state[data-pattern=stripes] { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--foreground) 10%, transparent) 0 1.5px, transparent 1.5px 5px), color-mix(in srgb, var(--foreground) 7%, transparent); }
+.state[data-state=setup-required], .state[data-state=missing], .state[data-pattern=warning] { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--destructive) 22%, transparent) 0 1.5px, transparent 1.5px 5px), color-mix(in srgb, var(--destructive) 10%, transparent); }
+.state[data-state=disabled], .state[data-state=unset], .state[data-pattern=dots] { background: radial-gradient(circle, color-mix(in srgb, var(--foreground) 30%, transparent) 0 .7px, transparent 1.1px) 1px 1px / 5px 5px; color: var(--muted-foreground); }
+/* The accounts fold in Accounts and keys: one tile per provider account, then the local tools. */
+.accounts-fold > summary { min-height: 40px; padding-inline-start: 14px; }
+.accounts-fold .fold-body > p { max-width: 80ch; margin: 0; }
+.accounts-subtitle { margin: 8px 0 0; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
+.account-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.account { display: grid; gap: 4px; align-content: start; min-width: 0; padding: 10px 12px; border-radius: calc(var(--radius) - 4px); background: var(--card); }
+.account p { margin: 0; }
+.account-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.account-name { min-width: 0; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
+.account-name a { color: inherit; }
+.account-keys { font-size: 12px; overflow-wrap: break-word; }
+.source-settings { display: grid; gap: 12px; padding: 12px; border-radius: calc(var(--radius) - 4px); background: var(--card); }
+.about-page { max-width: 720px; }
+.about-page .lede { font-size: 14px; line-height: 1.6; }
+.about-page p { margin-block: 6px; }
+.about-path { display: grid; justify-items: start; gap: 2px; margin-block: 12px; }
+.about-path .path { margin: 0; }
+.credits { margin: 6px 0; padding-inline-start: 20px; font-size: 13px; }
+.credits li { margin-block: 4px; }
+.btn.foot-link { min-height: 24px; padding-inline: 6px; font-size: 12px; }
+/* Usage at the top of the Library: SVG bars sized from numbers; each outcome has a fill pattern and a word in the legend. */
+.usage { display: grid; gap: 16px; margin-bottom: 20px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); }
+#browse > .usage { margin-top: 20px; }
+#usage:empty { display: none; }
+.usage-head .usage-empty { margin: 6px 0 2px; font-size: 14px; font-weight: var(--font-weight-medium, 500); }
+.usage-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+.usage-head { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 8px 16px; }
+.usage-head h3 { margin: 0; font-size: 18px; font-weight: var(--font-weight-medium, 500); }
+.usage-head p { margin: 2px 0 0; }
+.segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--card); }
+.segmented .btn { min-height: 26px; padding-inline: 10px; font-size: 12px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 0; }
+.metric { padding: 10px 12px; border-radius: calc(var(--radius) - 4px); background: var(--card); }
+.metric dt { font-size: 12px; color: var(--muted-foreground); }
+.metric dd { margin: 2px 0 0; }
+.metric-value { display: block; font-size: 20px; line-height: 1.3; font-weight: var(--font-weight-medium, 500); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.cost-unit { display: block; }
+.cost-unit + .cost-unit { font-size: 15px; }
+.metric-note { display: block; font-size: 12px; color: var(--muted-foreground); }
+.charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 32px; }
+.chart { min-width: 0; margin: 0; }
+.chart-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; }
+.chart-title { font-size: 13px; font-weight: var(--font-weight-medium, 500); }
+.columns { display: block; width: 100%; height: auto; }
+.columns .baseline { stroke: var(--input); stroke-width: 1; }
+.axis { display: flex; justify-content: space-between; gap: 12px; margin-top: 4px; font-size: 11px; color: var(--muted-foreground); }
+.source-rows { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+/* Fixed tracks, so every source's bar starts and ends at the same place; the cost sits under its bar. */
+.source-row { display: grid; grid-template-columns: minmax(96px, 150px) minmax(0, 1fr) 4ch; align-items: center; gap: 0 10px; font-size: 13px; }
+.source-row .row-cost { grid-column: 2 / -1; line-height: 1.4; }
+.source-row .count { text-align: end; font-variant-numeric: tabular-nums; font-weight: var(--font-weight-medium, 500); }
+.more-sources { margin-top: 8px; }
+.more-sources summary { width: fit-content; min-height: 24px; cursor: var(--cursor-interaction, pointer); }
+.more-sources .source-rows { margin-top: 8px; }
+.who { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.who-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track .bar { display: block; width: 100%; height: auto; border-radius: 3px; }
+.bar-ground { fill: var(--muted); }
+.cost-unit + .cost-unit::before { content: "+ "; color: var(--muted-foreground); }
+.fill-results { fill: var(--primary); }
+.hatch-ground { fill: color-mix(in srgb, var(--destructive) 22%, var(--background)); }
+.hatch-line { fill: var(--destructive); }
+.dots-ground { fill: color-mix(in srgb, var(--primary) 18%, var(--background)); }
+.dots-dot { fill: var(--primary); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted-foreground); }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 10px; height: 10px; flex: none; }
+.usage-scope { margin: 0; }
+/* An open dig's Retrievals summary: Usage's figures and source chart, then the list of every call grouped by what
+   saved it, one compact entry per call. */
+.retrievals { margin-bottom: 20px; }
+.retrievals-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 32px; align-items: start; }
+.retrievals-body .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.retrievals-fold .fold-body { gap: 20px; }
+.retrieval-group-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 6px; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
+.retrieval-group > .meta { max-width: 80ch; margin: 0 0 6px; }
+.retrieval-list { margin: 0; padding: 0; list-style: none; }
+/* One line per call where it fits: what it did on the left, its facts and original on the right; an error below. */
+.retrieval { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 16px; padding-block: 6px; border-top: 1px solid var(--border); font-size: 13px; }
+.retrieval-line { display: flex; flex: 1 1 320px; align-items: baseline; gap: 8px; min-width: 0; }
+.retrieval-line .state { flex: none; }
+.retrieval-what { min-width: 0; overflow-wrap: anywhere; }
+.retrieval-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; margin-inline-start: auto; order: 2; }
+.retrieval-error { flex-basis: 100%; margin: 0; font-size: 12px; overflow-wrap: anywhere; order: 3; }
+.btn.retrieval-raw { min-height: 24px; padding-inline: 6px; font-size: 12px; }
+@media (max-width: 760px) { .charts, .retrievals-body { grid-template-columns: 1fr; } }
+body.panel-mode .charts, body.panel-mode .retrievals-body { grid-template-columns: 1fr; }
+/* Narrow panels: a source's name and count share a line, its bar and cost run full width beneath; the index stacks. */
+@media (max-width: 520px) {
+  .source-row { grid-template-columns: minmax(0, 1fr) 4ch; }
+  .source-row .track { grid-column: 1 / -1; grid-row: 2; margin-top: 4px; }
+  .source-row .row-cost { grid-column: 1 / -1; }
+  .toc-row { grid-template-columns: minmax(0, 1fr); }
+}
+/* A narrow Library, as in the conversation panel, keeps Usage's window, figures and cost scope and leaves the charts
+   to a wider view, so the dig cards start near the top. */
+#browse { container-type: inline-size; }
+@container (max-width: 560px) {
+  #usage { gap: 10px; padding: 12px; }
+  #usage .usage-head h3 { font-size: 15px; }
+  #usage .charts, #usage .legend, #usage .usage-counts { display: none; }
+  #usage .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  #usage .metric { padding: 8px 10px; }
+  #usage .metric-value { font-size: 16px; }
+  #usage .cost-unit + .cost-unit { font-size: 13px; }
+  #usage .usage-scope { font-size: 11px; }
+}
+@media (max-width: 760px) {
+  main { padding: 16px 16px 88px; }
+  .masthead { align-items: start; flex-wrap: wrap; }
+  .brand { flex-wrap: wrap; }
+  .library-list { grid-template-columns: 1fr; }
+  .search { max-width: none; }
+}
+body.panel-mode main { padding: 12px 14px 24px; }
+body.panel-mode .masthead { gap: 12px; flex-wrap: wrap; }
+body.panel-mode .tagline { display: none; }
+body.panel-mode .library-list { grid-template-columns: 1fr; }
+body.panel-mode .detail-heading h2 { font-size: 17px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<!--LOGO_SPRITE-->
+<main>
+  <header class="masthead">
+    <div class="brand"><h1>Dig</h1><p class="tagline" id="tagline">Saved research</p></div>
+    <nav class="nav" aria-label="Dig views">
+      <button class="btn btn-ghost" id="nav-trail" type="button" hidden>This conversation</button>
+      <button class="btn btn-ghost" id="nav-library" type="button">Library</button>
+      <button class="btn btn-ghost" id="nav-sources" type="button">Sources</button>
+      <button class="btn btn-ghost" id="nav-settings" type="button">Settings</button>
+    </nav>
+  </header>
+  <div class="notice-row" id="notice-row">
+    <div id="notice" class="notice" role="status" aria-live="polite"></div>
+    <button id="reload" class="btn" type="button" hidden>Reload library</button>
+    <button id="dismiss" class="btn btn-ghost" type="button" hidden>Dismiss</button>
+  </div>
+  <section id="panel" hidden>
+    <div class="panel-heading"><h2 id="panel-scope">This conversation</h2><p class="meta">Research started here, with its saved reports and retrievals.</p></div>
+    <div id="panel-cost" class="cost-summary" hidden></div>
+    <div id="panel-digs" class="panel-list"></div>
+    <h3 class="section-title">Retrievals not yet in a saved report or answer</h3>
+    <p class="meta" id="live-caveat" hidden>Workers run in their own conversations. Until a report claims their retrievals, they are labeled “another conversation or worker” and left out of this conversation’s provider costs.</p>
+    <div id="panel-live"></div>
+  </section>
+  <section id="browse">
+    <section class="usage" id="usage" aria-labelledby="usage-title"></section>
+    <div class="library-toolbar">
+      <input type="search" class="form-control search" id="search" aria-label="Search saved research" placeholder="Search saved research">
+      <div class="stats">
+        <div class="stat"><strong id="questions">0</strong><span>questions</span></div>
+        <div class="stat"><strong id="reports">0</strong><span>reports</span></div>
+        <div class="stat"><strong id="retrievals">0</strong><span>retrievals</span></div>
+      </div>
+    </div>
+    <div id="list" class="library-list"></div>
+  </section>
+  <section id="detail" hidden>
+    <div class="detail-heading">
+      <button id="back" class="btn btn-ghost" type="button">← Back</button>
+      <h2 id="dig-title"></h2><p id="dig-meta" class="meta"></p>
+    </div>
+    <section id="dig-retrievals" class="usage retrievals" aria-labelledby="retrievals-title"></section>
+    <nav id="files" class="files" aria-label="Files in this dig"></nav>
+    <article class="document" aria-labelledby="file-title">
+      <div class="document-head">
+        <h3 id="file-title" class="sr-only"></h3>
+        <details class="file-details"><summary>File details</summary><p class="path" id="file-name"></p></details>
+        <button id="back-to-report" class="btn" type="button" hidden></button>
+      </div>
+      <div id="document"></div>
+    </article>
+  </section>
+  <section id="sources" hidden>
+    <div class="page-heading">
+      <h2>Sources</h2>
+      <p class="summary-line" id="sources-summary"></p>
+      <p class="meta">Switches save as you flip them. Codex’s plugin settings edit the same config.toml.</p>
+    </div>
+    <section class="keys-section" id="keys-section" aria-labelledby="keys-title" hidden>
+      <div class="keys-head">
+        <h3 id="keys-title">Accounts and keys</h3>
+        <button id="edit-keys" class="btn" type="button" disabled>Edit keys.env</button>
+      </div>
+      <p class="keys-text">Provider keys live in keys.env, outside the chat, and Dig picks up changes when you save it. One key can serve several sources, so the list below goes by provider account.</p>
+      <p id="keys-path" class="path"></p>
+      <div class="accounts" id="accounts" hidden></div>
+    </section>
+    <p id="sources-status" class="meta sources-status" role="status" aria-live="polite"></p>
+    <nav id="sources-toc" class="toc" aria-label="Sources by what they research"></nav>
+    <div id="sources-list"></div>
+  </section>
+  <section id="settings" hidden>
+    <div class="page-heading">
+      <h2>Settings</h2>
+      <p class="meta">Dig-wide settings. Changes save as you make them, to the file below; Codex’s plugin settings edit the same file. Each source’s own settings are on Sources.</p>
+      <p id="config-path" class="path"></p>
+    </div>
+    <div id="settings-fields" class="settings"></div>
+    <p id="settings-status" class="meta" role="status" aria-live="polite"></p>
+  </section>
+  <section id="about" class="about-page" hidden>
+    <div class="detail-heading">
+      <button id="about-back" class="btn btn-ghost" type="button">← Back</button>
+      <h2>About Dig</h2>
+    </div>
+    <div id="about-body"></div>
+  </section>
+  <footer class="foot">
+    <span id="host-state">Connecting…</span><span id="live-state"></span><span id="source-status"></span><span id="retention"></span>
+    <button id="nav-about" class="btn btn-ghost foot-link" type="button">About Dig</button>
+    <details class="library-location"><summary>Library location</summary><p id="library-path" class="path"></p></details>
+  </footer>
+</main>
+<!--APP_SCRIPT-->
+</body>
+</html>

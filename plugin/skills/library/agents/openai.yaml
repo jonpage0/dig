@@ -1,0 +1,7 @@
+interface:
+  display_name: "Dig · Library"
+  short_description: "Find and reuse research you already saved"
+  icon_small: "../../assets/skills/library-big.svg"
+  icon_large: "../../assets/skills/library-big.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:library to find what I already researched about this."
