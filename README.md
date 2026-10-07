@@ -44,9 +44,9 @@ Then quit and reopen ChatGPT.
 
 ## Privacy and costs
 
-- **Local:** Dig runs entirely on your computer. It has no server of its own and collects nothing.
-- **What leaves your computer:** your questions go only to the services you turn on, using your own keys.
-- **Where things are kept:** your research, settings and keys stay in `~/.local/share/dig`.
+- **Local:** Dig runs on your computer. It has no server of its own and collects nothing.
+- **What leaves your computer:** Dig sends searches only to the services you turn on, using your own keys. What they return goes into your Codex conversation, which Codex handles like the rest of the chat.
+- **Where things are kept:** your settings and keys stay in `~/.local/share/dig`, and your research in its `library` folder unless you choose another one in Dig's settings.
 - **Costs:** each service bills you directly. Dig shows the cost each one reports for every search; when a service doesn't report one, Dig shows the cost as unknown rather than guessing.
 
 ## Uninstall
