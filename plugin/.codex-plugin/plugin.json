@@ -1,6 +1,6 @@
 {
   "name": "dig",
-  "version": "0.2.29",
+  "version": "0.2.30",
   "description": "Source-specific research tools and methods with a native retained-evidence library.",
   "author": {
     "name": "Jon Page"

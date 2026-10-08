@@ -21,7 +21,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 - `source_info` with `source: "x"` for enablement and readiness;
 - X's own API, which needs `X_BEARER_TOKEN`: `x_post`, `x_search_posts`, `x_count_posts`, `x_users`, `x_news`, and `x_community` (a Community's details come from X's API, or from TikHub without the token; its posts always come through TikHub with `TIKHUB_API_KEY`);
-- Grok's X search, which needs `XAI_API_KEY`: `xsearch`, only when the assignment asks for Grok's reading of the wider conversation;
+- Grok's X search, which needs `XAI_API_KEY`: `xsearch`, for what a post's video or images show, and for Grok's reading of the wider conversation when the assignment asks for it;
 - `research_save` with `source: "x"` and `agent: "x-post"`.
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_read`, and `research_save`.
@@ -38,7 +38,7 @@ X's API bills each post and user it returns from the user's X developer credits 
 4. **Amplifiers.** `x_post` with `reposters` names the accounts that reposted it; name the notable ones and their reach.
 5. **Spread and origin.** `x_count_posts` for the post's distinctive phrase, its link (`url:`) or its claim's key terms, by hour or day, shows when discussion rose and fell. `x_search_posts` with an `end_time` before the post looks for earlier posts making the same claim or sharing the same link; pass `archive: true` when the post is more than a few days old.
 6. **Context.** `x_news` with the topic finds an X News story that clusters the post. When the post was made in an X Community, `x_community` with that Community reads its details and recent posts around the topic. Links in the post are named, not read: reading them needs another source, which the parent can choose.
-7. **Grok's reading, when asked.** Only when the assignment asks for the wider conversation's interpretation, run `xsearch` and label what it returns as Grok's account; read any post it cites with `x_post` before quoting it.
+7. **Grok, for video and images, and when asked.** Grok is the only Dig tool that watches a post's video and reads its images; X's API returns media links and metadata such as alt text, duration and views, not what the media show. When a post's substance is in its video or images (a demo, a finished reel, a screenshot of commands or numbers), run `xsearch` naming the posts' links (one pass can cover several) and ask what the media show, with on-screen text quoted and what Grok could not see stated; report it under the post as Grok's description, not as something Dig observed. When the assignment asks for the wider conversation's interpretation, run `xsearch` for that and label what it returns as Grok's account. Read any post Grok cites with `x_post` before quoting it.
 
 X's search operators include `from:`, `to:`, `conversation_id:`, `in_reply_to_tweet_id:`, `quotes_of_tweet_id:`, `is:reply`, `is:quote`, `is:verified`, `has:media`, `has:links`, `url:`, `lang:`, `min_likes:N`, `min_replies:N` and `min_reposts:N`, with parentheses and `OR`. Since May 4, 2026, X's search leaves reposts out of keyword matches (a `from:` search still returns an account's reposts), so `reposters` is how to see who reposted; recent search covers seven days and `archive: true` reaches back to 2006.
 

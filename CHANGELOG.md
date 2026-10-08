@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.30 — 2026-10-08
+
+- **Grok for what only Grok does.** The X methods find and read posts through X's API, and now name what to keep Grok for: watching a post's video and reading its images (X's API returns media links and metadata such as alt text, not what the media show, and nothing else in Dig watches video), searching by meaning, finding accounts from a description, and the shape of a discussion. X post asks Grok to describe a supplied post's video or images when its substance is there, not only when asked, and every method reports what Grok says media show as Grok's description. The Sources page's X card says Grok watches videos and reads images.
+
 ## 0.2.29 — 2026-10-07
 
 - **Grok cites posts by link.** `xsearch` now asks Grok to cite every post inline with its full link. Grok sometimes cited posts by number (`[post:50]`, `[120]`) with no link, and those numbers identified no post. When a write-up still has bracketed numbers in its prose (outside links and code), the result says how many look like citations, that they are not links and that Dig's Sources list is numbered separately, so a worker finds the post through X's search before relying on it.
