@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Put installation and setup first in the README, expand the feature overview, and map optional provider accounts and keys to the capabilities they enable. The source guide also lists Papers bridge credential aliases and prerequisites.
+
 ## 0.2.31 — 2026-10-08
 
 - **Facebook research through ScrapeCreators.** Public profiles, page posts, reels, photos, video search, individual posts, transcripts, comments and replies, plus public group information and posts. A separate events tool discovers events by name, page or city and reads individual event details.

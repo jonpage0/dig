@@ -2,6 +2,8 @@
 
 Turn sources on and off on Dig's **Sources** page. Each source card says whether it is ready, which keys it uses and where to get them; **Setup details** on the card opens the full list.
 
+No source requires that you configure every other source. Hacker News, DeepWiki and Polymarket need no account. GitHub public REST reads and direct Papers searches can run without keys, with provider-specific limits. YouTube's keyless path needs a local `yt-dlp`. Other sources use your own provider accounts; API charges are separate from your ChatGPT plan.
+
 ## Keys
 
 Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.env`), one `NAME=value` per line. **Edit keys.env** on the Sources page creates the file if needed, adds an empty line for each key it is missing, and opens it; fill in the values and save. Dig picks up the change without a restart.
@@ -38,7 +40,7 @@ One key often covers several sources: a ScrapeCreators key serves eight of them 
 
 ## GitHub
 
-GitHub works without a login, within GitHub's anonymous limits: 60 API calls an hour instead of 5,000, enough for fewer than ten repository inspections, and no review or issue-response samples, which need GitHub's GraphQL API. Either fix is optional:
+GitHub's public REST tools work without a login at lower anonymous limits. A token or existing `gh` login raises those limits and makes GraphQL-based review and issue-response samples available. Either is optional:
 
 - Put a GitHub personal access token in `keys.env` as `GH_TOKEN` (or `GITHUB_TOKEN`). A classic token with no scopes is enough, because Dig reads only public data.
 - Or log in with the GitHub CLI: `gh auth login`. Dig uses that login when `keys.env` has no GitHub token.
@@ -91,6 +93,20 @@ node /path/to/installed/plugin/bridges/papers/setup.mjs
 ```
 
 Setup downloads a pinned copy of [paper-search-mcp](https://github.com/openags/paper-search-mcp) and its Python dependencies into Dig's folder. Unpaywall, one of its databases, needs a contact email: put `PAPER_SEARCH_MCP_UNPAYWALL_EMAIL` in `keys.env` or pass `--email you@example.com` to setup. Re-run setup after an update that changes the bridge.
+
+### Optional Papers credentials and settings
+
+Direct Semantic Scholar/OpenAlex searches work without the bridge. The bridge adds 19 search connectors, including arXiv, PubMed, PMC, Crossref, OpenAlex, Unpaywall and others; availability still depends on each upstream service. Keys are optional and are added outside chat to Dig's `keys.env`.
+
+| Name | What it enables |
+| --- | --- |
+| `SEMANTIC_SCHOLAR_API_KEY` | A Semantic Scholar rate limit of your own for direct search/recommendations and the bridge's Semantic Scholar connector. |
+| `OPENALEX_API_KEY` | Your OpenAlex allowance and rate limit for direct search and the bridge's OpenAlex/SSRN connectors. OpenAlex usage can be metered even with free allowance available. |
+| `NCBI_API_KEY` | Higher NCBI request limits for the bridge's PubMed/PMC connectors. Not needed for direct Semantic Scholar or OpenAlex tools. |
+| `PAPER_SEARCH_MCP_CORE_API_KEY` | The bridge's CORE connector; not required by the other Papers connectors. |
+| `PAPER_SEARCH_MCP_UNPAYWALL_EMAIL` | A contact email, not an API key. Enables Unpaywall's lookup of legal open-access copies; without it, that connector is skipped. |
+
+The bridge also accepts `PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY`, `PAPER_SEARCH_MCP_OPENALEX_API_KEY` and `PAPER_SEARCH_MCP_NCBI_API_KEY`. A nonempty bridge-specific name takes precedence over the matching general name **inside the bridge only**; direct tools use the general name. Most users can keep one general key per provider. **Edit keys.env** offers all supported names, but an empty placeholder does not require you to obtain that key.
 
 ## DataForSEO
 
