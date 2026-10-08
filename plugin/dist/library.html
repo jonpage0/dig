@@ -19712,8 +19712,8 @@ container holding the app. Specify either width or maxWidth, and either height o
     { id: "code", label: "Code and developers", sources: ["github", "deepwiki", "hackernews"] },
     { id: "papers", label: "Papers", sources: ["papers"] },
     { id: "video", label: "Video", sources: ["youtube"] },
-    { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "linkedin", "telegram", "china-social"] },
-    { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "dataforseo"] }
+    { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "facebook", "linkedin", "telegram", "china-social"] },
+    { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "facebook-ads", "dataforseo"] }
   ];
   var SCRAPECREATORS = { name: "ScrapeCreators", url: "https://scrapecreators.com" };
   var TIKHUB = { name: "TikHub", url: "https://tikhub.io" };
@@ -19914,6 +19914,18 @@ container holding the app. Specify either width or maxWidth, and either height o
       logo: "instagram"
     },
     {
+      id: "facebook",
+      label: "Facebook",
+      description: "Public profiles, posts, groups, videos and events",
+      tools: ["scrapecreators_facebook", "scrapecreators_facebook_events"],
+      env: ["SCRAPECREATORS_API_KEY"],
+      keys: ["SCRAPECREATORS_API_KEY"],
+      credential: "SCRAPECREATORS_API_KEY",
+      about: "Public Facebook profiles, posts, reels, photos, comments, groups and events through ScrapeCreators, with video search and transcripts when available. No Facebook account is used; private and gated content is not accessible.",
+      providers: [SCRAPECREATORS],
+      billing: SCRAPECREATORS_CREDITS
+    },
+    {
       id: "linkedin",
       label: "LinkedIn",
       description: "Public profiles, companies and posts",
@@ -19991,6 +20003,18 @@ container holding the app. Specify either width or maxWidth, and either height o
       providers: [TIKHUB, SCRAPECREATORS],
       billing: "Creative Center through TikHub (cost shown as unknown); Ad Library through ScrapeCreators credits.",
       logo: "tiktok"
+    },
+    {
+      id: "facebook-ads",
+      label: "Facebook ads",
+      description: "Meta Ad Library advertisers, creatives and transcripts",
+      tools: ["facebook_ad_library"],
+      env: ["SCRAPECREATORS_API_KEY"],
+      keys: ["SCRAPECREATORS_API_KEY"],
+      credential: "SCRAPECREATORS_API_KEY",
+      about: "Meta's public Ad Library through ScrapeCreators: find advertisers and ads, inspect their creative text, run dates and media, and read available transcripts. Ad presence and run duration are not proof of performance or of a claim in an ad.",
+      providers: [SCRAPECREATORS],
+      billing: SCRAPECREATORS_CREDITS
     },
     {
       id: "dataforseo",
@@ -22423,6 +22447,8 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     "square-play": [["rect", { "x": "3", "y": "3", "width": "18", "height": "18", "rx": "2" }], ["path", { "d": "M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z" }]]
   };
   var SOURCE_GLYPHS = { "hackernews": "newspaper", "deepwiki": "book-open-text", "polymarket": "chart-candlestick", "github": "folder-git-2", "exa": "scan-search", "perplexity": "globe", "papers": "graduation-cap", "youtube": "square-play", "x": "scale", "reddit": "messages-square", "tikhub-reddit": "list-tree", "tiktok": "clapperboard", "instagram": "camera", "linkedin": "briefcase-business", "telegram": "send", "china-social": "languages", "commerce": "shopping-cart", "tiktok-ads": "megaphone", "dataforseo": "chart-no-axes-combined" };
+  SOURCE_GLYPHS.facebook = "messages-square";
+  SOURCE_GLYPHS["facebook-ads"] = "megaphone";
   var METHOD_GLYPHS = { "x-judge": "scale", "x-breadth": "radar", "x-post": "message-square-quote", "youtube-summarizer": "captions" };
   var glyphFor = (source, method) => METHOD_GLYPHS[method] ?? SOURCE_GLYPHS[source] ?? "shovel";
 
@@ -23248,7 +23274,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
 
   // src/version.mjs
-  var VERSION = "0.2.30";
+  var VERSION = "0.2.31";
 
   // src/app.mjs
   var POLL_MS = 2e3;

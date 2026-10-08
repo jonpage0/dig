@@ -32,6 +32,8 @@ export const GLYPHS = {
 };
 /** Report source id → glyph; a method can override its source's glyph (X judge and X breadth differ). */
 export const SOURCE_GLYPHS = {"hackernews":"newspaper","deepwiki":"book-open-text","polymarket":"chart-candlestick","github":"folder-git-2","exa":"scan-search","perplexity":"globe","papers":"graduation-cap","youtube":"square-play","x":"scale","reddit":"messages-square","tikhub-reddit":"list-tree","tiktok":"clapperboard","instagram":"camera","linkedin":"briefcase-business","telegram":"send","china-social":"languages","commerce":"shopping-cart","tiktok-ads":"megaphone","dataforseo":"chart-no-axes-combined"};
+SOURCE_GLYPHS.facebook = "messages-square";
+SOURCE_GLYPHS["facebook-ads"] = "megaphone";
 export const METHOD_GLYPHS = {"x-judge":"scale","x-breadth":"radar","x-post":"message-square-quote","youtube-summarizer":"captions"};
 export const glyphFor = (source, method) => METHOD_GLYPHS[method] ?? SOURCE_GLYPHS[source] ?? 'shovel';
 

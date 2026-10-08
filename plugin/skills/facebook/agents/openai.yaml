@@ -1,0 +1,9 @@
+interface:
+  display_name: "Dig · Facebook"
+  short_description: "Public Facebook posts, groups and events"
+  icon_small: "../../assets/skills/messages-square.svg"
+  icon_large: "../../assets/skills/messages-square.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:facebook to research public Facebook evidence for this question."
+policy:
+  allow_implicit_invocation: false

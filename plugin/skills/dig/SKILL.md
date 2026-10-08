@@ -42,6 +42,8 @@ Pick a source only because it answers a named part of the question; never run ev
 - `china-social`: Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat.
 - `commerce`: Amazon products, deals, charts, sellers, reviews, up to 365 days of history.
 - `tiktok`, `instagram`, `linkedin`, `telegram`: public evidence from each platform.
+- `facebook`: public Facebook profiles, posts, groups, video search and events; supplied post links, comments and available transcripts.
+- `facebook-ads`: Meta Ad Library advertisers, ad creatives, run dates and available transcripts, not inferred performance.
 - `tiktok-ads`: TikTok Creative Center ad analytics and the public Ad Library.
 
 ## Run one source

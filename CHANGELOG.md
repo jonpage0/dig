@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.31 — 2026-10-08
+
+- **Facebook research through ScrapeCreators.** Public profiles, page posts, reels, photos, video search, individual posts, transcripts, comments and replies, plus public group information and posts. A separate events tool discovers events by name, page or city and reads individual event details.
+- **Facebook ads.** Search Meta's Ad Library, find advertiser page IDs, inspect an advertiser's ads and read ad details and available transcripts. Creative variants, run dates, media links and returned transparency disclosures stay attached to their ad.
+- **Two source methods, one existing key.** Facebook and Facebook ads have separate source controls and research skills, both using `SCRAPECREATORS_API_KEY`. Each call reads one page, exposes continuation and records reported credits. No Facebook login, automatic crawl, request retry or redirect; private/gated content and missing data are reported rather than invented.
+
 ## 0.2.30 — 2026-10-08
 
 - **Grok for what only Grok does.** The X methods find and read posts through X's API, and now name what to keep Grok for: watching a post's video and reading its images (X's API returns media links and metadata such as alt text, not what the media show, and nothing else in Dig watches video), searching by meaning, finding accounts from a description, and the shape of a discussion. X post asks Grok to describe a supplied post's video or images when its substance is there, not only when asked, and every method reports what Grok says media show as Grok's description. The Sources page's X card says Grok watches videos and reads images.

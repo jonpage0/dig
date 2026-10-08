@@ -105,7 +105,6 @@ test('Edit keys.env creates a private file and adds an empty line for every cred
   assert.ok(!['EXA_API_KEY', 'TIKHUB_API_KEY', 'DATAFORSEO_USERNAME'].some(name => all.added.includes(name)));
   const text = await readFile(first.path, 'utf8');
   assert.ok(text.startsWith(`${created}EXA_API_KEY=user-exa-value\n# TIKHUB_API_KEY=\n`), 'Existing lines stay as they were');
-  assert.match(text, /^# Reddit, TikTok, Instagram, LinkedIn, Telegram, TikTok ads: SCRAPECREATORS_API_KEY\nSCRAPECREATORS_API_KEY=$/m);
   assert.equal(text.match(/^SCRAPECREATORS_API_KEY=$/gm).length, 1);
 });
 

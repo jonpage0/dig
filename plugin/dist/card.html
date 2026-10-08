@@ -19060,6 +19060,9 @@ container holding the app. Specify either width or maxWidth, and either height o
     "sliders-horizontal": [["path", { "d": "M10 5H3" }], ["path", { "d": "M12 19H3" }], ["path", { "d": "M14 3v4" }], ["path", { "d": "M16 17v4" }], ["path", { "d": "M21 12h-9" }], ["path", { "d": "M21 19h-5" }], ["path", { "d": "M21 5h-7" }], ["path", { "d": "M8 10v4" }], ["path", { "d": "M8 12H3" }]],
     "square-play": [["rect", { "x": "3", "y": "3", "width": "18", "height": "18", "rx": "2" }], ["path", { "d": "M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z" }]]
   };
+  var SOURCE_GLYPHS = { "hackernews": "newspaper", "deepwiki": "book-open-text", "polymarket": "chart-candlestick", "github": "folder-git-2", "exa": "scan-search", "perplexity": "globe", "papers": "graduation-cap", "youtube": "square-play", "x": "scale", "reddit": "messages-square", "tikhub-reddit": "list-tree", "tiktok": "clapperboard", "instagram": "camera", "linkedin": "briefcase-business", "telegram": "send", "china-social": "languages", "commerce": "shopping-cart", "tiktok-ads": "megaphone", "dataforseo": "chart-no-axes-combined" };
+  SOURCE_GLYPHS.facebook = "messages-square";
+  SOURCE_GLYPHS["facebook-ads"] = "megaphone";
 
   // src/status.mjs
   var PATTERNS = {
@@ -19121,7 +19124,7 @@ container holding the app. Specify either width or maxWidth, and either height o
   }
 
   // src/version.mjs
-  var VERSION = "0.2.30";
+  var VERSION = "0.2.31";
 
   // src/card.mjs
   var SVG = "http://www.w3.org/2000/svg";

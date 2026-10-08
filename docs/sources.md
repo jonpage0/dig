@@ -27,12 +27,14 @@ Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.en
 | Reddit | Threads and comments | `SCRAPECREATORS_API_KEY` | |
 | TikHub Reddit | Full comment trees and subreddit context | `TIKHUB_API_KEY` | |
 | TikTok, Instagram, LinkedIn, Telegram | Public posts and profiles | `SCRAPECREATORS_API_KEY` | |
+| Facebook | Public profiles, posts, groups, videos and events | `SCRAPECREATORS_API_KEY` | |
+| Facebook ads | Meta Ad Library advertisers, ads and transcripts | `SCRAPECREATORS_API_KEY` | |
 | China social | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat | `TIKHUB_API_KEY` | |
 | Commerce | Amazon products, deals, price and rank history, reviews | `SCRAPE_DO_API_KEY`; optional `NEXSCOPE_API_KEY` for history and reviews | |
 | TikTok ads | Top ads and what an advertiser is running | `TIKHUB_API_KEY` and `SCRAPECREATORS_API_KEY` | |
 | DataForSEO | Search results, keywords, rankings, backlinks | `DATAFORSEO_USERNAME` and `DATAFORSEO_PASSWORD` | |
 
-One key often covers several sources: a ScrapeCreators key serves six of them and a TikHub key four.
+One key often covers several sources: a ScrapeCreators key serves eight of them and a TikHub key four.
 
 ## GitHub
 
@@ -71,6 +73,14 @@ Dig only reads, so the app's **Read** permission is enough, and with it the toke
 `x_community` reads one Community by id or link: its details from X's API and its posts through TikHub, which needs `TIKHUB_API_KEY`.
 
 X has three research methods: **X judge** (`$dig:x-judge`) weighs claims by reach and kind of source and reads every post it relies on; **X breadth** (`$dig:x-breadth`) finds as many distinct posts, accounts and angles as it can without judging them; **X post** (`$dig:x-post`) reads particular posts and reports what surrounds them.
+
+## Facebook and Facebook ads
+
+Both use your existing ScrapeCreators key. Enable **Facebook** for public profiles, posts, groups, videos and events; enable **Facebook ads** separately for Meta's Ad Library. Neither needs a Facebook login.
+
+Facebook research starts from a public URL, video search or event discovery. It is not a general search of every Facebook post. Private and gated content is unavailable, and a public group's accessible page is not a complete archive. Available transcripts describe speech, not everything shown in a video.
+
+Facebook ads searches advertiser and ad records. Keep the country, filters, dates and pages inspected with any conclusion: an empty filtered page does not prove that an advertiser runs no ads, and an ad's run duration does not establish its return on spend.
 
 ## Papers bridge
 

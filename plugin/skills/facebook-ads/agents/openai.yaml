@@ -1,0 +1,9 @@
+interface:
+  display_name: "Dig · Facebook ads"
+  short_description: "Meta Ad Library advertisers and creatives"
+  icon_small: "../../assets/skills/megaphone.svg"
+  icon_large: "../../assets/skills/megaphone.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:facebook-ads to research advertisers and creatives in Meta's Ad Library."
+policy:
+  allow_implicit_invocation: false

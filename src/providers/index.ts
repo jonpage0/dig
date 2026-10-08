@@ -20,6 +20,8 @@ import { ask as perplexity_ask, search as perplexity_search, research as perplex
 import { search as xsearch } from "./tools/xsearch.js";
 import { post as x_post, search_posts as x_search_posts, count_posts as x_count_posts, users as x_users, news as x_news, explore as x_explore, bookmarks as x_bookmarks, likes as x_likes, community as x_community } from "./tools/x_api.js";
 import { tiktok as scrapecreators_tiktok, instagram as scrapecreators_instagram, linkedin as scrapecreators_linkedin, telegram as scrapecreators_telegram } from "./tools/scrapecreators.js";
+import { facebook as scrapecreators_facebook, facebook_events as scrapecreators_facebook_events } from "./tools/facebook.js";
+import { library as facebook_ad_library } from "./tools/facebook_ads.js";
 import { search as github_search, inspect as github_inspect, read as github_read } from "./tools/github.js";
 import { search as tiktok_ads_search, top as tiktok_ads_top, detail as tiktok_ads_detail, library as tiktok_ad_library } from "./tools/tiktok_ads.js";
 import { read_wiki_structure as deepwiki_read_wiki_structure, read_wiki_contents as deepwiki_read_wiki_contents, ask_question as deepwiki_ask_question } from "./tools/deepwiki.js";
@@ -70,6 +72,9 @@ export const providerTools: Record<string, ToolSpec> = {
 	scrapecreators_instagram,
 	scrapecreators_linkedin,
 	scrapecreators_telegram,
+	scrapecreators_facebook,
+	scrapecreators_facebook_events,
+	facebook_ad_library,
 	github_search,
 	github_inspect,
 	github_read,

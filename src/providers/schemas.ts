@@ -3,6 +3,8 @@
 import type { Type, TSchema } from "@sinclair/typebox";
 import { REPORT_STATUSES, TOPIC_VOLATILITIES } from "./library/files.js";
 import { ALL_MODULES } from "./modules.js";
+import { createFacebookSchemas } from "./facebook-schemas.js";
+import { createFacebookAdsSchemas } from "./facebook-ads-schemas.js";
 type Typebox = typeof Type;
 type Schema = TSchema;
 
@@ -53,6 +55,8 @@ export function createSchemas(
   sources: readonly string[] = ALL_MODULES,
 ): Record<string, TSchema> {
   const schemas: Record<string, Schema> = {
+    ...createFacebookSchemas(T),
+    ...createFacebookAdsSchemas(T),
     hackernews: T.Object({
       query: T.String({ description: "Search query." }),
       days: T.Optional(

@@ -43,8 +43,8 @@ export const SOURCE_GROUPS = [
   { id: "code", label: "Code and developers", sources: ["github", "deepwiki", "hackernews"] },
   { id: "papers", label: "Papers", sources: ["papers"] },
   { id: "video", label: "Video", sources: ["youtube"] },
-  { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "linkedin", "telegram", "china-social"] },
-  { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "dataforseo"] },
+  { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "facebook", "linkedin", "telegram", "china-social"] },
+  { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "facebook-ads", "dataforseo"] },
 ] as const;
 const SCRAPECREATORS = { name: "ScrapeCreators", url: "https://scrapecreators.com" };
 const TIKHUB = { name: "TikHub", url: "https://tikhub.io" };
@@ -247,6 +247,18 @@ export const MODULES = [
     logo: "instagram",
   },
   {
+    id: "facebook",
+    label: "Facebook",
+    description: "Public profiles, posts, groups, videos and events",
+    tools: ["scrapecreators_facebook", "scrapecreators_facebook_events"],
+    env: ["SCRAPECREATORS_API_KEY"],
+    keys: ["SCRAPECREATORS_API_KEY"],
+    credential: "SCRAPECREATORS_API_KEY",
+    about: "Public Facebook profiles, posts, reels, photos, comments, groups and events through ScrapeCreators, with video search and transcripts when available. No Facebook account is used; private and gated content is not accessible.",
+    providers: [SCRAPECREATORS],
+    billing: SCRAPECREATORS_CREDITS,
+  },
+  {
     id: "linkedin",
     label: "LinkedIn",
     description: "Public profiles, companies and posts",
@@ -328,6 +340,18 @@ export const MODULES = [
     logo: "tiktok",
   },
   {
+    id: "facebook-ads",
+    label: "Facebook ads",
+    description: "Meta Ad Library advertisers, creatives and transcripts",
+    tools: ["facebook_ad_library"],
+    env: ["SCRAPECREATORS_API_KEY"],
+    keys: ["SCRAPECREATORS_API_KEY"],
+    credential: "SCRAPECREATORS_API_KEY",
+    about: "Meta's public Ad Library through ScrapeCreators: find advertisers and ads, inspect their creative text, run dates and media, and read available transcripts. Ad presence and run duration are not proof of performance or of a claim in an ad.",
+    providers: [SCRAPECREATORS],
+    billing: SCRAPECREATORS_CREDITS,
+  },
+  {
     id: "dataforseo",
     label: "DataForSEO",
     description: "SERPs, keywords, rankings, backlinks, local business and AI visibility",
@@ -350,7 +374,7 @@ export type ModuleId = (typeof MODULES)[number]["id"];
 export const ALL_MODULES: ModuleId[] = MODULES.map((m) => m.id);
 /**
  * The provider accounts behind Dig's credentials, for the accounts list on the Sources page. One key can serve several
- * sources (one ScrapeCreators key covers six), so the list has a row per account rather than per source. `keys` holds
+ * sources, so the list has a row per account rather than per source. `keys` holds
  * the account's keys.env names as a module's `keys` does: an inner list names aliases of one credential. Which sources
  * each serves, and whether they need it, comes from those sources' credentials in source_info. `signup` is the
  * provider's own page for creating or finding the key; `billing` is a short line drawn from the sources' catalog copy
@@ -401,6 +425,7 @@ export const PRESETS: Record<string, readonly ModuleId[]> = {
     "reddit",
     "tiktok",
     "instagram",
+    "facebook",
     "linkedin",
     "telegram",
     "x",
