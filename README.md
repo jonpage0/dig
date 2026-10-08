@@ -91,23 +91,23 @@ Good to know:
 **No key needed:** Hacker News, DeepWiki, Polymarket.
 **Works without a key, with limits:** GitHub (lower rate limits), Papers (shared rate limits), YouTube (needs `yt-dlp` installed).
 
-| Service | Key name in `keys.env` | What it unlocks |
+| Service | Used by | Key name in `keys.env` |
 | --- | --- | --- |
-| [Exa](https://dashboard.exa.ai/api-keys) | `EXA_API_KEY` | Web search, page text, similar pages |
-| [Perplexity](https://console.perplexity.ai) | `PERPLEXITY_API_KEY` | Cited answers and web search |
-| [GitHub](https://github.com/settings/tokens) *(optional)* | `GH_TOKEN` or `GITHUB_TOKEN` | Higher limits, plus review and issue samples |
-| [xAI](https://console.x.ai/team/default/api-keys) | `XAI_API_KEY` | Grok's X search, including images and videos |
-| [X API](https://console.x.com) | `X_BEARER_TOKEN` | Exact posts, threads, replies, accounts, search, counts, News |
-| X sign-in *(optional)* | `X_CONSUMER_KEY`, `X_CONSUMER_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` | Your bookmarks and likes; people and Communities search |
-| [ScrapeCreators](https://app.scrapecreators.com) | `SCRAPECREATORS_API_KEY` | Reddit, TikTok, Instagram, Facebook, LinkedIn, Telegram, Facebook ads, TikTok Ad Library |
-| [TikHub](https://user.tikhub.io/dashboard/api) | `TIKHUB_API_KEY` | Advanced Reddit, China social, TikTok Creative Center; X Communities |
-| [Just One](https://dashboard.justoneapi.com/en) *(optional)* | `JUSTONE_API_KEY` | An alternative China social backend, used only when asked for |
-| [Scrape.do](https://dashboard.scrape.do/) | `SCRAPE_DO_API_KEY` | Amazon products, search, deals, Best Sellers |
-| [Nexscope](https://www.nexscope.ai) *(optional)* | `NEXSCOPE_API_KEY` | Amazon reviews and price/rank history |
-| [Semantic Scholar](https://www.semanticscholar.org/product/api#api-key-form) *(optional)* | `SEMANTIC_SCHOLAR_API_KEY` | Higher limits for paper search |
-| [OpenAlex](https://openalex.org/settings/api) *(optional)* | `OPENALEX_API_KEY` | Your own OpenAlex allowance |
-| [Google Cloud](https://console.cloud.google.com/apis/credentials) *(optional)* | `OPENCODE_RESEARCH_GOOGLE_API_KEY` | YouTube Data API search |
-| [DataForSEO](https://app.dataforseo.com/api-access) | `DATAFORSEO_USERNAME`, `DATAFORSEO_PASSWORD` | Search results, keywords, rankings, backlinks |
+| [Exa](https://dashboard.exa.ai/api-keys) | **Exa**: web search, page text, similar pages | `EXA_API_KEY` |
+| [Perplexity](https://console.perplexity.ai) | **Perplexity**: cited answers and web search | `PERPLEXITY_API_KEY` |
+| [GitHub](https://github.com/settings/tokens) *(optional)* | **GitHub**: higher limits, plus review and issue samples | `GH_TOKEN` or `GITHUB_TOKEN` |
+| [xAI](https://console.x.ai/team/default/api-keys) | **X**: Grok's search by meaning, including images and videos | `XAI_API_KEY` |
+| [X API](https://console.x.com) | **X**: exact posts, threads, replies, accounts, search, counts, News | `X_BEARER_TOKEN` |
+| X sign-in *(optional)* | **X**: your bookmarks and likes; people and Communities search | `X_CONSUMER_KEY`, `X_CONSUMER_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` |
+| [ScrapeCreators](https://app.scrapecreators.com) | **Reddit**, **TikTok**, **Instagram**, **Facebook**, **LinkedIn**, **Telegram**, **Facebook ads**, **TikTok ads** (Ad Library) | `SCRAPECREATORS_API_KEY` |
+| [TikHub](https://user.tikhub.io/dashboard/api) | **Reddit** (advanced), **China social**, **TikTok ads** (Creative Center), **X** (Communities) | `TIKHUB_API_KEY` |
+| [Just One](https://dashboard.justoneapi.com/en) *(optional)* | **China social**: an alternative backend, used only when asked for | `JUSTONE_API_KEY` |
+| [Scrape.do](https://dashboard.scrape.do/) | **Amazon**: products, search, deals, Best Sellers | `SCRAPE_DO_API_KEY` |
+| [Nexscope](https://www.nexscope.ai) *(optional)* | **Amazon**: reviews and price/rank history | `NEXSCOPE_API_KEY` |
+| [Semantic Scholar](https://www.semanticscholar.org/product/api#api-key-form) *(optional)* | **Papers**: higher limits for paper search | `SEMANTIC_SCHOLAR_API_KEY` |
+| [OpenAlex](https://openalex.org/settings/api) *(optional)* | **Papers**: your own OpenAlex allowance | `OPENALEX_API_KEY` |
+| [Google Cloud](https://console.cloud.google.com/apis/credentials) *(optional)* | **YouTube**: Data API search | `OPENCODE_RESEARCH_GOOGLE_API_KEY` |
+| [DataForSEO](https://app.dataforseo.com/api-access) | **DataForSEO**: search results, keywords, rankings, backlinks | `DATAFORSEO_USERNAME`, `DATAFORSEO_PASSWORD` |
 
 Partial setups work. X's API and Grok are independent, and so are Amazon's current data and its history. Dig names what's unavailable instead of quietly swapping in another source.
 
