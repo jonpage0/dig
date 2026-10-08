@@ -31,8 +31,8 @@ Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.en
 | TikTok, Instagram, LinkedIn, Telegram | Public posts and profiles | `SCRAPECREATORS_API_KEY` | |
 | Facebook | Public profiles, posts, groups, videos and events | `SCRAPECREATORS_API_KEY` | |
 | Facebook ads | Meta Ad Library advertisers, ads and transcripts | `SCRAPECREATORS_API_KEY` | |
-| China social | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat | `TIKHUB_API_KEY` | |
-| Commerce | Amazon products, deals, price and rank history, reviews | `SCRAPE_DO_API_KEY`; optional `NEXSCOPE_API_KEY` for history and reviews | |
+| China social | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat | `TIKHUB_API_KEY`; optional `JUSTONE_API_KEY`, used only when the Just One backend is asked for | |
+| Commerce | Amazon products, deals, price and rank history, reviews | `SCRAPE_DO_API_KEY` (or `SCRAPEDO_API_TOKEN`); optional `NEXSCOPE_API_KEY` for history and reviews, without which the card reads partly ready | |
 | TikTok ads | Top ads and what an advertiser is running | `TIKHUB_API_KEY` and `SCRAPECREATORS_API_KEY` | |
 | DataForSEO | Search results, keywords, rankings, backlinks | `DATAFORSEO_USERNAME` and `DATAFORSEO_PASSWORD` | |
 
@@ -103,10 +103,10 @@ Direct Semantic Scholar/OpenAlex searches work without the bridge. The bridge ad
 | `SEMANTIC_SCHOLAR_API_KEY` | A Semantic Scholar rate limit of your own for direct search/recommendations and the bridge's Semantic Scholar connector. |
 | `OPENALEX_API_KEY` | Your OpenAlex allowance and rate limit for direct search and the bridge's OpenAlex/SSRN connectors. OpenAlex usage can be metered even with free allowance available. |
 | `NCBI_API_KEY` | Higher NCBI request limits for the bridge's PubMed/PMC connectors. Not needed for direct Semantic Scholar or OpenAlex tools. |
-| `PAPER_SEARCH_MCP_CORE_API_KEY` | The bridge's CORE connector; not required by the other Papers connectors. |
+| `PAPER_SEARCH_MCP_CORE_API_KEY` | An optional key for the bridge's CORE connector, which also runs without one. |
 | `PAPER_SEARCH_MCP_UNPAYWALL_EMAIL` | A contact email, not an API key. Enables Unpaywall's lookup of legal open-access copies; without it, that connector is skipped. |
 
-The bridge also accepts `PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY`, `PAPER_SEARCH_MCP_OPENALEX_API_KEY` and `PAPER_SEARCH_MCP_NCBI_API_KEY`. A nonempty bridge-specific name takes precedence over the matching general name **inside the bridge only**; direct tools use the general name. Most users can keep one general key per provider. **Edit keys.env** offers all supported names, but an empty placeholder does not require you to obtain that key.
+The direct tools and the bridge also accept `PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY` and `PAPER_SEARCH_MCP_OPENALEX_API_KEY`, and the bridge accepts `PAPER_SEARCH_MCP_NCBI_API_KEY`. When both spellings are set, the `PAPER_SEARCH_MCP_` name wins. Most users can keep one general key per provider. **Edit keys.env** offers every supported name; an empty line does not mean you need that key.
 
 ## DataForSEO
 

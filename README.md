@@ -1,82 +1,118 @@
 # Dig
 
-A research plugin for Codex in the ChatGPT desktop app, with source-specific research methods and a local evidence library.
+Source-by-source research for Codex in the ChatGPT desktop app, with every report and original response saved where you can check it.
+
+<p align="center">
+<img src="docs/logos/exa.svg" width="32" height="32" alt="Exa" title="Exa">
+<img src="docs/logos/perplexity.svg" width="32" height="32" alt="Perplexity" title="Perplexity">
+<img src="docs/logos/github.svg" width="32" height="32" alt="GitHub" title="GitHub">
+<img src="docs/logos/ycombinator.svg" width="32" height="32" alt="Hacker News" title="Hacker News">
+<img src="docs/logos/youtube.svg" width="32" height="32" alt="YouTube" title="YouTube">
+<img src="docs/logos/x.svg" width="32" height="32" alt="X" title="X">
+<img src="docs/logos/reddit.svg" width="32" height="32" alt="Reddit" title="Reddit">
+<img src="docs/logos/tiktok.svg" width="32" height="32" alt="TikTok" title="TikTok">
+<img src="docs/logos/instagram.svg" width="32" height="32" alt="Instagram" title="Instagram">
+<img src="docs/logos/linkedin.svg" width="32" height="32" alt="LinkedIn" title="LinkedIn">
+<img src="docs/logos/telegram.svg" width="32" height="32" alt="Telegram" title="Telegram">
+<img src="docs/logos/polymarket.svg" width="32" height="32" alt="Polymarket" title="Polymarket">
+</p>
 
 ## Install
 
-You need the **ChatGPT desktop app with Codex** and **[Node.js](https://nodejs.org) 22 or newer** (`node --version` to check). Dig has been tested on macOS; other platforms have not been verified. The installed plugin is bundled: no npm install or source build is needed.
+You need:
 
-Run these two commands in a terminal:
+- the **ChatGPT desktop app with Codex** (tested on macOS);
+- **[Node.js](https://nodejs.org) 22 or newer** (`node --version` to check).
+
+Then run:
 
 ```sh
 codex plugin marketplace add jonpage0/dig
 codex plugin add dig@dig
 ```
 
-If your terminal doesn't know `codex`, use the copy inside the macOS ChatGPT app:
+If your terminal doesn't know `codex`, use the copy inside the ChatGPT app:
 
 ```sh
 /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex plugin marketplace add jonpage0/dig
 /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex plugin add dig@dig
 ```
 
-Quit and reopen ChatGPT, then type **`$dig:setup`** in a new Codex conversation. Setup helps you choose sources and tells you which keys or local tools each one needs. **You can start with Hacker News without any API key.**
+Quit and reopen ChatGPT, then type **`$dig:setup`** in a new conversation. It walks you through choosing sources.
+
+> **Try it with no keys:** Hacker News, DeepWiki and Polymarket work without any account.
 
 ## What Dig does
 
-Ask a question, choose the sources, and get source reports with links and retained original responses—not just an answer you cannot inspect. Dig currently includes **21 sources, 23 research methods and 56 provider tools**.
+Ask a question in Codex. Dig researches it source by source, writes a report for each source, and keeps the original responses behind every claim.
 
-- **Research one source or combine several.** The conversation can run a method directly or use ordinary source workers, then read their reports and evidence before answering. Worker model and effort settings are suggestions, not enforced pins.
-- **Search the web and code.** Exa and Perplexity provide web search and cited answers; GitHub discovers and inspects repositories; DeepWiki answers questions about a named repository; Hacker News supplies developer discussions.
-- **Read papers and spoken content.** Search scholarly literature and related work, retrieve available open-access full text and PDFs, and save YouTube transcripts for claims about what a creator actually said.
-- **Investigate X in two complementary ways.** X's API reads exact posts, threads, replies, accounts, search, counts, News and more. Grok adds semantic discovery, discourse analysis and interpretation of images and videos in X posts. Independent X judge, breadth and post methods weigh evidence, find different angles or inspect a particular post. Optional X sign-in adds your bookmarks and likes.
-- **Research public social content and advertising.** Reddit, TikTok, Instagram, Facebook, LinkedIn, Telegram and Mainland-China social platforms have their own methods. Facebook includes public groups and events. Separate Facebook ads and TikTok ads methods inspect ad libraries; TikTok Creative Center also supplies selected-ad analytics. Access and coverage differ by platform—this is not private-account access or an exhaustive social archive.
-- **Explore commerce and search markets.** Amazon products, deals, Best Sellers, reviews and price/rank history; Polymarket odds and liquidity; DataForSEO search results, keywords, rankings, backlinks, local business and AI visibility. Market odds are beliefs, not facts.
-- **Keep the work inspectable.** Browse and search saved Markdown reports in the native library, open original responses, see the research trail beside the conversation, attach saved research with `@`, and inspect provider-reported costs. Retention can be switched off; missing evidence and unknown costs stay explicit.
+**21 sources · 23 research methods · 56 provider tools**
+
+| Area | Sources | What you get |
+| --- | --- | --- |
+| **Web** | <img src="docs/logos/exa.svg" width="18" height="18" alt=""> Exa · <img src="docs/logos/perplexity.svg" width="18" height="18" alt=""> Perplexity | Web search, page text, cited answers |
+| **Code** | <img src="docs/logos/github.svg" width="18" height="18" alt=""> GitHub · <img src="plugin/assets/skills/book-open-text.svg" width="18" height="18" alt=""> DeepWiki · <img src="docs/logos/ycombinator.svg" width="18" height="18" alt=""> Hacker News | Repositories and their activity, questions about a codebase, developer discussion |
+| **Papers** | <img src="plugin/assets/skills/graduation-cap.svg" width="18" height="18" alt=""> Semantic Scholar, OpenAlex, optional 19-connector bridge | Literature search, related work, open-access full text and PDFs |
+| **Video** | <img src="docs/logos/youtube.svg" width="18" height="18" alt=""> YouTube | Full transcripts, so a claim can be checked against what was said |
+| **X** | <img src="docs/logos/x.svg" width="18" height="18" alt=""> X API and xAI's Grok | Exact posts, threads, accounts, search and counts; search by meaning; descriptions of images and videos |
+| **Social** | <img src="docs/logos/reddit.svg" width="18" height="18" alt=""> Reddit · <img src="docs/logos/tiktok.svg" width="18" height="18" alt=""> TikTok · <img src="docs/logos/instagram.svg" width="18" height="18" alt=""> Instagram · <img src="plugin/assets/skills/messages-square.svg" width="18" height="18" alt=""> Facebook · <img src="docs/logos/linkedin.svg" width="18" height="18" alt=""> LinkedIn · <img src="docs/logos/telegram.svg" width="18" height="18" alt=""> Telegram · <img src="plugin/assets/skills/languages.svg" width="18" height="18" alt=""> China social | Public posts, comments, profiles, groups and events |
+| **Ads** | <img src="plugin/assets/skills/megaphone.svg" width="18" height="18" alt=""> Facebook ads · <img src="docs/logos/tiktok.svg" width="18" height="18" alt=""> TikTok ads | Ad libraries; TikTok Creative Center analytics |
+| **Markets** | <img src="docs/logos/polymarket.svg" width="18" height="18" alt=""> Polymarket · <img src="plugin/assets/skills/shopping-cart.svg" width="18" height="18" alt=""> Amazon · <img src="plugin/assets/skills/chart-no-axes-combined.svg" width="18" height="18" alt=""> DataForSEO | Prediction-market odds; products, reviews and price history; search and SEO data |
+
+What you get back:
+
+- **A report per source**, linking every post, page or paper it relies on.
+- **The original responses**, saved so any claim can be checked.
+- **A library** in Codex's sidebar to browse and search past research, plus a research trail beside the conversation.
+- **Costs as each provider reports them.** Unknown stays unknown; Dig never guesses.
+
+Good to know:
+
+- **You choose the sources.** Run one directly (`$dig:reddit`) or let Codex combine several.
+- **Public data only.** Dig doesn't log in to social accounts or read private content. Coverage varies by platform.
+- **X has two ways in.** X's API returns the posts themselves; Grok adds search by meaning and reads images and videos. Three methods use them: X judge weighs claims, X breadth finds as many angles as it can, X post inspects one post.
 
 ## Services and API keys
 
-**You do not need every service or key.** Enable only the sources you want. API accounts are separate from your ChatGPT plan: the services below may bill you directly even when Codex's model runs on your plan.
+**You only need keys for the sources you turn on.** Each service bills you directly, separately from your ChatGPT plan.
 
-Hacker News, DeepWiki and Polymarket need **no account or API key**. GitHub public REST discovery and reading also work without a login, at lower limits. Direct Papers searches can run without keys; optional keys raise provider limits. YouTube has a keyless path through an installed `yt-dlp`.
+**No key needed:** Hacker News, DeepWiki, Polymarket.
+**Works without a key, with limits:** GitHub (lower rate limits), Papers (shared rate limits), YouTube (needs `yt-dlp` installed).
 
-| Service / account | Credential in Dig's `keys.env` | What it enables |
+| Service | Key name in `keys.env` | What it unlocks |
 | --- | --- | --- |
-| [Exa](https://dashboard.exa.ai/api-keys) | `EXA_API_KEY` | Web search, page extraction, similar pages; deep research when explicitly requested. |
-| [Perplexity API](https://console.perplexity.ai) | `PERPLEXITY_API_KEY` | Web search and citation-grounded answers at different depths. |
-| [GitHub](https://github.com/settings/tokens) — optional | `GH_TOKEN` or `GITHUB_TOKEN`, or an existing `gh` login | Higher public API limits and GraphQL-based review/issue-response evidence. |
-| [xAI](https://console.x.ai/team/default/api-keys) | `XAI_API_KEY` | Grok's X search, semantic discovery and interpretation of post images/videos. Separate from the X developer API account. |
-| [X API](https://console.x.com) | `X_BEARER_TOKEN` | Direct X reads: posts, threads, replies, quotes, accounts, recent/archive search, counts, News, trends, Spaces and Lists. |
-| X sign-in — optional | `X_CONSUMER_KEY`, `X_CONSUMER_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` | People and Communities search as your account, plus your bookmarks, bookmark folders and liked posts. Use read-only app permissions. |
-| [ScrapeCreators](https://app.scrapecreators.com) | `SCRAPECREATORS_API_KEY` | Reddit, TikTok, Instagram, LinkedIn, Telegram, Facebook public content/events, Facebook ads, and TikTok Ad Library. One key covers eight sources. |
-| [TikHub](https://user.tikhub.io/dashboard/api) | `TIKHUB_API_KEY` | Advanced Reddit, Mainland-China social platforms, TikTok Creative Center; also X Community posts/search and a single-post fallback. |
-| [Just One](https://dashboard.justoneapi.com/en) — optional | `JUSTONE_API_KEY` | An explicitly selected alternative backend for China social—not an automatic fallback. |
-| [Scrape.do](https://dashboard.scrape.do/) | `SCRAPE_DO_API_KEY` or `SCRAPEDO_API_TOKEN` | Current Amazon products, searches, deals, Best Sellers and seller catalogs. |
-| [Nexscope](https://www.nexscope.ai) — optional | `NEXSCOPE_API_KEY` | Amazon review samples and retrospective price/rank history, separate from Scrape.do's current snapshots. |
-| [Semantic Scholar](https://www.semanticscholar.org/product/api#api-key-form) — optional | `SEMANTIC_SCHOLAR_API_KEY` | Higher limits for literature search and related-paper recommendations. |
-| [OpenAlex](https://openalex.org/settings/api) — optional | `OPENALEX_API_KEY` | A provider allowance/rate limit of your own for OpenAlex literature searches. Usage can be paid or covered by its free allowance. |
-| [Google Cloud / YouTube Data API](https://console.cloud.google.com/apis/credentials) — optional | `OPENCODE_RESEARCH_GOOGLE_API_KEY` | YouTube Data API search metadata. Transcripts still need `yt-dlp`. |
-| [DataForSEO](https://app.dataforseo.com/api-access) | `DATAFORSEO_USERNAME` and `DATAFORSEO_PASSWORD` | Paid SEO/search-market queries. Use the API login and API password, not the dashboard password. |
+| [Exa](https://dashboard.exa.ai/api-keys) | `EXA_API_KEY` | Web search, page text, similar pages |
+| [Perplexity](https://console.perplexity.ai) | `PERPLEXITY_API_KEY` | Cited answers and web search |
+| [GitHub](https://github.com/settings/tokens) *(optional)* | `GH_TOKEN` or `GITHUB_TOKEN` | Higher limits, plus review and issue samples |
+| [xAI](https://console.x.ai/team/default/api-keys) | `XAI_API_KEY` | Grok's X search, including images and videos |
+| [X API](https://console.x.com) | `X_BEARER_TOKEN` | Exact posts, threads, replies, accounts, search, counts, News |
+| X sign-in *(optional)* | `X_CONSUMER_KEY`, `X_CONSUMER_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` | Your bookmarks and likes; people and Communities search |
+| [ScrapeCreators](https://app.scrapecreators.com) | `SCRAPECREATORS_API_KEY` | Reddit, TikTok, Instagram, Facebook, LinkedIn, Telegram, Facebook ads, TikTok Ad Library |
+| [TikHub](https://user.tikhub.io/dashboard/api) | `TIKHUB_API_KEY` | Advanced Reddit, China social, TikTok Creative Center; X Communities |
+| [Just One](https://dashboard.justoneapi.com/en) *(optional)* | `JUSTONE_API_KEY` | An alternative China social backend, used only when asked for |
+| [Scrape.do](https://dashboard.scrape.do/) | `SCRAPE_DO_API_KEY` | Amazon products, search, deals, Best Sellers |
+| [Nexscope](https://www.nexscope.ai) *(optional)* | `NEXSCOPE_API_KEY` | Amazon reviews and price/rank history |
+| [Semantic Scholar](https://www.semanticscholar.org/product/api#api-key-form) *(optional)* | `SEMANTIC_SCHOLAR_API_KEY` | Higher limits for paper search |
+| [OpenAlex](https://openalex.org/settings/api) *(optional)* | `OPENALEX_API_KEY` | Your own OpenAlex allowance |
+| [Google Cloud](https://console.cloud.google.com/apis/credentials) *(optional)* | `OPENCODE_RESEARCH_GOOGLE_API_KEY` | YouTube Data API search |
+| [DataForSEO](https://app.dataforseo.com/api-access) | `DATAFORSEO_USERNAME`, `DATAFORSEO_PASSWORD` | Search results, keywords, rankings, backlinks |
 
-Some capabilities also need local tools or extra provider settings:
+Partial setups work. X's API and Grok are independent, and so are Amazon's current data and its history. Dig names what's unavailable instead of quietly swapping in another source.
 
-- **YouTube:** install `yt-dlp` and a supported JavaScript runtime (Deno or Node 22+). Some captions additionally need yt-dlp's proof-of-origin token plugin. Dig does not install it or read browser cookies.
-- **Federated Papers, full text and PDFs:** install the optional Papers bridge, using `git` and `uv`. Optional NCBI and CORE keys improve particular connectors; a contact email enables Unpaywall's legal open-access lookup. The [source setup guide](docs/sources.md#papers-bridge) lists the exact names and setup command.
-- **Partial setup is useful:** X's API and Grok are independent; either can be used without the other's key. TikTok Creative Center and its Ad Library use different providers. Amazon current snapshots and history/reviews use different providers. Dig reports the unavailable part rather than silently replacing it.
+**Local tools:** YouTube transcripts need [`yt-dlp`](https://github.com/yt-dlp/yt-dlp). Federated paper search, full text and PDFs need the optional Papers bridge (`git` and `uv`).
 
-For source-by-source requirements, optional aliases and access limits, see **[Sources and their keys](docs/sources.md)**. Dig's Sources page also links to each account's key page and shows which sources share a credential.
+[Sources and their keys](docs/sources.md) has every option, alias and setup step.
 
-### Add keys outside the chat
+### Adding keys
 
-On Dig's **Sources** page, select **Edit keys.env**. Fill in the keys you chose and save. Keys live in `~/.local/share/dig/keys.env`, never in the plugin or conversation; Dig reloads the file when saved. **Use existing key** copies a credential already in Codex's starting environment only when you request it. Never paste a key into chat.
+Keys never go in the chat. On Dig's **Sources** page, click **Edit keys.env**, paste your keys after the `=` signs and save. Dig picks up the change right away. The file lives at `~/.local/share/dig/keys.env`.
 
 ## Use
 
-- **Ask a research question** normally, or say which sources to use.
-- **Run a method directly:** `$dig:reddit`, `$dig:x-post`, `$dig:facebook`, `$dig:facebook-ads` or another source method.
-- **Open Dig** from the sidebar to browse reports, original evidence and costs.
-- **Attach saved research** to a question with `@` in the composer.
-- **Change source selection or worker suggestions** on Dig's Sources and Settings pages.
+- **Ask a research question** normally, or name the sources you want.
+- **Run one method:** type `$dig:` and pick one, such as `$dig:x-post` or `$dig:facebook`.
+- **Open Dig** from the sidebar to read reports, original responses and costs.
+- **Reuse past research** by typing `@` in the composer.
 
 ## Update
 
@@ -85,14 +121,15 @@ codex plugin marketplace upgrade dig
 codex plugin add dig@dig
 ```
 
-The first command refreshes the GitHub marketplace snapshot; the second installs its latest Dig package. Quit and reopen ChatGPT afterward. Settings, keys and saved research stay outside the installed package.
+Then quit and reopen ChatGPT. Your settings, keys and research are kept.
 
 ## Privacy and costs
 
-- **Local storage, third-party retrieval:** Dig runs locally and has no research backend or telemetry service of its own. Queries and requested URLs go to the enabled providers; their responses enter your Codex conversation and are handled like the rest of that chat.
-- **Your library:** settings and keys live in `~/.local/share/dig`; research lives in its `library` folder unless you select another folder. Original responses are retained only when retention is on and saving succeeds.
-- **Your provider accounts:** each service bills you directly. Dig records reported charges in their original units, never merges different credit systems or estimates an unknown charge. Displayed totals exclude Codex model costs and are not a reconciled invoice.
-- **Access rules still apply:** use providers and public data in accordance with their terms and applicable law. An available connector does not grant access to private content or permission to redistribute it. Research claims still need checking against the evidence.
+- **Runs on your computer.** Dig has no server of its own and collects nothing.
+- **What leaves your computer:** searches go only to the services you turn on, with your keys. Their results enter your Codex conversation.
+- **Where things are kept:** settings, keys and research live in `~/.local/share/dig` (you can choose another research folder).
+- **Costs:** each service bills you. Dig shows what each reports; Codex model usage isn't included.
+- **Provider terms still apply** to what you search and reuse.
 
 ## Uninstall
 
@@ -111,8 +148,8 @@ npm run check   # build and offline tests
 npm run smoke   # one live, keyless Hacker News search in a throwaway folder
 ```
 
-To install a local checkout: `codex plugin marketplace add /path/to/dig`. The [architecture contract](docs/architecture.md) explains the boundaries; [CHANGELOG.md](CHANGELOG.md) lists releases. Report vulnerabilities privately through [SECURITY.md](SECURITY.md).
+Install a local checkout with `codex plugin marketplace add /path/to/dig`. See the [architecture](docs/architecture.md), the [changelog](CHANGELOG.md) and the [security policy](SECURITY.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Dig is an independent project, not an OpenAI, X or provider-endorsed plugin.
+MIT. See [LICENSE](LICENSE); bundled third-party licenses are in [plugin/THIRD_PARTY_NOTICES.md](plugin/THIRD_PARTY_NOTICES.md). Service logos are their owners' trademarks, shown to identify each service. Dig is an independent project, not affiliated with OpenAI, X or any provider.

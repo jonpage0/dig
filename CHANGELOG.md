@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Put installation and setup first in the README, expand the feature overview, and map optional provider accounts and keys to the capabilities they enable. The source guide also lists Papers bridge credential aliases and prerequisites.
+- **Easier-to-read README.** Installation comes first; what Dig does and which services and keys unlock what are now tables with each source's logo. The source guide lists every optional key and alias.
+- **Third-party notices.** The build now writes `plugin/THIRD_PARTY_NOTICES.md` with the license of every package bundled into the plugin, and fails if a bundled package's license cannot be included.
 
 ## 0.2.31 — 2026-10-08
 
