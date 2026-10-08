@@ -185,7 +185,7 @@ export const settingsFields = {
   worker_effort: { schema: z.enum(WORKER_EFFORTS), title: 'Source worker effort', description: `The reasoning effort Dig suggests for source workers, ${WORKER_DEFAULTS.default.effort} unless you change it. Each method follows this until it has its own suggestion on the Sources page; X judge and X breadth start with their own.` },
   ...Object.fromEntries(MODULES.map(m => [sourceSetting(m.id), { schema: z.boolean(), title: `Enable ${m.label}`, description: m.description }])),
   x_model: { schema: z.string().min(1), title: 'X provider model', description: 'xAI retrieval model, not the Codex source-worker model.' },
-  x_depth: { schema: z.enum(['quick', 'standard', 'max', 'ultra']), title: 'Starting X search depth', description: 'X passes use this depth unless a pass needs another: X judge may run max for a nuanced or disputed pass, X breadth runs max for its final sweep, and a quick existence check runs quick.' },
+  x_depth: { schema: z.enum(['quick', 'standard', 'max', 'ultra']), title: 'Starting X search depth', description: 'X passes use this depth unless a pass needs another: X judge may run one max pass for a nuanced or disputed question, X breadth one max pass for a final sweep, and a quick existence check runs quick. A max or ultra starting depth applies to every pass.' },
   x_web_search: { schema: z.boolean(), title: 'Include web search in X retrieval', description: 'Off keeps X research to X posts. A request can still turn web search on or off for a single pass.' },
   x_code_execution: { schema: z.boolean(), title: 'Allow provider code execution in X retrieval' },
   ...Object.fromEntries(METHODS.flatMap(agent => Object.entries(workerFields(agent)))),

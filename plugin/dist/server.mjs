@@ -40876,7 +40876,7 @@ var settingsFields = {
   worker_effort: { schema: external_exports.enum(WORKER_EFFORTS), title: "Source worker effort", description: `The reasoning effort Dig suggests for source workers, ${WORKER_DEFAULTS.default.effort} unless you change it. Each method follows this until it has its own suggestion on the Sources page; X judge and X breadth start with their own.` },
   ...Object.fromEntries(MODULES.map((m3) => [sourceSetting(m3.id), { schema: external_exports.boolean(), title: `Enable ${m3.label}`, description: m3.description }])),
   x_model: { schema: external_exports.string().min(1), title: "X provider model", description: "xAI retrieval model, not the Codex source-worker model." },
-  x_depth: { schema: external_exports.enum(["quick", "standard", "max", "ultra"]), title: "Starting X search depth", description: "X passes use this depth unless a pass needs another: X judge may run max for a nuanced or disputed pass, X breadth runs max for its final sweep, and a quick existence check runs quick." },
+  x_depth: { schema: external_exports.enum(["quick", "standard", "max", "ultra"]), title: "Starting X search depth", description: "X passes use this depth unless a pass needs another: X judge may run one max pass for a nuanced or disputed question, X breadth one max pass for a final sweep, and a quick existence check runs quick. A max or ultra starting depth applies to every pass." },
   x_web_search: { schema: external_exports.boolean(), title: "Include web search in X retrieval", description: "Off keeps X research to X posts. A request can still turn web search on or off for a single pass." },
   x_code_execution: { schema: external_exports.boolean(), title: "Allow provider code execution in X retrieval" },
   ...Object.fromEntries(METHODS.flatMap((agent) => Object.entries(workerFields(agent))))
@@ -49357,7 +49357,7 @@ function buildSystemMessage(options) {
 Your job:
 1. Use the x_search tool to find relevant X.com posts
 2. Analyze the posts you find
-3. Report findings with inline citations when available
+3. Report findings, citing each post inline where you use it with its full link (https://x.com/<handle>/status/<id>). Never cite a post by number, such as [3] or [post:12]: numbers do not reach the reader as links.
 4. If no results, state clearly "No results found" and explain why
 
 Response Format:
@@ -49423,6 +49423,26 @@ function extractContent(response) {
     }
   }
   return { text: text2, sources };
+}
+var NOT_PROSE = /* @__PURE__ */ new Set(["link", "image", "code", "codespan", "escape", "html", "def"]);
+function proseOf(tokens, out = []) {
+  for (const token2 of tokens) {
+    if (NOT_PROSE.has(token2.type)) continue;
+    const inner = "tokens" in token2 ? token2.tokens : void 0;
+    if (token2.type === "text" && !inner) out.push(token2.raw);
+    if (inner) proseOf(inner, out);
+    if (token2.type === "list") for (const item of token2.items) proseOf(item.tokens, out);
+    if (token2.type === "table") {
+      const table2 = token2;
+      for (const cell of [...table2.header, ...table2.rows.flat()]) proseOf(cell.tokens, out);
+    }
+  }
+  return out;
+}
+function numberedCitations(text2) {
+  const number4 = String.raw`(?:post:\s*\d{1,4}|\d{1,3})`;
+  const marker = new RegExp(String.raw`\[${number4}(?:\s*[,–-]\s*${number4})*\]`, "gi");
+  return proseOf(x.lex(text2)).flatMap((prose) => prose.match(marker) ?? []);
 }
 function reasoningEffortForDepth(depth) {
   if (depth === "quick") return "low";
@@ -49579,6 +49599,13 @@ var search5 = metered({
       const passLabel = args.passLabel?.trim() || "pass-1";
       let result = `${passLabel}
 ${text2}`;
+      const numbered = numberedCitations(text2);
+      if (numbered.length > 0) {
+        const markers = numbered.length === 1 ? "1 bracketed marker that looks like a citation by number" : `${numbered.length} bracketed markers that look like citations by number`;
+        result += `
+
+**Citations by number:** this write-up has ${markers} (such as ${numbered[0]}) but no link for them. Dig does not resolve which post each means, and the Sources list below is numbered by Dig, not by Grok, so do not read a number as that Sources entry. Find the post a claim rests on through X's search (\`x_search_posts\`) before relying on it.`;
+      }
       const handleList = args.handles?.length ? args.handles.map((h2) => h2.replace(/^@/, "")).join(", ") : "none";
       const excludeList = args.excludeHandles?.length ? args.excludeHandles.map((h2) => h2.replace(/^@/, "")).join(", ") : "none";
       const activeTools = tools.map((t) => t.type).join(", ");
@@ -55917,7 +55944,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
 }
 
 // src/version.mjs
-var VERSION2 = "0.2.28";
+var VERSION2 = "0.2.29";
 
 // src/server.mjs
 loadKeys();

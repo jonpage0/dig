@@ -64,3 +64,17 @@ test("the default model receives the requested depth as reasoning effort", async
 	await executeSource(search, { query: "depth", depth: "max" }, context);
 	expect(bodies.map((body) => [body.model, body.reasoning?.effort])).toEqual([["grok-4.7", "medium"], ["grok-4.7", "high"]]);
 });
+
+test("a write-up that cites posts by number is flagged; links, references, code and years are not", async () => {
+	const reply = (text: string) => (async () => Response.json({ id: "r", output: [{ type: "message", content: [{ type: "output_text", text }] }], usage: { total_tokens: 1, cost_in_usd_ticks: 1 } })) as typeof fetch;
+	globalThis.fetch = reply("According to [post:50]: the skills work. Oren posts the result [120] and [118], as do [3, 5].");
+	const numbered = await executeSource(search, { query: "numbered" }, context);
+	expect(numbered.status).toBe("success");
+	expect(numbered.text).toContain("this write-up has 4 bracketed markers that look like citations by number (such as [post:50]) but no link for them");
+	globalThis.fetch = reply(
+		"Alex shows the skills [1](https://x.com/The_Alex/status/1). Ethan edits raw footage [[3]](https://x.com/Ethan_Ng_13/status/3 \"post\"). " +
+			"Oren posts the result [2] and [4][oren]; the fix is `items[0]`, shipped in [2026].\n\n[2]: https://x.com/orenmeetsworld/status/2\n[oren]: https://x.com/orenmeetsworld/status/4",
+	);
+	const linked = await executeSource(search, { query: "linked" }, context);
+	expect(linked.text).not.toContain("Citations by number");
+});

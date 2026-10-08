@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.29 — 2026-10-07
+
+- **Grok cites posts by link.** `xsearch` now asks Grok to cite every post inline with its full link. Grok sometimes cited posts by number (`[post:50]`, `[120]`) with no link, and those numbers identified no post. When a write-up still has bracketed numbers in its prose (outside links and code), the result says how many look like citations, that they are not links and that Dig's Sources list is numbered separately, so a worker finds the post through X's search before relying on it.
+- **Fewer Grok passes in the X methods.** X judge runs at most three Grok passes and X breadth at most four, each passing `max` at most once; a `max` or `ultra` starting depth you set still applies to every pass. Both find posts through X's own search and keep Grok for interpretation: a Grok pass pays for every post it fetches, while its write-up links only a fraction of them.
+
 ## 0.2.28 — 2026-10-07
 
 - **Figures at the top of the conversation panel.** The panel beside a conversation now opens with four small figures for that conversation's research: retrievals, sources, failed or stopped, and provider cost. They count the same calls as the conversation's cost did, and say how many retrievals by workers or other conversations are not included until a saved report claims them.

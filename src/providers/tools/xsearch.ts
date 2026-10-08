@@ -8,6 +8,7 @@
  * Supports handle filtering, date ranges, image/video understanding,
  * multi-turn chaining via previous_response_id, and prompt caching.
  */
+import { Lexer, type Token, type Tokens } from "marked"
 import type { KeepRaw, ToolSpec } from "../types.js"
 import { loadConfig } from "../runtime-config.js"
 import { keptJson, keptText } from "../http.js"
@@ -112,7 +113,7 @@ function buildSystemMessage(options: {
 Your job:
 1. Use the x_search tool to find relevant X.com posts
 2. Analyze the posts you find
-3. Report findings with inline citations when available
+3. Report findings, citing each post inline where you use it with its full link (https://x.com/<handle>/status/<id>). Never cite a post by number, such as [3] or [post:12]: numbers do not reach the reader as links.
 4. If no results, state clearly "No results found" and explain why
 
 Response Format:
@@ -182,6 +183,39 @@ function extractContent(response: ResponsesResponse): { text: string; sources: A
   }
 
   return { text, sources }
+}
+
+/** Markdown tokens whose text is not prose: links and images (whose label may itself be `[1]`), code, escapes, HTML and reference definitions. */
+const NOT_PROSE = new Set(["link", "image", "code", "codespan", "escape", "html", "def"])
+
+/** The prose of a Markdown write-up, one string per text token, so a match never spans two tokens. */
+function proseOf(tokens: Token[], out: string[] = []): string[] {
+  for (const token of tokens) {
+    if (NOT_PROSE.has(token.type)) continue
+    const inner = "tokens" in token ? token.tokens : undefined
+    if (token.type === "text" && !inner) out.push(token.raw)
+    if (inner) proseOf(inner, out)
+    if (token.type === "list") for (const item of (token as Tokens.List).items) proseOf(item.tokens, out)
+    if (token.type === "table") {
+      const table = token as Tokens.Table
+      for (const cell of [...table.header, ...table.rows.flat()]) proseOf(cell.tokens, out)
+    }
+  }
+  return out
+}
+
+/**
+ * Grok sometimes cites posts by number (`[post:50]`, `[120]`) with no link in its text; in the runs observed, its
+ * annotations then listed posts without positions and the numbers did not index that list (the post described at
+ * `[post:50]` was entry 27 of it). Returns the bracketed numbers in the write-up's prose: `[post:N]`, or one to three
+ * digits (so a year is not one), alone or in a list or range such as `[1, 2]` or `[1–3]`. Markdown decides what is
+ * prose, so a number that is a link's label (`[1](url)`, Grok's `[[1]](url)`), a resolved reference (`[1]` with a
+ * `[1]: url` definition) or code is not counted.
+ */
+function numberedCitations(text: string): string[] {
+  const number = String.raw`(?:post:\s*\d{1,4}|\d{1,3})`
+  const marker = new RegExp(String.raw`\[${number}(?:\s*[,–-]\s*${number})*\]`, "gi")
+  return proseOf(Lexer.lex(text)).flatMap((prose) => prose.match(marker) ?? [])
 }
 
 type XSearchDepth = "quick" | "standard" | "max" | "ultra"
@@ -385,6 +419,11 @@ export const search = metered({
       // Build result
       const passLabel = args.passLabel?.trim() || "pass-1"
       let result = `${passLabel}\n${text}`
+      const numbered = numberedCitations(text)
+      if (numbered.length > 0) {
+        const markers = numbered.length === 1 ? "1 bracketed marker that looks like a citation by number" : `${numbered.length} bracketed markers that look like citations by number`
+        result += `\n\n**Citations by number:** this write-up has ${markers} (such as ${numbered[0]}) but no link for them. Dig does not resolve which post each means, and the Sources list below is numbered by Dig, not by Grok, so do not read a number as that Sources entry. Find the post a claim rests on through X's search (\`x_search_posts\`) before relying on it.`
+      }
 
       // Search parameters summary
       const handleList = args.handles?.length ? args.handles.map((h: string) => h.replace(/^@/, "")).join(", ") : "none"
