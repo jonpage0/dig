@@ -48,16 +48,28 @@ Ask a question in Codex. Dig researches it source by source, writes a report for
 
 **21 sources · 23 research methods · 56 provider tools**
 
-| Area | Sources | What you get |
-| --- | --- | --- |
-| **Web** | <img src="docs/logos/exa.svg" width="18" height="18" alt=""> Exa · <img src="docs/logos/perplexity.svg" width="18" height="18" alt=""> Perplexity | Web search, page text, cited answers |
-| **Code** | <img src="docs/logos/github.svg" width="18" height="18" alt=""> GitHub · <img src="plugin/assets/skills/book-open-text.svg" width="18" height="18" alt=""> DeepWiki · <img src="docs/logos/ycombinator.svg" width="18" height="18" alt=""> Hacker News | Repositories and their activity, questions about a codebase, developer discussion |
-| **Papers** | <img src="plugin/assets/skills/graduation-cap.svg" width="18" height="18" alt=""> Semantic Scholar, OpenAlex, optional 19-connector bridge | Literature search, related work, open-access full text and PDFs |
-| **Video** | <img src="docs/logos/youtube.svg" width="18" height="18" alt=""> YouTube | Full transcripts, so a claim can be checked against what was said |
-| **X** | <img src="docs/logos/x.svg" width="18" height="18" alt=""> X API and xAI's Grok | Exact posts, threads, accounts, search and counts; search by meaning; descriptions of images and videos |
-| **Social** | <img src="docs/logos/reddit.svg" width="18" height="18" alt=""> Reddit · <img src="docs/logos/tiktok.svg" width="18" height="18" alt=""> TikTok · <img src="docs/logos/instagram.svg" width="18" height="18" alt=""> Instagram · <img src="plugin/assets/skills/messages-square.svg" width="18" height="18" alt=""> Facebook · <img src="docs/logos/linkedin.svg" width="18" height="18" alt=""> LinkedIn · <img src="docs/logos/telegram.svg" width="18" height="18" alt=""> Telegram · <img src="plugin/assets/skills/languages.svg" width="18" height="18" alt=""> China social | Public posts, comments, profiles, groups and events |
-| **Ads** | <img src="plugin/assets/skills/megaphone.svg" width="18" height="18" alt=""> Facebook ads · <img src="docs/logos/tiktok.svg" width="18" height="18" alt=""> TikTok ads | Ad libraries; TikTok Creative Center analytics |
-| **Markets** | <img src="docs/logos/polymarket.svg" width="18" height="18" alt=""> Polymarket · <img src="plugin/assets/skills/shopping-cart.svg" width="18" height="18" alt=""> Amazon · <img src="plugin/assets/skills/chart-no-axes-combined.svg" width="18" height="18" alt=""> DataForSEO | Prediction-market odds; products, reviews and price history; search and SEO data |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
+| :---: | --- | --- |
+| <img src="docs/logos/exa.svg" width="22" height="22" alt=""> | **Exa** | Web search and page text |
+| <img src="docs/logos/perplexity.svg" width="22" height="22" alt=""> | **Perplexity** | Cited web answers |
+| <img src="docs/logos/github.svg" width="22" height="22" alt=""> | **GitHub** | Repositories, their activity and source code |
+| <img src="plugin/assets/skills/book-open-text.svg" width="22" height="22" alt=""> | **DeepWiki** | Questions about a public codebase |
+| <img src="docs/logos/ycombinator.svg" width="22" height="22" alt=""> | **Hacker&nbsp;News** | Developer stories and discussion |
+| <img src="plugin/assets/skills/graduation-cap.svg" width="22" height="22" alt=""> | **Papers** | Semantic Scholar, OpenAlex and 19 more indexes; full text and PDFs |
+| <img src="docs/logos/youtube.svg" width="22" height="22" alt=""> | **YouTube** | Full video transcripts |
+| <img src="docs/logos/x.svg" width="22" height="22" alt=""> | **X** | Exact posts, threads and accounts; Grok for search by meaning, images and video |
+| <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **Reddit** | Threads, comments and full comment trees |
+| <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok** | Videos, captions and transcripts |
+| <img src="docs/logos/instagram.svg" width="22" height="22" alt=""> | **Instagram** | Reels, accounts and transcripts |
+| <img src="plugin/assets/skills/messages-square.svg" width="22" height="22" alt=""> | **Facebook** | Public pages, posts, groups and events |
+| <img src="docs/logos/linkedin.svg" width="22" height="22" alt=""> | **LinkedIn** | Profiles, companies and posts |
+| <img src="docs/logos/telegram.svg" width="22" height="22" alt=""> | **Telegram** | Public channels and posts |
+| <img src="plugin/assets/skills/languages.svg" width="22" height="22" alt=""> | **China&nbsp;social** | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat |
+| <img src="plugin/assets/skills/megaphone.svg" width="22" height="22" alt=""> | **Facebook&nbsp;ads** | Meta Ad Library advertisers and creatives |
+| <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok&nbsp;ads** | Creative Center analytics and the Ad Library |
+| <img src="docs/logos/polymarket.svg" width="22" height="22" alt=""> | **Polymarket** | Prediction-market odds |
+| <img src="plugin/assets/skills/shopping-cart.svg" width="22" height="22" alt=""> | **Amazon** | Products, reviews and price history |
+| <img src="plugin/assets/skills/chart-no-axes-combined.svg" width="22" height="22" alt=""> | **DataForSEO** | Search results, keywords, rankings and backlinks |
 
 What you get back:
 
