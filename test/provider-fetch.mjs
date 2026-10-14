@@ -17,6 +17,11 @@ async function rotateBearerToken() {
   }
 }
 
+/** Percent escapes written with lowercase hex digits, as some servers echo them. */
+const lowercaseEscapes = text => text.replace(/%[0-9A-F]{2}/g, escape => escape.toLowerCase());
+/** Every UTF-8 byte of `text` percent-encoded, unreserved characters included. */
+const everyByteEscaped = text => [...new TextEncoder().encode(text)].map(byte => `%${byte.toString(16).padStart(2, '0')}`).join('');
+
 globalThis.fetch = async (url, init) => {
   const target = new URL(String(url));
   if (target.origin === 'https://api.scrape.do' && target.pathname === '/plugin/amazon/pdp') {
@@ -26,6 +31,15 @@ globalThis.fetch = async (url, init) => {
   }
   if (target.origin === 'https://api.scrape.do' && target.pathname === '/plugin/amazon/offer-listing') {
     return Response.json({ message: 'Offers unavailable' }, { status: 400 });
+  }
+  if (target.origin === 'https://api.scrape.do' && target.pathname === '/plugin/amazon/search') {
+    // The token this request was sent with, echoed with lowercase percent escapes, form-encoded and with every byte
+    // escaped, in the body and in the kept cost header.
+    const token = target.searchParams.get('token');
+    const percent = lowercaseEscapes(encodeURIComponent(token));
+    const form = lowercaseEscapes(new URLSearchParams({ v: token }).toString().slice(2));
+    const everyByte = everyByteEscaped(token);
+    return Response.json({ message: `bad token ${percent} or ${form} or ${everyByte}` }, { status: 400, headers: { 'scrape.do-request-cost': `${percent} ${everyByte}` } });
   }
   if (target.origin === 'https://api.x.com' && target.pathname === '/2/tweets') {
     // The credential this request was sent with, which the response then echoes.

@@ -26,6 +26,7 @@
  */
 import { requestJson } from "../http.js"
 import { metered } from "../outcome.js"
+import { knownSecrets, redactText } from "../secrets.js"
 import type { ToolContext, ToolSpec } from "../types.js"
 
 const SC_BASE = "https://api.scrapecreators.com"
@@ -78,12 +79,6 @@ export type RequestContext = Pick<ToolContext, "abort" | "keep">
 export type ScrapeCreatorsResponse =
   | { ok: true; payload: Record<string, unknown>; status: number }
   | { ok: false; cancelled: boolean; error: string; payload: Record<string, unknown> | null }
-
-/** Strips the live API key out of any text that might echo it (provider messages, fetch errors). */
-export function redactSecret(text: string): string {
-  const key = process.env.SCRAPECREATORS_API_KEY?.trim()
-  return key ? text.replaceAll(key, "[redacted]") : text
-}
 
 /** `ERROR:` text for a failed response; cancellations are named as such, never as provider failures. */
 export function failText(response: { cancelled: boolean; error: string }): string {
@@ -159,11 +154,11 @@ export async function scrapecreatorsRequest(
     status = response.status
   } catch (error) {
     if (signal.aborted) return { ok: false, cancelled: true, error: `${label} cancelled while the request was in flight`, payload: null }
-    return { ok: false, cancelled: false, error: redactSecret(`${label} request failed: ${error instanceof Error ? error.message : "Unknown error"}`), payload: null }
+    return { ok: false, cancelled: false, error: redactText(`${label} request failed: ${error instanceof Error ? error.message : "Unknown error"}`, knownSecrets()), payload: null }
   }
   const record = asRecord(payload)
   const rawMessage = record ? (asString(record.error) ?? asString(record.message)) : null
-  const providerMessage = rawMessage ? redactSecret(rawMessage) : null
+  const providerMessage = rawMessage ? redactText(rawMessage, knownSecrets()) : null
   if (status !== 200) {
     return { ok: false, cancelled: false, error: `${label} returned HTTP ${status}${providerMessage ? `: ${providerMessage}` : ""}`, payload: record }
   }

@@ -171,7 +171,7 @@ describe("exa tools", () => {
 		restore = mock.restore;
 		const out = text(await search.execute({ query: "q" }, context));
 		expect(out).not.toContain("exa-test-key");
-		expect(out).toContain("[EXA_API_KEY redacted]");
+		expect(out).toContain("[redacted]");
 	});
 
 	test("contents reports per-URL failures and URLs Exa never accounted for", async () => {
@@ -226,9 +226,9 @@ describe("exa tools", () => {
 
 		const out = text(result);
 		expect(out).not.toContain("exa-test-key");
-		expect(out).toContain("- https://example.invalid/?k=[EXA_API_KEY redacted] — [EXA_API_KEY redacted] (HTTP 401)");
+		expect(out).toContain("- https://example.invalid/?k=[redacted] — [redacted] (HTTP 401)");
 		expect(JSON.stringify(details(result))).not.toContain("exa-test-key");
-		expect(details(result)).toMatchObject({ failed: ["https://example.invalid/?k=[EXA_API_KEY redacted]"] });
+		expect(details(result)).toMatchObject({ failed: ["https://example.invalid/?k=[redacted]"] });
 	});
 
 	test("similar uses excludeSourceDomain and caps numResults at the public limit with a note", async () => {

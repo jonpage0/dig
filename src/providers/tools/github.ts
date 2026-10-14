@@ -30,7 +30,7 @@
  */
 import { execFile } from "node:child_process"
 import { free } from "../outcome.js"
-import { registerSecret, registeredSecrets } from "../secrets.js"
+import { knownSecrets, redactProviderText, redactText, registerSecret } from "../secrets.js"
 import type { SourceToolOutput, ToolContext, ToolSpec } from "../types.js"
 
 /** Cancellation plus the raw-response capture of the tool call. */
@@ -307,14 +307,12 @@ function errorMessage(error: unknown): string {
 }
 
 /**
- * Removes every resolved token (registered with the shared tool boundary,
- * which also redacts raw responses and receipts) and anything shaped like a
- * GitHub token from provider or transport text.
+ * Removes every known credential (the resolved token included, registered with the shared tool boundary, which also
+ * redacts raw responses and receipts) in any spelling, and anything shaped like a GitHub token, from provider or
+ * transport text.
  */
 function redactSecrets(text: string): string {
-  let clean = text
-  for (const token of registeredSecrets()) clean = clean.split(token).join(REDACTED)
-  return clean.replace(GITHUB_TOKEN_PATTERN, REDACTED)
+  return redactText(text, knownSecrets()).replace(GITHUB_TOKEN_PATTERN, REDACTED)
 }
 
 // ---------------------------------------------------------------------------
@@ -486,16 +484,10 @@ async function githubRequest(
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: AbortSignal.any([ctx.abort, AbortSignal.timeout(TIMEOUT_MS)]),
     })
-    const text = await response.text()
-    let payload: unknown = null
-    if (text) {
-      try {
-        payload = JSON.parse(text)
-      } catch {
-        payload = null
-      }
-    }
-    ctx.keep(`${options.method ?? "GET"} ${url.pathname}`, response.status, payload ?? text)
+    // Redacted as it arrives, JSON decoded first, like every provider body, so later excerpts cannot cut a credential short.
+    const body = redactProviderText(await response.text(), knownSecrets())
+    const payload = body.json ? body.value : null
+    ctx.keep(`${options.method ?? "GET"} ${url.pathname}`, response.status, payload ?? body.text)
     const transient = response.status >= 500 && response.status <= 504
     if (!transient || attempt === 1) {
       return { status: response.status, headers: response.headers, payload, rateLimit: rateLimitFrom(response.headers) }

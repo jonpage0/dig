@@ -15,6 +15,7 @@ const saved = {
 	DIG_STATE_DIR: process.env.DIG_STATE_DIR,
 	PAPER_SEARCH_MCP_ENV_FILE: process.env.PAPER_SEARCH_MCP_ENV_FILE,
 	PAPER_SEARCH_MCP_UNPAYWALL_EMAIL: process.env.PAPER_SEARCH_MCP_UNPAYWALL_EMAIL,
+	OPENALEX_API_KEY: process.env.OPENALEX_API_KEY,
 };
 let root: string;
 
@@ -139,6 +140,17 @@ test("the bridge's echoes of the Unpaywall contact email reach neither results n
 			expect(value).not.toContain(encoded);
 		}
 	}
+});
+
+test("a key the bridge echoes inside its JSON output is redacted, however JSON escaping spells it", async () => {
+	// A quote and a backslash make the key's JSON text differ from the key.
+	const key = 'Bridge"quoted\\key-value';
+	process.env.OPENALEX_API_KEY = key;
+	process.env.FAKE_SEARCH_OUTPUT = JSON.stringify({ source_status: { openalex: "failed" }, papers: [], errors: { openalex: `401 Unauthorized for api_key ${key}` } });
+	const kept: unknown[] = [];
+	const result = text(await multi_search.execute({ query: "keys", sources: ["openalex"] }, { ...context, keep: (_label: string, _status: number | string, body: unknown) => { kept.push(body); } }));
+	expect(result).toContain("401 Unauthorized for api_key [redacted]");
+	for (const value of [result, JSON.stringify(kept)]) expect(value).not.toContain("quoted");
 });
 
 test("a federated search's outcome follows its requested connectors' health, so one whose every connector failed is recorded as failed", async () => {

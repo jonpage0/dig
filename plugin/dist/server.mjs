@@ -18930,7 +18930,7 @@ var require_fast_uri = __commonJS({
         normalizeString(uri2, options);
       } else if (typeof uri2 === "object") {
         uri2 = /** @type {T} */
-        parse4(serialize(uri2, options), options);
+        parse3(serialize(uri2, options), options);
       }
       return uri2;
     }
@@ -18970,8 +18970,8 @@ var require_fast_uri = __commonJS({
     function resolveComponent(base, relative4, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
-        base = parse4(serialize(base, options), options);
-        relative4 = parse4(serialize(relative4, options), options);
+        base = parse3(serialize(base, options), options);
+        relative4 = parse3(serialize(relative4, options), options);
       }
       options = options || {};
       if (!options.tolerant && relative4.scheme) {
@@ -19270,7 +19270,7 @@ var require_fast_uri = __commonJS({
       }
       return { parsed, malformedAuthorityOrPort, malformedPercentEncoding, malformedSchemeSpecific, malformedHost, malformedScheme };
     }
-    function parse4(uri2, opts) {
+    function parse3(uri2, opts) {
       return parseWithStatus(uri2, opts).parsed;
     }
     function normalizeString(uri2, opts) {
@@ -19307,7 +19307,7 @@ var require_fast_uri = __commonJS({
       resolveComponent,
       equal,
       serialize,
-      parse: parse4
+      parse: parse3
     };
     module2.exports = fastUri;
     module2.exports.default = fastUri;
@@ -30424,8 +30424,8 @@ function parseStringDef(def, refs) {
   }
   return res;
 }
-function escapeLiteralCheckValue(literal2, refs) {
-  return refs.patternStrategy === "escape" ? escapeNonAlphaNumeric(literal2) : literal2;
+function escapeLiteralCheckValue(literal3, refs) {
+  return refs.patternStrategy === "escape" ? escapeNonAlphaNumeric(literal3) : literal3;
 }
 var ALPHA_NUMERIC = new Set("ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvxyz0123456789");
 function escapeNonAlphaNumeric(source) {
@@ -36660,7 +36660,7 @@ function String2(options) {
 function* FromUnion(syntax) {
   const trim2 = syntax.trim().replace(/"|'/g, "");
   return trim2 === "boolean" ? yield Boolean2() : trim2 === "number" ? yield Number2() : trim2 === "bigint" ? yield BigInt2() : trim2 === "string" ? yield String2() : yield (() => {
-    const literals2 = trim2.split("|").map((literal2) => Literal(literal2.trim()));
+    const literals2 = trim2.split("|").map((literal3) => Literal(literal3.trim()));
     return literals2.length === 0 ? Never() : literals2.length === 1 ? literals2[0] : UnionEvaluated(literals2);
   })();
 }
@@ -38695,40 +38695,95 @@ function registerSecret(value) {
   const secret = value.trim();
   if (secret.length >= MIN_SECRET_LENGTH) registered.add(secret);
 }
-function registeredSecrets() {
-  return registered;
-}
 function knownSecrets(env = process.env) {
-  const values = /* @__PURE__ */ new Set();
-  const add = (value) => {
-    values.add(value);
-    values.add(encodeURIComponent(value));
-    values.add(new URLSearchParams({ v: value }).toString().slice(2));
-  };
-  for (const value of registered) add(value);
+  const values = new Set(registered);
   for (const name2 of CREDENTIAL_ENV) {
     const value = env[name2]?.trim();
-    if (value && value.length >= MIN_SECRET_LENGTH) add(value);
+    if (value && value.length >= MIN_SECRET_LENGTH) values.add(value);
   }
   return [...values].sort((a, b2) => b2.length - a.length);
 }
+var literal2 = (text4) => text4.replace(/[\\^$.*+?()[\]{}|/-]/g, "\\$&");
+var utf8 = new TextEncoder();
+var byteEscape = (byte) => `%${byte.toString(16).toUpperCase().padStart(2, "0").replace(/[A-F]/g, (digit) => `[${digit}${digit.toLowerCase()}]`)}`;
+function characterSpellings(character) {
+  const spellings = [];
+  let length = character.length;
+  if (character.isWellFormed()) {
+    const bytes = [...utf8.encode(character)];
+    spellings.push(bytes.map(byteEscape).join(""));
+    length = Math.max(length, 3 * bytes.length);
+  }
+  if (character === " ") spellings.push("\\+");
+  spellings.push(literal2(character));
+  return { pattern: `(?:${spellings.join("|")})`, length };
+}
+var spellingsBySecret = /* @__PURE__ */ new Map();
+function secretSpellings(secret) {
+  let found = spellingsBySecret.get(secret);
+  if (!found) {
+    const characters = [...secret].map(characterSpellings);
+    found = {
+      pattern: new RegExp(characters.map((character) => character.pattern).join(""), "g"),
+      reach: characters.reduce((sum, character) => sum + character.length, 0)
+    };
+    spellingsBySecret.set(secret, found);
+  }
+  return found;
+}
+function redactEncoded(text4, secret) {
+  const { pattern, reach } = secretSpellings(secret);
+  if (text4.length <= reach) return text4.replace(pattern, REDACTED);
+  const marks = /[%+]/g;
+  let redacted = "";
+  let done = 0;
+  for (let mark = marks.exec(text4); mark; ) {
+    const start = Math.max(done, mark.index - reach + 1);
+    let end = mark.index + reach;
+    for (mark = marks.exec(text4); mark && mark.index - reach + 1 < end; mark = marks.exec(text4)) end = mark.index + reach;
+    end = Math.min(end, text4.length);
+    redacted += text4.slice(done, start) + text4.slice(start, end).replace(pattern, REDACTED);
+    done = end;
+  }
+  return done === 0 ? text4 : redacted + text4.slice(done);
+}
 function redactText(text4, secrets) {
+  const escaped = /[%+]/.test(text4);
   let clean = text4;
-  for (const secret of secrets) if (clean.includes(secret)) clean = clean.replaceAll(secret, REDACTED);
+  for (const secret of secrets) {
+    if (escaped) clean = redactEncoded(clean, secret);
+    clean = clean.replaceAll(secret, REDACTED);
+  }
   return clean;
 }
 function redactValue(value, secrets) {
   if (!secrets.length) return value;
   if (typeof value === "string") return redactText(value, secrets);
-  if (Array.isArray(value)) return value.map((item) => redactValue(item, secrets));
-  if (value && typeof value === "object" && [Object.prototype, null].includes(Object.getPrototypeOf(value)))
-    return redactRecord(value, secrets);
+  if (Array.isArray(value)) {
+    const items = value.map((item) => redactValue(item, secrets));
+    return items.some((item, index) => item !== value[index]) ? items : value;
+  }
+  if (value && typeof value === "object" && [Object.prototype, null].includes(Object.getPrototypeOf(value))) {
+    const entries2 = Object.entries(value);
+    const clean = entries2.map(([name2, item]) => [redactText(name2, secrets), redactValue(item, secrets)]);
+    return clean.some(([name2, item], index) => name2 !== entries2[index][0] || item !== entries2[index][1]) ? Object.fromEntries(clean) : value;
+  }
   return value;
 }
 function redactRecord(record3, secrets) {
   return Object.fromEntries(
     Object.entries(record3).map(([name2, item]) => [redactText(name2, secrets), redactValue(item, secrets)])
   );
+}
+function redactProviderText(text4, secrets, parse3 = JSON.parse) {
+  let decoded;
+  try {
+    decoded = parse3(text4);
+  } catch {
+    return { text: redactText(text4, secrets), json: false };
+  }
+  const value = redactValue(decoded, secrets);
+  return { text: value === decoded ? text4 : JSON.stringify(value), json: true, value };
 }
 
 // src/config.mjs
@@ -40178,7 +40233,6 @@ var basename = (path2) => String(path2 ?? "").split("/").filter(Boolean).at(-1) 
 
 // src/ui/markdown.mjs
 var FRONT_MATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
-var SOURCE_CARD = /^\s*```ya?ml[^\n]*\n(source_card:[^\n]*\n[\s\S]*?)\n?```[^\n]*(?:\n|$)/;
 function scalar(raw) {
   const value = raw.trim();
   const double = /^"(?:[^"\\]|\\.)*"/.exec(value);
@@ -40211,15 +40265,19 @@ function frontMatter(text4) {
   }
   return { meta: meta3, body: text4.slice(match[0].length) };
 }
-function sourceCard(body) {
-  const match = SOURCE_CARD.exec(body);
-  if (!match) return { card: null, body };
-  const yaml = match[1];
+function closedFence(raw) {
+  const lines = raw.replace(/\n$/, "").split("\n");
+  const fence = /^ {0,3}(`{3,}|~{3,})/.exec(lines[0])[1];
+  const closer = lines.length > 1 ? lines.at(-1).replace(/^ {0,3}/, "") : "";
+  return closer.startsWith(fence) && /^[`~]* *$/.test(closer.slice(fence.length));
+}
+var isSourceCard = (block2) => block2?.type === "code" && block2.codeBlockStyle !== "indented" && /^ya?ml(?:\s|$)/.test(block2.lang ?? "") && /^source_card:/.test(block2.text) && closedFence(block2.raw);
+function readCard(yaml) {
   const fields = {};
   const lists = {};
   let list = null;
   let partial2 = false;
-  for (const line of yaml.split(/\r?\n/).slice(1)) {
+  for (const line of yaml.split("\n").slice(1)) {
     if (!line.trim() || /^\s*#/.test(line)) continue;
     const entry = /^ {2}([a-z_][a-z0-9_]*):\s*(.*)$/.exec(line);
     const item = /^ {2,}- (.*)$/.exec(line);
@@ -40239,7 +40297,32 @@ function sourceCard(body) {
       else partial2 = true;
     } else partial2 = true;
   }
-  return { card: { fields, lists, yaml, partial: partial2 }, body: body.slice(match[0].length) };
+  return { fields, lists, yaml, partial: partial2 };
+}
+function summaryLine(blocks) {
+  const at = blocks.findIndex((block2) => block2.type === "heading" && block2.depth === 2 && block2.text === "Summary");
+  if (at < 0) return "";
+  for (const block2 of blocks.slice(at + 1)) {
+    if (block2.type === "heading" && block2.depth <= 2) break;
+    const line = block2.raw.split("\n").find((text4) => text4.trim());
+    if (line !== void 0) return line;
+  }
+  return "";
+}
+function reportParts(body) {
+  const text4 = body.replace(/\r\n?/g, "\n");
+  const blocks = new x({ gfm: true }).blockTokens(text4);
+  const first = blocks.findIndex((block2) => block2.type !== "space");
+  let card = null;
+  let rest = text4;
+  if (isSourceCard(blocks[first])) {
+    card = readCard(blocks[first].text);
+    let end = blocks.slice(0, first + 1).reduce((length, block2) => length + block2.raw.length, 0);
+    if (!blocks[first].raw.endsWith("\n") && text4[end] === "\n") end += 1;
+    rest = text4.slice(end);
+  }
+  const headings = blocks.filter((block2) => block2.type === "heading").map(({ depth, text: heading }) => ({ depth, text: heading }));
+  return { card, rest, headings, summary: summaryLine(blocks) };
 }
 function firstParagraph(markdown) {
   const plain2 = (tokens2) => (tokens2 ?? []).map((token2) => token2.tokens ? plain2(token2.tokens) : token2.type === "escape" || token2.type === "codespan" || token2.type === "text" ? decodeEntities(token2.text) : "").join("");
@@ -40253,6 +40336,7 @@ var methods = moduleAgents(ALL_MODULES).filter((m3) => !m3.helper);
 var sourceLabels = Object.fromEntries(MODULES.map((m3) => [m3.id, m3.label]));
 var accountsFor = (report, call) => call.source === report;
 var reportName = (name2) => typeof name2 === "string" && /^[a-z0-9][a-z0-9-]*\.md$/.test(name2) && !["dig.md", "answer.md"].includes(name2);
+var REPORT_SECTIONS = ["Summary", "Evidence Highlights", "Needs Follow-Up", "Negative Evidence (when relevant)"];
 var quote = (value) => JSON.stringify(value);
 var token = (value) => typeof value === "string" && /^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,180}$/.test(value);
 var slug = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 65) || "research";
@@ -40393,13 +40477,18 @@ async function recordCall(config3, project2, dig2, { tool, source, args, at, ms,
 `);
   return receipt;
 }
+function assertReport(parts) {
+  if (!parts.card) throw new Error("The report must begin with its source_card block: a ```yaml fenced block whose first line is source_card:, closed by its fence");
+  const sections = new Set(parts.headings.filter((heading) => heading.depth === 2).map((heading) => heading.text));
+  for (const section of REPORT_SECTIONS) if (!sections.has(section)) throw new Error(`Missing report section: ${section} (a "## ${section}" heading of the report itself, outside code, lists and quotes)`);
+}
 async function saveReport(config3, { project: project2, dig: dig2, source, agent = source, content, topic, question, topic_volatility, supersedes, session = SESSION_UNAVAILABLE }) {
   session = safeSegment(session, SESSION_UNAVAILABLE);
   if (!ALL_MODULES.includes(source)) throw new Error("source must name a report source from source_info");
   if (!methods.some((m3) => m3.module === source && m3.name === agent)) throw new Error(`agent must name a ${source} source method from source_info`);
   if (supersedes && !dig2) throw new Error("supersedes requires an existing dig");
-  if (!/^```ya?ml\s*\nsource_card:\s*\n/.test(content)) throw new Error("The report must begin with its source_card YAML block");
-  for (const heading of ["Summary", "Evidence Highlights", "Needs Follow-Up", "Negative Evidence (when relevant)"]) if (!content.includes(`## ${heading}`)) throw new Error(`Missing report section: ${heading}`);
+  const parts = reportParts(content);
+  assertReport(parts);
   if (topic && (topic.length > 50 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(topic))) throw new Error("topic must be lowercase, hyphenated and at most 50 characters");
   if (!dig2 && !question?.trim()) throw new Error("question is required when saving without a dig");
   const createdDig = !dig2;
@@ -40409,7 +40498,7 @@ async function saveReport(config3, { project: project2, dig: dig2, source, agent
     if (!reportName(supersedes)) throw new Error("Invalid supersedes report reference");
     await readFile2(await contained(config3, join2(folder, supersedes)));
   }
-  const title = firstHeading(content) ?? question ?? topic ?? `${sourceLabels[source]} research`;
+  const title = parts.headings.find((heading) => heading.depth === 1)?.text ?? question ?? topic ?? `${sourceLabels[source]} research`;
   const at = (/* @__PURE__ */ new Date()).toISOString();
   for (let n = 1; n < 1e3; n++) {
     const name2 = n === 1 ? `${agent}.md` : `${agent}-${n}.md`;
@@ -40493,8 +40582,9 @@ async function listLibrary(config3) {
       for (const name2 of names.filter((f2) => f2 !== "dig.md" && f2 !== "answer.md")) {
         const text4 = await readFile2(await contained(config3, join2(folder, name2)), "utf8");
         const head = frontMatter2(text4);
-        const summary = /^## Summary\s*\r?\n([\s\S]*?)(?=\r?\n## |$)/m.exec(text4)?.[1].trim().slice(0, 280) ?? "";
-        reports.push({ name: name2, text: text4, summary, source: head.source ?? null, method: head.agent ?? null, supersedes: head.supersedes ?? null, at: head.generated_at ?? null, session: typeof head.session === "string" ? head.session : null, status: sourceCard(text4.replace(/^---\n[\s\S]*?\n---\n/, "")).card?.fields?.status });
+        const parts = reportParts(text4.replace(/^---\n[\s\S]*?\n---\n/, ""));
+        const summary = parts.summary.trim().slice(0, 280);
+        reports.push({ name: name2, text: text4, summary, source: head.source ?? null, method: head.agent ?? null, supersedes: head.supersedes ?? null, at: head.generated_at ?? null, session: typeof head.session === "string" ? head.session : null, status: parts.card?.fields?.status });
       }
       reports.sort((a, b2) => (time4(a.at) ?? 0) - (time4(b2.at) ?? 0) || a.name.localeCompare(b2.name, void 0, { numeric: true }));
       const answer = names.includes("answer.md") ? `${prefix}/answer.md` : null;
@@ -40611,21 +40701,6 @@ function withoutSecrets(value) {
   if (Array.isArray(value)) return value.map(withoutSecrets);
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).filter(([name2]) => !name2.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().split(/[^a-z0-9]+/).some((part) => SECRET_NAME_PARTS.has(part))).map(([name2, item]) => [name2, withoutSecrets(item)]));
-}
-function firstHeading(markdown) {
-  let fence;
-  for (const line of markdown.split("\n")) {
-    const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
-    if (marker) {
-      if (!fence) fence = marker[0];
-      else if (marker[0] === fence) fence = void 0;
-      continue;
-    }
-    if (!fence) {
-      const heading = /^#\s+(.+?)\s*#*\s*$/.exec(line);
-      if (heading) return heading[1];
-    }
-  }
 }
 
 // src/catalog.mjs
@@ -41028,7 +41103,6 @@ function openInDig(file2, id = identity) {
   return `codex://plugins/${id.plugin}@${id.marketplace}/app/open_library?path=${encodeURIComponent(`/read?file=${encodeURIComponent(file2)}`)}`;
 }
 var isDigDocument = (file2) => /\/digs\/[^/]+\/[^/]+\.md$/.test(file2);
-var SUMMARY = /^## Summary\s*\r?\n([\s\S]*?)(?=\r?\n## |$)/m;
 var trim = (text4, max) => text4.length > max ? `${text4.slice(0, max - 1).replace(/\s+\S*$/, "")}\u2026` : text4;
 function savedResearch(snapshot2, file2, text4) {
   const item = snapshot2.items.find((entry) => entry.files.includes(file2));
@@ -41051,8 +41125,7 @@ function savedResearch(snapshot2, file2, text4) {
       link: openInDig(file2)
     };
   }
-  const { card, body: rest } = sourceCard(body);
-  const summary = SUMMARY.exec(rest)?.[1] ?? "";
+  const { card, summary } = reportParts(body);
   return {
     kind: "report",
     file: file2,
@@ -41162,48 +41235,36 @@ function billingHeaders(response) {
   const cost = response.headers.get("scrape.do-request-cost");
   return cost === null ? void 0 : { "scrape.do-request-cost": cost };
 }
-function capture(keep, label, response, body, headers) {
-  if (headers) keep(label, response.status, body, headers);
+function capture(keep, label, response, body, headers, interrupted = false) {
+  if (interrupted) keep(label, response.status, body, headers, true);
+  else if (headers) keep(label, response.status, body, headers);
   else keep(label, response.status, body);
 }
-async function responseText(response, keep, label, headers) {
+async function responseBody(response, keep, label, headers, parse3) {
+  let text4;
   try {
-    return await response.text();
+    text4 = await response.text();
   } catch (error51) {
-    capture(keep, label, response, "", headers);
+    capture(keep, label, response, "", headers, true);
     throw error51;
   }
+  return redactProviderText(text4, knownSecrets(), parse3);
 }
 async function keptJson(response, keep, label) {
   const headers = billingHeaders(response);
-  const text4 = await responseText(response, keep, label, headers);
-  let payload;
-  try {
-    payload = JSON.parse(text4);
-  } catch (error51) {
-    capture(keep, label, response, text4, headers);
-    throw error51;
+  const body = await responseBody(response, keep, label, headers);
+  if (!body.json) {
+    capture(keep, label, response, body.text, headers);
+    throw new SyntaxError(`The ${label} response is not JSON`);
   }
-  capture(keep, label, response, payload, headers);
-  return payload;
+  capture(keep, label, response, body.value, headers);
+  return body.value;
 }
 async function keptText(response, keep, label) {
   const headers = billingHeaders(response);
-  const text4 = await responseText(response, keep, label, headers);
-  let body = text4;
-  try {
-    body = JSON.parse(text4);
-  } catch {
-  }
-  capture(keep, label, response, body, headers);
-  return text4;
-}
-function parse3(text4, parseJson) {
-  try {
-    return parseJson(text4);
-  } catch {
-    return null;
-  }
+  const body = await responseBody(response, keep, label, headers);
+  capture(keep, label, response, body.json ? body.value : body.text, headers);
+  return body.text;
 }
 async function requestJson(policy) {
   const startedAt = performance.now();
@@ -41226,10 +41287,10 @@ async function requestJson(policy) {
         ])
       });
       const headers = billingHeaders(response);
-      const text4 = await response.text().catch(() => "");
-      const payload = text4 ? parse3(text4, policy.parseJson ?? JSON.parse) : null;
       captured = true;
-      capture(policy.keep, label, response, payload ?? text4, headers);
+      const body = await responseBody(response, policy.keep, label, headers, policy.parseJson);
+      const payload = body.json ? body.value : null;
+      capture(policy.keep, label, response, payload ?? body.text, headers);
       policy.signal.throwIfAborted();
       if (!retryStatuses.has(response.status) || attempt === retries) {
         return {
@@ -41244,6 +41305,7 @@ async function requestJson(policy) {
     } catch (error51) {
       if (!captured) policy.keep(label, "error", error51 instanceof Error ? error51.message : String(error51));
       if (policy.signal.aborted) throw policy.signal.reason ?? error51;
+      if (captured) throw error51;
       lastError = error51;
       if (attempt === retries) throw error51;
     }
@@ -41300,12 +41362,12 @@ async function executeSource(spec, args, context) {
   }
   const captured = {
     ...context,
-    keep(label, status, body, headers) {
+    keep(label, status, body, headers, interrupted) {
       if (billing && billing !== "free") {
         observations += 1;
         try {
           const pricing2 = receiptCost(billing.charge({ label, status, body, ...headers ? { headers } : {} }, args));
-          if (pricing2.cost === null) incomplete = true;
+          if (pricing2.cost === null || interrupted) incomplete = true;
           for (const { amount, unit } of pricing2.cost ?? pricing2.knownCost ?? []) {
             const total2 = (totals.get(unit) ?? 0) + amount;
             if (Number.isFinite(total2)) totals.set(unit, total2);
@@ -41716,10 +41778,6 @@ function scrapecreatorsHeaders() {
   return { "x-api-key": key, Accept: "application/json", "User-Agent": USER_AGENT };
 }
 var MISSING_KEY_ERROR = "SCRAPECREATORS_API_KEY not set. Get a key at https://scrapecreators.com";
-function redactSecret(text4) {
-  const key = process.env.SCRAPECREATORS_API_KEY?.trim();
-  return key ? text4.replaceAll(key, "[redacted]") : text4;
-}
 function failText(response) {
   return response.cancelled ? `ERROR: Cancelled: ${response.error}` : `ERROR: ${response.error}`;
 }
@@ -41761,11 +41819,11 @@ async function scrapecreatorsRequest(path2, params, headers, ctx, label) {
     status = response.status;
   } catch (error51) {
     if (signal.aborted) return { ok: false, cancelled: true, error: `${label} cancelled while the request was in flight`, payload: null };
-    return { ok: false, cancelled: false, error: redactSecret(`${label} request failed: ${error51 instanceof Error ? error51.message : "Unknown error"}`), payload: null };
+    return { ok: false, cancelled: false, error: redactText(`${label} request failed: ${error51 instanceof Error ? error51.message : "Unknown error"}`, knownSecrets()), payload: null };
   }
   const record3 = asRecord(payload);
   const rawMessage = record3 ? asString(record3.error) ?? asString(record3.message) : null;
-  const providerMessage = rawMessage ? redactSecret(rawMessage) : null;
+  const providerMessage = rawMessage ? redactText(rawMessage, knownSecrets()) : null;
   if (status !== 200) {
     return { ok: false, cancelled: false, error: `${label} returned HTTP ${status}${providerMessage ? `: ${providerMessage}` : ""}`, payload: record3 };
   }
@@ -43584,7 +43642,7 @@ function firstNumber(...values) {
 }
 function safeJsonSnippet(value, maxLength = 1600) {
   try {
-    const serialized2 = redactDiagnostics(JSON.stringify(value, null, 2) ?? "");
+    const serialized2 = JSON.stringify(redactValue(value, knownSecrets()), null, 2) ?? "";
     if (!serialized2) return "{}";
     return serialized2.length <= maxLength ? serialized2 : `${serialized2.slice(0, maxLength - 1).trimEnd()}\u2026`;
   } catch {
@@ -43609,13 +43667,6 @@ function collectRecords(value, maxDepth = 6) {
   }
   visit(value, 0);
   return records2;
-}
-function redactDiagnostics(text4) {
-  for (const name2 of ["TIKHUB_API_KEY", "SCRAPECREATORS_API_KEY"]) {
-    const key = process.env[name2]?.trim();
-    if (key) text4 = text4.replaceAll(key, "[redacted]").replaceAll(encodeURIComponent(key), "[redacted]");
-  }
-  return text4;
 }
 function collectStringsByKey(value, keyPattern, valuePattern) {
   const found = /* @__PURE__ */ new Set();
@@ -43951,12 +44002,8 @@ async function tikhubGet(endpoint, params, ctx) {
       headers: tikhubHeaders(),
       signal: AbortSignal.any([ctx.abort, controller.signal])
     });
-    const text4 = await response.text();
-    let data = text4;
-    try {
-      data = text4 ? JSON.parse(text4) : null;
-    } catch {
-    }
+    const body = redactProviderText(await response.text(), knownSecrets());
+    const data = body.json ? body.value : body.text || null;
     ctx.keep(endpoint, response.status, data);
     if (!response.ok) {
       throw new Error(`TikHub ${response.status}: ${safeJsonSnippet(data, 500)}`);
@@ -44000,7 +44047,7 @@ async function runCall(label, endpoint, params, ctx) {
       endpoint,
       params,
       notes,
-      error: redactDiagnostics(err instanceof Error ? err.message : "Unknown TikHub error")
+      error: redactText(err instanceof Error ? err.message : "Unknown TikHub error", knownSecrets())
     };
   }
 }
@@ -44400,12 +44447,12 @@ var reddit = {
       if (typedArgs.after && typedArgs.operation === "author_context" && !typedArgs.afterTarget) throw new Error("author_context pagination requires afterTarget=user_posts or user_comments; their cursors are not interchangeable");
       if (typedArgs.postIds && typedArgs.postIds.length > (typedArgs.operation === "thread_intelligence" ? 5 : 30)) throw new Error("Too many postIds; thread_intelligence supports 5 and batch_enrich supports 30");
       const calls = await buildCalls(typedArgs, context);
-      const text4 = redactDiagnostics(formatOutput(typedArgs, calls));
+      const text4 = redactText(formatOutput(typedArgs, calls), knownSecrets());
       const failedCalls = calls.filter((call) => call.error).length;
       return failedCalls > 0 && failedCalls < calls.length ? outcome("partial", text4) : text4;
     } catch (err) {
       if (context.abort.aborted) return "ERROR: TikHub Reddit cancelled; cancellation is not provider failure or evidence absence.";
-      return `ERROR: TikHub Reddit failed: ${redactDiagnostics(err instanceof Error ? err.message : "Unknown error")}`;
+      return `ERROR: TikHub Reddit failed: ${redactText(err instanceof Error ? err.message : "Unknown error", knownSecrets())}`;
     }
   }
 };
@@ -44580,11 +44627,7 @@ Warning: ${w3}`).join("")}`,
   }
 });
 function redact(text4) {
-  const key = process.env.OPENCODE_RESEARCH_GOOGLE_API_KEY;
-  return (key ? text4.replaceAll(key, "[redacted]") : text4).replace(
-    /([?&]key=)[^&\s]+/gi,
-    "$1[redacted]"
-  );
+  return redactText(text4, knownSecrets()).replace(/([?&]key=)[^&\s]+/gi, "$1[redacted]");
 }
 async function searchViaAPI(query, limit, days, apiKey2, signal, keep) {
   const warnings = [];
@@ -45471,12 +45514,9 @@ function searchResult(out, requested) {
 ${out}` : out;
   return { status, text: bounded(text4) };
 }
-function redactDiagnostics2(value) {
-  let text4 = value.replace(/([?&](?:api_key|access_token|token|key)=)[^&\s]+/gi, "$1[redacted]");
-  for (const [name2, secret] of Object.entries(process.env)) {
-    if (secret && /KEY|TOKEN|SECRET|PASSWORD/i.test(name2)) text4 = text4.replaceAll(secret, "[redacted]");
-  }
-  return text4;
+function redactDiagnostics(value) {
+  const secrets = Object.entries(process.env).flatMap(([name2, secret]) => secret && /KEY|TOKEN|SECRET|PASSWORD/i.test(name2) ? [secret] : []).sort((a, b2) => b2.length - a.length);
+  return redactProviderText(value, secrets).text.replace(/([?&](?:api_key|access_token|token|key)=)[^&\s]+/gi, "$1[redacted]");
 }
 function resolveUv() {
   const executable2 = findExecutable("uv");
@@ -45498,15 +45538,14 @@ function keepOutput(keep, label, exitCode, out) {
   keep(label, exitCode, body);
 }
 var CONTACT_NAMES = ["PAPER_SEARCH_MCP_UNPAYWALL_EMAIL", "UNPAYWALL_EMAIL"];
-var queryEncoded = (value) => encodeURIComponent(value).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`).replaceAll("%20", "+");
 function contactValues() {
   const values = /* @__PURE__ */ new Set();
   for (const name2 of CONTACT_NAMES) {
     for (const value of [process.env[name2]?.trim(), ...paperSearchEnvValues(name2)]) {
-      if (value?.includes("@")) values.add(value).add(queryEncoded(value));
+      if (value?.includes("@")) values.add(value);
     }
   }
-  return [...values].sort((a, b2) => b2.length - a.length);
+  return [...values];
 }
 function runBridge(command, signal) {
   const directory2 = resolveBridge();
@@ -45531,8 +45570,8 @@ function runBridge(command, signal) {
     });
     child.on("close", (code, killed) => {
       if (failure3 && !signal.aborted) return reject(failure3);
-      const contact = contactValues();
-      const read2 = (chunks) => redactText(Buffer.concat(chunks).toString("utf8"), contact);
+      const scrubbed = [...knownSecrets(), ...contactValues()].sort((a, b2) => b2.length - a.length);
+      const read2 = (chunks) => redactProviderText(Buffer.concat(chunks).toString("utf8"), scrubbed).text;
       resolve6({ stdout: read2(stdout), stderr: read2(stderr), exitCode: code ?? killed ?? "unknown" });
     });
   });
@@ -45541,7 +45580,7 @@ async function runPaperSearch(cliArgs, ctx) {
   const { stdout, stderr, exitCode } = await runBridge(["paper-search", ...cliArgs], ctx.abort);
   const out = stdout.trim();
   if (exitCode !== 0) {
-    const detail2 = redactDiagnostics2(out || stderr.trim().split("\n").slice(-5).join("\n"));
+    const detail2 = redactDiagnostics(out || stderr.trim().split("\n").slice(-5).join("\n"));
     keepOutput(ctx.keep, `paper-search ${cliArgs[0]}`, exitCode, detail2);
     return `ERROR: paper-search exited with code ${exitCode}: ${detail2.slice(0, 2e3)}`;
   }
@@ -45745,7 +45784,7 @@ function formatNumber3(value) {
 }
 function safeJsonSnippet2(value, maxLength = 1400) {
   try {
-    const serialized2 = redactDiagnostics3(JSON.stringify(value, null, 2) ?? "");
+    const serialized2 = JSON.stringify(redactValue(value, knownSecrets()), null, 2) ?? "";
     if (!serialized2) {
       return null;
     }
@@ -45766,13 +45805,6 @@ function dedupeItems(items) {
     deduped.push(item);
   }
   return deduped;
-}
-function redactDiagnostics3(text4) {
-  for (const name2 of ["TIKHUB_API_KEY", "SCRAPECREATORS_API_KEY", "JUSTONE_API_KEY"]) {
-    const key = process.env[name2]?.trim();
-    if (key) text4 = text4.replaceAll(key, "[redacted]").replaceAll(encodeURIComponent(key), "[redacted]");
-  }
-  return text4;
 }
 function collectRecords2(value, maxDepth = 6) {
   const records2 = [];
@@ -46722,7 +46754,7 @@ var search = {
           failures.push({
             platform,
             provider: provider?.id ?? requestedProvider,
-            message: redactDiagnostics3(error51 instanceof Error ? error51.message : "Unknown error")
+            message: redactText(error51 instanceof Error ? error51.message : "Unknown error", knownSecrets())
           });
         }
       }
@@ -46784,7 +46816,7 @@ var search = {
         }
       };
     } catch (error51) {
-      return `ERROR: China-social search failed: ${redactDiagnostics3(error51 instanceof Error ? error51.message : "Unknown error")}`;
+      return `ERROR: China-social search failed: ${redactText(error51 instanceof Error ? error51.message : "Unknown error", knownSecrets())}`;
     }
   }
 };
@@ -46980,19 +47012,8 @@ function nexscopeApiKey() {
   }
   return token2;
 }
-function redactSecrets(text4) {
-  let redacted = text4;
-  for (const secret of [
-    process.env.SCRAPE_DO_API_KEY?.trim(),
-    process.env.SCRAPEDO_API_TOKEN?.trim(),
-    process.env.NEXSCOPE_API_KEY?.trim()
-  ]) {
-    if (secret) redacted = redacted.split(secret).join("[redacted]");
-  }
-  return redacted;
-}
 function errorMessage(error51) {
-  return redactSecrets(error51 instanceof Error ? error51.message : "Unknown error");
+  return redactText(error51 instanceof Error ? error51.message : "Unknown error", knownSecrets());
 }
 function requireInteger(value, name2, min, max) {
   if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
@@ -47165,11 +47186,10 @@ function boolLabel(value) {
 }
 function safeJsonSnippet3(value, maxLength = 1600) {
   try {
-    const raw = JSON.stringify(value, null, 2);
-    if (!raw) {
+    const serialized2 = JSON.stringify(redactValue(value, knownSecrets()), null, 2);
+    if (!serialized2) {
       return null;
     }
-    const serialized2 = redactSecrets(raw);
     return serialized2.length <= maxLength ? serialized2 : `${serialized2.slice(0, maxLength - 1).trimEnd()}\u2026`;
   } catch {
     return null;
@@ -48651,9 +48671,6 @@ var exaMetered = (spec) => metered(spec, "USD", (body) => reportedDollars(body) 
 function apiKey() {
   return process.env.EXA_API_KEY?.trim() || null;
 }
-function redactKey(message3, key) {
-  return message3.split(key).join("[EXA_API_KEY redacted]");
-}
 async function exaPost(path2, body, options) {
   const headers = {
     "x-api-key": options.key,
@@ -48687,10 +48704,10 @@ async function exaPost(path2, body, options) {
   if (!payload) throw new ExaShapeError(path2, "non-object JSON body");
   return parseResponse(path2, payload);
 }
-function failure(operation, error51, signal, key) {
+function failure(operation, error51, signal) {
   if (signal.aborted) return `ERROR: Exa ${operation} canceled before completion; not a provider failure.`;
   const message3 = error51 instanceof Error ? error51.message : "Unknown error";
-  return `ERROR: Exa ${operation} failed: ${redactKey(message3, key)}`;
+  return `ERROR: Exa ${operation} failed: ${redactText(message3, knownSecrets())}`;
 }
 function invalid(value) {
   return typeof value === "object" && value !== null && "error" in value;
@@ -48837,7 +48854,7 @@ var search3 = exaMetered({
     try {
       response = await exaPost("/search", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: plan.beta });
     } catch (error51) {
-      return failure("search", error51, ctx.abort, key);
+      return failure("search", error51, ctx.abort);
     }
     const notes = note ? [note] : [];
     const results = response.results;
@@ -48885,7 +48902,7 @@ var contents = exaMetered({
     try {
       response = await exaPost("/contents", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: highlights.beta });
     } catch (error51) {
-      return failure("contents extraction", error51, ctx.abort, key);
+      return failure("contents extraction", error51, ctx.abort);
     }
     const results = response.results;
     const statuses = response.statuses;
@@ -48906,7 +48923,7 @@ var contents = exaMetered({
       for (const f2 of failures) {
         const tag = f2.error?.tag ?? "ERROR";
         const http = typeof f2.error?.httpStatusCode === "number" ? ` (HTTP ${f2.error.httpStatusCode})` : "";
-        lines.push(redactKey(`- ${f2.id} \u2014 ${tag}${http}`, key));
+        lines.push(redactText(`- ${f2.id} \u2014 ${tag}${http}`, knownSecrets()));
       }
     }
     if (unaccounted.length > 0) {
@@ -48943,7 +48960,7 @@ var contents = exaMetered({
       text: lines.join("\n"),
       details: resultDetails(response, {
         requested: requested.length,
-        failed: failures.map((f2) => redactKey(f2.id, key)),
+        failed: failures.map((f2) => redactText(f2.id, knownSecrets())),
         unaccounted,
         dynamicHighlights: highlights.beta !== void 0
       })
@@ -48976,7 +48993,7 @@ var similar = exaMetered({
     try {
       response = await exaPost("/findSimilar", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: plan.beta });
     } catch (error51) {
-      return failure("findSimilar", error51, ctx.abort, key);
+      return failure("findSimilar", error51, ctx.abort);
     }
     const notes = note ? [note] : [];
     const results = response.results;
@@ -49031,7 +49048,7 @@ var research = exaMetered({
         retries: RESEARCH_RETRIES
       });
     } catch (error51) {
-      return failure("deep research", error51, ctx.abort, key);
+      return failure("deep research", error51, ctx.abort);
     }
     const results = response.results;
     const output = response.output;
@@ -49169,9 +49186,7 @@ function searchBudgets(args) {
   return budgets;
 }
 function safeMessage(error51) {
-  const message3 = error51 instanceof Error ? error51.message : "Unknown Perplexity error";
-  const key = process.env.PERPLEXITY_API_KEY;
-  return key ? message3.replaceAll(key, "[REDACTED]") : message3;
+  return redactText(error51 instanceof Error ? error51.message : "Unknown Perplexity error", knownSecrets());
 }
 async function makeApiRequest(endpoint, body, ctx) {
   if (ctx.abort.aborted) throw new Error("Perplexity request cancelled by caller");
@@ -49199,7 +49214,7 @@ async function makeApiRequest(endpoint, body, ctx) {
       throw error51;
     }
     if (!response.ok) {
-      const detail2 = (await keptText(response, ctx.keep, endpoint)).replaceAll(key, "[REDACTED]").slice(0, 300);
+      const detail2 = (await keptText(response, ctx.keep, endpoint)).slice(0, 300);
       throw new Error(`Perplexity API error: HTTP ${response.status}${detail2 ? ` \u2014 ${detail2}` : ""}`);
     }
     const data = await keptJson(response, ctx.keep, endpoint);
@@ -52972,12 +52987,10 @@ function isBotLogin(login, typename) {
   return login !== null && BOT_LOGIN_PATTERN.test(login);
 }
 function errorMessage2(error51) {
-  return redactSecrets2(error51 instanceof Error ? error51.message : "Unknown error");
+  return redactSecrets(error51 instanceof Error ? error51.message : "Unknown error");
 }
-function redactSecrets2(text4) {
-  let clean = text4;
-  for (const token2 of registeredSecrets()) clean = clean.split(token2).join(REDACTED2);
-  return clean.replace(GITHUB_TOKEN_PATTERN, REDACTED2);
+function redactSecrets(text4) {
+  return redactText(text4, knownSecrets()).replace(GITHUB_TOKEN_PATTERN, REDACTED2);
 }
 function parseRepo(input) {
   let value = asString2(input);
@@ -53090,16 +53103,9 @@ async function githubRequest(url2, auth, ctx, options = {}) {
       body: options.body === void 0 ? void 0 : JSON.stringify(options.body),
       signal: AbortSignal.any([ctx.abort, AbortSignal.timeout(TIMEOUT_MS4)])
     });
-    const text4 = await response.text();
-    let payload = null;
-    if (text4) {
-      try {
-        payload = JSON.parse(text4);
-      } catch {
-        payload = null;
-      }
-    }
-    ctx.keep(`${options.method ?? "GET"} ${url2.pathname}`, response.status, payload ?? text4);
+    const body = redactProviderText(await response.text(), knownSecrets());
+    const payload = body.json ? body.value : null;
+    ctx.keep(`${options.method ?? "GET"} ${url2.pathname}`, response.status, payload ?? body.text);
     const transient = response.status >= 500 && response.status <= 504;
     if (!transient || attempt === 1) {
       return { status: response.status, headers: response.headers, payload, rateLimit: rateLimitFrom(response.headers) };
@@ -53140,7 +53146,7 @@ function describeFailure(response, what) {
   const record3 = asRecord6(response.payload);
   const message3 = asString2(record3?.message);
   const errors = asArray5(record3?.errors).map((entry) => asString2(asRecord6(entry)?.message)).filter((entry) => entry !== null);
-  const detail2 = redactSecrets2([message3, ...errors].filter(Boolean).join("; "));
+  const detail2 = redactSecrets([message3, ...errors].filter(Boolean).join("; "));
   return `GitHub returned HTTP ${response.status} for ${what}${detail2 ? `: ${truncate3(detail2, 240)}` : ""}`;
 }
 function isMarkedPublic(record3) {
@@ -53677,7 +53683,7 @@ async function fetchGraphqlEvidence(repo, auth, ctx, samples) {
   const record3 = asRecord6(response.payload);
   if (response.status !== 200 || !record3) return { ok: false, error: describeFailure(response, "GraphQL evidence") };
   const errors = asArray5(record3.errors).map((entry) => asString2(asRecord6(entry)?.message)).filter((entry) => entry !== null);
-  if (errors.length) return { ok: false, error: `GitHub GraphQL reported ${errors.length} error(s): ${truncate3(redactSecrets2(errors.join("; ")), 240)}` };
+  if (errors.length) return { ok: false, error: `GitHub GraphQL reported ${errors.length} error(s): ${truncate3(redactSecrets(errors.join("; ")), 240)}` };
   const data = asRecord6(record3.data);
   const repository = asRecord6(data?.repository);
   if (!repository) return { ok: false, error: "GitHub GraphQL returned no repository data" };
@@ -54458,13 +54464,6 @@ function scrapecreatorsHeaders2() {
   if (!key) return null;
   return { "x-api-key": key, Accept: "application/json", "User-Agent": "omp-tiktok-ads-tool/1.0" };
 }
-function redactDiagnostics4(text4) {
-  for (const name2 of ["TIKHUB_API_KEY", "SCRAPECREATORS_API_KEY"]) {
-    const key = process.env[name2]?.trim();
-    if (key) text4 = text4.replaceAll(key, "[redacted]").replaceAll(encodeURIComponent(key), "[redacted]");
-  }
-  return text4;
-}
 async function tikhubPost2(endpoint, body, headers, ctx) {
   const response = await requestJson({
     url: new URL(endpoint, tikhubBaseUrl4()),
@@ -54483,13 +54482,13 @@ async function tikhubPost2(endpoint, body, headers, ctx) {
   }
   const outerCode = asNumber3(outer.code);
   if (outerCode !== 200) {
-    return { error: redactDiagnostics4(`TikHub ${endpoint} returned code ${outerCode ?? "unknown"}: ${asString3(outer.message) ?? asString3(outer.detail) ?? "no message"}`) };
+    return { error: redactText(`TikHub ${endpoint} returned code ${outerCode ?? "unknown"}: ${asString3(outer.message) ?? asString3(outer.detail) ?? "no message"}`, knownSecrets()) };
   }
   const inner = asRecord7(outer.data);
   if (!inner) return { data: null };
   const innerCode = asNumber3(inner.code);
   if (innerCode !== null && innerCode !== 0) {
-    return { error: redactDiagnostics4(`TikTok Creative Center returned code ${innerCode}: ${asString3(inner.msg) ?? "no message"}`) };
+    return { error: redactText(`TikTok Creative Center returned code ${innerCode}: ${asString3(inner.msg) ?? "no message"}`, knownSecrets()) };
   }
   return { data: "data" in inner ? inner.data : inner };
 }
@@ -54583,7 +54582,7 @@ var search7 = {
     try {
       result2 = await tikhubPost2("/api/v1/tiktok/ads/search_ads", body, headers, ctx);
     } catch (error51) {
-      return `ERROR: TikTok Creative Center search failed: ${redactDiagnostics4(error51 instanceof Error ? error51.message : "Unknown error")}`;
+      return `ERROR: TikTok Creative Center search failed: ${redactText(error51 instanceof Error ? error51.message : "Unknown error", knownSecrets())}`;
     }
     if ("error" in result2) return `ERROR: ${result2.error}`;
     const data = asRecord7(result2.data);
@@ -54637,7 +54636,7 @@ var top = {
     try {
       result2 = await tikhubPost2("/api/v1/tiktok/ads/get_top_ads_spotlight", body, headers, ctx);
     } catch (error51) {
-      return `ERROR: TikTok Creative Center spotlight failed: ${redactDiagnostics4(error51 instanceof Error ? error51.message : "Unknown error")}`;
+      return `ERROR: TikTok Creative Center spotlight failed: ${redactText(error51 instanceof Error ? error51.message : "Unknown error", knownSecrets())}`;
     }
     if ("error" in result2) return `ERROR: ${result2.error}`;
     const data = asRecord7(result2.data);
@@ -54710,7 +54709,7 @@ var detail = {
     try {
       detailResult = await tikhubPost2("/api/v1/tiktok/ads/get_ads_detail", { ads_id: adId }, headers, ctx);
     } catch (error51) {
-      return `ERROR: TikTok Creative Center detail failed: ${redactDiagnostics4(error51 instanceof Error ? error51.message : "Unknown error")}`;
+      return `ERROR: TikTok Creative Center detail failed: ${redactText(error51 instanceof Error ? error51.message : "Unknown error", knownSecrets())}`;
     }
     if ("error" in detailResult) return `ERROR: ${detailResult.error}`;
     const ad = normalizeCreativeCenterAd(detailResult.data);
@@ -54726,10 +54725,10 @@ var detail = {
     if (withAnalytics) {
       const [percentileResult, retentionResult] = await Promise.all([
         tikhubPost2("/api/v1/tiktok/ads/get_ad_percentile", { material_id: adId, metric: "ctr_percentile" }, headers, ctx).catch(
-          (error51) => ({ error: redactDiagnostics4(error51 instanceof Error ? error51.message : "request failed") })
+          (error51) => ({ error: redactText(error51 instanceof Error ? error51.message : "request failed", knownSecrets()) })
         ),
         tikhubPost2("/api/v1/tiktok/ads/get_ad_keyframe_analysis", { material_id: adId, metric: "retain_ctr" }, headers, ctx).catch(
-          (error51) => ({ error: redactDiagnostics4(error51 instanceof Error ? error51.message : "request failed") })
+          (error51) => ({ error: redactText(error51 instanceof Error ? error51.message : "request failed", knownSecrets()) })
         )
       ]);
       if ("error" in percentileResult) notes.push(`CTR percentile unavailable: ${percentileResult.error}`);
@@ -54743,7 +54742,7 @@ var detail = {
     } else if (withSimilar) {
       const body = { material_id: adId, country_code: ad.countries[0] ?? "US", industry: topLevelIndustryId(ad.industryId) };
       const similarResult = await tikhubPost2("/api/v1/tiktok/ads/get_recommended_ads", body, headers, ctx).catch(
-        (error51) => ({ error: redactDiagnostics4(error51 instanceof Error ? error51.message : "request failed") })
+        (error51) => ({ error: redactText(error51 instanceof Error ? error51.message : "request failed", knownSecrets()) })
       );
       if ("error" in similarResult) notes.push(`Similar ads unavailable: ${similarResult.error}`);
       else similar2 = asArray6(asRecord7(similarResult.data)?.materials).map(normalizeCreativeCenterAd).filter((entry) => entry !== null);
@@ -54849,10 +54848,10 @@ var library2 = creditMetered({
       payload = asRecord7(response.payload);
       status = response.status;
     } catch (error51) {
-      return `ERROR: TikTok Ad Library search failed: ${redactDiagnostics4(error51 instanceof Error ? error51.message : "Unknown error")}`;
+      return `ERROR: TikTok Ad Library search failed: ${redactText(error51 instanceof Error ? error51.message : "Unknown error", knownSecrets())}`;
     }
     if (status !== 200 || !payload) return `ERROR: ScrapeCreators TikTok Ad Library returned HTTP ${status}`;
-    if (payload.success === false) return `ERROR: ScrapeCreators TikTok Ad Library: ${redactDiagnostics4(asString3(payload.error) ?? asString3(payload.message) ?? "request not successful")}`;
+    if (payload.success === false) return `ERROR: ScrapeCreators TikTok Ad Library: ${redactText(asString3(payload.error) ?? asString3(payload.message) ?? "request not successful", knownSecrets())}`;
     if (!Array.isArray(payload.ads)) return "ERROR: TikTok Ad Library response did not contain an ads array; response shape unavailable, not an empty search.";
     const allAds = asArray6(payload.ads).map(normalizeLibraryAd).filter((ad) => ad !== null);
     if (payload.ads.length > 0 && allAds.length === 0) return "ERROR: TikTok Ad Library returned ads but none could be normalized; not an empty search.";
@@ -54969,17 +54968,20 @@ async function callDeepWiki(name2, args, signal, keep) {
   });
   const text4 = await response.text();
   signal.throwIfAborted();
+  const secrets = knownSecrets();
   let payload;
   try {
-    payload = extractSseJson(text4);
+    payload = redactValue(extractSseJson(text4), secrets);
   } catch (error51) {
-    keep(name2, response.status, text4);
-    if (!response.ok) return failed(`DeepWiki HTTP ${response.status}: ${text4.slice(0, 300)}`);
-    return failed(`Failed to parse DeepWiki response: ${error51 instanceof Error ? error51.message : "Unknown error"}`);
+    const clean = redactText(text4, secrets);
+    keep(name2, response.status, clean);
+    if (!response.ok) return failed(`DeepWiki HTTP ${response.status}: ${clean.slice(0, 300)}`);
+    const reason2 = error51 instanceof SyntaxError ? "a response event is not JSON" : error51 instanceof Error ? error51.message : "Unknown error";
+    return failed(`Failed to parse DeepWiki response: ${reason2}`);
   }
   keep(name2, response.status, payload);
   if (!response.ok) {
-    return failed(`DeepWiki HTTP ${response.status}: ${text4.slice(0, 300)}`);
+    return failed(`DeepWiki HTTP ${response.status}: ${JSON.stringify(payload).slice(0, 300)}`);
   }
   try {
     return textFromMcpResult(payload);
@@ -57604,7 +57606,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
 }
 
 // src/version.mjs
-var VERSION2 = "0.2.31";
+var VERSION2 = "0.2.32";
 
 // src/server.mjs
 loadKeys();

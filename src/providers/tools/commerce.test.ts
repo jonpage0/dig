@@ -645,6 +645,20 @@ describe("commerce Scrape.do enrichment", () => {
 		expect(result).not.toContain("scrape-do-test-key");
 		expect(result).toContain('"debug": "request token [redacted]"');
 	});
+
+	test("an encoded token echo is redacted before the raw response excerpt is cut, so no fragment of it survives", async () => {
+		process.env.SCRAPE_DO_API_KEY = "PRIVATE/percent+KEY space-unique-7G9w"; // gitleaks:allow (synthetic test key)
+		const encoded = encodeURIComponent(process.env.SCRAPE_DO_API_KEY).replace(/%[0-9A-F]{2}/g, (escape) => escape.toLowerCase());
+		// Place the echo so the excerpt's 1,600-character cut falls 10 characters into it.
+		const shape = JSON.stringify({ status: "success", products: [], debug: "" }, null, 2);
+		const start = shape.indexOf('"debug": "') + '"debug": "'.length;
+		const mock = installFetchMock({ status: "success", products: [], debug: `${"x".repeat(1599 - start - 10)}${encoded}` });
+		restoreFetch = mock.restore;
+
+		const result = await search.execute({ query: "x" }, context);
+		expect(result).toContain("## Raw Response Excerpt");
+		expect(result).not.toContain("PRIVATE%2f");
+	});
 });
 
 describe("commerce Scrape.do billing", () => {
@@ -728,6 +742,28 @@ describe("commerce Scrape.do billing", () => {
 		expect(result.details?.cost).toBeNull();
 		expect(result.details?.knownCost).toEqual([{ amount: 1, unit: "Scrape.do credits" }]);
 		expect(kept).toEqual([["search", 200, "", { "scrape.do-request-cost": "1" }]]);
+	});
+
+	test("a response whose body times out leaves the total unknown: its header charge is a subtotal, and a zero header proves no zero", async () => {
+		for (const [header, knownCost] of [["3", [{ amount: 3, unit: "Scrape.do credits" }]], ["0", undefined]] as const) {
+			let requests = 0;
+			route({
+				"/plugin/amazon/search": () => {
+					requests += 1;
+					const response = reply({}, header);
+					// The request's own timeout fires mid-body; the caller never cancels.
+					response.text = async () => {
+						throw new DOMException("The operation timed out.", "TimeoutError");
+					};
+					return response;
+				},
+			});
+			const result = await executeSource(search, { query: "usb c cable" }, context);
+			expect(requests).toBe(1);
+			expect(result.status).toBe("failed");
+			expect(result.details?.cost).toBeNull();
+			expect(result.details?.knownCost).toEqual(knownCost);
+		}
 	});
 
 	test("cancellation during the second product request keeps the first request's reported charge as a subtotal", async () => {

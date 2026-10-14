@@ -10,8 +10,8 @@
  * Results have scrapecreatorsRequest's shape and meaning: a non-200 status or a `success: false`
  * body is an error carrying the provider's own message, a failed response keeps its JSON body as
  * `payload`, an aborted signal is a cancellation, and parameters that are undefined or "" are not
- * sent. The parsed body is redacted before it is returned, because callers may truncate it, and a
- * cut credential would escape the boundary's exact-match redaction.
+ * sent. keptText returns the body with credentials redacted, JSON decoded first, so no caller's cut
+ * can leave part of one; the parsed body is redacted again for the record.
  */
 import { keptText } from "../http.js"
 import { knownSecrets, redactText, redactValue } from "../secrets.js"

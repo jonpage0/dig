@@ -1,6 +1,7 @@
 import type { KeepRaw, ToolSpec } from "../types.js";
 import { failed, free, outcome } from "../outcome.js";
 import { keptJson, keptText } from "../http.js";
+import { knownSecrets, redactText } from "../secrets.js";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import {
@@ -215,12 +216,9 @@ export default free({
   },
 } satisfies ToolSpec);
 
+/** Known credentials in any spelling, and any `key=` query value, since a request URL carries the Google key there. */
 function redact(text: string): string {
-  const key = process.env.OPENCODE_RESEARCH_GOOGLE_API_KEY;
-  return (key ? text.replaceAll(key, "[redacted]") : text).replace(
-    /([?&]key=)[^&\s]+/gi,
-    "$1[redacted]",
-  );
+  return redactText(text, knownSecrets()).replace(/([?&]key=)[^&\s]+/gi, "$1[redacted]");
 }
 async function searchViaAPI(
   query: string,

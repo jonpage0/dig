@@ -23,6 +23,7 @@
  */
 import { requestJson } from "../http.js"
 import { outcome } from "../outcome.js"
+import { knownSecrets, redactText } from "../secrets.js"
 import type { ToolContext, ToolSpec } from "../types.js"
 import { TIKTOK_AD_INDUSTRIES } from "./tiktok_ads_industries.js"
 import { creditMetered, type RequestContext } from "./scrapecreators.js"
@@ -241,14 +242,6 @@ function scrapecreatorsHeaders(): Record<string, string> | null {
   return { "x-api-key": key, Accept: "application/json", "User-Agent": "omp-tiktok-ads-tool/1.0" }
 }
 
-function redactDiagnostics(text: string): string {
-  for (const name of ["TIKHUB_API_KEY", "SCRAPECREATORS_API_KEY"]) {
-    const key = process.env[name]?.trim()
-    if (key) text = text.replaceAll(key, "[redacted]").replaceAll(encodeURIComponent(key), "[redacted]")
-  }
-  return text
-}
-
 /**
  * TikHub wraps every response twice: an outer envelope `{code, data}` and an
  * inner Creative Center envelope `{code, msg, data}`. Returns the inner data or
@@ -277,13 +270,13 @@ async function tikhubPost(
   }
   const outerCode = asNumber(outer.code)
   if (outerCode !== 200) {
-    return { error: redactDiagnostics(`TikHub ${endpoint} returned code ${outerCode ?? "unknown"}: ${asString(outer.message) ?? asString(outer.detail) ?? "no message"}`) }
+    return { error: redactText(`TikHub ${endpoint} returned code ${outerCode ?? "unknown"}: ${asString(outer.message) ?? asString(outer.detail) ?? "no message"}`, knownSecrets()) }
   }
   const inner = asRecord(outer.data)
   if (!inner) return { data: null }
   const innerCode = asNumber(inner.code)
   if (innerCode !== null && innerCode !== 0) {
-    return { error: redactDiagnostics(`TikTok Creative Center returned code ${innerCode}: ${asString(inner.msg) ?? "no message"}`) }
+    return { error: redactText(`TikTok Creative Center returned code ${innerCode}: ${asString(inner.msg) ?? "no message"}`, knownSecrets()) }
   }
   return { data: "data" in inner ? inner.data : inner }
 }
@@ -396,7 +389,7 @@ export const search = {
     try {
       result = await tikhubPost("/api/v1/tiktok/ads/search_ads", body, headers, ctx)
     } catch (error) {
-      return `ERROR: TikTok Creative Center search failed: ${redactDiagnostics(error instanceof Error ? error.message : "Unknown error")}`
+      return `ERROR: TikTok Creative Center search failed: ${redactText(error instanceof Error ? error.message : "Unknown error", knownSecrets())}`
     }
     if ("error" in result) return `ERROR: ${result.error}`
 
@@ -461,7 +454,7 @@ export const top = {
     try {
       result = await tikhubPost("/api/v1/tiktok/ads/get_top_ads_spotlight", body, headers, ctx)
     } catch (error) {
-      return `ERROR: TikTok Creative Center spotlight failed: ${redactDiagnostics(error instanceof Error ? error.message : "Unknown error")}`
+      return `ERROR: TikTok Creative Center spotlight failed: ${redactText(error instanceof Error ? error.message : "Unknown error", knownSecrets())}`
     }
     if ("error" in result) return `ERROR: ${result.error}`
 
@@ -551,7 +544,7 @@ export const detail = {
     try {
       detailResult = await tikhubPost("/api/v1/tiktok/ads/get_ads_detail", { ads_id: adId }, headers, ctx)
     } catch (error) {
-      return `ERROR: TikTok Creative Center detail failed: ${redactDiagnostics(error instanceof Error ? error.message : "Unknown error")}`
+      return `ERROR: TikTok Creative Center detail failed: ${redactText(error instanceof Error ? error.message : "Unknown error", knownSecrets())}`
     }
     if ("error" in detailResult) return `ERROR: ${detailResult.error}`
     const ad = normalizeCreativeCenterAd(detailResult.data)
@@ -571,10 +564,10 @@ export const detail = {
     if (withAnalytics) {
       const [percentileResult, retentionResult] = await Promise.all([
         tikhubPost("/api/v1/tiktok/ads/get_ad_percentile", { material_id: adId, metric: "ctr_percentile" }, headers, ctx).catch(
-          (error: unknown) => ({ error: redactDiagnostics(error instanceof Error ? error.message : "request failed") }),
+          (error: unknown) => ({ error: redactText(error instanceof Error ? error.message : "request failed", knownSecrets()) }),
         ),
         tikhubPost("/api/v1/tiktok/ads/get_ad_keyframe_analysis", { material_id: adId, metric: "retain_ctr" }, headers, ctx).catch(
-          (error: unknown) => ({ error: redactDiagnostics(error instanceof Error ? error.message : "request failed") }),
+          (error: unknown) => ({ error: redactText(error instanceof Error ? error.message : "request failed", knownSecrets()) }),
         ),
       ])
       if ("error" in percentileResult) notes.push(`CTR percentile unavailable: ${percentileResult.error}`)
@@ -591,7 +584,7 @@ export const detail = {
     } else if (withSimilar) {
       const body: Record<string, unknown> = { material_id: adId, country_code: ad.countries[0] ?? "US", industry: topLevelIndustryId(ad.industryId) }
       const similarResult = await tikhubPost("/api/v1/tiktok/ads/get_recommended_ads", body, headers, ctx).catch(
-        (error: unknown) => ({ error: redactDiagnostics(error instanceof Error ? error.message : "request failed") }),
+        (error: unknown) => ({ error: redactText(error instanceof Error ? error.message : "request failed", knownSecrets()) }),
       )
       if ("error" in similarResult) notes.push(`Similar ads unavailable: ${similarResult.error}`)
       else similar = asArray(asRecord(similarResult.data)?.materials).map(normalizeCreativeCenterAd).filter((entry): entry is CreativeCenterAd => entry !== null)
@@ -718,10 +711,10 @@ export const library = creditMetered({
       payload = asRecord(response.payload)
       status = response.status
     } catch (error) {
-      return `ERROR: TikTok Ad Library search failed: ${redactDiagnostics(error instanceof Error ? error.message : "Unknown error")}`
+      return `ERROR: TikTok Ad Library search failed: ${redactText(error instanceof Error ? error.message : "Unknown error", knownSecrets())}`
     }
     if (status !== 200 || !payload) return `ERROR: ScrapeCreators TikTok Ad Library returned HTTP ${status}`
-    if (payload.success === false) return `ERROR: ScrapeCreators TikTok Ad Library: ${redactDiagnostics(asString(payload.error) ?? asString(payload.message) ?? "request not successful")}`
+    if (payload.success === false) return `ERROR: ScrapeCreators TikTok Ad Library: ${redactText(asString(payload.error) ?? asString(payload.message) ?? "request not successful", knownSecrets())}`
     if (!Array.isArray(payload.ads)) return "ERROR: TikTok Ad Library response did not contain an ads array; response shape unavailable, not an empty search."
 
     const allAds = asArray(payload.ads).map(normalizeLibraryAd).filter((ad): ad is LibraryAd => ad !== null)

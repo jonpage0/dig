@@ -74,6 +74,23 @@ describe("papers provider outcomes", () => {
 		expect(result.text).not.toContain("fixture-secret");
 	});
 
+	test("an OpenAlex error whose body is cut off is not recorded as free: the documented no-charge needs the whole response", async () => {
+		mockFetch(async () => {
+			const response = new Response('{"error":"quota"}', { status: 429 });
+			// The request's own timeout or a transport failure stops the body after the status arrived.
+			response.text = async () => {
+				throw new DOMException("The operation timed out.", "TimeoutError");
+			};
+			return response;
+		});
+		const result = await executeSource(openalex_search, { query: "example" }, context);
+		expect(result.status).toBe("failed");
+		expect(result.text).toContain("HTTP 429");
+		expect(result.details?.cost).toBeNull();
+		expect(result.details?.knownCost).toBeUndefined();
+		expect(fetchMock.mock.callCount()).toBe(1);
+	});
+
 	test("does not convert HTTP-200 error payloads into empty literature evidence", async () => {
 		mockFetch(async () => new Response('{"error":"provider unavailable"}'));
 		expect(text(await openalex_search.execute({ query: "test" }, context))).toMatch(/^ERROR:/);

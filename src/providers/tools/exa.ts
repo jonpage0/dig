@@ -24,6 +24,7 @@
  */
 import { requestJson } from "../http.js"
 import { metered } from "../outcome.js"
+import { knownSecrets, redactText } from "../secrets.js"
 import type { KeepRaw, ToolContext, ToolSpec } from "../types.js"
 
 const EXA_BASE = "https://api.exa.ai"
@@ -267,11 +268,6 @@ function apiKey(): string | null {
   return process.env.EXA_API_KEY?.trim() || null
 }
 
-/** Provider text is untrusted; never let the credential reach a rendered error. */
-function redactKey(message: string, key: string): string {
-  return message.split(key).join("[EXA_API_KEY redacted]")
-}
-
 type ExaPath = "/search" | "/contents" | "/findSimilar"
 
 async function exaPost(
@@ -315,10 +311,11 @@ async function exaPost(
   return parseResponse(path, payload)
 }
 
-function failure(operation: string, error: unknown, signal: AbortSignal, key: string): string {
+/** Provider bodies arrive redacted (requestJson); a transport error's message does not, so it is redacted here. */
+function failure(operation: string, error: unknown, signal: AbortSignal): string {
   if (signal.aborted) return `ERROR: Exa ${operation} canceled before completion; not a provider failure.`
   const message = error instanceof Error ? error.message : "Unknown error"
-  return `ERROR: Exa ${operation} failed: ${redactKey(message, key)}`
+  return `ERROR: Exa ${operation} failed: ${redactText(message, knownSecrets())}`
 }
 
 // ---------------------------------------------------------------------------
@@ -547,7 +544,7 @@ export const search = exaMetered({
     try {
       response = await exaPost("/search", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: plan.beta })
     } catch (error) {
-      return failure("search", error, ctx.abort, key)
+      return failure("search", error, ctx.abort)
     }
 
     const notes = note ? [note] : []
@@ -610,7 +607,7 @@ export const contents = exaMetered({
     try {
       response = await exaPost("/contents", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: highlights.beta })
     } catch (error) {
-      return failure("contents extraction", error, ctx.abort, key)
+      return failure("contents extraction", error, ctx.abort)
     }
 
     const results = response.results
@@ -634,7 +631,7 @@ export const contents = exaMetered({
         const tag = f.error?.tag ?? "ERROR"
         const http = typeof f.error?.httpStatusCode === "number" ? ` (HTTP ${f.error.httpStatusCode})` : ""
         // Per-URL id and tag are provider text, like the top-level error envelope.
-        lines.push(redactKey(`- ${f.id} — ${tag}${http}`, key))
+        lines.push(redactText(`- ${f.id} — ${tag}${http}`, knownSecrets()))
       }
     }
     if (unaccounted.length > 0) {
@@ -674,7 +671,7 @@ export const contents = exaMetered({
       text: lines.join("\n"),
       details: resultDetails(response, {
         requested: requested.length,
-        failed: failures.map((f) => redactKey(f.id, key)),
+        failed: failures.map((f) => redactText(f.id, knownSecrets())),
         unaccounted,
         dynamicHighlights: highlights.beta !== undefined,
       }),
@@ -720,7 +717,7 @@ export const similar = exaMetered({
     try {
       response = await exaPost("/findSimilar", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: plan.beta })
     } catch (error) {
-      return failure("findSimilar", error, ctx.abort, key)
+      return failure("findSimilar", error, ctx.abort)
     }
 
     const notes = note ? [note] : []
@@ -792,7 +789,7 @@ export const research = exaMetered({
         retries: RESEARCH_RETRIES,
       })
     } catch (error) {
-      return failure("deep research", error, ctx.abort, key)
+      return failure("deep research", error, ctx.abort)
     }
 
     const results = response.results

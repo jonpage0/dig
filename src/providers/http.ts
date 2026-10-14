@@ -1,3 +1,4 @@
+import { knownSecrets, redactProviderText, type RedactedProviderText } from "./secrets.js";
 import type { KeepRaw, RetainedResponse } from "./types.js";
 
 export interface JsonRequestPolicy {
@@ -68,52 +69,59 @@ function billingHeaders(response: Response): RetainedResponse["headers"] {
 	return cost === null ? undefined : { "scrape.do-request-cost": cost };
 }
 
-function capture(keep: KeepRaw, label: string, response: Response, body: unknown, headers: RetainedResponse["headers"]): void {
-	if (headers) keep(label, response.status, body, headers);
+function capture(keep: KeepRaw, label: string, response: Response, body: unknown, headers: RetainedResponse["headers"], interrupted = false): void {
+	if (interrupted) keep(label, response.status, body, headers, true);
+	else if (headers) keep(label, response.status, body, headers);
 	else keep(label, response.status, body);
 }
 
-async function responseText(response: Response, keep: KeepRaw, label: string, headers: RetainedResponse["headers"]): Promise<string> {
-	try { return await response.text(); }
+/**
+ * The body as it arrived, redacted by what it means (`redactProviderText`: JSON decoded first, by `parse`) before any
+ * caller can read or cut it, since a credential cut in two would pass the tool boundary's redaction. A body that
+ * cannot be read in full is kept once, as interrupted, before the failure propagates.
+ */
+async function responseBody(
+	response: Response,
+	keep: KeepRaw,
+	label: string,
+	headers: RetainedResponse["headers"],
+	parse?: (text: string) => unknown,
+): Promise<RedactedProviderText> {
+	let text: string;
+	try { text = await response.text(); }
 	catch (error) {
-		capture(keep, label, response, "", headers);
+		capture(keep, label, response, "", headers, true);
 		throw error;
 	}
+	return redactProviderText(text, knownSecrets(), parse);
 }
 
 /**
  * `response.json()` that also keeps the body for the call's raw file: parsed
  * JSON, or the text when it does not parse (and then throws like `json()`).
+ * Known credentials are redacted from what it keeps and returns.
  */
 export async function keptJson(response: Response, keep: KeepRaw, label: string): Promise<unknown> {
 	const headers = billingHeaders(response);
-	const text = await responseText(response, keep, label, headers);
-	let payload: unknown;
-	try { payload = JSON.parse(text); }
-	catch (error) {
-		capture(keep, label, response, text, headers);
-		throw error;
+	const body = await responseBody(response, keep, label, headers);
+	if (!body.json) {
+		capture(keep, label, response, body.text, headers);
+		// Unlike the parser's own message, this one quotes none of the body, which could cut a credential in two.
+		throw new SyntaxError(`The ${label} response is not JSON`);
 	}
-	capture(keep, label, response, payload, headers);
-	return payload;
+	capture(keep, label, response, body.value, headers);
+	return body.value;
 }
 
-/** `response.text()` that also keeps the body (parsed when it is JSON) for the call's raw file. */
+/**
+ * `response.text()` that also keeps the body (parsed when it is JSON) for the call's raw file, with known credentials
+ * redacted: JSON is decoded before it is redacted, and comes back byte-for-byte when nothing was.
+ */
 export async function keptText(response: Response, keep: KeepRaw, label: string): Promise<string> {
 	const headers = billingHeaders(response);
-	const text = await responseText(response, keep, label, headers);
-	let body: unknown = text;
-	try { body = JSON.parse(text); } catch {}
-	capture(keep, label, response, body, headers);
-	return text;
-}
-
-function parse(text: string, parseJson: (text: string) => unknown): unknown {
-	try {
-		return parseJson(text);
-	} catch {
-		return null;
-	}
+	const body = await responseBody(response, keep, label, headers);
+	capture(keep, label, response, body.json ? body.value : body.text, headers);
+	return body.text;
 }
 
 export async function requestJson(policy: JsonRequestPolicy): Promise<JsonRequestResult> {
@@ -138,10 +146,11 @@ export async function requestJson(policy: JsonRequestPolicy): Promise<JsonReques
 				]),
 			});
 			const headers = billingHeaders(response);
-			const text = await response.text().catch(() => "");
-			const payload = text ? parse(text, policy.parseJson ?? JSON.parse) : null;
+			// From here this response is kept exactly once, as interrupted when its body cannot be read in full.
 			captured = true;
-			capture(policy.keep, label, response, payload ?? text, headers);
+			const body = await responseBody(response, policy.keep, label, headers, policy.parseJson);
+			const payload = body.json ? body.value : null;
+			capture(policy.keep, label, response, payload ?? body.text, headers);
 			policy.signal.throwIfAborted();
 			if (!retryStatuses.has(response.status) || attempt === retries) {
 				return {
@@ -156,6 +165,8 @@ export async function requestJson(policy: JsonRequestPolicy): Promise<JsonReques
 		} catch (error) {
 			if (!captured) policy.keep(label, "error", error instanceof Error ? error.message : String(error));
 			if (policy.signal.aborted) throw policy.signal.reason ?? error;
+			// The response arrived, and may be charged, but its body did not: propagate, never repeat the request.
+			if (captured) throw error;
 			lastError = error;
 			if (attempt === retries) throw error;
 		}

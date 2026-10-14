@@ -72,6 +72,13 @@ export function normalizeOutcome(result: SourceToolResult): ToolOutcome {
           : "success";
   return outcome(status, text, details);
 }
+/**
+ * Runs one provider call and finalizes its cost on every exit. Each kept
+ * response contributes its charge as it arrives, so a later throw,
+ * cancellation or interrupted response keeps what was already reported: the
+ * total is then unknown (`cost: null`) with the positive observed amounts as
+ * `knownCost`. A metered call with no kept response is unknown, never free.
+ */
 export async function executeSource(
   spec: ToolSpec,
   args: unknown,
@@ -94,12 +101,13 @@ export async function executeSource(
   }
   const captured: ToolContext = {
     ...context,
-    keep(label, status, body, headers) {
+    keep(label, status, body, headers, interrupted) {
       if (billing && billing !== "free") {
         observations += 1;
         try {
           const pricing = receiptCost(billing.charge({ label, status, body, ...(headers ? { headers } : {}) }, args));
-          if (pricing.cost === null) incomplete = true;
+          // A response whose body could not be read in full was interrupted: its charge is a subtotal at most.
+          if (pricing.cost === null || interrupted) incomplete = true;
           for (const { amount, unit } of pricing.cost ?? pricing.knownCost ?? []) {
             const total = (totals.get(unit) ?? 0) + amount;
             if (Number.isFinite(total)) totals.set(unit, total);

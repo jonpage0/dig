@@ -4,13 +4,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import { MODULES, moduleAgents, ALL_MODULES } from './providers/modules.ts';
 import { receiptCost } from './providers/library/cost.ts';
 import { ANSWER_STATUSES, digWord } from './status.mjs';
-import { sourceCard } from './ui/markdown.mjs';
+import { reportParts } from './ui/markdown.mjs';
 
 const methods = moduleAgents(ALL_MODULES).filter(m => !m.helper);
 const sourceLabels = Object.fromEntries(MODULES.map(m => [m.id, m.label]));
 // A report accounts for its own source's calls.
 const accountsFor = (report, call) => call.source === report;
 const reportName = name => typeof name === 'string' && /^[a-z0-9][a-z0-9-]*\.md$/.test(name) && !['dig.md', 'answer.md'].includes(name);
+const REPORT_SECTIONS = ['Summary', 'Evidence Highlights', 'Needs Follow-Up', 'Negative Evidence (when relevant)'];
 
 const quote = value => JSON.stringify(value);
 const token = value => typeof value === 'string' && /^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,180}$/.test(value);
@@ -111,13 +112,21 @@ export async function recordCall(config, project, dig, { tool, source, args, at,
   await appendFile(callsPath, `${JSON.stringify(receipt)}\n`);
   return receipt;
 }
+// A report opens with its source card (a closed ```yaml block whose text begins source_card:) and carries every required
+// section as a top-level level-2 heading. reportParts reads it as the rendered report and every reader of the card,
+// title and Summary do, so a saved report reads as it was checked.
+function assertReport(parts) {
+  if (!parts.card) throw new Error('The report must begin with its source_card block: a ```yaml fenced block whose first line is source_card:, closed by its fence');
+  const sections = new Set(parts.headings.filter(heading => heading.depth === 2).map(heading => heading.text));
+  for (const section of REPORT_SECTIONS) if (!sections.has(section)) throw new Error(`Missing report section: ${section} (a "## ${section}" heading of the report itself, outside code, lists and quotes)`);
+}
 export async function saveReport(config, { project, dig, source, agent = source, content, topic, question, topic_volatility, supersedes, session = SESSION_UNAVAILABLE }) {
   session = safeSegment(session, SESSION_UNAVAILABLE);
   if (!ALL_MODULES.includes(source)) throw new Error('source must name a report source from source_info');
   if (!methods.some(m => m.module === source && m.name === agent)) throw new Error(`agent must name a ${source} source method from source_info`);
   if (supersedes && !dig) throw new Error('supersedes requires an existing dig');
-  if (!/^```ya?ml\s*\nsource_card:\s*\n/.test(content)) throw new Error('The report must begin with its source_card YAML block');
-  for (const heading of ['Summary', 'Evidence Highlights', 'Needs Follow-Up', 'Negative Evidence (when relevant)']) if (!content.includes(`## ${heading}`)) throw new Error(`Missing report section: ${heading}`);
+  const parts = reportParts(content);
+  assertReport(parts);
   if (topic && (topic.length > 50 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(topic))) throw new Error('topic must be lowercase, hyphenated and at most 50 characters');
   if (!dig && !question?.trim()) throw new Error('question is required when saving without a dig');
   const createdDig = !dig;
@@ -127,7 +136,7 @@ export async function saveReport(config, { project, dig, source, agent = source,
     if (!reportName(supersedes)) throw new Error('Invalid supersedes report reference');
     await readFile(await contained(config, join(folder, supersedes)));
   }
-  const title = firstHeading(content) ?? question ?? topic ?? `${sourceLabels[source]} research`;
+  const title = parts.headings.find(heading => heading.depth === 1)?.text ?? question ?? topic ?? `${sourceLabels[source]} research`;
   const at = new Date().toISOString();
   for (let n = 1; n < 1000; n++) {
     const name = n === 1 ? `${agent}.md` : `${agent}-${n}.md`;
@@ -180,8 +189,9 @@ export async function listLibrary(config) {
       for (const name of names.filter(f => f !== 'dig.md' && f !== 'answer.md')) {
         const text = await readFile(await contained(config, join(folder, name)), 'utf8');
         const head = frontMatter(text);
-        const summary = /^## Summary\s*\r?\n([\s\S]*?)(?=\r?\n## |$)/m.exec(text)?.[1].trim().slice(0, 280) ?? '';
-        reports.push({ name, text, summary, source: head.source ?? null, method: head.agent ?? null, supersedes: head.supersedes ?? null, at: head.generated_at ?? null, session: typeof head.session === 'string' ? head.session : null, status: sourceCard(text.replace(/^---\n[\s\S]*?\n---\n/, '')).card?.fields?.status });
+        const parts = reportParts(text.replace(/^---\n[\s\S]*?\n---\n/, ''));
+        const summary = parts.summary.trim().slice(0, 280);
+        reports.push({ name, text, summary, source: head.source ?? null, method: head.agent ?? null, supersedes: head.supersedes ?? null, at: head.generated_at ?? null, session: typeof head.session === 'string' ? head.session : null, status: parts.card?.fields?.status });
       }
       reports.sort((a, b) => (time(a.at) ?? 0) - (time(b.at) ?? 0) || a.name.localeCompare(b.name, undefined, { numeric: true }));
       const answer = names.includes('answer.md') ? `${prefix}/answer.md` : null;
@@ -281,20 +291,4 @@ function withoutSecrets(value) {
   return Object.fromEntries(Object.entries(value)
     .filter(([name]) => !name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some(part => SECRET_NAME_PARTS.has(part)))
     .map(([name, item]) => [name, withoutSecrets(item)]));
-}
-
-function firstHeading(markdown) {
-  let fence;
-  for (const line of markdown.split('\n')) {
-    const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
-    if (marker) {
-      if (!fence) fence = marker[0];
-      else if (marker[0] === fence) fence = undefined;
-      continue;
-    }
-    if (!fence) {
-      const heading = /^#\s+(.+?)\s*#*\s*$/.exec(line);
-      if (heading) return heading[1];
-    }
-  }
 }

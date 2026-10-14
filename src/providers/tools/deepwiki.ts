@@ -1,4 +1,5 @@
 import { outcome, failed, free, type ToolOutcome } from "../outcome.js";
+import { knownSecrets, redactText, redactValue } from "../secrets.js";
 import type { KeepRaw, ToolSpec } from "../types.js";
 
 const DEEPWIKI_MCP_URL = "https://mcp.deepwiki.com/mcp";
@@ -84,17 +85,23 @@ async function callDeepWiki(
 	});
 	const text = await response.text();
 	signal.throwIfAborted();
+	// DeepWiki sends no credential, but an answer can echo one from a question. The decoded response is redacted, and
+	// text that does not decode is redacted as text, before any of it is kept or cut into an excerpt.
+	const secrets = knownSecrets();
 	let payload: unknown;
 	try {
-		payload = extractSseJson(text);
+		payload = redactValue(extractSseJson(text), secrets);
 	} catch (error) {
-		keep(name, response.status, text);
-		if (!response.ok) return failed(`DeepWiki HTTP ${response.status}: ${text.slice(0, 300)}`);
-		return failed(`Failed to parse DeepWiki response: ${error instanceof Error ? error.message : "Unknown error"}`);
+		const clean = redactText(text, secrets);
+		keep(name, response.status, clean);
+		if (!response.ok) return failed(`DeepWiki HTTP ${response.status}: ${clean.slice(0, 300)}`);
+		// The JSON parser's own message quotes part of the response, which could cut a credential in two.
+		const reason = error instanceof SyntaxError ? "a response event is not JSON" : error instanceof Error ? error.message : "Unknown error";
+		return failed(`Failed to parse DeepWiki response: ${reason}`);
 	}
 	keep(name, response.status, payload);
 	if (!response.ok) {
-		return failed(`DeepWiki HTTP ${response.status}: ${text.slice(0, 300)}`);
+		return failed(`DeepWiki HTTP ${response.status}: ${JSON.stringify(payload).slice(0, 300)}`);
 	}
 	try {
 		return textFromMcpResult(payload);

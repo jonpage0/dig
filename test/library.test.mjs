@@ -1,10 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, writeFile, symlink, mkdir, rename, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, updateConfig } from '../src/config.mjs';
 import { startDig, recordCall, saveReport, finishDig, listLibrary, readLibraryFile, projectFolder } from '../src/library.mjs';
+import { savedResearch } from '../src/surfaces.mjs';
+import { frontMatter, reportParts } from '../src/ui/markdown.mjs';
 
 import { report } from './report-fixture.mjs';
 
@@ -32,6 +35,112 @@ test('reports and answers never overwrite, projects stay isolated, and cards gro
   await assert.rejects(readLibraryFile(config, 'escape.json'), /outside the library/);
   assert.throws(() => projectFolder('relative-project'), /absolute/);
   await assert.rejects(saveReport(config, { project: state, dig: one.dig, source: 'hackernews', content: '# No source card' }), /source_card/);
+});
+
+const SECTIONS = ['## Summary', '## Evidence Highlights', '## Needs Follow-Up', '## Negative Evidence (when relevant)'];
+
+test('the save refuses required sections that appear only inside code, and a source_card block that never closes, writing nothing', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-fenced-sections-')); const config = await loadConfig(state);
+  const save = lines => saveReport(config, { project: state, source: 'hackernews', question: 'Fenced sections?', content: lines.join('\n') });
+  const filled = SECTIONS.flatMap(heading => [heading, 'None.', '']);
+  const card = ['```yaml', 'source_card:', '  status: "complete"'];
+  // The sections are only the card's own text.
+  await assert.rejects(save([...card, '  instructions: |', ...SECTIONS.map(heading => `    ${heading}`), '```', '', 'No report sections.']), /Missing report section: Summary/);
+  // The card never closes, so everything after it is code.
+  await assert.rejects(save([...card, '', ...filled]), /source_card/);
+  // The sections are only inside a fenced block after the card.
+  await assert.rejects(save([...card, '```', '', '```text', ...filled, '```']), /Missing report section: Summary/);
+  // Fences close as the rendered report reads them: ```still-code carries an info string, so it does not close the card.
+  await assert.rejects(save([...card, '```still-code', ...filled]), /source_card/);
+  // A shorter ``` inside a four-backtick block does not close it.
+  await assert.rejects(save([...card, '```', '', '````markdown', '```', ...filled, '````']), /Missing report section: Summary/);
+  // A backtick line inside a tilde block does not close it, and the unclosed block runs to the end.
+  await assert.rejects(save([...card, '```', '', '~~~', '```', ...filled]), /Missing report section: Summary/);
+  // A line indented four spaces is indented code, not the card's closing fence.
+  await assert.rejects(save([...card, '    ```', ...filled]), /source_card/);
+  assert.equal(existsSync(join(config.library, projectFolder(state), 'digs')), false);
+});
+
+test('the title, source card and Summary are read as the save reads them, so valid reports that quote code read as written', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-fence-readers-')); const config = await loadConfig(state);
+  const save = (lines, question) => saveReport(config, { project: state, source: 'hackernews', question, content: lines.join('\n') });
+  const filled = SECTIONS.flatMap(heading => [heading, heading === '## Summary' ? 'Read summary.' : 'None.', '']);
+  const card = ['```yaml', 'source_card:', '  status: "complete"', '```', ''];
+  const accepted = [
+    // A four-backtick block may quote a ``` line; its own ```` closes it.
+    [...card, '````markdown', '```js', 'const sample = true;', '````', '', ...filled],
+    // A tilde block closes with tildes, whatever backtick lines it holds.
+    [...card, '~~~', '```', '~~~', '', ...filled],
+    // A line indented four spaces opens no fence, so the sections after it stay outside code.
+    [...card, '    ```', '', ...filled],
+    // A closing fence may be longer than its opener and end in spaces.
+    [...card.slice(0, 3), '````  ', '', ...filled],
+  ];
+  for (const [index, lines] of accepted.entries()) await save(lines, `Accepted ${index}`);
+  // Code quoting a title, a Summary and a fence inside the card; the readers take only the real ones.
+  const quoting = await save([
+    '```yaml', 'source_card:', '  note: "wrap examples in ``` fences"', '  status: "complete"', '```', '',
+    '````markdown', '```', '# Quoted title', '## Summary', 'Quoted summary.', '````', '',
+    '# Real title', '', ...filled,
+  ], 'Which headings are real?');
+  const snapshot = await listLibrary(config);
+  assert.deepEqual(snapshot.items.map(item => [item.reportDetails[0].summary, item.reportDetails[0].status]), Array(accepted.length + 1).fill(['Read summary.', 'complete']));
+  const text = await readFile(quoting.path, 'utf8');
+  assert.match(text, /^title: "Real title"$/m);
+  const { card: parsed, rest } = reportParts(frontMatter(text).body);
+  assert.deepEqual(parsed.fields, { note: 'wrap examples in ``` fences', status: 'complete' });
+  assert.ok(rest.startsWith('\n````markdown\n'));
+  const file = snapshot.items.find(item => item.id === quoting.dig).reports[0];
+  const shown = savedResearch(snapshot, file, text);
+  assert.deepEqual([shown.summary, shown.status], ['Read summary.', 'complete']);
+});
+
+test('the save and the readers follow the rendered block structure: code in lists and quotes, indented and setext headings, closing sequences', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-block-structure-')); const config = await loadConfig(state);
+  const save = (lines, question) => saveReport(config, { project: state, source: 'hackernews', question, content: lines.join('\n') });
+  const card = ['```yaml', 'source_card:', '  status: "complete"', '```', ''];
+  const sections = SECTIONS.map(heading => heading.slice(3));
+  const filled = (heading = section => `## ${section}`) => sections.flatMap(section => [heading(section), section === 'Summary' ? 'Read summary.' : 'None.', '']);
+  const accepted = [
+    // A fenced block inside a list item closes inside it; the sections after the list are real headings.
+    [...card, '- ```text', '  Example code', '  ```', '', ...filled()],
+    // So does one inside a block quote.
+    [...card, '> ```', '> quoted code', '> ```', '', ...filled()],
+    // ATX headings may be indented one to three spaces.
+    [...card, ...filled(section => ` ## ${section}`)],
+    [...card, ...filled(section => `   ## ${section}`)],
+    // A closing sequence after a space is not part of the heading; a setext underline makes a level-2 heading too.
+    [...card, ...filled(section => `## ${section} ##`)],
+    [...card, ...filled(section => `${section}\n${'-'.repeat(section.length)}`)],
+  ];
+  for (const [index, lines] of accepted.entries()) await save(lines, `Accepted ${index}`);
+  const refusals = [
+    // `#` without a space before it is part of the heading's text.
+    [...card, ...filled(section => `## ${section}#`)],
+    // Headings inside a list item or a block quote are not the report's sections.
+    [...card, ...filled(section => `- ## ${section}`)],
+    [...card, ...filled(section => `> ## ${section}`)],
+    // Nor are lines of a fenced block inside a block quote.
+    [...card, '> ```', ...filled().map(line => `> ${line}`), '> ```', ''],
+  ];
+  for (const lines of refusals) await assert.rejects(save(lines, 'Refused'), /Missing report section: Summary/);
+  const snapshot = await listLibrary(config);
+  assert.deepEqual(snapshot.items.map(item => [item.title, item.reportDetails[0].summary, item.reportDetails[0].status]).sort(),
+    accepted.map((_, index) => [`Accepted ${index}`, 'Read summary.', 'complete']));
+});
+
+test('an existing report with a fenced block in a list keeps its Summary, status and discovery snippet', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-list-fence-')); const config = await loadConfig(state);
+  const dig = await startDig(config, state, 'Saved before 0.2.32', 'parent');
+  // Written as an earlier version saved it; the reading must not depend on the save that accepted it.
+  const content = report.replace('## Summary', '- ```text\n  Example code\n  ```\n\n## Summary');
+  await writeFile(join(dig.path, 'hackernews.md'), `---\ntitle: "Saved before 0.2.32"\ndig: ${JSON.stringify(dig.dig)}\nsource: hackernews\nagent: hackernews\ngenerated_at: "${new Date().toISOString()}"\nproject: ${JSON.stringify(state)}\nsession: "parent"\n---\n${content}`);
+  const snapshot = await listLibrary(config);
+  const [item] = snapshot.items;
+  const summary = 'A small inspected sample, not a representative survey.';
+  assert.deepEqual([item.snippet, item.reportDetails[0].summary, item.reportDetails[0].status], [summary, summary, 'complete']);
+  const shown = savedResearch(snapshot, item.reports[0], await readFile(join(dig.path, 'hackernews.md'), 'utf8'));
+  assert.deepEqual([shown.summary, shown.status], [summary, 'complete']);
 });
 
 test('calls that name no dig belong to the session save that follows them; unclaimed calls stay visible as live activity', async () => {
@@ -65,7 +174,7 @@ test('a call that names its dig counts in that dig whichever conversation made i
   const stopped = await call(first.dig, 'worker-stopped', 'call_stopped');
   const receipts = (await readFile(join(config.library, projectFolder(state), 'sessions', 'worker-stopped', 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual([stopped.dig, receipts.at(-1).dig], [first.dig, first.dig]);
-  await call(first.dig, 'worker-saved', 'call_saved'); await pause();
+  await pause(); await call(first.dig, 'worker-saved', 'call_saved'); await pause();
   const saved = await saveReport(config, { project: state, dig: first.dig, source: 'x', agent: 'x-judge', content: report.replace('source: "hackernews"', 'source: "x"'), session: 'worker-saved' }); await pause();
   // Inline work for the second dig stays with it, although the parent's next save is a report for the first.
   await call(second.dig, 'parent', 'call_inline'); await pause();

@@ -12,6 +12,7 @@
  *   - TIKHUB_BASE_URL (optional; defaults to https://api.tikhub.io)
  */
 import { outcome } from "../outcome.js"
+import { knownSecrets, redactProviderText, redactText, redactValue } from "../secrets.js"
 import type { ToolContext, ToolSpec } from "../types.js"
 
 /** Cancellation plus the raw-response capture of the tool call. */
@@ -188,9 +189,10 @@ function firstNumber(...values: unknown[]): number | null {
   return null
 }
 
+/** Diagnostic excerpt of a raw provider payload, redacted (decoded values, before serializing) before it is cut. */
 function safeJsonSnippet(value: unknown, maxLength = 1600): string {
   try {
-    const serialized = redactDiagnostics(JSON.stringify(value, null, 2) ?? "")
+    const serialized = JSON.stringify(redactValue(value, knownSecrets()), null, 2) ?? ""
     if (!serialized) return "{}"
     return serialized.length <= maxLength
       ? serialized
@@ -222,14 +224,6 @@ function collectRecords(value: unknown, maxDepth = 6): Record<string, unknown>[]
 
   visit(value, 0)
   return records
-}
-
-function redactDiagnostics(text: string): string {
-  for (const name of ["TIKHUB_API_KEY", "SCRAPECREATORS_API_KEY"]) {
-    const key = process.env[name]?.trim()
-    if (key) text = text.replaceAll(key, "[redacted]").replaceAll(encodeURIComponent(key), "[redacted]")
-  }
-  return text
 }
 
 function collectStringsByKey(value: unknown, keyPattern: RegExp, valuePattern: RegExp): string[] {
@@ -624,13 +618,10 @@ async function tikhubGet(endpoint: string, params: Record<string, unknown>, ctx:
       signal: AbortSignal.any([ctx.abort, controller.signal]),
     })
 
-    const text = await response.text()
-    let data: unknown = text
-    try {
-      data = text ? JSON.parse(text) : null
-    } catch {
-      // Keep text response for diagnostics.
-    }
+    // Redacted as it arrives, JSON decoded first, like every provider body, so later excerpts cannot cut a credential
+    // short. Text that is not JSON is kept for diagnostics.
+    const body = redactProviderText(await response.text(), knownSecrets())
+    const data: unknown = body.json ? body.value : body.text || null
     ctx.keep(endpoint, response.status, data)
 
     if (!response.ok) {
@@ -677,7 +668,7 @@ async function runCall(label: string, endpoint: string, params: Record<string, u
       endpoint,
       params,
       notes,
-      error: redactDiagnostics(err instanceof Error ? err.message : "Unknown TikHub error"),
+      error: redactText(err instanceof Error ? err.message : "Unknown TikHub error", knownSecrets()),
     }
   }
 }
@@ -1121,13 +1112,13 @@ export const reddit = {
       if (typedArgs.after && typedArgs.operation === "author_context" && !typedArgs.afterTarget) throw new Error("author_context pagination requires afterTarget=user_posts or user_comments; their cursors are not interchangeable")
       if (typedArgs.postIds && typedArgs.postIds.length > (typedArgs.operation === "thread_intelligence" ? 5 : 30)) throw new Error("Too many postIds; thread_intelligence supports 5 and batch_enrich supports 30")
       const calls = await buildCalls(typedArgs, context)
-      const text = redactDiagnostics(formatOutput(typedArgs, calls))
+      const text = redactText(formatOutput(typedArgs, calls), knownSecrets())
       // All calls failing is reported as an ERROR by formatOutput; some failing is partial.
       const failedCalls = calls.filter((call) => call.error).length
       return failedCalls > 0 && failedCalls < calls.length ? outcome("partial", text) : text
     } catch (err) {
       if (context.abort.aborted) return "ERROR: TikHub Reddit cancelled; cancellation is not provider failure or evidence absence."
-      return `ERROR: TikHub Reddit failed: ${redactDiagnostics(err instanceof Error ? err.message : "Unknown error")}`
+      return `ERROR: TikHub Reddit failed: ${redactText(err instanceof Error ? err.message : "Unknown error", knownSecrets())}`
     }
   },
 } satisfies ToolSpec

@@ -4,6 +4,7 @@
  */
 import { keptJson, keptText } from "../http.js"
 import { outcome } from "../outcome.js"
+import { knownSecrets, redactText } from "../secrets.js"
 import type { SourceToolResult, ToolContext, ToolSpec } from "../types.js"
 
 const PERPLEXITY_BASE = "https://api.perplexity.ai"
@@ -103,9 +104,7 @@ function searchBudgets(args: Record<string, unknown>): Record<string, unknown> {
 }
 
 function safeMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : "Unknown Perplexity error"
-  const key = process.env.PERPLEXITY_API_KEY
-  return key ? message.replaceAll(key, "[REDACTED]") : message
+  return redactText(error instanceof Error ? error.message : "Unknown Perplexity error", knownSecrets())
 }
 
 async function makeApiRequest(endpoint: string, body: Record<string, unknown>, ctx: ToolContext): Promise<Record<string, unknown>> {
@@ -135,8 +134,8 @@ async function makeApiRequest(endpoint: string, body: Record<string, unknown>, c
       throw error
     }
     if (!response.ok) {
-      // Provider bodies can echo credentials; redact before limiting error length.
-      const detail = (await keptText(response, ctx.keep, endpoint)).replaceAll(key, "[REDACTED]").slice(0, 300)
+      // keptText returns the body with credentials redacted, so this cut cannot leave part of one.
+      const detail = (await keptText(response, ctx.keep, endpoint)).slice(0, 300)
       throw new Error(`Perplexity API error: HTTP ${response.status}${detail ? ` — ${detail}` : ""}`)
     }
     const data: unknown = await keptJson(response, ctx.keep, endpoint)

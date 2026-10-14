@@ -6,7 +6,7 @@ import { dirname, join, sep } from 'node:path';
 import { MODULES } from './providers/modules.ts';
 import { packageRoot } from './catalog.mjs';
 import { createCatalog } from './ui/catalog.mjs';
-import { firstParagraph, frontMatter, sourceCard } from './ui/markdown.mjs';
+import { firstParagraph, frontMatter, reportParts } from './ui/markdown.mjs';
 import { answerWord, runWord } from './status.mjs';
 import { glyphFor, monochromeSvg, svgDataUri } from './glyphs.mjs';
 
@@ -51,7 +51,6 @@ export function openInDig(file, id = identity) {
 }
 export const isDigDocument = file => /\/digs\/[^/]+\/[^/]+\.md$/.test(file);
 
-const SUMMARY = /^## Summary\s*\r?\n([\s\S]*?)(?=\r?\n## |$)/m;
 const trim = (text, max) => (text.length > max ? `${text.slice(0, max - 1).replace(/\s+\S*$/, '')}…` : text);
 
 /** Details for the saved-research card: what was saved, about which question, its own status as a tag word, and how much evidence it retains. */
@@ -67,8 +66,7 @@ export function savedResearch(snapshot, file, text) {
       summary: trim(firstParagraph(body), 280), reports, retrievals: item.calls.length, link: openInDig(file),
     };
   }
-  const { card, body: rest } = sourceCard(body);
-  const summary = SUMMARY.exec(rest)?.[1] ?? '';
+  const { card, summary } = reportParts(body);
   return {
     kind: 'report', file, title: item.title, label: catalog.fileLabel(file), source: meta.source ?? null, method: meta.agent ?? null,
     glyph: glyphFor(meta.source, meta.agent), status: runWord(card?.fields?.status), savedAt: meta.generated_at ?? null,

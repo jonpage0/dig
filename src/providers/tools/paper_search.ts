@@ -3,7 +3,7 @@ import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, rmSync } fro
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig, paperSearchDirectory, paperSearchEnvFile, paperSearchEnvValues, paperSearchInterpreter } from "../runtime-config.js";
-import { redactText } from "../secrets.js";
+import { knownSecrets, redactProviderText } from "../secrets.js";
 import { findExecutable } from "../executables.js";
 import { free, type OutcomeStatus } from "../outcome.js";
 import type { CostAmount, ReceiptCost } from "../library/types.js";
@@ -177,12 +177,12 @@ function searchResult(out: string, requested: string[]): SourceToolOutput | stri
 	return { status, text: bounded(text) };
 }
 
+/** The value of every environment name shaped like a credential, in any spelling (JSON decoded first), then any `key=`-style query value. */
 function redactDiagnostics(value: string): string {
-	let text = value.replace(/([?&](?:api_key|access_token|token|key)=)[^&\s]+/gi, "$1[redacted]");
-	for (const [name, secret] of Object.entries(process.env)) {
-		if (secret && /KEY|TOKEN|SECRET|PASSWORD/i.test(name)) text = text.replaceAll(secret, "[redacted]");
-	}
-	return text;
+	const secrets = Object.entries(process.env)
+		.flatMap(([name, secret]) => (secret && /KEY|TOKEN|SECRET|PASSWORD/i.test(name) ? [secret] : []))
+		.sort((a, b) => b.length - a.length);
+	return redactProviderText(value, secrets).text.replace(/([?&](?:api_key|access_token|token|key)=)[^&\s]+/gi, "$1[redacted]");
 }
 
 function resolveUv(): string {
@@ -222,31 +222,31 @@ interface BridgeRun {
  * Dig's environment (keys.env) or its own settings file.
  */
 const CONTACT_NAMES = ["PAPER_SEARCH_MCP_UNPAYWALL_EMAIL", "UNPAYWALL_EMAIL"];
-/** A value as Python's `requests` writes it into a query string (`@` → `%40`, `+` → `%2B`). */
-const queryEncoded = (value: string) =>
-	encodeURIComponent(value).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`).replaceAll("%20", "+");
 /**
- * Every contact email the bridge could be using, as written and as encoded in a request URL, longest first. The
- * address is personal rather than a credential, and Dig keeps it out of conversations and saved evidence, but the
- * bridge echoes it: Unpaywall's rejected-email warning names it, and an HTTP error quotes the request URL. Only a
- * value with an `@` counts, so a stray placeholder such as `none` never blanks ordinary words in the evidence.
+ * Every contact email the bridge could be using; `redactText` finds each as written and as encoded
+ * in a request URL. The address is personal rather than a credential, and Dig keeps it out of conversations and saved
+ * evidence, but the bridge echoes it: Unpaywall's rejected-email warning names it, and an HTTP error quotes the request
+ * URL. Only a value with an `@` counts, so a stray placeholder such as `none` never blanks ordinary words in the
+ * evidence.
  */
 function contactValues(): string[] {
 	const values = new Set<string>();
 	for (const name of CONTACT_NAMES) {
 		for (const value of [process.env[name]?.trim(), ...paperSearchEnvValues(name)]) {
-			if (value?.includes("@")) values.add(value).add(queryEncoded(value));
+			if (value?.includes("@")) values.add(value);
 		}
 	}
-	return [...values].sort((a, b) => b.length - a.length);
+	return [...values];
 }
 
 /**
  * `uv run --no-sync` inside the bridge clone. Settles only once the process
  * has exited, so a cancelled download never races the removal of its scratch
  * folder. Cancellation kills it (SIGTERM) and reports its exit as it was;
- * failing to start rejects. The contact email is scrubbed from both streams
- * before anything reads them, so no truncation can leave part of it.
+ * failing to start rejects. Known credentials and the contact email are
+ * scrubbed from both streams before anything reads them, JSON output decoded
+ * first (`redactProviderText`), so no JSON escape can hide one and no
+ * truncation can leave part of one.
  */
 function runBridge(command: string[], signal: AbortSignal): Promise<BridgeRun> {
 	const directory = resolveBridge();
@@ -271,8 +271,8 @@ function runBridge(command: string[], signal: AbortSignal): Promise<BridgeRun> {
 		});
 		child.on("close", (code, killed) => {
 			if (failure && !signal.aborted) return reject(failure);
-			const contact = contactValues();
-			const read = (chunks: Buffer[]) => redactText(Buffer.concat(chunks).toString("utf8"), contact);
+			const scrubbed = [...knownSecrets(), ...contactValues()].sort((a, b) => b.length - a.length);
+			const read = (chunks: Buffer[]) => redactProviderText(Buffer.concat(chunks).toString("utf8"), scrubbed).text;
 			resolve({ stdout: read(stdout), stderr: read(stderr), exitCode: code ?? killed ?? "unknown" });
 		});
 	});

@@ -134,6 +134,39 @@ test('a key rotated in keys.env while a request that used it is outstanding stay
   } finally { await client.close(); }
 });
 
+test('a key echoed with lowercase percent escapes, form encoding or every byte escaped reaches neither the result, the receipt, the raw response, its kept cost header nor a saved report', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dig-native-encoded-echo-'));
+  const key = 'Native/key+PRIVATE sample';
+  await writeFile(join(root, 'config.toml'), '[sources]\nenabled = ["commerce"]\n');
+  await writeFile(join(root, 'keys.env'), `SCRAPE_DO_API_KEY=${key}\n`, { mode: 0o600 });
+  // test/provider-fetch.mjs echoes the token it was sent in these spellings, in the response body and its cost header.
+  const lowercaseEscapes = text => text.replace(/%[0-9A-F]{2}/g, escape => escape.toLowerCase());
+  const spellings = {
+    'percent-encoded': lowercaseEscapes(encodeURIComponent(key)),
+    'form-encoded': lowercaseEscapes(new URLSearchParams({ v: key }).toString().slice(2)),
+    'every-byte-escaped': [...new TextEncoder().encode(key)].map(byte => `%${byte.toString(16).padStart(2, '0')}`).join(''),
+  };
+  const client = new Client({ name: 'native-encoded-echo-proof', version: '1' });
+  const transport = new StdioClientTransport({ command: process.execPath, args: ['--import', resolve('test/provider-fetch.mjs'), resolve('plugin/dist/server.mjs')], cwd: root, env: { DIG_STATE_DIR: root, PATH: process.env.PATH }, stderr: 'pipe' });
+  const call = async (name, args) => (await client.callTool({ name, arguments: args, _meta: { threadId: 'encoded-echo' } })).structuredContent;
+  try {
+    await client.connect(transport);
+    const result = await client.callTool({ name: 'commerce_search', arguments: { project: root, query: `usb ${spellings['every-byte-escaped']}` }, _meta: { threadId: 'encoded-echo' } });
+    assert.equal(result.structuredContent.status, 'failed');
+    assert.match(result.structuredContent.text, /bad token \[redacted\] or \[redacted\] or \[redacted\]/);
+    assert.equal(result.structuredContent.call.args.query, 'usb [redacted]');
+    const saved = await call('research_save', { project: root, source: 'commerce', question: 'Echo check', content: `${report.replace('source: "hackernews"', 'source: "commerce"')}\n${Object.values(spellings).join(' ')}\n` });
+    const listing = await call('library_list', { project: root });
+    const { rawFile } = [...listing.live, ...listing.items.flatMap(item => item.calls)].find(c => c.id === result.structuredContent.call.id);
+    const raw = (await call('library_read', { file: rawFile })).text;
+    assert.deepEqual(JSON.parse(raw).responses[0].headers, { 'scrape.do-request-cost': '[redacted] [redacted]' });
+    const receipts = (await call('library_read', { file: rawFile.replace(/raw\/[^/]+$/, 'calls.jsonl') })).text;
+    const savedReport = (await call('library_read', { file: saved.path })).text;
+    const written = [JSON.stringify(result), raw, receipts, savedReport].join('\n');
+    for (const [name, spelling] of Object.entries(spellings)) assert.equal(written.includes(spelling), false, `No ${name} spelling survives`);
+  } finally { await client.close(); }
+});
+
 test('grouped questions redact known credentials before deriving record names or saving metadata', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dig-native-start-'));
   const secret = 'NativeMixedCaseSecretQA42';

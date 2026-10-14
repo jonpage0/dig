@@ -20,6 +20,7 @@
  *   - JUSTONE_BASE_URL (optional; defaults to https://api.justoneapi.com)
  */
 import { requestJson } from "../http.js"
+import { knownSecrets, redactText, redactValue } from "../secrets.js"
 import type { KeepRaw, ToolSpec } from "../types.js"
 
 const CHINA_SOCIAL_PLATFORM_VALUES = [
@@ -274,9 +275,10 @@ function formatNumber(value: number | null): string | null {
   return value.toString()
 }
 
+/** Diagnostic excerpt of a raw provider payload, redacted (decoded values, before serializing) before it is cut. */
 function safeJsonSnippet(value: unknown, maxLength = 1400): string | null {
   try {
-    const serialized = redactDiagnostics(JSON.stringify(value, null, 2) ?? "")
+    const serialized = JSON.stringify(redactValue(value, knownSecrets()), null, 2) ?? ""
     if (!serialized) {
       return null
     }
@@ -304,14 +306,6 @@ function dedupeItems(items: SearchItem[]): SearchItem[] {
   }
 
   return deduped
-}
-
-function redactDiagnostics(text: string): string {
-  for (const name of ["TIKHUB_API_KEY", "SCRAPECREATORS_API_KEY", "JUSTONE_API_KEY"]) {
-    const key = process.env[name]?.trim()
-    if (key) text = text.replaceAll(key, "[redacted]").replaceAll(encodeURIComponent(key), "[redacted]")
-  }
-  return text
 }
 
 function collectRecords(value: unknown, maxDepth = 6): Record<string, unknown>[] {
@@ -1426,7 +1420,7 @@ export const search = {
           failures.push({
             platform,
             provider: provider?.id ?? requestedProvider,
-            message: redactDiagnostics(error instanceof Error ? error.message : "Unknown error"),
+            message: redactText(error instanceof Error ? error.message : "Unknown error", knownSecrets()),
           })
         }
       }
@@ -1497,7 +1491,7 @@ export const search = {
         },
       }
     } catch (error) {
-      return `ERROR: China-social search failed: ${redactDiagnostics(error instanceof Error ? error.message : "Unknown error")}`
+      return `ERROR: China-social search failed: ${redactText(error instanceof Error ? error.message : "Unknown error", knownSecrets())}`
     }
   },
 } satisfies ToolSpec

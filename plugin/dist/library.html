@@ -21350,7 +21350,6 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 
   // src/ui/markdown.mjs
   var FRONT_MATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
-  var SOURCE_CARD = /^\s*```ya?ml[^\n]*\n(source_card:[^\n]*\n[\s\S]*?)\n?```[^\n]*(?:\n|$)/;
   var HEADING_OFFSET = 3;
   var MAX_HEADING = 6;
   function scalar(raw) {
@@ -21385,15 +21384,19 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     }
     return { meta: meta3, body: text2.slice(match[0].length) };
   }
-  function sourceCard(body) {
-    const match = SOURCE_CARD.exec(body);
-    if (!match) return { card: null, body };
-    const yaml = match[1];
+  function closedFence(raw) {
+    const lines = raw.replace(/\n$/, "").split("\n");
+    const fence = /^ {0,3}(`{3,}|~{3,})/.exec(lines[0])[1];
+    const closer = lines.length > 1 ? lines.at(-1).replace(/^ {0,3}/, "") : "";
+    return closer.startsWith(fence) && /^[`~]* *$/.test(closer.slice(fence.length));
+  }
+  var isSourceCard = (block) => block?.type === "code" && block.codeBlockStyle !== "indented" && /^ya?ml(?:\s|$)/.test(block.lang ?? "") && /^source_card:/.test(block.text) && closedFence(block.raw);
+  function readCard(yaml) {
     const fields = {};
     const lists = {};
     let list5 = null;
     let partial2 = false;
-    for (const line of yaml.split(/\r?\n/).slice(1)) {
+    for (const line of yaml.split("\n").slice(1)) {
       if (!line.trim() || /^\s*#/.test(line)) continue;
       const entry = /^ {2}([a-z_][a-z0-9_]*):\s*(.*)$/.exec(line);
       const item2 = /^ {2,}- (.*)$/.exec(line);
@@ -21413,7 +21416,32 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         else partial2 = true;
       } else partial2 = true;
     }
-    return { card: { fields, lists, yaml, partial: partial2 }, body: body.slice(match[0].length) };
+    return { fields, lists, yaml, partial: partial2 };
+  }
+  function summaryLine(blocks2) {
+    const at = blocks2.findIndex((block) => block.type === "heading" && block.depth === 2 && block.text === "Summary");
+    if (at < 0) return "";
+    for (const block of blocks2.slice(at + 1)) {
+      if (block.type === "heading" && block.depth <= 2) break;
+      const line = block.raw.split("\n").find((text2) => text2.trim());
+      if (line !== void 0) return line;
+    }
+    return "";
+  }
+  function reportParts(body) {
+    const text2 = body.replace(/\r\n?/g, "\n");
+    const blocks2 = new x({ gfm: true }).blockTokens(text2);
+    const first = blocks2.findIndex((block) => block.type !== "space");
+    let card2 = null;
+    let rest = text2;
+    if (isSourceCard(blocks2[first])) {
+      card2 = readCard(blocks2[first].text);
+      let end = blocks2.slice(0, first + 1).reduce((length, block) => length + block.raw.length, 0);
+      if (!blocks2[first].raw.endsWith("\n") && text2[end] === "\n") end += 1;
+      rest = text2.slice(end);
+    }
+    const headings = blocks2.filter((block) => block.type === "heading").map(({ depth, text: heading }) => ({ depth, text: heading }));
+    return { card: card2, rest, headings, summary: summaryLine(blocks2) };
   }
   function inline(tokens) {
     return (tokens ?? []).map((token) => {
@@ -22322,7 +22350,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const { meta: meta3, body } = frontMatter(text2);
     const kind = fileKind(file2);
     if (kind === "report") {
-      const { card: card2, body: rest } = sourceCard(body);
+      const { card: card2, rest } = reportParts(body);
       return node("div", "doc", reportFacts(meta3, catalog2), card2 ? cardSummary(card2) : node("p", "meta", "This report has no readable source card."), renderMarkdown(rest));
     }
     return node("div", "doc", kind === "answer" ? answerFacts(meta3, catalog2) : questionFacts(meta3, catalog2), renderMarkdown(body));
@@ -23274,7 +23302,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
 
   // src/version.mjs
-  var VERSION = "0.2.31";
+  var VERSION = "0.2.32";
 
   // src/app.mjs
   var POLL_MS = 2e3;

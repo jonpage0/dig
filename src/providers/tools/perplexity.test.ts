@@ -174,7 +174,28 @@ describe("Perplexity Agent and Search contracts", () => {
     installFetch({ error: { message: "Invalid perplexity-test-secret" } }, 401)
     const result = text(await ask.execute({ messages }, context))
     expect(result).toContain("HTTP 401")
-    expect(result).toContain("[REDACTED]")
+    expect(result).toContain("[redacted]")
     expect(result).not.toContain("perplexity-test-secret")
+  })
+
+  test("an encoded credential echo is redacted before the error body is cut, so no fragment of it survives", async () => {
+    const key = `PRIVATE/percent+KEY space-unique-${"7G9w".repeat(20)}` // gitleaks:allow (synthetic test key)
+    process.env.PERPLEXITY_API_KEY = key
+    const encoded = encodeURIComponent(key).replace(/%[0-9A-F]{2}/g, (escape) => escape.toLowerCase())
+    // The 300-character cut falls inside the echoed key.
+    globalThis.fetch = Object.assign(async () => new Response(`${"X".repeat(240)}${encoded}${"Y".repeat(100)}`, { status: 401 }), { preconnect: originalFetch.preconnect })
+    const result = text(await ask.execute({ messages }, context))
+    expect(result).toContain("HTTP 401")
+    expect(result).toContain("[redacted]")
+    expect(result).not.toContain("PRIVATE%2f")
+  })
+
+  test("a JSON error body hiding the key behind a JSON escape and mixed URL spellings is redacted", async () => {
+    process.env.PERPLEXITY_API_KEY = "Review/key+PRIVATE sample"
+    globalThis.fetch = Object.assign(async () => new Response('{"error":{"message":"Review\\/key%2bPRIVATE+sample"}}', { status: 401 }), { preconnect: originalFetch.preconnect })
+    const result = text(await ask.execute({ messages }, context))
+    expect(result).toContain("HTTP 401")
+    expect(result).toContain("[redacted]")
+    expect(result).not.toContain("PRIVATE")
   })
 })

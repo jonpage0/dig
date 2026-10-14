@@ -11,9 +11,18 @@ export interface RetainedResponse {
 /**
  * Records one provider response for the call's raw file: per request or
  * attempt, parsed JSON when possible, text otherwise. Never pass request
- * headers or credentials.
+ * headers or credentials. `interrupted` marks a response that arrived but
+ * whose body could not be read in full (a timeout, cancellation or transport
+ * failure mid-body): it is kept once, with its status and charge header, and
+ * its charge is at most a subtotal, so the call's total cost is unknown.
  */
-export type KeepRaw = (label: string, status: number | string, body: unknown, headers?: RetainedResponse["headers"]) => void;
+export type KeepRaw = (
+	label: string,
+	status: number | string,
+	body: unknown,
+	headers?: RetainedResponse["headers"],
+	interrupted?: boolean,
+) => void;
 
 export interface ToolContext {
 	sessionID: string;

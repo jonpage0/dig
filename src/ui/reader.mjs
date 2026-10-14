@@ -2,7 +2,7 @@
 // and retained original responses as source-shaped evidence with the verbatim JSON always reachable.
 import { answerWord, callWord, runWord } from '../status.mjs';
 import { attr, externalLink, httpUrl, node, tag } from './dom.mjs';
-import { frontMatter, renderMarkdown, sourceCard } from './markdown.mjs';
+import { frontMatter, renderMarkdown, reportParts } from './markdown.mjs';
 import { bodies, evidence, hasSourceView, ITEM_NOUNS, sentenceText } from './evidence/index.mjs';
 import { absTime, basename, costText, duration, num, plural } from './format.mjs';
 import { costSummary } from '../providers/library/cost.ts';
@@ -52,7 +52,7 @@ export function documentView(file, text, catalog) {
   const { meta, body } = frontMatter(text);
   const kind = fileKind(file);
   if (kind === 'report') {
-    const { card, body: rest } = sourceCard(body);
+    const { card, rest } = reportParts(body);
     return node('div', 'doc', reportFacts(meta, catalog), card ? cardSummary(card) : node('p', 'meta', 'This report has no readable source card.'), renderMarkdown(rest));
   }
   return node('div', 'doc', kind === 'answer' ? answerFacts(meta, catalog) : questionFacts(meta, catalog), renderMarkdown(body));

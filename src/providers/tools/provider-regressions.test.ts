@@ -104,6 +104,16 @@ test("DeepWiki answers streamed after progress notifications are successes", asy
   expect(result.details?.status).toBe("success");
   expect(result.content[0].text).toContain("HTMLBundle");
 });
+test("a DeepWiki error excerpt is redacted before it is cut, so no fragment of an echoed key survives", async () => {
+  process.env.EXA_API_KEY = `PRIVATE/percent+KEY space-unique-${"7G9w".repeat(20)}`; // gitleaks:allow (synthetic test key)
+  const encoded = encodeURIComponent(process.env.EXA_API_KEY).replace(/%[0-9A-F]{2}/g, (escape) => escape.toLowerCase());
+  // The 300-character excerpt ends inside the echoed key.
+  mockFetch(async () => new Response(`${"X".repeat(260)}${encoded}`, { status: 502 }));
+  const result = await tool("deepwiki_read_wiki_contents", { repoName: "fixture/repo" });
+  expect(result.details?.status).toBe("failed");
+  expect(result.content[0].text).toContain("DeepWiki HTTP 502");
+  expect(result.content[0].text).not.toContain("PRIVATE%2f");
+});
 test("explicit successful text is not classified as a failure by its first word", () => {
   expect(
     hostResult(outcome("success", "ERROR: quoted source text"), "fixture")

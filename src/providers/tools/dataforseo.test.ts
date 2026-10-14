@@ -137,6 +137,21 @@ test("a password echoed in a response is redacted before the output is serialize
 	expect(result.text).not.toContain("quoted-pass");
 });
 
+test("redacting an echoed password never breaks a valid response: its JSON escapes still decode and its reported cost is kept", async () => {
+	// The password is also the tail of a JSON escape in ordinary data (`\u0061lpha` decodes to "alpha").
+	process.env.DATAFORSEO_PASSWORD = "u0061lpha";
+	const wire = JSON.stringify(envelope([{
+		id: "t-escape", status_code: 20000, status_message: "Ok.", cost: 0.125, result_count: 1,
+		result: [{ keyword: "ESCAPED", note: "25% + fees" }],
+	}], 0.125)).replace('"ESCAPED"', '"\\u0061lpha"');
+	installFetch(() => new Response(wire, { headers: { "content-type": "application/json" } }));
+	const result = await executeSource(request, { path: "serp/google/organic/live/advanced", tasks: [{ keyword: "alpha" }] }, context);
+	expect(result.status).toBe("success");
+	expect(result.details?.cost).toEqual([{ amount: 0.125, unit: "USD" }]);
+	expect(result.text).toContain('"keyword":"alpha"');
+	expect(result.text).toContain("25% + fees");
+});
+
 const INDEX = [
 	"Docs DataForSEO V3",
 	"",

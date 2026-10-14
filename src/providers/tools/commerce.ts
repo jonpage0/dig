@@ -23,6 +23,7 @@
  */
 import { requestJson } from "../http.js"
 import { metered, outcome } from "../outcome.js"
+import { knownSecrets, redactText, redactValue } from "../secrets.js"
 import type { KeepRaw, SourceToolResult, ToolSpec } from "../types.js"
 
 /** Scrape.do's own credit unit; never converted to dollars or merged with other providers' credits. */
@@ -414,24 +415,11 @@ function nexscopeApiKey(): string {
 }
 
 /**
- * Provider text (error echoes, raw payload excerpts) can carry the request
- * URL or body; the Scrape.do token travels in the query string, so strip any
- * configured credential before the text reaches tool output.
+ * The Scrape.do token travels in the query string, so an error can carry the request URL. Provider bodies already
+ * arrive redacted (requestJson); an error message is redacted the same way before it reaches tool output.
  */
-function redactSecrets(text: string): string {
-  let redacted = text
-  for (const secret of [
-    process.env.SCRAPE_DO_API_KEY?.trim(),
-    process.env.SCRAPEDO_API_TOKEN?.trim(),
-    process.env.NEXSCOPE_API_KEY?.trim(),
-  ]) {
-    if (secret) redacted = redacted.split(secret).join("[redacted]")
-  }
-  return redacted
-}
-
 function errorMessage(error: unknown): string {
-  return redactSecrets(error instanceof Error ? error.message : "Unknown error")
+  return redactText(error instanceof Error ? error.message : "Unknown error", knownSecrets())
 }
 
 function requireInteger(value: unknown, name: string, min: number, max: number): number {
@@ -645,15 +633,14 @@ function boolLabel(value: boolean | null): string {
   return value ? "Yes" : "No"
 }
 
-/** Diagnostic excerpt of a raw provider payload; redacted because the payload is provider text. */
+/** Diagnostic excerpt of a raw provider payload, redacted (decoded values, before serializing) before it is cut. */
 function safeJsonSnippet(value: unknown, maxLength = 1600): string | null {
   try {
-    const raw = JSON.stringify(value, null, 2)
-    if (!raw) {
+    const serialized = JSON.stringify(redactValue(value, knownSecrets()), null, 2)
+    if (!serialized) {
       return null
     }
 
-    const serialized = redactSecrets(raw)
     return serialized.length <= maxLength
       ? serialized
       : `${serialized.slice(0, maxLength - 1).trimEnd()}…`

@@ -6,7 +6,6 @@ import { node, attr, httpUrl, externalLink } from './dom.mjs';
 import { decodeEntities } from './format.mjs';
 
 const FRONT_MATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
-const SOURCE_CARD = /^\s*```ya?ml[^\n]*\n(source_card:[^\n]*\n[\s\S]*?)\n?```[^\n]*(?:\n|$)/;
 // Markdown h1 sits below the page's h1 (Dig), h2 (the question) and h3 (the open file's name).
 const HEADING_OFFSET = 3;
 const MAX_HEADING = 6;
@@ -32,15 +31,23 @@ export function frontMatter(text) {
 }
 
 /**
- * The source skill's leading `source_card` block. Scalars and string lists are read for the summary;
- * anything else stays visible in the verbatim block (`partial` marks a card the summary could not fully read).
+ * Whether a fenced code block's source ends with a closing fence, as marked reads one: up to three spaces, the
+ * opening fence's characters, any more backticks or tildes, then only spaces. Unclosed, the block runs to the end.
  */
-export function sourceCard(body) {
-  const match = SOURCE_CARD.exec(body);
-  if (!match) return { card: null, body };
-  const yaml = match[1];
+function closedFence(raw) {
+  const lines = raw.replace(/\n$/, '').split('\n');
+  const fence = /^ {0,3}(`{3,}|~{3,})/.exec(lines[0])[1];
+  const closer = lines.length > 1 ? lines.at(-1).replace(/^ {0,3}/, '') : '';
+  return closer.startsWith(fence) && /^[`~]* *$/.test(closer.slice(fence.length));
+}
+
+/** A report's source card block: a closed fenced code block, `yaml` or `yml` its info string's first word, whose text begins `source_card:`. */
+const isSourceCard = block => block?.type === 'code' && block.codeBlockStyle !== 'indented' && /^ya?ml(?:\s|$)/.test(block.lang ?? '') && /^source_card:/.test(block.text) && closedFence(block.raw);
+
+/** The card's scalars and string lists; anything else stays visible in the verbatim `yaml` (`partial` marks a card the summary could not fully read). */
+function readCard(yaml) {
   const fields = {}; const lists = {}; let list = null; let partial = false;
-  for (const line of yaml.split(/\r?\n/).slice(1)) {
+  for (const line of yaml.split('\n').slice(1)) {
     if (!line.trim() || /^\s*#/.test(line)) continue;
     const entry = /^ {2}([a-z_][a-z0-9_]*):\s*(.*)$/.exec(line);
     const item = /^ {2,}- (.*)$/.exec(line);
@@ -55,7 +62,45 @@ export function sourceCard(body) {
       if (typeof parsed === 'string' || typeof parsed === 'number') list.push(String(parsed)); else partial = true;
     } else partial = true;
   }
-  return { card: { fields, lists, yaml, partial }, body: body.slice(match[0].length) };
+  return { fields, lists, yaml, partial };
+}
+
+/** The first nonblank source line under the top-level `## Summary`, before the next heading of level 1 or 2; '' when there is none. */
+function summaryLine(blocks) {
+  const at = blocks.findIndex(block => block.type === 'heading' && block.depth === 2 && block.text === 'Summary');
+  if (at < 0) return '';
+  for (const block of blocks.slice(at + 1)) {
+    if (block.type === 'heading' && block.depth <= 2) break;
+    const line = block.raw.split('\n').find(text => text.trim());
+    if (line !== undefined) return line;
+  }
+  return '';
+}
+
+/**
+ * A report body (front matter removed) read as marked reads Markdown, CommonMark with GFM. Code (fenced or indented,
+ * in a list or block quote or not), list items, block quotes and HTML blocks are block structure, so no line inside
+ * them is a heading or the card. The save's check and every reader of a report's card, status, title and Summary use
+ * this one reading, so they agree with each other and with the rendered report.
+ * - `card`: the first block when it is the source card (`isSourceCard`), read by `readCard`; otherwise null.
+ * - `rest`: the body after the card's closing fence line, or the whole body without a card.
+ * - `headings`: the top-level headings, ATX or setext, as `{ depth, text }`.
+ * - `summary`: the Summary snippet's source line (`summaryLine`).
+ */
+export function reportParts(body) {
+  const text = body.replace(/\r\n?/g, '\n');
+  const blocks = new Lexer({ gfm: true }).blockTokens(text);
+  const first = blocks.findIndex(block => block.type !== 'space');
+  let card = null; let rest = text;
+  if (isSourceCard(blocks[first])) {
+    card = readCard(blocks[first].text);
+    // Only blank lines precede the card; the newline that ends its closing fence line is part of it.
+    let end = blocks.slice(0, first + 1).reduce((length, block) => length + block.raw.length, 0);
+    if (!blocks[first].raw.endsWith('\n') && text[end] === '\n') end += 1;
+    rest = text.slice(end);
+  }
+  const headings = blocks.filter(block => block.type === 'heading').map(({ depth, text: heading }) => ({ depth, text: heading }));
+  return { card, rest, headings, summary: summaryLine(blocks) };
 }
 
 function inline(tokens) {
