@@ -444,6 +444,13 @@ test('Sources gives each source a card holding its own settings, Settings holds 
   assert.equal(named(videoCard, 'video_enabled').checked, false);
   assert.doesNotMatch(videoCard.textContent, /Research methods?|suggested worker/);
   assert.match(videoCard.textContent, /About this tool/);
+  const youtubeCard = cards.find(card => card.getAttribute('id') === 'source-youtube');
+  assert.match(youtubeCard.textContent, /Gemini 3\.8 Flash/);
+  assert.match(youtubeCard.textContent, /Gemini 4 Argon/);
+  assert.match(youtubeCard.textContent, /Glimpse/);
+  assert.doesNotMatch(youtubeCard.textContent, /code execution/i);
+  assert.ok(named(youtubeCard, 'youtube_video_worker_model'));
+  assert.ok(!names(youtubeCard).some(name => ['video', 'question', 'query'].includes(name)), 'Analysis stays in the host conversation, with no source-card request form');
   // The longest source id owns a key.
   const home = name => cards.find(card => named(card, name))?.getAttribute('id');
   assert.deepEqual(['x_model', 'x_depth', 'x_web_search', 'x_code_execution', 'tiktok_enabled', 'tiktok_ads_enabled', 'reddit_enabled', 'tikhub_reddit_enabled'].map(home),

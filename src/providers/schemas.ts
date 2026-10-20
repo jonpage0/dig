@@ -3,6 +3,7 @@
 import type { Type, TSchema } from "@sinclair/typebox";
 import { REPORT_STATUSES, TOPIC_VOLATILITIES } from "./library/files.js";
 import { ALL_MODULES, reportSources } from "./modules.js";
+import { createYouTubeAnalysisSchemas } from "./youtube-analysis-schemas.js";
 import { createFacebookSchemas } from "./facebook-schemas.js";
 import { createFacebookAdsSchemas } from "./facebook-ads-schemas.js";
 type Typebox = typeof Type;
@@ -56,6 +57,7 @@ export function createSchemas(
 ): Record<string, TSchema> {
   const schemas: Record<string, Schema> = {
     ...createFacebookSchemas(T),
+    ...createYouTubeAnalysisSchemas(T),
     ...createFacebookAdsSchemas(T),
     tiktok_top: T.Object({ query: T.String(), cursor: T.Optional(T.Integer({minimum: 0})), region: T.Optional(T.String()), sort: enumSchema(T, ["relevance", "most-liked", "date-posted"], "Result ordering."), period: enumSchema(T, ["yesterday", "this-week", "this-month", "last-3-months", "last-6-months", "all-time"], "Publication window.") }, {additionalProperties: false}),
     tiktok_comments: T.Object({ url: T.String(), cursor: T.Optional(T.Integer({minimum: 0})) }, {additionalProperties: false}),

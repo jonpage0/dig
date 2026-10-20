@@ -5,7 +5,7 @@ description: YouTube videos researched through their full saved transcripts, for
 
 # YouTube transcript research
 
-Use YouTube for videos, tutorials, reviews, demos, creator positions, and transcript-grounded claims. Search results and engagement select evidence; the transcript shows what a creator actually said.
+Use this method for video discovery, tutorials, reviews, demos, creator positions, and transcript-grounded claims. Search results and engagement select evidence; the transcript records the available captions or transcription. For deeper analysis of an already supplied public YouTube video, use the separate `youtube-video` method from `source_info`: Gemini 3.8 Flash is its standard, with Argon for harder reasoning. Choose the method that answers the question rather than automatically running both.
 
 Run this skill inline in the thread that needs it, or as an ordinary source worker that the parent thread spawned for this one question. Either way, run it yourself: do not spawn another source worker or run a second source. The only subagents you may spawn, and normally should for independent transcripts, are transcript helpers running the `youtube-summarizer` helper method.
 
@@ -19,7 +19,7 @@ As a worker, you have not seen the parent's conversation or anything it read, so
 
 Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, CLI, configuration, keys and library are separate; never use them.
 
-- `source_info` with `source: "youtube"` — enablement, readiness, the library path, and the helper method's packaged skill;
+- `source_info` with `source: "youtube"` — enablement, readiness, the library path, the separate video-analysis method and the transcript helper's packaged skill;
 - `youtube` — search videos and optionally save full transcripts;
 - `youtube_transcript` — explicit paid ScrapeCreators fallback for an exact video, preserving caption timestamps and language;
 - `library_read` — read a saved transcript or summary in full; it accepts an absolute path inside the active library and returns `nextOffset` until the file is complete;
@@ -27,7 +27,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_read`, and `research_save`.
 
-Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. `OPENCODE_RESEARCH_GOOGLE_API_KEY` is optional; `yt-dlp` is needed for transcripts and keyless search. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (Dig's Sources page can copy one Codex's environment already has), and installs `yt-dlp` themselves. A missing prerequisite is a coverage limit, not evidence that videos or transcripts do not exist. Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
+Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. `OPENCODE_RESEARCH_GOOGLE_API_KEY` is optional; `yt-dlp` is needed for local captions and keyless search. The separate video method uses optional `GEMINI_API_KEY`; this transcript method does not need it. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (Dig's Sources & tools page can copy one Codex's environment already has), and installs `yt-dlp` themselves. A missing prerequisite is a coverage limit, not evidence that videos or transcripts do not exist. Read readiness per route; the overall source can be partly configured while this method works.
 
 Use `library_read` or the host's own full-file reader and file discovery for transcript and summary artifacts, and the host's file writer for the one permitted summary recovery write. Never use shell redirection.
 
@@ -65,9 +65,11 @@ Never fabricate a video, channel, metric, quote, timestamp, transcript, summary,
 
 Structure the report with `## Summary`, `## Top Videos`, `## Creator Perspectives`, `## Points of Agreement`, `## Points of Disagreement`, `## Data Points & Claims`, and `## Stats`. Stats include videos found, transcript and summary counts, cached summaries, persistence recoveries and failures, full transcripts read, and the triage rationale. `## Summary` is the report's discovery summary: what was found, its scope and limits, and what this research is useful for later. Keep it inside the report; the per-video transcript summaries are helper artifacts, not a replacement for it.
 
-## Optional video inspection
+## Optional video analysis
 
-When the question depends on what a surfaced video shows, you may also use the shared `video_analyze` tool within the user's authorized paid-provider scope. This is the exception to the source-tool restriction above: it analyzes media from this source, without researching a different source. Read `source_info` for `video` and its `helperSkillPath` first. Use a returned direct media URL, an exact YouTube URL, or an explicitly supplied local project clip; a social post URL is not a video file. Keep the source URL, inspected interval and analysis receipt in this report. Treat the result as Glimpse's interpretation and distinguish visual observations, automatic speech transcription and inference. Missing or incomplete video analysis is a coverage limit; do not force a failed route or infer unseen visuals from captions.
+If the question needs analysis beyond the transcript, the `youtube-video` method provides the full procedure and its own standard source report. Inline, read that method's `skillPath` and use it for the deeper question. As a transcript worker, return the exact video URL, useful interval and remaining question to the initiating thread rather than spawning another source worker or silently expanding the assignment.
+
+For a concrete visual detail within this assignment, you may use the shared `video_analyze` tool under the user's authorized paid-provider scope. Read `source_info` for `video` and its `helperSkillPath` first. This Glimpse exception inspects the selected media without creating a second report source. Broader YouTube analysis normally starts with Gemini 3.8 Flash, then Argon for harder reasoning; a specific visual need or the user's explicit provider choice can justify Glimpse directly. Preserve the source URL, inspected interval and receipt, and distinguish visual observation, speech transcription and model inference.
 
 ## Wait for a real outcome
 

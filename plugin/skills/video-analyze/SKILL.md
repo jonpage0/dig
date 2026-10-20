@@ -1,17 +1,19 @@
 ---
 name: video-analyze
-description: Inspect a supplied video or a focused YouTube interval with Dig's optional Elorian Glimpse tool, for visual events, temporal order, demonstrations and available speech. Complements source research; it does not search for sources or create an independent source report.
+description: Call Dig's standalone Elorian Glimpse tool to inspect a supplied video or focused interval for visual events, temporal order and demonstrations. Works directly in conversation without a dig or report, and alongside appropriate source research.
 ---
 
 # Video analysis
 
-Use this helper when what happens on screen matters to the question. Captions remain useful for exact creator claims; visual analysis adds actions, object changes, diagrams, demonstrations and event order. A talking-head lecture that is fully answered by its transcript may need no paid visual call.
+Use this helper when what happens on screen matters to the question: actions, object changes, diagrams, demonstrations and event order. It exposes the ordinary MCP tool `video_analyze`, callable directly by the initiating thread. No `dig_start`, source worker or report is required. Captions remain useful for creator claims; a talking-head lecture answered by its transcript may need no paid visual call.
+
+For deeper analysis of a supplied public YouTube video, the standard route is the `youtube-video` method with Gemini 3.8 Flash. Prefer Gemini 4 Argon next for harder reasoning. Use Glimpse directly when a concrete visual need calls for focused inspection, or when the user chooses Glimpse. Preserve explicit provider choices and spend limits; do not turn this guidance into a mandatory sequence of paid calls.
 
 ## Choose the evidence
 
 Read `source_info` with `source: "video"`. It is a shared tool (`kind: "tool"`), with no research method or suggested worker. Use only this plugin's `video_analyze`. Respect its enabled state and the user's paid-provider scope. The user sets `ELORIAN_API_KEY` in Dig's private keys.env; never ask for or return its value.
 
-Select a specific video and a concrete visual question. Pass the absolute `project` and the parent's `dig` when assigned. A source worker may use this helper on media from its assigned source; it does not become a second source worker and does not start another dig.
+Select a specific video and a concrete visual question. Pass the absolute `project`; `dig` is optional and is used only when grouping is already wanted. A source worker may use this helper when its source method explicitly allows the exception, on media from that assigned source. It does not become a second source worker and does not start another dig.
 
 Inputs:
 

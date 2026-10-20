@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 — 2026-10-20
+
+- Add optional YouTube video understanding with Gemini 3.8 Flash by default, Gemini 4 Argon for harder reasoning, and an ordinary `youtube-video` source method. Search and transcripts remain available without a Gemini key.
+- Add static clips, frame sampling and resolution, agentic video processing, multi-video comparisons, structured answers, explicit Google Search/URL context, stored follow-ups, and background status/cancellation. Provider tokens remain distinct from unknown billed dollars.
+- Expand the YouTube source card and shared Glimpse guidance. Glimpse remains a standalone focused visual tool; YouTube reasoning prefers Flash, then Argon when needed, with no automatic paid fallback.
+- Fix composer mentions to sort individual reports and answers before the twenty-result limit. Update worker fork guidance to the host's supported options.
+
 ## 0.4.3 — 2026-10-19
 
 - Add optional shared Video analysis with Elorian Glimpse. It complements source research without becoming a report source or a second corroborating source. Existing settings, receipts and reports keep their fields.

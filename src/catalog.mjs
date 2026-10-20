@@ -56,7 +56,9 @@ export function sourceInfo(config, source) {
     if (m.id === 'youtube') {
       const available = executable('yt-dlp');
       prerequisites.push({ name: 'yt-dlp', available, detail: 'Install yt-dlp explicitly for keyless search and full transcripts; no automatic installation.' });
-      if (!available) { status = has('OPENCODE_RESEARCH_GOOGLE_API_KEY') ? 'partial' : 'setup-required'; message = 'yt-dlp is absent. A Google key supports metadata search only; transcripts and keyless search need yt-dlp.'; }
+      const metadata = has('OPENCODE_RESEARCH_GOOGLE_API_KEY'), hosted = has('SCRAPECREATORS_API_KEY'), gemini = has('GEMINI_API_KEY');
+      status = available ? 'ready' : metadata || hosted || gemini ? 'partial' : 'setup-required';
+      message = `Keyless search and local captions: ${available ? 'yt-dlp available' : 'needs yt-dlp'}. Metadata search: ${metadata ? 'YouTube Data API key present' : 'optional OPENCODE_RESEARCH_GOOGLE_API_KEY absent'}. Hosted transcripts: ${hosted ? 'ScrapeCreators key present' : 'optional SCRAPECREATORS_API_KEY absent'}. Gemini video analysis: ${gemini ? 'GEMINI_API_KEY present; no local video tools needed' : 'optional GEMINI_API_KEY absent; search and transcript methods do not need it'}. Credential validity and provider access are untested.`;
     }
     if (m.id === 'video') {
       for (const name of ['yt-dlp', 'ffmpeg', 'ffprobe']) prerequisites.push({ name, available: executable(name), detail: name === 'yt-dlp' ? 'Needed only for public YouTube video clips. No cookies, sign-in or automatic installation.' : 'Needed to inspect and prepare local or YouTube clips; direct media URLs and uploaded file IDs do not need it.' });

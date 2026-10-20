@@ -55,6 +55,63 @@ test('video utility discovery follows its switch and offers helper guidance with
   }
 });
 
+test('YouTube Gemini tools use the source switch, retain unknown-cost receipts and save a full video-method report', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dig-native-youtube-analysis-'));
+  await mkdir(join(root, 'state'));
+  await writeFile(join(root, 'state/keys.env'), 'GEMINI_API_KEY=gemini-protocol-synthetic-value\n', { mode: 0o600 });
+  const { client, isolated } = await startServer(root);
+  const call = (name, args) => client.callTool({ name, arguments: args, _meta: { threadId: 'youtube-protocol-worker' } });
+  try {
+    const initialTools = (await client.listTools()).tools;
+    assert.ok(!initialTools.some(tool => tool.name === 'youtube_analyze'));
+    assert.ok(initialTools.find(tool => tool.name === 'dig_start').inputSchema.properties.planned.items.enum.includes('youtube-video'));
+    await call('settings.update', { set: { youtube_enabled: true } });
+    const tools = (await client.listTools()).tools;
+    assert.ok(tools.some(tool => tool.name === 'youtube_analyze'));
+    assert.ok(tools.some(tool => tool.name === 'youtube_analysis_status'));
+    assert.ok(!tools.some(tool => tool.name === 'video_analyze'), 'The separate Glimpse switch does not change');
+    const source = (await call('source_info', { source: 'youtube' })).structuredContent.sources[0];
+    assert.deepEqual(source.credentials.find(credential => credential.name === 'GEMINI_API_KEY'), { name: 'GEMINI_API_KEY', available: true, required: false, environment: 'absent' });
+    const method = source.methods.find(method => method.name === 'youtube-video');
+    assert.equal(method.helper, false);
+    assert.ok(method.skillPath.startsWith(await realpath(isolated)));
+    assert.match(await readFile(method.skillPath, 'utf8'), /agent: "youtube-video"/);
+    const invalid = await call('youtube_analyze', { project: root, question: 'Invalid provider model', videos: [{ url: 'aB_cD-eF123' }], model: 'wrong-model' });
+    assert.equal(invalid.isError, true);
+    assert.equal(Object.hasOwn(tools.find(tool => tool.name === 'youtube_analyze').inputSchema.properties, 'codeExecution'), false);
+    const unsupported = await call('youtube_analyze', { project: root, question: 'Unsupported code tool', videos: [{ url: 'aB_cD-eF123' }], codeExecution: true });
+    assert.equal(unsupported.isError, true, 'The public tool refuses code execution for YouTube inputs');
+    const analysis = (await call('youtube_analyze', { project: root, question: 'What closes?', videos: [{ url: 'aB_cD-eF123', startSeconds: 2, endSeconds: 20, fps: 2 }] })).structuredContent;
+    assert.equal(analysis.status, 'success');
+    assert.equal(analysis.dig, undefined, 'Direct analysis needs no pre-created dig');
+    assert.equal(analysis.call.source, 'youtube');
+    assert.equal(analysis.call.tool, 'youtube_analyze');
+    assert.equal(analysis.call.cost, null);
+    assert.equal(analysis.call.knownCost, undefined);
+    assert.doesNotMatch(JSON.stringify(analysis), /gemini-protocol-synthetic-value/);
+    const checked = (await call('youtube_analysis_status', { project: root, interactionId: analysis.interactionId })).structuredContent;
+    assert.equal(checked.status, 'success');
+    assert.deepEqual(checked.usage, analysis.usage, 'Status usage is the same cumulative observation');
+    assert.equal(checked.call.cost, null);
+    const saved = (await call('research_save', { project: root, source: 'youtube', agent: 'youtube-video', question: 'What closes?', content: report.replace('hackernews', 'youtube') })).structuredContent;
+    assert.equal(saved.report, 'youtube-video.md');
+    const listing = (await call('library_list', { project: root, source: 'youtube' })).structuredContent;
+    assert.equal(listing.items.length, 1);
+    assert.equal(listing.items[0].calls.length, 2);
+    assert.ok(listing.items[0].calls.every(receipt => receipt.claimedBy.endsWith('/youtube-video.md')));
+    const raw = (await call('library_read', { file: listing.items[0].calls[0].rawFile })).structuredContent.text;
+    assert.match(raw, /At 00:10 the door closes/);
+    assert.doesNotMatch(raw, /gemini-protocol-synthetic-value/);
+    await call('settings.update', { set: { youtube_enabled: false } });
+    assert.ok(!(await client.listTools()).tools.some(tool => tool.name === 'youtube_analyze'));
+    assert.ok(!(await client.listTools()).tools.some(tool => tool.name === 'youtube_analysis_status'));
+    assert.match((await call('library_read', { file: saved.file })).structuredContent.text, /agent: youtube-video/);
+  } finally {
+    await client.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('standalone bundle starts outside the repo, exposes native metadata, retains outcomes and reloads preferences', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dig-native-protocol-'));
   const { client, isolated } = await startServer(root);

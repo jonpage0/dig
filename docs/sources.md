@@ -1,12 +1,12 @@
 # Sources and their keys
 
-Turn sources on and off on Dig's **Sources** page. Each source card says whether it is ready, which keys it uses and where to get them; **Setup details** on the card opens the full list.
+Turn sources on and off on Dig's **Sources & tools** page. Each source card says whether it is ready, which keys it uses and where to get them; **Setup details** on the card opens the full list. Dig has 22 research sources, 26 methods and 71 provider tools, including the separate shared Video analysis tool.
 
 No source requires that you configure every other source. Hacker News, DeepWiki and Polymarket need no account. GitHub public REST reads and direct Papers searches can run without keys, with provider-specific limits. YouTube's keyless path needs a local `yt-dlp`. Other sources use your own provider accounts; API charges are separate from your ChatGPT plan.
 
 ## Keys
 
-Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.env`), one `NAME=value` per line. **Edit keys.env** on the Sources page creates the file if needed, adds an empty line for each key it is missing, and opens it; fill in the values and save. Dig picks up the change without a restart.
+Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.env`), one `NAME=value` per line. **Edit keys.env** on the Sources & tools page creates the file if needed, adds an empty line for each key it is missing, and opens it; fill in the values and save. Dig picks up the change without a restart.
 
 - Never paste a key into the chat. Dig never asks for one there.
 - A key already exported in the environment that starts Codex is not used until you copy it in: the source's **Use existing key** button does that.
@@ -24,7 +24,7 @@ Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.en
 | Exa | Web search and page text | `EXA_API_KEY` | |
 | Perplexity | Cited answers on current facts | `PERPLEXITY_API_KEY` | |
 | Papers | Scholarly papers, citations and full text | Optional: `SEMANTIC_SCHOLAR_API_KEY`, `OPENALEX_API_KEY`, `NCBI_API_KEY` and others | The Papers bridge (`git`, `uv`) for federated search, full text and PDFs |
-| YouTube | Videos and their full transcripts | Optional: `OPENCODE_RESEARCH_GOOGLE_API_KEY` | `yt-dlp` |
+| YouTube | Video discovery, saved transcripts and Gemini video understanding | Optional by route: `OPENCODE_RESEARCH_GOOGLE_API_KEY`, `SCRAPECREATORS_API_KEY`, `GEMINI_API_KEY` | `yt-dlp` for keyless search/local captions; no local video tools for Gemini |
 | X | Posts, threads, accounts, search, counts, X News, Communities | `XAI_API_KEY` (Grok's X search) and `X_BEARER_TOKEN` (X's API); optional sign-in keys and `TIKHUB_API_KEY` | |
 | Reddit | Threads and comments | `SCRAPECREATORS_API_KEY` | |
 | TikHub Reddit | Full comment trees and subreddit context | `TIKHUB_API_KEY` | |
@@ -36,7 +36,7 @@ Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.en
 | TikTok ads | Top ads and what an advertiser is running | `TIKHUB_API_KEY` and `SCRAPECREATORS_API_KEY` | |
 | DataForSEO | Search results, keywords, rankings, backlinks | `DATAFORSEO_USERNAME` and `DATAFORSEO_PASSWORD` | |
 
-One key often covers several sources: a ScrapeCreators key serves eight of them and a TikHub key four.
+One key can cover several sources: ScrapeCreators serves multiple social sources and hosted YouTube transcripts; TikHub serves advanced Reddit, China social, TikTok ads and supported X reads. Each provider account appears once in Accounts and keys.
 
 ## GitHub
 
@@ -49,7 +49,20 @@ Results say which login they used, or that they ran anonymously.
 
 ## YouTube
 
-Install `yt-dlp` for keyless search and transcripts, plus a JavaScript runtime it can use: Deno (its default) or Node 22+. Some videos' captions also need yt-dlp's proof-of-origin token plugin; without it, yt-dlp skips those captions. An optional `OPENCODE_RESEARCH_GOOGLE_API_KEY` adds YouTube Data API metadata. Dig never installs programs or reads browser cookies. Transcripts are saved in your library.
+Choose the route that answers your question; none requires every YouTube option:
+
+| Route | Setup | What it does |
+| --- | --- | --- |
+| Discovery and local captions | Install `yt-dlp`, plus Deno or Node 22+ | Search without a key and save available captions in the library. |
+| YouTube Data API metadata | Optional `OPENCODE_RESEARCH_GOOGLE_API_KEY` from [Google Cloud](https://console.cloud.google.com/apis/credentials) | Adds keyed metadata search; it does not enable Gemini analysis. |
+| Hosted transcripts | Optional `SCRAPECREATORS_API_KEY` | The separate paid `youtube_transcript` tool preserves returned timing and language. It is used explicitly, not as an automatic paid fallback. |
+| Gemini video understanding | Optional `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey) | Analyzes supplied public YouTube videos with Flash or Argon, without local download tools. |
+
+The full-report methods are `$dig:youtube` for discovery and transcript research, and `$dig:youtube-video` for deeper analysis of selected videos. The latter starts with Gemini 3.8 Flash, preferring Gemini 4 Argon for harder reasoning before a different provider. A focused visual need or an explicit user choice can go directly to the separate Glimpse tool.
+
+`GEMINI_API_KEY` is Dig's sole Gemini credential name. Keep it separate from `OPENCODE_RESEARCH_GOOGLE_API_KEY`; having one does not establish that the other route is configured. A missing Gemini key leaves discovery and transcript methods available. Readiness describes prerequisites, not tested provider access.
+
+Some videos' captions need yt-dlp's proof-of-origin token plugin; without it, yt-dlp skips those captions. Dig never installs programs or reads browser cookies. For Gemini's clip controls, background results, provider history, grounding and timestamp limits, see [YouTube video understanding](youtube-video.md).
 
 ## X
 
@@ -114,4 +127,6 @@ DataForSEO charges per request from a prepaid account. Set `DATAFORSEO_USERNAME`
 
 ## Shared video analysis
 
-Video analysis is an optional shared tool, not a report source. Enable it under Sources & tools → Shared tools and put `ELORIAN_API_KEY` in keys.env, using [Elorian’s key page](https://platform.elorian.ai/settings/keys). Direct video URLs work without local executables; local and YouTube clips need ffmpeg and ffprobe, plus yt-dlp for YouTube. The tool exposes token and media coverage; billed dollars remain unknown when the provider returns no charge. See [video analysis](video-analysis.md).
+Video analysis is the optional standalone `video_analyze` tool, using Elorian Glimpse. It can run directly in a conversation without a dig or report, or inspect selected media for an appropriate source worker. Enable it under **Sources & tools → Shared tools** and put `ELORIAN_API_KEY` in keys.env, using [Elorian’s key page](https://platform.elorian.ai/settings/keys).
+
+For broader YouTube analysis, use Flash first and Argon for harder reasoning. Choose Glimpse for a focused visual need or an explicit provider preference. Direct video-file URLs work without local executables; local and YouTube clips need ffmpeg and ffprobe, plus yt-dlp for YouTube. The tool exposes token and media coverage; billed dollars remain unknown when the provider returns no charge. See [Glimpse video inspection](video-analysis.md).

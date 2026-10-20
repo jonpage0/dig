@@ -1,6 +1,8 @@
-# Video analysis
+# Glimpse video inspection
 
-Dig’s optional `video_analyze` tool uses Elorian Glimpse to inspect what happens on screen and when. It can complement a YouTube transcript, explain a demonstration, or inspect media discovered through another source. Its interpretation is not independent corroboration of the same video.
+Dig’s optional `video_analyze` tool uses Elorian Glimpse to inspect what happens on screen and when. Call it directly in the conversation with `$dig:video-analyze`; no dig or source report is required. It can also complement a transcript or inspect media found by an appropriate source method. Its interpretation is not independent corroboration of the same video.
+
+For broader understanding of a supplied public YouTube video, start with the [YouTube video method](youtube-video.md), whose standard provider is Gemini 3.8 Flash. Prefer Gemini 4 Argon next when harder reasoning is needed. Choose Glimpse directly for a specific visual question, such as a mechanism changing state or a brief action, or when it is your explicit provider choice. This is a choice of useful methods, not a requirement to pay for each one.
 
 Enable **Video analysis** under **Sources & tools → Shared tools**, then set `ELORIAN_API_KEY` in Dig’s private keys.env. [Elorian’s console](https://platform.elorian.ai/settings/keys) provides keys and credits; its [API reference](https://platform.elorian.ai/settings/docs) requires sign-in. Each account pays Elorian directly.
 
@@ -13,7 +15,7 @@ Enable **Video analysis** under **Sources & tools → Shared tools**, then set `
 
 For YouTube and local files, `startSeconds` defaults to zero and `endSeconds` to 120 seconds later, capped to the video’s duration. Each interval is at most 120 seconds. These paths require ffmpeg and ffprobe; YouTube also requires yt-dlp. Dig does not install these programs automatically. Prepared clips fit within 640 × 360 and 64 MiB; local input files are also capped at 64 MiB. Direct URLs and existing file IDs cannot be trimmed with these arguments and remain subject to Elorian’s current limits.
 
-A useful prompt is: “Inspect seconds 35–55. What action changes the mechanism? Give timestamps and distinguish visible evidence from inference.” Use the actual clip range in the call. A time parameter in a YouTube URL is not a clip selector.
+A useful prompt is: “Use Glimpse to inspect seconds 35–55. What action changes the mechanism? Give the original video URL, clip-relative and original-video timestamps, and distinguish visible evidence from inference.” Use the actual clip range in the call. A time parameter in a YouTube URL is not a clip selector. Direct tool calls need an explicit absolute `project` for their retained receipts; `dig` is optional.
 
 `high` is the default effort. `xhigh` and `max` allow more provider work when a question warrants it. The default initial sampling request is two frames per second; the returned effective sampling and frame count describe what the provider received. This does not guarantee that brief events were seen. The answer-token limit is not a ceiling on internal reasoning or total spend. Web and reverse-image searches stay disabled.
 

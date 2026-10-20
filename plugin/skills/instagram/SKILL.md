@@ -51,7 +51,9 @@ Structure the report with `## Summary`, `## Top Reels`, `## Visual Trends`, `## 
 
 ## Optional video inspection
 
-When the question depends on what a surfaced video shows, you may also use the shared `video_analyze` tool within the user's authorized paid-provider scope. This is the exception to the source-tool restriction above: it analyzes media from this source, without researching a different source. Read `source_info` for `video` and its `helperSkillPath` first. Use a returned direct media URL, an exact YouTube URL, or an explicitly supplied local project clip; a social post URL is not a video file. Keep the source URL, inspected interval and analysis receipt in this report. Treat the result as Glimpse's interpretation and distinguish visual observations, automatic speech transcription and inference. Missing or incomplete video analysis is a coverage limit; do not force a failed route or infer unseen visuals from captions.
+When a concrete visual question about media from this source needs inspection, you may use the shared `video_analyze` tool within the user's authorized paid-provider scope. This is the explicit exception to the source-tool restriction above. Read `source_info` for `video` and its `helperSkillPath` first. Use a returned direct media URL or an explicitly supplied local project clip; a social post URL is not a video file. Glimpse is also callable directly by the initiating thread without a dig or report. Preserve the user's explicit provider choice.
+
+If a linked YouTube video instead needs broader analysis, return its exact URL, relevant interval and remaining question for the initiating thread's `youtube-video` method: Gemini 3.8 Flash is the standard, then Argon for harder reasoning. A specific visual need can justify Glimpse directly on a YouTube clip. Keep the source URL, inspected interval and analysis receipt in this report; distinguish visual observations, speech transcription and model inference. Missing or incomplete analysis is a coverage limit, not permission to force a failed route or infer unseen visuals from captions.
 
 ## Wait for a real outcome
 

@@ -88,15 +88,22 @@ export function mentionItems(snapshot, query) {
   const entries = [];
   for (const item of snapshot.items) {
     const documents = [...(item.answer ? [{ file: item.answer, label: 'Answer', glyph: 'shovel', summary: '', at: item.finishedAt }] : []),
-      ...(item.reportDetails ?? []).map(report => ({ file: report.file, label: catalog.fileLabel(report.file), glyph: glyphFor(report.source, report.method), summary: report.summary, at: null }))];
+      ...(item.reportDetails ?? []).map(report => ({ file: report.file, label: catalog.fileLabel(report.file), glyph: glyphFor(report.source, report.method), summary: report.summary, at: report.at }))];
     for (const document of documents) {
       const haystack = `${item.title}\n${document.label}\n${document.summary}`.toLowerCase();
       if (words.every(word => haystack.includes(word))) entries.push({ item, ...document });
     }
   }
-  return entries.slice(0, MENTION_LIMIT).map(({ item, file, label, glyph }) => ({
+  const dated = entry => {
+    const own = Date.parse(entry.at);
+    if (Number.isFinite(own)) return own;
+    const fallback = Date.parse(entry.item.startedAt);
+    return Number.isFinite(fallback) ? fallback : -Infinity;
+  };
+  entries.sort((a, b) => dated(b) - dated(a) || (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+  return entries.slice(0, MENTION_LIMIT).map(({ item, file, label, glyph, at }) => ({
     type: 'resource_link', uri: `dig://library/${encodeURIComponent(file)}`, name: file.split('/').at(-1),
-    title: trim(item.title, 120), description: [label, shortDate(item.startedAt)].filter(Boolean).join(' · '), mimeType: 'text/markdown', icons: iconFor(glyph),
+    title: trim(item.title, 120), description: [label, shortDate(at) || shortDate(item.startedAt)].filter(Boolean).join(' · '), mimeType: 'text/markdown', icons: iconFor(glyph),
   }));
 }
 

@@ -19921,30 +19921,30 @@ container holding the app. Specify either width or maxWidth, and either height o
     {
       id: "youtube",
       label: "YouTube",
-      description: "Videos and saved transcripts",
-      tools: ["youtube", "youtube_transcript"],
-      skills: ["youtube"],
+      description: "Video discovery, saved transcripts and focused Gemini video analysis",
+      tools: ["youtube", "youtube_transcript", "youtube_analyze", "youtube_analysis_status"],
+      skills: ["youtube", "youtube-video"],
       helpers: ["youtube-summarizer"],
-      env: ["OPENCODE_RESEARCH_GOOGLE_API_KEY", "SCRAPECREATORS_API_KEY"],
-      credential: "Optional OPENCODE_RESEARCH_GOOGLE_API_KEY; yt-dlp for keyless search; optional SCRAPECREATORS_API_KEY for hosted transcripts",
+      env: ["OPENCODE_RESEARCH_GOOGLE_API_KEY", "SCRAPECREATORS_API_KEY", "GEMINI_API_KEY"],
+      credential: "Optional OPENCODE_RESEARCH_GOOGLE_API_KEY for metadata search; yt-dlp for keyless search and local captions; optional SCRAPECREATORS_API_KEY for hosted transcripts; optional GEMINI_API_KEY for Gemini video analysis",
       requires: ["yt-dlp"],
-      about: "Finds videos and saves their full transcripts, so a claim can be checked against what was actually said. Search and transcripts run on your computer through yt-dlp; an optional Google key adds Data API search metadata.",
-      providers: [{ name: "yt-dlp", url: "https://github.com/yt-dlp/yt-dlp" }, { name: "YouTube Data API", url: "https://developers.google.com/youtube/v3" }],
-      billing: "Local yt-dlp and YouTube Data API calls are free. The separate hosted transcript tool uses ScrapeCreators credits reported by each response.",
+      about: "Finds videos, saves transcripts and analyzes supplied public YouTube videos. The transcript method searches and checks creator claims; the optional YouTube video method uses Gemini 3.8 Flash for standard deeper analysis and Gemini 4 Argon for harder reasoning. Choose a focused Glimpse inspection when the question calls for close visual examination. Model descriptions and timestamps remain claims to check against the original video.",
+      providers: [{ name: "yt-dlp", url: "https://github.com/yt-dlp/yt-dlp" }, { name: "YouTube Data API", url: "https://developers.google.com/youtube/v3" }, { name: "Google Gemini API", url: "https://ai.google.dev/gemini-api/docs/video-understanding" }],
+      billing: "Local yt-dlp and YouTube Data API calls are free. Hosted transcripts use reported ScrapeCreators credits. Gemini calls use your Google API account; returned token usage does not establish a per-call charge, so Dig records their cost as unknown.",
       logo: "youtube"
     },
     {
       id: "video",
       kind: "tool",
       label: "Video analysis",
-      description: "Analyze a supplied video or bounded clip with Elorian; a shared utility for any source",
+      description: "Inspect a supplied video or bounded clip with Elorian Glimpse, directly or alongside source research",
       tools: ["video_analyze"],
       skills: [],
       helperSkill: "video-analyze",
       env: ["ELORIAN_API_KEY"],
       keys: ["ELORIAN_API_KEY"],
       credential: "ELORIAN_API_KEY from Elorian's API Keys page",
-      about: "Answers a specific question about a supplied video or bounded clip through Elorian. Source research can use it when visual or spoken evidence matters. The media is sent to Elorian, and the answer is model-generated analysis to check against the original; this tool does not search or produce a separate research report.",
+      about: "Answers a focused visual question about a supplied video or bounded clip through Elorian Glimpse. Call it directly from the conversation, or use it to inspect media found during appropriate source research; no dig or report is required. For broader YouTube analysis, start with the YouTube method's Gemini 3.8 Flash and use Argon for harder reasoning. Glimpse remains available for a specific visual need or the user's explicit choice. Media is sent to Elorian, and its answer is model-generated analysis to check against the original.",
       providers: [{ name: "Elorian", url: "https://platform.elorian.ai/settings/docs" }],
       billing: "Paid from your Elorian account. Token usage is shown when returned; the API does not report a per-call charge, so Dig records cost as unknown."
     },
@@ -20159,6 +20159,7 @@ container holding the app. Specify either width or maxWidth, and either height o
     { id: "ncbi", name: "NCBI (PubMed and PMC)", signup: "https://account.ncbi.nlm.nih.gov/settings/", keys: [["NCBI_API_KEY", "PAPER_SEARCH_MCP_NCBI_API_KEY"]], billing: "Free. Used by the Papers bridge\u2019s PubMed and PMC searches." },
     { id: "core", name: "CORE", signup: "https://core.ac.uk/services/api#form", keys: ["PAPER_SEARCH_MCP_CORE_API_KEY"], billing: "Used by the Papers bridge\u2019s CORE search, which also works without a key." },
     { id: "google", name: "Google Cloud (YouTube Data API)", signup: "https://console.cloud.google.com/apis/credentials", keys: ["OPENCODE_RESEARCH_GOOGLE_API_KEY"], billing: "Uses your YouTube Data API quota. Adds Data API search metadata; transcripts need yt-dlp." },
+    { id: "google-gemini", name: "Google Gemini", signup: "https://aistudio.google.com/apikey", keys: ["GEMINI_API_KEY"], billing: "Optional YouTube video analysis through Gemini. Token usage is shown when returned; no per-call charge is reported, so Dig records cost as unknown." },
     { id: "x-api", name: "X API", signup: "https://console.x.com", keys: ["X_BEARER_TOKEN"], optional: ["X_CONSUMER_KEY", "X_CONSUMER_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET"], billing: `Pay-per-use credits from your X developer account. The optional sign-in keys (the app's Consumer Key and Secret and an Access Token and Secret for your own account) let Dig search people and Communities and read your bookmarks and likes as that account. ${UNKNOWN_COST}` },
     { id: "xai", name: "xAI", signup: "https://console.x.ai/team/default/api-keys", keys: ["XAI_API_KEY"], billing: "Paid per request in US dollars, which Dig records." },
     { id: "scrapecreators", name: "ScrapeCreators", signup: "https://app.scrapecreators.com", keys: ["SCRAPECREATORS_API_KEY"], billing: "ScrapeCreators credits per request, which Dig records." },
@@ -22615,7 +22616,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   var SOURCE_GLYPHS = { "hackernews": "newspaper", "deepwiki": "book-open-text", "polymarket": "chart-candlestick", "github": "folder-git-2", "exa": "scan-search", "perplexity": "globe", "papers": "graduation-cap", "youtube": "square-play", "video": "clapperboard", "x": "scale", "reddit": "messages-square", "tikhub-reddit": "list-tree", "tiktok": "clapperboard", "instagram": "camera", "linkedin": "briefcase-business", "telegram": "send", "threads": "messages-square", "china-social": "languages", "commerce": "shopping-cart", "tiktok-ads": "megaphone", "dataforseo": "chart-no-axes-combined" };
   SOURCE_GLYPHS.facebook = "messages-square";
   SOURCE_GLYPHS["facebook-ads"] = "megaphone";
-  var METHOD_GLYPHS = { "x-judge": "scale", "x-breadth": "radar", "x-post": "message-square-quote", "youtube-summarizer": "captions", "video-analyze": "clapperboard" };
+  var METHOD_GLYPHS = { "x-judge": "scale", "x-breadth": "radar", "x-post": "message-square-quote", "youtube-summarizer": "captions", "youtube-video": "clapperboard", "video-analyze": "clapperboard" };
   var glyphFor = (source, method) => METHOD_GLYPHS[method] ?? SOURCE_GLYPHS[source] ?? "shovel";
 
   // src/ui/settings.mjs
@@ -22784,8 +22785,8 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     deepwiki: { tasks: ["Explore a public repository\u2019s generated documentation.", "Ask codebase questions and identify source files to verify."], example: "Use Dig and DeepWiki to explain how [repository] implements [feature], then identify what needs checking in its source." },
     hackernews: { tasks: ["Search stories, Ask HN, Show HN and comments.", "Read a specific story and its comment tree with explicit page limits."], example: "Use Dig to read this Hacker News thread: [URL]. Explain the strongest arguments and what the comments do not establish." },
     papers: { tasks: ["Find papers, related work, citations and supporting passages.", "Read available full text, PDFs and sections through the configured Papers tools."], example: "Use Dig Papers to find research on [question]. Separate paper findings from your interpretation and retain the evidence." },
-    youtube: { tasks: ["Find videos and inspect transcript-grounded claims.", "Use local captions first; the separately requested hosted transcript fallback is paid."], example: "Use Dig to read the transcript of [video URL] and identify the passages supporting [claim]." },
-    video: { tasks: ["Ask a focused question about a supplied video or bounded clip.", "Send the media to Elorian for model-generated analysis, then check important claims against the original. Any source method can use this shared tool."], example: "Use Dig\u2019s Video analysis tool to inspect [video or local project file] for [specific question]. State the clip coverage and distinguish observed details from interpretation." },
+    youtube: { tasks: ["Find videos and check creator claims against saved transcripts. Local captions and the optional hosted transcript route remain available.", "Analyze supplied public YouTube videos with Gemini 3.8 Flash as the standard deeper method; choose Gemini 4 Argon for harder reasoning.", "Focus on intervals, compare up to ten videos and ask follow-up questions. Choose fixed sampling or let Gemini direct its inspection; adjust detail and request structured findings when useful.", "Continue or cancel longer analyses through the conversation. Optional web grounding and URL context require an explicit choice; video evidence stays separate. Glimpse remains available for a focused visual need."], example: "Use Dig\u2019s YouTube video method to analyze [public YouTube URL] for [question]. Start with Gemini 3.8 Flash, identify timestamped evidence and preserve the analysis limits." },
+    video: { tasks: ["Ask a focused visual question about a supplied video or bounded clip directly in the conversation; no dig or report is required.", "Send the media to Elorian Glimpse for model-generated analysis, then check important claims against the original. Appropriate source methods can also use this shared tool.", "For broader YouTube analysis, use Gemini 3.8 Flash first and Argon for harder reasoning, unless you choose Glimpse or need focused visual inspection."], example: "Use Dig\u2019s Video analysis tool to inspect [video or local project file] for [specific visual question]. State the clip coverage and distinguish observed details from interpretation." },
     x: { tasks: ["Weigh claims with X judge, discover broadly with X breadth, or inspect exact posts.", "Read threads, Communities and available media descriptions; account-only reads need the optional sign-in."], example: "Use Dig X judge to examine what practitioners are saying about [topic]. Read the original posts behind the important claims." },
     reddit: { tasks: ["Find public Reddit discussions.", "Read thread comments and separate anecdotes from corroborated claims."], example: "Use Dig Reddit to investigate firsthand experiences with [topic], including contrary experiences." },
     "tikhub-reddit": { tasks: ["Explore subreddit context and advanced Reddit discovery.", "Enrich selected posts and read available comment trees."], example: "Use Dig TikHub Reddit to investigate [topic] in [subreddit] and retain the relevant discussions." },
@@ -23527,7 +23528,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
 
   // src/version.mjs
-  var VERSION = "0.4.3";
+  var VERSION = "0.5.0";
 
   // src/app.mjs
   var POLL_MS = 2e3;

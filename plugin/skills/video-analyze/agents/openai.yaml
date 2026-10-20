@@ -1,6 +1,6 @@
 interface:
   display_name: "Dig · Video analysis"
-  short_description: "Inspect video events, timing and available speech"
+  short_description: "Inspect visual details directly, without a dig or report"
   icon_small: "../../assets/skills/clapperboard.svg"
   icon_large: "../../assets/skills/clapperboard.svg"
   default_prompt: "Use $dig:video-analyze to inspect this video and explain what happens with timestamps."

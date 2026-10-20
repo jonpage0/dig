@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · YouTube video"
+  short_description: "Deeper video analysis with Gemini and timestamped evidence"
+  icon_small: "../../assets/skills/clapperboard.svg"
+  icon_large: "../../assets/skills/clapperboard.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:youtube-video to analyze this public YouTube video with Gemini 3.8 Flash and save the timestamped evidence."
+policy:
+  # Reached through source_info routing or an explicit $dig:youtube-video mention.
+  allow_implicit_invocation: false

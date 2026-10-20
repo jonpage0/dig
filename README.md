@@ -48,7 +48,7 @@ For a first run, ask: **“Use Dig and Hacker News to research how developers ap
 
 Ask a question in Codex. Dig researches it source by source, writes a report for each source, and keeps the original responses behind every claim.
 
-**22 sources · 25 research methods · 69 tools, including shared video analysis**
+**22 sources · 26 research methods · 71 tools, including shared video analysis**
 
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
 | :---: | --- | --- |
@@ -58,7 +58,7 @@ Ask a question in Codex. Dig researches it source by source, writes a report for
 | <img src="plugin/assets/skills/book-open-text.svg" width="22" height="22" alt=""> | **DeepWiki** | Questions about a public codebase |
 | <img src="docs/logos/ycombinator.svg" width="22" height="22" alt=""> | **Hacker&nbsp;News** | Developer stories and discussion |
 | <img src="plugin/assets/skills/graduation-cap.svg" width="22" height="22" alt=""> | **Papers** | Semantic Scholar, OpenAlex and 18 more indexes; full text and PDFs |
-| <img src="docs/logos/youtube.svg" width="22" height="22" alt=""> | **YouTube** | Full video transcripts and optional visual inspection |
+| <img src="docs/logos/youtube.svg" width="22" height="22" alt=""> | **YouTube** | Video discovery, saved transcripts and optional Gemini video understanding |
 | <img src="docs/logos/x.svg" width="22" height="22" alt=""> | **X** | Exact posts, threads and accounts; Grok for search by meaning, images and video |
 | <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **Reddit** | Threads, comments and full comment trees |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok** | Videos, captions and transcripts |
@@ -88,11 +88,13 @@ Good to know:
 
 ## Video understanding
 
-Ask **“Use Dig to inspect this YouTube demo from 35 to 55 seconds. What changes on screen, and does it support the speaker’s claim?”**
+Ask **“Use Dig’s YouTube video method to analyze this demo from 35 to 55 seconds. What changes, and does it support the speaker’s claim? Give the video URL and original timestamps for each finding.”**
 
-The optional **Video analysis** tool uses [Elorian Glimpse](https://elorian.ai/) alongside source research. It inspects visual events and their order, with available automatic speech transcription. It is a tool, not another evidence source. Enable it under **Sources & tools → Shared tools**, and add `ELORIAN_API_KEY` in keys.env.
+The optional **YouTube video** method (`$dig:youtube-video`) uses **Gemini 3.8 Flash** for standard deeper analysis. Choose **Gemini 4 Argon** next when the question needs harder reasoning. It can analyze selected intervals, compare up to ten video inputs, follow up on stored context, and return structured findings. Enable YouTube and add `GEMINI_API_KEY` in keys.env; this route needs no local downloader. The key is separate from the optional YouTube Data API key, and transcript research still works without it.
 
-YouTube and local clips need `yt-dlp` (YouTube), `ffmpeg` and `ffprobe`. Dig processes at most two minutes per selected clip, preserves its original time offset, and reports frame coverage, audio gaps and token usage. Direct HTTPS video files also work. A failed download stays an explicit limitation; Dig does not use browser cookies or force a fallback. See [video analysis](docs/video-analysis.md) for input, retention and cost limits.
+Use the standalone **Video analysis** tool (`$dig:video-analyze`) with [Elorian Glimpse](https://elorian.ai/) for a focused visual need or when you explicitly choose it. It works directly in the conversation, without a dig or report, and alongside appropriate source research. Enable it under **Sources & tools → Shared tools** and add `ELORIAN_API_KEY`. Direct video-file URLs work; local or YouTube clips need `ffmpeg` and `ffprobe`, plus `yt-dlp` for YouTube, and cover at most two minutes per selected interval.
+
+Analysis remains model interpretation. Check exact speech and timestamps against the original; with several videos, require a separate original-video timeline for each. Google’s stored interaction history and Elorian’s uploaded media have their own retention, separate from Dig’s library. Both providers return token usage without a per-call dollar charge, so Dig records cost as unknown. See [YouTube video understanding](docs/youtube-video.md) and [Glimpse video inspection](docs/video-analysis.md) for controls, storage and evidence limits.
 
 ## Services and API keys
 
@@ -118,9 +120,10 @@ YouTube and local clips need `yt-dlp` (YouTube), `ffmpeg` and `ffprobe`. Dig pro
 | [Semantic Scholar](https://www.semanticscholar.org/product/api#api-key-form) *(optional)* | **Papers**: higher limits for paper search | `SEMANTIC_SCHOLAR_API_KEY` |
 | [OpenAlex](https://openalex.org/settings/api) *(optional)* | **Papers**: your own OpenAlex allowance | `OPENALEX_API_KEY` |
 | [Google Cloud](https://console.cloud.google.com/apis/credentials) *(optional)* | **YouTube**: Data API search | `OPENCODE_RESEARCH_GOOGLE_API_KEY` |
+| [Google Gemini](https://aistudio.google.com/apikey) *(optional)* | **YouTube**: Gemini video understanding and follow-up analysis | `GEMINI_API_KEY` |
 | [DataForSEO](https://app.dataforseo.com/api-access) | **DataForSEO**: search results, keywords, rankings, backlinks | `DATAFORSEO_USERNAME`, `DATAFORSEO_PASSWORD` |
 
-Partial setups work. X's API and Grok are independent, and so are Amazon's current data and its history. Dig names what's unavailable instead of quietly swapping in another source.
+Partial setups work. X's API and Grok are independent, and so are Amazon's current data and its history. YouTube discovery, hosted transcripts and Gemini video understanding have separate prerequisites. Dig names what's unavailable instead of quietly swapping in another source.
 
 **Local tools:** YouTube transcripts need [`yt-dlp`](https://github.com/yt-dlp/yt-dlp). Federated paper search, full text and PDFs need the optional Papers bridge (`git` and `uv`).
 
@@ -162,7 +165,8 @@ Refresh Dig’s plugin/MCP connection, then verify the running version in About 
 ## Privacy and costs
 
 - **Runs on your computer.** Dig has no server of its own and collects nothing.
-- **What leaves your computer:** searches go to the services you turn on, with your keys. Video analysis sends selected media to Elorian. Their results enter your Codex conversation.
+- **What leaves your computer:** searches go to the services you turn on, with your keys. YouTube understanding sends selected public video references and your question to Google; Glimpse sends selected media or media references to Elorian. Their results enter your Codex conversation.
+- **Provider history:** Google interaction storage is enabled by default for follow-ups and background results; a foreground first request can opt out with `store: false`. Elorian uploads expire according to its returned file metadata. These are separate from Dig’s local retention.
 - **Where things are kept:** settings, keys and research live in `~/.local/share/dig` (you can choose another research folder).
 - **Costs:** each service bills you. Dig shows what each reports; Codex model usage isn't included.
 - **Provider terms still apply** to what you search and reuse.
