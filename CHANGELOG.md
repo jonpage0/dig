@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.2 — 2026-10-19
+
+- Polymarket search works again. A search whose results included an active market with a condition ID failed with "lines is not defined"; each market shown now lists its condition ID and outcome token IDs, which the price-history and resolution reads take.
+- Grouped Polymarket events label each outcome's odds by Polymarket's own short name ("No change", "25 bps decrease") instead of a fragment of its question such as "there" or "the".
+- YouTube transcripts no longer keep a configured key that yt-dlp captions or a video's title echoed, as written or URL-encoded. Every transcript file, from yt-dlp or the hosted fallback, is redacted the same way before it is written; transcripts saved earlier are not rewritten.
+- The Threads method now describes Meta's Threads (public posts with their replies, and an account's returned posts) instead of Telegram channels.
+- The Papers method names all 20 federated search connectors, OpenReview included.
+
 ## 0.4.1 — 2026-10-19
 
 - Saved research becomes a compact list with clear source, project and date cues, a short usage line, and expandable details. Long questions and summary previews no longer compete for space.

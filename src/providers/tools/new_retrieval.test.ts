@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { executeSource } from "../outcome.js"
 import { tiktok_top, tiktok_comments, instagram_comments, threads } from "./social_evidence.js"
 import { transcript } from "./youtube_transcript.js"
+import polymarket from "./polymarket.js"
 import { history, resolution } from "./polymarket_data.js"
 import { content as openalexContent } from "./openalex_content.js"
 import { snippets, relations } from "./paper_evidence.js"
@@ -61,6 +62,20 @@ test("Polymarket resolution treats estimates separately and validates selector i
   globalThis.fetch = (async () => response({data:[{status:"proposed",expected_settlement_time:"2026-10-20T12:00:00Z"}]})) as typeof fetch
   const out = await executeSource(resolution,{event_id:"123"},ctx); assert.equal(out.status,"success"); assert.match(out.text,/estimates, not deadlines/)
   assert.equal((await executeSource(resolution,{event_id:"123",question_id:"bad"},ctx)).status,"failed")
+})
+test("a Polymarket search names each shown market's condition and outcome token IDs, for the history and resolution reads", async () => {
+  const market = (id: string, question: string, tokens: string) => ({id, conditionId:`0x${id.repeat(64)}`, clobTokenIds:tokens, question, outcomes:'["Yes","No"]', outcomePrices:'["0.4","0.6"]', active:true, closed:false})
+  const single = market("a","Will it rain in Austin?",'["111","222"]'), field = [market("b","Will Ann win the race?",'["333","444"]'), market("c","Will Bo win the race?",'["555","666"]')]
+  globalThis.fetch = (async () => response({events:[{id:"e1",title:"Will it rain in Austin?",slug:"rain",markets:[single]},{id:"e2",title:"Who wins the race?",slug:"race",markets:field}]})) as typeof fetch
+  const out = await executeSource(polymarket,{query:"rain race"},ctx); assert.equal(out.status,"success",out.text)
+  for (const m of [single, ...field]) { assert.ok(out.text.includes(`Condition ID: ${m.conditionId}`), out.text); assert.ok(out.text.includes(`Outcome token IDs (outcome order): ${m.clobTokenIds}`), out.text) }
+})
+test("a grouped Polymarket event labels each market's odds by Gamma's group title", async () => {
+  const market = (id: string, question: string, groupItemTitle: string, yes: string) => ({id, question, groupItemTitle, outcomes:'["Yes","No"]', outcomePrices:JSON.stringify([yes,String(1-Number(yes))]), active:true, closed:false})
+  const markets = [market("a","Will there be no change in Fed interest rates after the October meeting?","No change","0.855"), market("b","Will the Fed decrease interest rates by 25 bps after the October meeting?","25 bps decrease","0.145")]
+  globalThis.fetch = (async () => response({events:[{id:"e1",title:"Fed decision in October?",slug:"fed",markets}]})) as typeof fetch
+  const out = await executeSource(polymarket,{query:"Fed decision"},ctx); assert.equal(out.status,"success",out.text)
+  assert.ok(out.text.includes("No change: 85.5%"), out.text); assert.ok(out.text.includes("25 bps decrease: 14.5%"), out.text); assert.doesNotMatch(out.text,/^\s+(there|the): /m)
 })
 test("scholarly passage and relationship reads preserve source context and paging", async () => {
   globalThis.fetch = (async input => { const u=new URL(String(input)); assert.match(u.pathname,/snippet\/search/); assert.equal(u.searchParams.get("paperIds"),"DOI:10.1/example"); return response({data:[{snippet:{text:"A supported claim",section:"Results"},paper:{corpusId:1}}]}) }) as typeof fetch

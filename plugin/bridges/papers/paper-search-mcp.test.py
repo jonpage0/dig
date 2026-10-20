@@ -72,14 +72,16 @@ class BridgeContracts(unittest.TestCase):
         self.env.stop()
 
     def test_swallowed_failure_is_not_empty_and_parallel_sources_stay_separate(self):
-        with patch.dict(cli.SEARCHERS, {'empty': Empty(), 'broken': LoggedFailure(), 'silent': SilentFailure()}, clear=True):
+        # The bridge accepts only its own connector names, so the fixtures stand in for real ones.
+        fixtures = {'arxiv': Empty(), 'crossref': LoggedFailure(), 'dblp': SilentFailure()}
+        with patch.dict(cli.SEARCHERS, fixtures, clear=True):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                asyncio.run(cli.cmd_search(argparse.Namespace(query='test', max_results=1, sources='empty,broken,silent', year='2025')))
+                asyncio.run(cli.cmd_search(argparse.Namespace(query='test', max_results=1, sources='arxiv,crossref,dblp', year='2025', sort='relevance')))
             data = json.loads(out.getvalue())
-            self.assertEqual(data['source_status'], {'empty': 'empty', 'broken': 'failed', 'silent': 'partial'})
-            self.assertIn('provider timeout', data['errors']['broken'])
-            self.assertEqual(data['coverage']['year_not_applied_to'], ['empty', 'broken', 'silent'])
+            self.assertEqual(data['source_status'], {'arxiv': 'empty', 'crossref': 'failed', 'dblp': 'partial'})
+            self.assertIn('provider timeout', data['errors']['crossref'])
+            self.assertEqual(data['coverage']['year_not_applied_to'], ['arxiv', 'crossref', 'dblp'])
 
     def test_dblp_bot_wall_is_failure_but_real_empty_xml_is_empty(self):
         source = DBLPSearcher()
@@ -113,57 +115,65 @@ class BridgeContracts(unittest.TestCase):
                 self.assertTrue(errors)
                 self.assertTrue(all(call.kwargs['headers'].get('x-api-key') == 'fixture-key' for call in get.call_args_list))
 
-    def test_openalex_and_ssrn_auth_alias_and_budget_preserved_on_failure(self):
+    def test_openalex_auth_alias_and_budget_preserved_on_failure(self):
         os.environ['OPENALEX_API_KEY'] = 'fixture-bare'
         os.environ['PAPER_SEARCH_MCP_OPENALEX_API_KEY'] = ' '
-        for source in [OpenAlexSearcher(), SSRNSearcher()]:
-            rejected = response('{"error":"quota"}', 429)
-            rejected.headers['X-RateLimit-Remaining'] = '0'
-            with patch.object(source.session, 'get', return_value=rejected) as get:
-                _, errors, _ = cli._search_with_diagnostics(source, 'test', 1, {})
-                self.assertTrue(errors)
-                self.assertEqual(source.rate_limit['remaining'], 0)
-                self.assertEqual(get.call_args.kwargs['headers']['Authorization'], 'Bearer fixture-bare')
-                self.assertNotIn('fixture-bare', ';'.join(errors))
+        source = OpenAlexSearcher()
+        rejected = response('{"error":"quota"}', 429)
+        rejected.headers['X-RateLimit-Remaining'] = '0'
+        with patch.object(source.session, 'get', return_value=rejected):
+            _, errors, _ = cli._search_with_diagnostics(source, 'test', 1, {})
+        self.assertTrue(errors)
+        # Rate-limit headers are kept as the provider sent them.
+        self.assertEqual(source.rate_limit['remaining'], '0')
+        self.assertEqual(source.session.headers['Authorization'], 'Bearer fixture-bare')
+        self.assertNotIn('fixture-bare', ';'.join(errors))
+        # SSRN searches through an OpenAlexSearcher of its own, so the same path serves it.
+        with patch.object(OpenAlexSearcher, 'search_ssrn', return_value=[]) as delegated:
+            SSRNSearcher().search('test', max_results=1)
+        delegated.assert_called_once()
 
-    def test_openalex_backed_billing_reports_status_and_usd_per_requested_source(self):
-        def search(sources, **gets):
-            searchers = {'openalex': OpenAlexSearcher(), 'ssrn': SSRNSearcher(), 'empty': Empty()}
+    def test_openalex_backed_billing_reports_each_response_per_requested_source(self):
+        def search(sources, openalex, ssrn):
+            """`openalex` and `ssrn` configure each connector's `session.get`. SSRN makes a new
+            OpenAlexSearcher for each search, so its session is the one `requests.Session` returns then."""
+            searcher = OpenAlexSearcher()
             out = io.StringIO()
             with contextlib.ExitStack() as stack:
-                stack.enter_context(patch.dict(cli.SEARCHERS, searchers, clear=True))
-                for name, get in gets.items():
-                    stack.enter_context(patch.object(searchers[name].session, 'get', **get))
+                stack.enter_context(patch.dict(cli.SEARCHERS, {'openalex': searcher}, clear=True))
+                stack.enter_context(patch.object(searcher.session, 'get', **openalex))
+                stack.enter_context(patch('requests.Session')).return_value.get.configure_mock(**ssrn)
                 with contextlib.redirect_stdout(out):
-                    asyncio.run(cli.cmd_search(argparse.Namespace(query='test', max_results=1, sources=sources, year=None)))
+                    asyncio.run(cli.cmd_search(argparse.Namespace(query='test', max_results=1, sources=sources, year=None, sort='relevance')))
             return json.loads(out.getvalue())
 
         charged = response('{"meta":{"cost_usd":0.001},"results":[]}')
         charged.headers['X-RateLimit-Credits-Used'] = '10'
-        data = search('openalex,ssrn,empty',
-                      openalex={'return_value': charged},
-                      ssrn={'return_value': response('{"error":"quota"}', 429)})
+        data = search('openalex,ssrn', openalex={'return_value': charged}, ssrn={'return_value': response('{"error":"quota"}', 429)})
         # The status is kept even though the 429 raised; credits stay a separate budget value.
         self.assertEqual(data['billing'], {
-            'openalex': {'http_status': 200, 'cost_usd': 0.001},
-            'ssrn': {'http_status': 429, 'cost_usd': None},
+            'openalex': {'responses': [{'http_status': 200, 'cost_usd': 0.001, 'credits_used': 10.0}]},
+            'ssrn': {'responses': [{'http_status': 429, 'cost_usd': None, 'credits_used': None}]},
         })
-        self.assertEqual(data['rate_limits']['openalex']['credits-used'], 10)
         data = search('openalex,ssrn',
                       openalex={'return_value': response('{"meta":{"cost_usd":0.002},"error":"failed"}', 500)},
                       ssrn={'return_value': response('{"meta":{"cost_usd":0.003},"error":"failed"}', 400)})
         self.assertEqual(data['billing'], {
-            'openalex': {'http_status': 500, 'cost_usd': 0.002},
-            'ssrn': {'http_status': 400, 'cost_usd': 0.003},
+            'openalex': {'responses': [{'http_status': 500, 'cost_usd': 0.002, 'credits_used': None}]},
+            'ssrn': {'responses': [{'http_status': 400, 'cost_usd': 0.003, 'credits_used': None}]},
         })
         data = search('openalex,ssrn',
                       openalex={'return_value': response('{"meta":{"cost_usd":-1},"results":[]}')},
                       ssrn={'side_effect': requests.ConnectionError('fixture offline')})
         self.assertEqual(data['billing'], {
-            'openalex': {'http_status': 200, 'cost_usd': None},
-            'ssrn': {'http_status': None, 'cost_usd': None},
+            'openalex': {'responses': [{'http_status': 200, 'cost_usd': None, 'credits_used': None}]},
+            'ssrn': {'responses': [{'http_status': None, 'cost_usd': None, 'credits_used': None}]},
         })
-        self.assertNotIn('billing', search('empty'))
+        with patch.dict(cli.SEARCHERS, {'arxiv': Empty()}, clear=True):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                asyncio.run(cli.cmd_search(argparse.Namespace(query='test', max_results=1, sources='arxiv', year=None, sort='relevance')))
+        self.assertNotIn('billing', json.loads(out.getvalue()))
 
     def test_ncbi_cross_process_dispatch_paced_and_key_sent(self):
         # macOS/Linux parent fixture: fork inherits mocks/env, all workers share one lock path.

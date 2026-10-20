@@ -932,14 +932,14 @@ function toDotPath(_path) {
   return segs.join("");
 }
 function prettifyError(error51) {
-  const lines2 = [];
+  const lines = [];
   const issues = [...error51.issues].sort((a, b2) => (a.path ?? []).length - (b2.path ?? []).length);
   for (const issue2 of issues) {
-    lines2.push(`\u2716 ${issue2.message}`);
+    lines.push(`\u2716 ${issue2.message}`);
     if (issue2.path?.length)
-      lines2.push(`  \u2192 at ${toDotPath(issue2.path)}`);
+      lines.push(`  \u2192 at ${toDotPath(issue2.path)}`);
   }
-  return lines2.join("\n");
+  return lines.join("\n");
 }
 var initializer, $ZodError, $ZodRealError;
 var init_errors = __esm({
@@ -1807,9 +1807,9 @@ var init_doc = __esm({
           return;
         }
         const content2 = arg;
-        const lines2 = content2.split("\n").filter((x2) => x2);
-        const minIndent = Math.min(...lines2.map((x2) => x2.length - x2.trimStart().length));
-        const dedented = lines2.map((x2) => x2.slice(minIndent)).map((x2) => " ".repeat(this.indent * 2) + x2);
+        const lines = content2.split("\n").filter((x2) => x2);
+        const minIndent = Math.min(...lines.map((x2) => x2.length - x2.trimStart().length));
+        const dedented = lines.map((x2) => x2.slice(minIndent)).map((x2) => " ".repeat(this.indent * 2) + x2);
         for (const line of dedented) {
           this.content.push(line);
         }
@@ -1818,8 +1818,8 @@ var init_doc = __esm({
         const F2 = Function;
         const args = this?.args;
         const content2 = this?.content ?? [``];
-        const lines2 = [...content2.map((x2) => `  ${x2}`)];
-        return new F2(...args, lines2.join("\n"));
+        const lines = [...content2.map((x2) => `  ${x2}`)];
+        return new F2(...args, lines.join("\n"));
       }
     };
   }
@@ -17990,9 +17990,9 @@ var require_compile = __commonJS({
       if (_sch)
         return _sch;
       const rootId = (0, resolve_1.getFullPath)(this.opts.uriResolver, sch.root.baseId);
-      const { es5, lines: lines2 } = this.opts.code;
+      const { es5, lines } = this.opts.code;
       const { ownProperties } = this.opts;
-      const gen = new codegen_1.CodeGen(this.scope, { es5, lines: lines2, ownProperties });
+      const gen = new codegen_1.CodeGen(this.scope, { es5, lines, ownProperties });
       let _ValidationError;
       if (sch.$async) {
         _ValidationError = gen.scopeValue("Error", {
@@ -19443,8 +19443,8 @@ var require_core = __commonJS({
         this._loading = {};
         this._cache = /* @__PURE__ */ new Map();
         opts = this.opts = { ...opts, ...requiredOptions(opts) };
-        const { es5, lines: lines2 } = this.opts.code;
-        this.scope = new codegen_2.ValueScope({ scope: {}, prefixes: EXT_SCOPE_NAMES, es5, lines: lines2 });
+        const { es5, lines } = this.opts.code;
+        this.scope = new codegen_2.ValueScope({ scope: {}, prefixes: EXT_SCOPE_NAMES, es5, lines });
         this.logger = getLogger(opts.logger);
         const formatOpt = opts.validateFormats;
         opts.validateFormats = false;
@@ -23846,22 +23846,22 @@ var require_parse_pretty_error = __commonJS({
       msg += ` at row ${err.line + 1}, col ${err.col + 1}, pos ${err.pos}:
 `;
       if (buf && buf.split) {
-        const lines2 = buf.split(/\n/);
-        const lineNumWidth = String(Math.min(lines2.length, err.line + 3)).length;
+        const lines = buf.split(/\n/);
+        const lineNumWidth = String(Math.min(lines.length, err.line + 3)).length;
         let linePadding = " ";
         while (linePadding.length < lineNumWidth) linePadding += " ";
-        for (let ii = Math.max(0, err.line - 1); ii < Math.min(lines2.length, err.line + 2); ++ii) {
+        for (let ii = Math.max(0, err.line - 1); ii < Math.min(lines.length, err.line + 2); ++ii) {
           let lineNum = String(ii + 1);
           if (lineNum.length < lineNumWidth) lineNum = " " + lineNum;
           if (err.line === ii) {
-            msg += lineNum + "> " + lines2[ii] + "\n";
+            msg += lineNum + "> " + lines[ii] + "\n";
             msg += linePadding + "  ";
             for (let hh = 0; hh < err.col; ++hh) {
               msg += " ";
             }
             msg += "^\n";
           } else {
-            msg += lineNum + ": " + lines2[ii] + "\n";
+            msg += lineNum + ": " + lines[ii] + "\n";
           }
         }
       }
@@ -40283,9 +40283,9 @@ function frontMatter(text5) {
   return { meta: meta3, body: text5.slice(match[0].length) };
 }
 function closedFence(raw) {
-  const lines2 = raw.replace(/\n$/, "").split("\n");
-  const fence = /^ {0,3}(`{3,}|~{3,})/.exec(lines2[0])[1];
-  const closer = lines2.length > 1 ? lines2.at(-1).replace(/^ {0,3}/, "") : "";
+  const lines = raw.replace(/\n$/, "").split("\n");
+  const fence = /^ {0,3}(`{3,}|~{3,})/.exec(lines[0])[1];
+  const closer = lines.length > 1 ? lines.at(-1).replace(/^ {0,3}/, "") : "";
   return closer.startsWith(fence) && /^[`~]* *$/.test(closer.slice(fence.length));
 }
 var isSourceCard = (block2) => block2?.type === "code" && block2.codeBlockStyle !== "indented" && /^ya?ml(?:\s|$)/.test(block2.lang ?? "") && /^source_card:/.test(block2.text) && closedFence(block2.raw);
@@ -41618,7 +41618,7 @@ var hackernews_default = free({
         const tags = [];
         if (hit._tags?.includes("show_hn")) tags.push("Show HN");
         if (hit._tags?.includes("ask_hn")) tags.push("Ask HN");
-        const lines2 = [
+        const lines = [
           `**${hit.objectID}** ${tags.length > 0 ? `[${tags.join(", ")}] ` : ""}${hit.title || "(no title)"}`,
           `  Points: ${hit.points ?? "unavailable"} | Comments: ${hit.num_comments ?? "unavailable"} | Author: ${hit.author}`,
           hit.url ? `  URL: ${hit.url}` : null,
@@ -41628,18 +41628,18 @@ var hackernews_default = free({
         ];
         const tree = commentTrees.get(hit.objectID);
         if (tree && tree.children && tree.children.length > 0) {
-          lines2.push(`  Top comments:`);
+          lines.push(`  Top comments:`);
           const topComments = tree.children.filter((c) => c.author && c.text && c.author !== "[deleted]").sort((a, b2) => (b2.children?.length ?? 0) - (a.children?.length ?? 0)).slice(0, 5);
           for (const comment of topComments) {
             const text5 = stripHtml(comment.text || "").slice(0, 250);
             const replyCount = comment.children?.length ?? 0;
             const truncated = (comment.text || "").length > 250 ? "..." : "";
-            lines2.push(
+            lines.push(
               `    \u{1F4AC} ${comment.author} (${replyCount} replies): ${text5}${truncated}`
             );
           }
         }
-        return lines2.filter(Boolean).join("\n");
+        return lines.filter(Boolean).join("\n");
       });
       const enrichedCount = commentTrees.size;
       const header = [
@@ -41696,11 +41696,11 @@ var read = free({
       const show2 = (item, parent) => [`## ${item.id}${parent ? ` (reply to ${parent})` : ""}${typeof item.title === "string" ? ` \u2014 ${text(item.title)}` : ""}`, `HN: https://news.ycombinator.com/item?id=${item.id}`, `Author: ${item.author ?? "unavailable/deleted"} | Date: ${item.created_at ?? "unavailable"}`, ...typeof item.url === "string" ? [`Linked URL: ${item.url}`] : [], typeof item.text === "string" ? text(item.text) : "[No text returned]"].join("\n");
       const selected = comments.slice(offset, offset + limit2);
       const more = offset + selected.length < comments.length;
-      const lines2 = [show2(root), `
+      const lines = [show2(root), `
 Comments: ${selected.length} shown of ${comments.length} returned; offset ${offset}.`, ...selected.map((entry) => show2(entry.item, entry.parent))];
-      if (more) lines2.push(`Continue with hackernews_read item=${id}, offset=${offset + selected.length}, limit=${limit2}.`);
-      if (malformed) lines2.push("Some descendant records were malformed; comment coverage is incomplete.");
-      return outcome(more || malformed ? "partial" : "success", lines2.join("\n\n"));
+      if (more) lines.push(`Continue with hackernews_read item=${id}, offset=${offset + selected.length}, limit=${limit2}.`);
+      if (malformed) lines.push("Some descendant records were malformed; comment coverage is incomplete.");
+      return outcome(more || malformed ? "partial" : "success", lines.join("\n\n"));
     } catch (error51) {
       ctx.abort.throwIfAborted();
       return `ERROR: ${error51 instanceof Error ? error51.message : "HN item read failed"}`;
@@ -41801,8 +41801,6 @@ var polymarket_default = free({
         for (const market of markets) {
           const outcomes = safeJsonParse(market.outcomes, []);
           const prices = safeJsonParse(market.outcomePrices, []);
-          if (market.conditionId) lines.push(`  Condition ID: ${market.conditionId}`);
-          if (market.clobTokenIds) lines.push(`  Outcome token IDs (outcome order): ${market.clobTokenIds}`);
           for (let i = 0; i < outcomes.length; i++) {
             const outcome2 = outcomes[i];
             if (!outcome2) continue;
@@ -41842,22 +41840,22 @@ var polymarket_default = free({
       scored.sort((a, b2) => b2.relevance - a.relevance);
       const topEvents = scored.slice(0, limit2);
       const results = topEvents.map(({ event, markets, matchedOutcomes, topMarket, vol24h, volTotal }) => {
-        const lines2 = [];
-        lines2.push(`**${event.title}**`);
-        lines2.push(
+        const lines = [];
+        lines.push(`**${event.title}**`);
+        lines.push(
           `  Volume: $${formatNumber(volTotal)} total` + (vol24h ? ` | $${formatNumber(vol24h)} 24h` : "") + (event.endDate ? ` | Ends: ${event.endDate.split("T")[0]}` : "")
         );
         if (event.slug) {
-          lines2.push(`  URL: https://polymarket.com/event/${event.slug}`);
+          lines.push(`  URL: https://polymarket.com/event/${event.slug}`);
         }
         const movement = formatPriceMovement(topMarket);
         if (movement) {
-          lines2.push(`  Movement: ${movement}`);
+          lines.push(`  Movement: ${movement}`);
         }
         if (matchedOutcomes.length > 0) {
-          lines2.push(`  Matched outcomes:`);
+          lines.push(`  Matched outcomes:`);
           for (const mo of matchedOutcomes) {
-            lines2.push(`    \u2192 ${mo.label}: ${(mo.price * 100).toFixed(1)}% \u2014 "${mo.market}"`);
+            lines.push(`    \u2192 ${mo.label}: ${(mo.price * 100).toFixed(1)}% \u2014 "${mo.market}"`);
           }
         }
         const allBinary = markets.every((m3) => {
@@ -41870,14 +41868,14 @@ var polymarket_default = free({
             const outcomes = safeJsonParse(m3.outcomes, []);
             const yesIdx = outcomes.findIndex((o) => o.toLowerCase() === "yes");
             const yesPrice = yesIdx >= 0 ? parseFloat(prices[yesIdx] || "0") : 0;
-            return { question: shortenQuestion(m3.question), price: yesPrice };
+            return { question: m3.groupItemTitle?.trim() || shortenQuestion(m3.question), price: yesPrice, market: m3 };
           }).filter((x2) => x2.price > 5e-3).sort((a, b2) => b2.price - a.price);
-          lines2.push(`  Odds:`);
+          lines.push(`  Odds:`);
           for (const item of leaderboard.slice(0, 8)) {
-            lines2.push(`    ${item.question}: ${(item.price * 100).toFixed(1)}%`);
+            lines.push(`    ${item.question}: ${(item.price * 100).toFixed(1)}%`, ...marketIds(item.market, "      "));
           }
           if (leaderboard.length > 8) {
-            lines2.push(`    ... +${leaderboard.length - 8} more`);
+            lines.push(`    ... +${leaderboard.length - 8} more`);
           }
         } else {
           for (const market of markets.slice(0, 3)) {
@@ -41885,23 +41883,24 @@ var polymarket_default = free({
             const prices = safeJsonParse(market.outcomePrices, []);
             if (outcomes.length <= 2) {
               const oddsStr = outcomes.map((o, i) => `${o}: ${(parseFloat(prices[i] || "0") * 100).toFixed(1)}%`).join(" / ");
-              lines2.push(`  \u{1F4CA} ${market.question} \u2014 ${oddsStr}`);
+              lines.push(`  \u{1F4CA} ${market.question} \u2014 ${oddsStr}`);
             } else {
               const pairs = outcomes.map((o, i) => ({ label: o, price: parseFloat(prices[i] || "0") })).sort((a, b2) => b2.price - a.price);
-              lines2.push(`  \u{1F4CA} ${market.question}`);
+              lines.push(`  \u{1F4CA} ${market.question}`);
               for (const p2 of pairs.slice(0, 5)) {
-                lines2.push(`    ${p2.label}: ${(p2.price * 100).toFixed(1)}%`);
+                lines.push(`    ${p2.label}: ${(p2.price * 100).toFixed(1)}%`);
               }
               if (pairs.length > 5) {
-                lines2.push(`    ... +${pairs.length - 5} more outcomes`);
+                lines.push(`    ... +${pairs.length - 5} more outcomes`);
               }
             }
+            lines.push(...marketIds(market, "    "));
           }
           if (markets.length > 3) {
-            lines2.push(`  ... +${markets.length - 3} more markets`);
+            lines.push(`  ... +${markets.length - 3} more markets`);
           }
         }
-        return lines2.join("\n");
+        return lines.join("\n");
       });
       const header = [
         `Polymarket results for "${args.query}" (${topEvents.length} events, ${queries.length} query expansions):`,
@@ -41914,6 +41913,12 @@ var polymarket_default = free({
     }
   }
 });
+function marketIds(market, indent) {
+  return [
+    ...market.conditionId ? [`${indent}Condition ID: ${market.conditionId}`] : [],
+    ...market.clobTokenIds ? [`${indent}Outcome token IDs (outcome order): ${market.clobTokenIds}`] : []
+  ];
+}
 function expandQueries(query) {
   const queries = [query];
   const words = query.split(/\s+/).filter((w3) => w3.length > 2);
@@ -42316,16 +42321,16 @@ var tiktok = creditMetered({
     const views = sumAvailable(items.map((i) => i.views));
     const likes2 = sumAvailable(items.map((i) => i.likes));
     const results = items.map((item, index) => {
-      const lines2 = [];
-      lines2.push(`${index + 1}. ${item.author ? `@${item.author}` : "(author unknown)"} \u2014 ${truncate(cleanText(item.text), 150) || "(no caption)"}`);
-      lines2.push(
+      const lines = [];
+      lines.push(`${index + 1}. ${item.author ? `@${item.author}` : "(author unknown)"} \u2014 ${truncate(cleanText(item.text), 150) || "(no caption)"}`);
+      lines.push(
         `   Views: ${fmtMetric(item.views)} | Likes: ${fmtMetric(item.likes)} | Comments: ${fmtMetric(item.comments)} | Shares: ${fmtMetric(item.shares)} | Date: ${item.date ?? "unknown"}${item.durationSeconds !== null ? ` | Duration: ${item.durationSeconds.toFixed(1)}s` : ""}`
       );
-      if (item.url) lines2.push(`   URL: ${item.url}`);
-      if (item.hashtags.length > 0) lines2.push(`   Tags: ${item.hashtags.map((h2) => `#${h2}`).join(" ")}`);
-      if (item.transcript) lines2.push(`   Transcript: ${item.transcript}`);
-      else if (item.transcriptNote) lines2.push(`   Transcript: ${item.transcriptNote}`);
-      return lines2.join("\n");
+      if (item.url) lines.push(`   URL: ${item.url}`);
+      if (item.hashtags.length > 0) lines.push(`   Tags: ${item.hashtags.map((h2) => `#${h2}`).join(" ")}`);
+      if (item.transcript) lines.push(`   Transcript: ${item.transcript}`);
+      else if (item.transcriptNote) lines.push(`   Transcript: ${item.transcriptNote}`);
+      return lines.join("\n");
     });
     const header = [
       `TikTok keyword search: "${query}" (${items.length} shown of ${returned.length} unique returned${duplicates ? `; ${duplicates} duplicate${duplicates === 1 ? "" : "s"} dropped` : ""})`,
@@ -42425,22 +42430,22 @@ async function fetchInstagramTranscript(url2, cacheMaxAge, headers, ctx) {
   return { text: capWords(combined.replace(/\s+/g, " ")), note: null, payload: response.payload };
 }
 function reelLine(item, index) {
-  const lines2 = [];
+  const lines = [];
   const who = item.author ? `@${item.author}${item.verified ? " (verified)" : ""}` : "(owner unknown)";
-  lines2.push(`${index + 1}. ${who} \u2014 ${truncate(cleanText(item.text), 150) || "(no caption)"}`);
+  lines.push(`${index + 1}. ${who} \u2014 ${truncate(cleanText(item.text), 150) || "(no caption)"}`);
   const views = item.views !== null ? `${fmtNum(item.views)} (${item.viewsSource})` : "unavailable";
-  lines2.push(
+  lines.push(
     `   Views: ${views} | Likes: ${fmtMetric(item.likes)} | Comments: ${fmtMetric(item.comments)} | Date: ${item.date ?? "unknown"}${item.duration !== null ? ` | Duration: ${item.duration}s` : ""}${item.authorFollowers !== null ? ` | Followers: ${fmtNum(item.authorFollowers)}` : ""}`
   );
-  if (item.viewsNote) lines2.push(`   Views note: ${item.viewsNote}`);
-  if (item.url) lines2.push(`   URL: ${item.url}`);
-  if (item.paidPartnership) lines2.push("   Paid partnership: yes");
-  if (item.location) lines2.push(`   Location: ${item.location}`);
-  if (item.hashtags.length > 0) lines2.push(`   Tags: ${item.hashtags.map((h2) => `#${h2}`).join(" ")}`);
-  if (item.commentPreviews.length > 0) lines2.push(`   Comment previews: ${item.commentPreviews.join(" || ")}`);
-  if (item.transcript) lines2.push(`   Transcript: ${item.transcript}`);
-  else if (item.transcriptNote) lines2.push(`   Transcript: ${item.transcriptNote}`);
-  return lines2.join("\n");
+  if (item.viewsNote) lines.push(`   Views note: ${item.viewsNote}`);
+  if (item.url) lines.push(`   URL: ${item.url}`);
+  if (item.paidPartnership) lines.push("   Paid partnership: yes");
+  if (item.location) lines.push(`   Location: ${item.location}`);
+  if (item.hashtags.length > 0) lines.push(`   Tags: ${item.hashtags.map((h2) => `#${h2}`).join(" ")}`);
+  if (item.commentPreviews.length > 0) lines.push(`   Comment previews: ${item.commentPreviews.join(" || ")}`);
+  if (item.transcript) lines.push(`   Transcript: ${item.transcript}`);
+  else if (item.transcriptNote) lines.push(`   Transcript: ${item.transcriptNote}`);
+  return lines.join("\n");
 }
 var instagram = creditMetered({
   description: "Search Instagram via ScrapeCreators in one of three modes. mode='reels' (default): Google-indexed Reels keyword search (/v2/instagram/reels/search) with date_posted and page 1-11; view counts are no longer part of search results (removed 2026-08-19) and are only fetched when enrich_views=true (1 credit per reel via /v1/instagram/post). mode='native': Instagram's own ranked users, hashtags, places, and keyword suggestions (/v1/instagram/search; one page, no posts). mode='popular': Instagram's curated Popular topic page (/v1/instagram/search/popular) with description, suggested terms, posts with play counts, and an opaque cursor. Requires SCRAPECREATORS_API_KEY; 1 credit per request, 1 per transcript. Metrics the provider omits are reported as unavailable, never 0.",
@@ -42638,40 +42643,40 @@ async function instagramNative(query, limit2, headers, ctx) {
   const hashtags = hashtagList.items.map(asRecord).filter((r2) => r2 !== null);
   const places = placeList.items.map(asRecord).filter((r2) => r2 !== null);
   const keywords = keywordList.items.map((entry) => typeof entry === "string" ? entry : asString(asRecord(entry)?.name) ?? asString(asRecord(entry)?.keyword)).filter((value) => value !== null);
-  const lines2 = [
+  const lines = [
     `Instagram native search: "${query}"`,
     "Source: Instagram's own ranked search (not Google-indexed); one page only; returns accounts, hashtags, places, and keyword suggestions, not posts.",
     provenanceLine(response.payload),
     `Returned: ${users2.length} users | ${hashtags.length} hashtags | ${places.length} places | ${keywords.length} keywords (showing up to ${limit2} per list)`
   ];
   if (users2.length) {
-    lines2.push("", "Users:");
+    lines.push("", "Users:");
     for (const user of users2.slice(0, limit2)) {
       const username = asString(user.username) ?? "(unknown)";
       const fullName = cleanText(user.full_name);
-      lines2.push(`- @${username}${fullName ? ` \u2014 ${fullName}` : ""}${user.is_verified === true ? " (verified)" : ""} \u2014 https://www.instagram.com/${username}/`);
+      lines.push(`- @${username}${fullName ? ` \u2014 ${fullName}` : ""}${user.is_verified === true ? " (verified)" : ""} \u2014 https://www.instagram.com/${username}/`);
     }
   }
   if (hashtags.length) {
-    lines2.push("", "Hashtags:");
+    lines.push("", "Hashtags:");
     for (const tag of hashtags.slice(0, limit2)) {
       const name2 = asString(tag.name) ?? "(unknown)";
       const count3 = asNumber(tag.media_count);
-      lines2.push(`- #${name2}${count3 !== null ? ` \u2014 ${fmtNum(count3)} posts` : ""}`);
+      lines.push(`- #${name2}${count3 !== null ? ` \u2014 ${fmtNum(count3)} posts` : ""}`);
     }
   }
   if (places.length) {
-    lines2.push("", "Places:");
+    lines.push("", "Places:");
     for (const place of places.slice(0, limit2)) {
       const name2 = asString(place.title) ?? asString(place.name) ?? "(unknown)";
       const subtitle = cleanText(place.subtitle);
-      lines2.push(`- ${name2}${subtitle ? ` \u2014 ${subtitle}` : ""}${asString(place.id) ? ` (place id ${asString(place.id)})` : ""}`);
+      lines.push(`- ${name2}${subtitle ? ` \u2014 ${subtitle}` : ""}${asString(place.id) ? ` (place id ${asString(place.id)})` : ""}`);
     }
   }
-  if (keywords.length) lines2.push("", `Keyword suggestions: ${keywords.slice(0, limit2).join(", ")}`);
-  if (!users2.length && !hashtags.length && !places.length && !keywords.length) lines2.push("", "Instagram returned empty user, hashtag, place, and keyword lists for this query.");
+  if (keywords.length) lines.push("", `Keyword suggestions: ${keywords.slice(0, limit2).join(", ")}`);
+  if (!users2.length && !hashtags.length && !places.length && !keywords.length) lines.push("", "Instagram returned empty user, hashtag, place, and keyword lists for this query.");
   return {
-    text: lines2.join("\n"),
+    text: lines.join("\n"),
     details: {
       provider: "scrapecreators",
       mode: "native",
@@ -42699,7 +42704,7 @@ async function instagramPopular(query, cursor, limit2, fetchTranscripts, transcr
   const description = asRecord(payload.description);
   const suggested = asArray(payload.suggested_terms).filter((v3) => typeof v3 === "string");
   const totalMedia = asNumber(payload.total_media_count);
-  const lines2 = [
+  const lines = [
     `Instagram popular topic: "${query}"${asString(payload.title) ? ` \u2014 ${asString(payload.title)}` : ""}${cursor ? " (continued page)" : ""}`,
     "Source: Instagram's curated public /popular page; posts are Instagram's own selection, not a keyword ranking.",
     `Posts: ${shown2.length} shown of ${posts.length} returned${totalMedia !== null ? `; Instagram reports ${fmtNum(totalMedia)} total media for the topic` : ""}`,
@@ -42707,11 +42712,11 @@ async function instagramPopular(query, cursor, limit2, fetchTranscripts, transcr
   ];
   const plain2 = cleanText(description?.plain_text);
   if (plain2) {
-    lines2.push(`Instagram description: ${truncate(plain2, 400)}`);
+    lines.push(`Instagram description: ${truncate(plain2, 400)}`);
     const sources = asArray(description?.source_uris).filter((v3) => typeof v3 === "string");
-    if (sources.length) lines2.push(`Description sources: ${sources.join(", ")}`);
+    if (sources.length) lines.push(`Description sources: ${sources.join(", ")}`);
   }
-  if (suggested.length) lines2.push(`Suggested terms: ${suggested.slice(0, 10).join(", ")}`);
+  if (suggested.length) lines.push(`Suggested terms: ${suggested.slice(0, 10).join(", ")}`);
   let transcriptsRequested = 0;
   let transcriptsFetched = 0;
   const transcriptFailures = [];
@@ -42741,28 +42746,28 @@ async function instagramPopular(query, cursor, limit2, fetchTranscripts, transcr
       }
     }
   }
-  lines2.push(credits.describe());
-  lines2.push(
+  lines.push(credits.describe());
+  lines.push(
     fetchTranscripts ? `Transcripts: ${transcriptsFetched} fetched of ${transcriptsRequested} requested (reels/videos only)${transcriptFailures.length ? `; ${transcriptFailures.length} failed` : ""}` : "Transcripts: not requested"
   );
-  if (transcriptFailures.length) lines2.push(`Transcript failures: ${transcriptFailures.join("; ")}`);
-  if (shown2.length === 0) lines2.push("", "The provider returned an empty post list for this topic page.");
+  if (transcriptFailures.length) lines.push(`Transcript failures: ${transcriptFailures.join("; ")}`);
+  if (shown2.length === 0) lines.push("", "The provider returned an empty post list for this topic page.");
   for (const [index, post2] of shown2.entries()) {
     const owner = asRecord(post2.owner);
     const username = asString(owner?.username);
     const caption = truncate(cleanText(post2.caption), 150) || "(no caption)";
     const plays = asNumber(post2.play_count);
-    lines2.push("", `${index + 1}. ${username ? `@${username}${owner?.is_verified === true ? " (verified)" : ""}` : "(owner unknown)"} \u2014 ${caption}`);
-    lines2.push(`   Type: ${asString(post2.type) ?? "unknown"} | Plays: ${fmtMetric(plays)}${plays === null ? " (Instagram did not expose a play count)" : ""}`);
-    if (asString(post2.url)) lines2.push(`   URL: ${asString(post2.url)}`);
+    lines.push("", `${index + 1}. ${username ? `@${username}${owner?.is_verified === true ? " (verified)" : ""}` : "(owner unknown)"} \u2014 ${caption}`);
+    lines.push(`   Type: ${asString(post2.type) ?? "unknown"} | Plays: ${fmtMetric(plays)}${plays === null ? " (Instagram did not expose a play count)" : ""}`);
+    if (asString(post2.url)) lines.push(`   URL: ${asString(post2.url)}`);
     const tags = hashtagsIn(asString(post2.caption) ?? "");
-    if (tags.length) lines2.push(`   Tags: ${tags.map((h2) => `#${h2}`).join(" ")}`);
+    if (tags.length) lines.push(`   Tags: ${tags.map((h2) => `#${h2}`).join(" ")}`);
     const transcript2 = transcripts.get(index);
-    if (transcript2) lines2.push(`   Transcript: ${transcript2}`);
-    else if (transcriptNotes.has(index)) lines2.push(`   Transcript: ${transcriptNotes.get(index)}`);
+    if (transcript2) lines.push(`   Transcript: ${transcript2}`);
+    else if (transcriptNotes.has(index)) lines.push(`   Transcript: ${transcriptNotes.get(index)}`);
   }
   return {
-    text: lines2.join("\n"),
+    text: lines.join("\n"),
     details: {
       provider: "scrapecreators",
       mode: "popular",
@@ -42849,7 +42854,7 @@ function formatLinkedInSearch(data, query, datePosted, cursor) {
   if (!listed.ok) return `ERROR: ${listed.error}`;
   const posts = listed.items.map(asRecord).filter((r2) => r2 !== null);
   const nextCursor = asString(data.cursor);
-  const lines2 = [
+  const lines = [
     `LinkedIn public post search: "${query}"`,
     `Filters: date_posted=${datePosted ?? "(none)"} | cursor=${cursor ?? "1 (first page)"}`,
     "Source: Google-indexed public posts and Pulse articles; best-effort, not a complete LinkedIn-native search. Order as returned.",
@@ -42857,7 +42862,7 @@ function formatLinkedInSearch(data, query, datePosted, cursor) {
     nextCursor ? `Next page: pass cursor="${nextCursor}"${Number(nextCursor) > LINKEDIN_MAX_SEARCH_CURSOR ? " (beyond the provider's page-11 cap)" : ""}` : "Next page: no cursor returned",
     `Posts returned: ${posts.length}`
   ];
-  if (posts.length === 0) lines2.push("", "The provider returned an empty post list for this query and window; Google-indexed coverage is thin here, which is not proof that LinkedIn holds nothing.");
+  if (posts.length === 0) lines.push("", "The provider returned an empty post list for this query and window; Google-indexed coverage is thin here, which is not proof that LinkedIn holds nothing.");
   for (const [index, post2] of posts.entries()) {
     const author = asRecord(post2.author);
     const authorName = cleanText(author?.name);
@@ -42865,22 +42870,22 @@ function formatLinkedInSearch(data, query, datePosted, cursor) {
     const likeCount = asNumber(post2.likeCount);
     const commentCount = asNumber(post2.commentCount);
     const comments = asArray(post2.comments);
-    lines2.push("", `${index + 1}. ${authorName ?? "Unknown author"}${followers !== null ? ` (${fmtNum(followers)} followers)` : ""}`);
-    if (cleanText(post2.description)) lines2.push(`   ${truncate(cleanText(post2.description), 400)}`);
-    lines2.push(
+    lines.push("", `${index + 1}. ${authorName ?? "Unknown author"}${followers !== null ? ` (${fmtNum(followers)} followers)` : ""}`);
+    if (cleanText(post2.description)) lines.push(`   ${truncate(cleanText(post2.description), 400)}`);
+    lines.push(
       `   Published: ${cleanText(post2.datePublished) ?? "unknown"} | Likes: ${fmtMetric(likeCount)} | Comments: ${fmtMetric(commentCount)}${comments.length ? ` (${comments.length} returned inline)` : ""}`
     );
-    if (cleanText(post2.url)) lines2.push(`   URL: ${cleanText(post2.url)}`);
-    if (cleanText(author?.url)) lines2.push(`   Author URL: ${cleanText(author?.url)}`);
+    if (cleanText(post2.url)) lines.push(`   URL: ${cleanText(post2.url)}`);
+    if (cleanText(author?.url)) lines.push(`   Author URL: ${cleanText(author?.url)}`);
     const preview = comments.map((entry) => {
       const comment = asRecord(entry);
       const text5 = cleanText(comment?.text);
       return text5 ? `${cleanText(comment?.author) ?? "Unknown"}: ${truncate(text5, 140)}` : null;
     }).filter((value) => value !== null).slice(0, 2);
-    if (preview.length) lines2.push(`   Comment previews: ${preview.join(" || ")}`);
+    if (preview.length) lines.push(`   Comment previews: ${preview.join(" || ")}`);
   }
   return {
-    text: lines2.join("\n"),
+    text: lines.join("\n"),
     details: {
       provider: "scrapecreators",
       kind: "search",
@@ -42894,7 +42899,7 @@ function formatLinkedInSearch(data, query, datePosted, cursor) {
   };
 }
 function formatLinkedInProfile(data, sourceUrl) {
-  const lines2 = [];
+  const lines = [];
   const name2 = cleanText(data.name) || "Unknown profile";
   const followers = asNumber(data.followers);
   const recentPosts = asArray(data.recentPosts).slice(0, 5);
@@ -42906,280 +42911,280 @@ function formatLinkedInProfile(data, sourceUrl) {
   const projects = asArray(data.projects).slice(0, 3);
   const recommendations = asArray(data.recommendations).slice(0, 3);
   const similarProfiles = asArray(data.similarProfiles).slice(0, 5);
-  lines2.push(`LinkedIn profile: ${name2}`);
-  lines2.push(`URL: ${sourceUrl}`);
-  lines2.push(provenanceLine(data));
-  if (cleanText(data.location)) lines2.push(`Location: ${cleanText(data.location)}`);
-  if (followers !== null) lines2.push(`Followers: ${fmtNum(followers)}`);
-  if (cleanText(data.connections)) lines2.push(`Connections: ${cleanText(data.connections)}`);
-  if (cleanText(data.about)) lines2.push("");
-  if (cleanText(data.about)) lines2.push(`About: ${truncate(cleanText(data.about), 500)}`);
+  lines.push(`LinkedIn profile: ${name2}`);
+  lines.push(`URL: ${sourceUrl}`);
+  lines.push(provenanceLine(data));
+  if (cleanText(data.location)) lines.push(`Location: ${cleanText(data.location)}`);
+  if (followers !== null) lines.push(`Followers: ${fmtNum(followers)}`);
+  if (cleanText(data.connections)) lines.push(`Connections: ${cleanText(data.connections)}`);
+  if (cleanText(data.about)) lines.push("");
+  if (cleanText(data.about)) lines.push(`About: ${truncate(cleanText(data.about), 500)}`);
   if (recentPosts.length > 0) {
-    lines2.push("");
-    lines2.push("Recent Posts:");
+    lines.push("");
+    lines.push("Recent Posts:");
     for (const item of recentPosts) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const title = cleanText(record3.title) || "Untitled post";
-      lines2.push(`- ${truncate(title, 220)}`);
-      if (cleanText(record3.activityType)) lines2.push(`  Activity: ${cleanText(record3.activityType)}`);
-      if (cleanText(record3.link)) lines2.push(`  URL: ${cleanText(record3.link)}`);
+      lines.push(`- ${truncate(title, 220)}`);
+      if (cleanText(record3.activityType)) lines.push(`  Activity: ${cleanText(record3.activityType)}`);
+      if (cleanText(record3.link)) lines.push(`  URL: ${cleanText(record3.link)}`);
     }
   }
   if (activity.length > 0) {
-    lines2.push("");
-    lines2.push("Recent Activity:");
+    lines.push("");
+    lines.push("Recent Activity:");
     for (const item of activity) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const title = cleanText(record3.title) || "Untitled activity";
-      lines2.push(`- ${truncate(title, 220)}`);
-      if (cleanText(record3.activityType)) lines2.push(`  Activity: ${cleanText(record3.activityType)}`);
-      if (cleanText(record3.link)) lines2.push(`  URL: ${cleanText(record3.link)}`);
+      lines.push(`- ${truncate(title, 220)}`);
+      if (cleanText(record3.activityType)) lines.push(`  Activity: ${cleanText(record3.activityType)}`);
+      if (cleanText(record3.link)) lines.push(`  URL: ${cleanText(record3.link)}`);
     }
   }
   if (articles.length > 0) {
-    lines2.push("");
-    lines2.push("Articles:");
+    lines.push("");
+    lines.push("Articles:");
     for (const item of articles) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const headline = cleanText(record3.headline) || "Untitled article";
-      lines2.push(`- ${truncate(headline, 220)}`);
-      if (cleanText(record3.datePublished)) lines2.push(`  Published: ${cleanText(record3.datePublished)}`);
-      if (cleanText(record3.articleBody)) lines2.push(`  Excerpt: ${truncate(cleanText(record3.articleBody), 220)}`);
+      lines.push(`- ${truncate(headline, 220)}`);
+      if (cleanText(record3.datePublished)) lines.push(`  Published: ${cleanText(record3.datePublished)}`);
+      if (cleanText(record3.articleBody)) lines.push(`  Excerpt: ${truncate(cleanText(record3.articleBody), 220)}`);
     }
   }
   if (experience.length > 0) {
-    lines2.push("");
-    lines2.push("Experience:");
+    lines.push("");
+    lines.push("Experience:");
     for (const item of experience) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const orgName = cleanText(record3.name) || "Unknown organization";
-      lines2.push(`- ${orgName}`);
-      if (cleanText(record3.url)) lines2.push(`  URL: ${cleanText(record3.url)}`);
-      if (cleanText(record3.location)) lines2.push(`  Location: ${cleanText(record3.location)}`);
+      lines.push(`- ${orgName}`);
+      if (cleanText(record3.url)) lines.push(`  URL: ${cleanText(record3.url)}`);
+      if (cleanText(record3.location)) lines.push(`  Location: ${cleanText(record3.location)}`);
       const member = asRecord(record3.member);
       const roleDescription = member ? cleanText(member.description) : null;
       const startDate = member ? displayScalar(member.startDate) : null;
       const endDate = member ? displayScalar(member.endDate) : null;
       if (startDate || endDate) {
-        lines2.push(`  Dates: ${startDate || "?"} - ${endDate || "Present"}`);
+        lines.push(`  Dates: ${startDate || "?"} - ${endDate || "Present"}`);
       }
-      if (roleDescription) lines2.push(`  Role: ${truncate(roleDescription, 180)}`);
+      if (roleDescription) lines.push(`  Role: ${truncate(roleDescription, 180)}`);
     }
   }
   if (education.length > 0) {
-    lines2.push("");
-    lines2.push("Education:");
+    lines.push("");
+    lines.push("Education:");
     for (const item of education) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const schoolName = cleanText(record3.name) || "Unknown school";
-      lines2.push(`- ${schoolName}`);
-      if (cleanText(record3.url)) lines2.push(`  URL: ${cleanText(record3.url)}`);
+      lines.push(`- ${schoolName}`);
+      if (cleanText(record3.url)) lines.push(`  URL: ${cleanText(record3.url)}`);
       const member = asRecord(record3.member);
       const startDate = member ? displayScalar(member.startDate) : null;
       const endDate = member ? displayScalar(member.endDate) : null;
       if (startDate || endDate) {
-        lines2.push(`  Dates: ${startDate || "?"} - ${endDate || "Present"}`);
+        lines.push(`  Dates: ${startDate || "?"} - ${endDate || "Present"}`);
       }
     }
   }
   if (publications.length > 0) {
-    lines2.push("");
-    lines2.push("Publications:");
+    lines.push("");
+    lines.push("Publications:");
     for (const item of publications) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const publicationName = cleanText(record3.name) || "Untitled publication";
-      lines2.push(`- ${publicationName}`);
-      if (cleanText(record3.url)) lines2.push(`  URL: ${cleanText(record3.url)}`);
+      lines.push(`- ${publicationName}`);
+      if (cleanText(record3.url)) lines.push(`  URL: ${cleanText(record3.url)}`);
     }
   }
   if (projects.length > 0) {
-    lines2.push("");
-    lines2.push("Projects:");
+    lines.push("");
+    lines.push("Projects:");
     for (const item of projects) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const projectName = cleanText(record3.name) || "Untitled project";
-      lines2.push(`- ${projectName}`);
-      if (cleanText(record3.url)) lines2.push(`  URL: ${cleanText(record3.url)}`);
-      if (cleanText(record3.dateRange)) lines2.push(`  Date Range: ${cleanText(record3.dateRange)}`);
-      if (cleanText(record3.description)) lines2.push(`  Description: ${truncate(cleanText(record3.description), 220)}`);
+      lines.push(`- ${projectName}`);
+      if (cleanText(record3.url)) lines.push(`  URL: ${cleanText(record3.url)}`);
+      if (cleanText(record3.dateRange)) lines.push(`  Date Range: ${cleanText(record3.dateRange)}`);
+      if (cleanText(record3.description)) lines.push(`  Description: ${truncate(cleanText(record3.description), 220)}`);
       const contributors = asArray(record3.contributors).slice(0, 4);
       if (contributors.length > 0) {
-        lines2.push(`  Contributors: ${contributors.map((contributor) => cleanText(asRecord(contributor)?.name)).filter((value) => Boolean(value)).join(", ")}`);
+        lines.push(`  Contributors: ${contributors.map((contributor) => cleanText(asRecord(contributor)?.name)).filter((value) => Boolean(value)).join(", ")}`);
       }
     }
   }
   if (recommendations.length > 0) {
-    lines2.push("");
-    lines2.push("Recommendations:");
+    lines.push("");
+    lines.push("Recommendations:");
     for (const item of recommendations) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const recommender = cleanText(record3.name) || "Unknown recommender";
-      lines2.push(`- ${recommender}`);
-      if (cleanText(record3.link)) lines2.push(`  URL: ${cleanText(record3.link)}`);
-      if (cleanText(record3.text)) lines2.push(`  Text: ${truncate(cleanText(record3.text), 240)}`);
+      lines.push(`- ${recommender}`);
+      if (cleanText(record3.link)) lines.push(`  URL: ${cleanText(record3.link)}`);
+      if (cleanText(record3.text)) lines.push(`  Text: ${truncate(cleanText(record3.text), 240)}`);
     }
   }
   if (similarProfiles.length > 0) {
-    lines2.push("");
-    lines2.push("Similar Profiles:");
+    lines.push("");
+    lines.push("Similar Profiles:");
     for (const item of similarProfiles) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const profileName = cleanText(record3.name) || "Unknown profile";
-      lines2.push(`- ${profileName}`);
-      if (cleanText(record3.link)) lines2.push(`  URL: ${cleanText(record3.link)}`);
+      lines.push(`- ${profileName}`);
+      if (cleanText(record3.link)) lines.push(`  URL: ${cleanText(record3.link)}`);
     }
   }
-  return lines2.join("\n");
+  return lines.join("\n");
 }
 function formatLinkedInCompany(data, sourceUrl) {
-  const lines2 = [];
+  const lines = [];
   const name2 = cleanText(data.name) || "Unknown company";
   const employeeCount = asNumber(data.employeeCount);
   const posts = asArray(data.posts).slice(0, 5);
   const employees = asArray(data.employees).slice(0, 5);
   const specialties = asArray(data.specialties).map((value) => cleanText(value)).filter((value) => Boolean(value)).slice(0, 12);
-  lines2.push(`LinkedIn company page: ${name2}`);
-  lines2.push(`URL: ${sourceUrl}`);
-  lines2.push(provenanceLine(data));
-  if (cleanText(data.website)) lines2.push(`Website: ${cleanText(data.website)}`);
-  if (cleanText(data.industry)) lines2.push(`Industry: ${cleanText(data.industry)}`);
-  if (cleanText(data.size)) lines2.push(`Size: ${cleanText(data.size)}`);
-  if (employeeCount !== null) lines2.push(`Employee count: ${fmtNum(employeeCount)}`);
-  if (cleanText(data.headquarters)) lines2.push(`Headquarters: ${cleanText(data.headquarters)}`);
-  if (cleanText(data.type)) lines2.push(`Type: ${cleanText(data.type)}`);
-  if (asNumber(data.founded) !== null) lines2.push(`Founded: ${asNumber(data.founded)}`);
-  if (cleanText(data.slogan)) lines2.push(`Slogan: ${cleanText(data.slogan)}`);
+  lines.push(`LinkedIn company page: ${name2}`);
+  lines.push(`URL: ${sourceUrl}`);
+  lines.push(provenanceLine(data));
+  if (cleanText(data.website)) lines.push(`Website: ${cleanText(data.website)}`);
+  if (cleanText(data.industry)) lines.push(`Industry: ${cleanText(data.industry)}`);
+  if (cleanText(data.size)) lines.push(`Size: ${cleanText(data.size)}`);
+  if (employeeCount !== null) lines.push(`Employee count: ${fmtNum(employeeCount)}`);
+  if (cleanText(data.headquarters)) lines.push(`Headquarters: ${cleanText(data.headquarters)}`);
+  if (cleanText(data.type)) lines.push(`Type: ${cleanText(data.type)}`);
+  if (asNumber(data.founded) !== null) lines.push(`Founded: ${asNumber(data.founded)}`);
+  if (cleanText(data.slogan)) lines.push(`Slogan: ${cleanText(data.slogan)}`);
   if (cleanText(data.description)) {
-    lines2.push("");
-    lines2.push(`Description: ${truncate(cleanText(data.description), 700)}`);
+    lines.push("");
+    lines.push(`Description: ${truncate(cleanText(data.description), 700)}`);
   }
   if (specialties.length > 0) {
-    lines2.push("");
-    lines2.push(`Specialties: ${specialties.join(", ")}`);
+    lines.push("");
+    lines.push(`Specialties: ${specialties.join(", ")}`);
   }
   if (employees.length > 0) {
-    lines2.push("");
-    lines2.push("Notable Employees:");
+    lines.push("");
+    lines.push("Notable Employees:");
     for (const item of employees) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const employeeName = cleanText(record3.name) || "Unknown employee";
-      lines2.push(`- ${employeeName}`);
-      if (cleanText(record3.title)) lines2.push(`  Title: ${cleanText(record3.title)}`);
-      if (cleanText(record3.link)) lines2.push(`  URL: ${cleanText(record3.link)}`);
+      lines.push(`- ${employeeName}`);
+      if (cleanText(record3.title)) lines.push(`  Title: ${cleanText(record3.title)}`);
+      if (cleanText(record3.link)) lines.push(`  URL: ${cleanText(record3.link)}`);
     }
   }
   if (posts.length > 0) {
-    lines2.push("");
-    lines2.push("Recent Posts Embedded In Company Page:");
+    lines.push("");
+    lines.push("Recent Posts Embedded In Company Page:");
     for (const item of posts) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const text5 = cleanText(record3.text) || "Untitled post";
-      lines2.push(`- ${truncate(text5, 260)}`);
-      if (cleanText(record3.datePublished)) lines2.push(`  Published: ${cleanText(record3.datePublished)}`);
-      if (cleanText(record3.url)) lines2.push(`  URL: ${cleanText(record3.url)}`);
+      lines.push(`- ${truncate(text5, 260)}`);
+      if (cleanText(record3.datePublished)) lines.push(`  Published: ${cleanText(record3.datePublished)}`);
+      if (cleanText(record3.url)) lines.push(`  URL: ${cleanText(record3.url)}`);
     }
   }
-  return lines2.join("\n");
+  return lines.join("\n");
 }
 function formatLinkedInCompanyPosts(data, sourceUrl, page) {
-  const lines2 = [];
+  const lines = [];
   const listed = expectArray(data, "posts", "ScrapeCreators LinkedIn company posts");
   if (!listed.ok) return `ERROR: ${listed.error}`;
   const posts = listed.items.slice(0, 10);
-  lines2.push(`LinkedIn company posts: ${sourceUrl}`);
-  lines2.push(`Page: ${page} of at most ${LINKEDIN_MAX_COMPANY_POSTS_PAGE}`);
-  lines2.push(provenanceLine(data));
+  lines.push(`LinkedIn company posts: ${sourceUrl}`);
+  lines.push(`Page: ${page} of at most ${LINKEDIN_MAX_COMPANY_POSTS_PAGE}`);
+  lines.push(provenanceLine(data));
   if (posts.length === 0) {
-    lines2.push("");
-    lines2.push("The provider returned an empty post list for this page.");
-    return lines2.join("\n");
+    lines.push("");
+    lines.push("The provider returned an empty post list for this page.");
+    return lines.join("\n");
   }
-  lines2.push("");
-  lines2.push(`Posts returned: ${posts.length}`);
-  lines2.push("");
+  lines.push("");
+  lines.push(`Posts returned: ${posts.length}`);
+  lines.push("");
   for (const item of posts) {
     const record3 = asRecord(item);
     if (!record3) continue;
     const text5 = cleanText(record3.text) || "Untitled post";
-    lines2.push(`- ${truncate(text5, 320)}`);
-    if (cleanText(record3.datePublished)) lines2.push(`  Published: ${cleanText(record3.datePublished)}`);
-    if (cleanText(record3.url)) lines2.push(`  URL: ${cleanText(record3.url)}`);
-    if (cleanText(record3.id)) lines2.push(`  Post ID: ${cleanText(record3.id)}`);
+    lines.push(`- ${truncate(text5, 320)}`);
+    if (cleanText(record3.datePublished)) lines.push(`  Published: ${cleanText(record3.datePublished)}`);
+    if (cleanText(record3.url)) lines.push(`  URL: ${cleanText(record3.url)}`);
+    if (cleanText(record3.id)) lines.push(`  Post ID: ${cleanText(record3.id)}`);
   }
-  return lines2.join("\n");
+  return lines.join("\n");
 }
 function formatLinkedInPost(data, sourceUrl) {
-  const lines2 = [];
+  const lines = [];
   const comments = asArray(data.comments).slice(0, 5);
   const moreArticles = asArray(data.moreArticles).slice(0, 3);
   const likeCount = asNumber(data.likeCount);
   const commentCount = asNumber(data.commentCount);
   const author = asRecord(data.author);
-  lines2.push(`LinkedIn post: ${cleanText(data.name) || cleanText(data.headline) || "Untitled post"}`);
-  lines2.push(`URL: ${sourceUrl}`);
-  lines2.push(provenanceLine(data));
-  if (cleanText(data.headline)) lines2.push(`Headline: ${truncate(cleanText(data.headline), 260)}`);
-  if (cleanText(data.datePublished)) lines2.push(`Published: ${cleanText(data.datePublished)}`);
+  lines.push(`LinkedIn post: ${cleanText(data.name) || cleanText(data.headline) || "Untitled post"}`);
+  lines.push(`URL: ${sourceUrl}`);
+  lines.push(provenanceLine(data));
+  if (cleanText(data.headline)) lines.push(`Headline: ${truncate(cleanText(data.headline), 260)}`);
+  if (cleanText(data.datePublished)) lines.push(`Published: ${cleanText(data.datePublished)}`);
   if (likeCount !== null || commentCount !== null) {
-    lines2.push(
+    lines.push(
       `Engagement: ${likeCount !== null ? `${fmtNum(likeCount)} likes` : "likes unknown"} | ${commentCount !== null ? `${fmtNum(commentCount)} comments` : "comments unknown"}`
     );
   }
   if (author) {
-    lines2.push("");
-    lines2.push("Author:");
-    if (cleanText(author.name)) lines2.push(`- Name: ${cleanText(author.name)}`);
-    if (cleanText(author.url)) lines2.push(`- URL: ${cleanText(author.url)}`);
+    lines.push("");
+    lines.push("Author:");
+    if (cleanText(author.name)) lines.push(`- Name: ${cleanText(author.name)}`);
+    if (cleanText(author.url)) lines.push(`- URL: ${cleanText(author.url)}`);
     const authorFollowers = asNumber(author.followers);
-    if (authorFollowers !== null) lines2.push(`- Followers: ${fmtNum(authorFollowers)}`);
+    if (authorFollowers !== null) lines.push(`- Followers: ${fmtNum(authorFollowers)}`);
   }
   if (cleanText(data.description)) {
-    lines2.push("");
-    lines2.push(`Description: ${truncate(cleanText(data.description), 700)}`);
+    lines.push("");
+    lines.push(`Description: ${truncate(cleanText(data.description), 700)}`);
   }
   if (comments.length > 0) {
-    lines2.push("");
-    lines2.push("Comments:");
+    lines.push("");
+    lines.push("Comments:");
     for (const item of comments) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const authorName = cleanText(record3.author) || "Unknown commenter";
       const text5 = cleanText(record3.text) || "";
-      lines2.push(`- ${authorName}: ${truncate(text5, 220)}`);
-      if (cleanText(record3.linkedinUrl)) lines2.push(`  URL: ${cleanText(record3.linkedinUrl)}`);
+      lines.push(`- ${authorName}: ${truncate(text5, 220)}`);
+      if (cleanText(record3.linkedinUrl)) lines.push(`  URL: ${cleanText(record3.linkedinUrl)}`);
     }
   }
   if (moreArticles.length > 0) {
-    lines2.push("");
-    lines2.push("Related Articles:");
+    lines.push("");
+    lines.push("Related Articles:");
     for (const item of moreArticles) {
       const record3 = asRecord(item);
       if (!record3) continue;
       const title = cleanText(record3.title) || "Untitled article";
-      lines2.push(`- ${truncate(title, 220)}`);
-      if (cleanText(record3.datePublished)) lines2.push(`  Published: ${cleanText(record3.datePublished)}`);
-      if (cleanText(record3.link)) lines2.push(`  URL: ${cleanText(record3.link)}`);
+      lines.push(`- ${truncate(title, 220)}`);
+      if (cleanText(record3.datePublished)) lines.push(`  Published: ${cleanText(record3.datePublished)}`);
+      if (cleanText(record3.link)) lines.push(`  URL: ${cleanText(record3.link)}`);
       const reactions = asNumber(record3.reactionCount);
       const commentsCount = asNumber(record3.commentCount);
       if (reactions !== null || commentsCount !== null) {
-        lines2.push(
+        lines.push(
           `  Engagement: ${reactions !== null ? `${fmtNum(reactions)} reactions` : "reactions unknown"} | ${commentsCount !== null ? `${fmtNum(commentsCount)} comments` : "comments unknown"}`
         );
       }
     }
   }
-  return lines2.join("\n");
+  return lines.join("\n");
 }
 var TELEGRAM_HANDLE_PATTERN = /^[A-Za-z][A-Za-z0-9_]{3,}$/;
 function normalizeTelegramHandle(value) {
@@ -43221,31 +43226,31 @@ function normalizeTelegramPostUrl(value) {
   return { url: `https://t.me/${handle}/${postId2}` };
 }
 function telegramChannelLines(channel) {
-  const lines2 = [];
+  const lines = [];
   const name2 = cleanText(channel.name) ?? "(name unavailable)";
   const handle = asString(channel.handle);
-  lines2.push(`Channel: ${name2}${handle ? ` (@${handle})` : ""}${channel.is_verified === true ? " \u2014 verified" : ""}`);
-  if (asString(channel.url)) lines2.push(`URL: ${asString(channel.url)}`);
+  lines.push(`Channel: ${name2}${handle ? ` (@${handle})` : ""}${channel.is_verified === true ? " \u2014 verified" : ""}`);
+  if (asString(channel.url)) lines.push(`URL: ${asString(channel.url)}`);
   const subscribers = asNumber(channel.subscriber_count);
   const members = asNumber(channel.member_count);
   const audience = [];
   if (subscribers !== null) audience.push(`${fmtNum(subscribers)} subscribers${asString(channel.subscriber_count_text) ? ` (${asString(channel.subscriber_count_text)})` : ""}`);
   if (members !== null) audience.push(`${fmtNum(members)} members${asString(channel.member_count_text) ? ` (${asString(channel.member_count_text)})` : ""}`);
-  lines2.push(`Audience: ${audience.length ? audience.join(" | ") : "not exposed by the public preview"}`);
+  lines.push(`Audience: ${audience.length ? audience.join(" | ") : "not exposed by the public preview"}`);
   const counters = ["photo_count", "video_count", "file_count", "link_count"].map((key) => {
     const count3 = asNumber(channel[key]);
     return count3 === null ? null : `${key.replace("_count", "s")}: ${fmtNum(count3)}`;
   }).filter((value) => value !== null);
-  if (counters.length) lines2.push(`Public media counters: ${counters.join(" | ")}`);
-  if (cleanText(channel.description)) lines2.push(`Description: ${truncate(cleanText(channel.description), 500)}`);
-  return lines2;
+  if (counters.length) lines.push(`Public media counters: ${counters.join(" | ")}`);
+  if (cleanText(channel.description)) lines.push(`Description: ${truncate(cleanText(channel.description), 500)}`);
+  return lines;
 }
 function telegramPostLines(post2, index) {
-  const lines2 = [];
+  const lines = [];
   const id = asString(post2.id) ?? (asNumber(post2.id) !== null ? String(post2.id) : null);
   const prefix = index === null ? "" : `${index + 1}. `;
   const author = cleanText(post2.author_name);
-  lines2.push(`${prefix}${author ? `${author} \u2014 ` : ""}${truncate(cleanText(post2.text), 300) || "(no text; media-only or unavailable in the preview)"}`);
+  lines.push(`${prefix}${author ? `${author} \u2014 ` : ""}${truncate(cleanText(post2.text), 300) || "(no text; media-only or unavailable in the preview)"}`);
   const views = asNumber(post2.view_count);
   const reactionTotal = asNumber(post2.reaction_count);
   const reactions = asArray(post2.reactions).map((entry) => {
@@ -43255,30 +43260,30 @@ function telegramPostLines(post2, index) {
     const label = asString(reaction?.emoji) ?? (asString(reaction?.emoji_id) ? `custom emoji ${asString(reaction?.emoji_id)}` : "reaction");
     return `${label} ${fmtNum(count3)}`;
   }).filter((value) => value !== null).slice(0, 6);
-  lines2.push(
+  lines.push(
     `${index === null ? "" : "   "}Published: ${asString(post2.published_at) ?? "unknown"} | Views: ${views !== null ? fmtNum(views) : "not exposed"} | Reactions: ${reactionTotal !== null ? fmtNum(reactionTotal) : "not exposed"}${reactions.length ? ` (${reactions.join(", ")})` : ""}`
   );
   const indent = index === null ? "" : "   ";
-  if (asString(post2.url)) lines2.push(`${indent}URL: ${asString(post2.url)}${id ? ` (post ${id})` : ""}`);
+  if (asString(post2.url)) lines.push(`${indent}URL: ${asString(post2.url)}${id ? ` (post ${id})` : ""}`);
   const forwarded = asRecord(post2.forwarded_from);
   if (forwarded) {
     const from = cleanText(forwarded.name) ?? cleanText(forwarded.author_name) ?? asString(forwarded.handle) ?? asString(forwarded.url);
-    if (from) lines2.push(`${indent}Forwarded from: ${from}${asString(forwarded.url) && asString(forwarded.url) !== from ? ` (${asString(forwarded.url)})` : ""}`);
+    if (from) lines.push(`${indent}Forwarded from: ${from}${asString(forwarded.url) && asString(forwarded.url) !== from ? ` (${asString(forwarded.url)})` : ""}`);
   } else if (typeof post2.forwarded_from === "string" && post2.forwarded_from.trim()) {
-    lines2.push(`${indent}Forwarded from: ${post2.forwarded_from.trim()}`);
+    lines.push(`${indent}Forwarded from: ${post2.forwarded_from.trim()}`);
   }
   const media = asArray(post2.media);
   if (media.length) {
     const kinds = media.map((entry) => asString(asRecord(entry)?.type) ?? "media");
-    lines2.push(`${indent}Media: ${media.length} item${media.length === 1 ? "" : "s"} (${kinds.join(", ")}); previews only, downloadable URLs may be absent`);
+    lines.push(`${indent}Media: ${media.length} item${media.length === 1 ? "" : "s"} (${kinds.join(", ")}); previews only, downloadable URLs may be absent`);
   }
   const preview = asRecord(post2.link_preview);
   if (preview) {
     const title = cleanText(preview.title) ?? cleanText(preview.site_name);
     const link2 = asString(preview.url);
-    if (title || link2) lines2.push(`${indent}Link preview: ${title ?? ""}${title && link2 ? " \u2014 " : ""}${link2 ?? ""}`);
+    if (title || link2) lines.push(`${indent}Link preview: ${title ?? ""}${title && link2 ? " \u2014 " : ""}${link2 ?? ""}`);
   }
-  return lines2;
+  return lines;
 }
 var telegram = creditMetered({
   description: "Read public Telegram channels and groups via ScrapeCreators using Telegram's public web preview (no Telegram account or login). kind='channel': name, description, verification, subscriber/member counts, media counters. kind='posts': one page of public posts (text, date, views, reactions when exposed, forwards, media previews, link previews) with a cursor for older pages. kind='post': one public post by URL. Private and invite-only channels, groups, and posts are not supported. Requires SCRAPECREATORS_API_KEY; 1 credit per request, cache hits free with cache_max_age.",
@@ -43303,9 +43308,9 @@ var telegram = creditMetered({
         "ScrapeCreators Telegram post"
       );
       if (!response2.ok) return failText(response2);
-      const lines3 = [`Telegram post: ${normalized2.url}`, "Source: Telegram public post widget; fields Telegram does not expose are reported as such.", provenanceLine(response2.payload), "", ...telegramPostLines(response2.payload, null)];
+      const lines2 = [`Telegram post: ${normalized2.url}`, "Source: Telegram public post widget; fields Telegram does not expose are reported as such.", provenanceLine(response2.payload), "", ...telegramPostLines(response2.payload, null)];
       return {
-        text: lines3.join("\n"),
+        text: lines2.join("\n"),
         details: {
           provider: "scrapecreators",
           kind,
@@ -43332,9 +43337,9 @@ var telegram = creditMetered({
         "ScrapeCreators Telegram channel"
       );
       if (!response2.ok) return failText(response2);
-      const lines3 = [`Telegram channel lookup: @${handle}`, "Source: Telegram public web preview; no logged-in account.", provenanceLine(response2.payload), "", ...telegramChannelLines(response2.payload)];
+      const lines2 = [`Telegram channel lookup: @${handle}`, "Source: Telegram public web preview; no logged-in account.", provenanceLine(response2.payload), "", ...telegramChannelLines(response2.payload)];
       return {
-        text: lines3.join("\n"),
+        text: lines2.join("\n"),
         details: {
           provider: "scrapecreators",
           kind,
@@ -43370,7 +43375,7 @@ var telegram = creditMetered({
     const nextCursor = asString(response.payload.cursor) ?? (asNumber(response.payload.cursor) !== null ? String(response.payload.cursor) : null);
     const hasMore = typeof response.payload.has_more === "boolean" ? response.payload.has_more : null;
     const channel = asRecord(response.payload.channel);
-    const lines2 = [
+    const lines = [
       `Telegram channel posts: @${handle}${cursor ? ` (page before cursor ${cursor})` : " (latest page)"}`,
       "Source: Telegram public web preview; one page per request; reactions and media URLs are absent when Telegram does not expose them.",
       `Order: newest first by published_at within this page (the provider delivers the page oldest-first)${undated ? `; ${undated} post${undated === 1 ? "" : "s"} without a parseable date listed last, unranked` : ""}.`,
@@ -43378,11 +43383,11 @@ var telegram = creditMetered({
       `Posts: ${shown2.length} shown of ${posts.length} returned on this page`,
       hasMore === false ? "Older posts: provider reports this is the terminal page" : nextCursor ? `Older posts: pass cursor="${nextCursor}"${hasMore === null ? " (has_more not reported)" : ""}` : "Older posts: no cursor returned and has_more not reported; continuation unavailable"
     ];
-    if (channel) lines2.push("", ...telegramChannelLines(channel));
-    if (shown2.length === 0) lines2.push("", "The provider returned an empty post list for this page.");
-    for (const [index, post2] of shown2.entries()) lines2.push("", ...telegramPostLines(post2, index));
+    if (channel) lines.push("", ...telegramChannelLines(channel));
+    if (shown2.length === 0) lines.push("", "The provider returned an empty post list for this page.");
+    for (const [index, post2] of shown2.entries()) lines.push("", ...telegramPostLines(post2, index));
     return {
-      text: lines2.join("\n"),
+      text: lines.join("\n"),
       details: {
         provider: "scrapecreators",
         kind,
@@ -43489,28 +43494,28 @@ function replyCursor(record3) {
   return more?.has_more === true ? asString(more.cursor) : null;
 }
 function formatThread(thread, index) {
-  const lines2 = [];
-  lines2.push(`${index + 1}. **${thread.id}** ${thread.subreddit ? `r/${thread.subreddit}` : "(subreddit unknown)"} \u2014 ${thread.title}${thread.stickied ? " [stickied]" : ""}${thread.nsfw ? " [NSFW]" : ""}`);
-  lines2.push(
+  const lines = [];
+  lines.push(`${index + 1}. **${thread.id}** ${thread.subreddit ? `r/${thread.subreddit}` : "(subreddit unknown)"} \u2014 ${thread.title}${thread.stickied ? " [stickied]" : ""}${thread.nsfw ? " [NSFW]" : ""}`);
+  lines.push(
     `   Score: ${fmtMetric(thread.score)} | Comments: ${fmtMetric(thread.numComments)} | Author: ${thread.author ? `u/${thread.author}` : "not returned"} | Date: ${thread.date ?? "unknown"}${thread.upvoteRatio !== null ? ` | Upvote ratio: ${thread.upvoteRatio}` : ""}${thread.flair ? ` | Flair: ${thread.flair}` : ""}`
   );
-  if (thread.url) lines2.push(`   URL: ${thread.url}`);
-  if (thread.selftext) lines2.push(`   Preview: ${truncate(thread.selftext, 200)}`);
+  if (thread.url) lines.push(`   URL: ${thread.url}`);
+  if (thread.selftext) lines.push(`   Preview: ${truncate(thread.selftext, 200)}`);
   if (thread.comments.length) {
-    lines2.push("   Top comments:");
-    lines2.push(...thread.comments);
+    lines.push("   Top comments:");
+    lines.push(...thread.comments);
   } else if (thread.commentNote) {
-    lines2.push(`   Comments: ${thread.commentNote}`);
+    lines.push(`   Comments: ${thread.commentNote}`);
   }
-  return lines2.join("\n");
+  return lines.join("\n");
 }
 function formatCommentHit(hit, index) {
-  const lines2 = [];
-  lines2.push(`${index + 1}. ${hit.author ? `u/${hit.author}` : "(author not returned)"}${hit.subreddit ? ` in r/${hit.subreddit}` : ""} \u2014 ${truncate(hit.body, 300)}`);
-  lines2.push(`   Score: ${fmtMetric(hit.score)} | Date: ${hit.date ?? "unknown"}${hit.postTitle ? ` | Thread: ${truncate(hit.postTitle, 120)}` : ""}`);
-  if (hit.url) lines2.push(`   URL: ${hit.url}`);
-  else if (hit.postUrl) lines2.push(`   Thread URL: ${hit.postUrl}`);
-  return lines2.join("\n");
+  const lines = [];
+  lines.push(`${index + 1}. ${hit.author ? `u/${hit.author}` : "(author not returned)"}${hit.subreddit ? ` in r/${hit.subreddit}` : ""} \u2014 ${truncate(hit.body, 300)}`);
+  lines.push(`   Score: ${fmtMetric(hit.score)} | Date: ${hit.date ?? "unknown"}${hit.postTitle ? ` | Thread: ${truncate(hit.postTitle, 120)}` : ""}`);
+  if (hit.url) lines.push(`   URL: ${hit.url}`);
+  else if (hit.postUrl) lines.push(`   Thread URL: ${hit.postUrl}`);
+  return lines.join("\n");
 }
 function normalizeRedditPostUrl(value) {
   let parsed;
@@ -43550,17 +43555,17 @@ async function postComments(postUrl, cursor, limit2, headers, ctx) {
   ];
   if (thread?.selftext) header.push(`Post text: ${truncate(thread.selftext, 400)}`);
   const body = shown2.map((record3, index) => {
-    const lines2 = [commentLine(record3, `${index + 1}. `)];
+    const lines = [commentLine(record3, `${index + 1}. `)];
     const date6 = isoDate(record3.created_at_iso) ?? isoDate(asNumber(record3.created_utc));
     const url2 = asString(record3.url) ?? (asString(record3.permalink) ? redditUrl(asString(record3.permalink), null) : null);
-    lines2.push(`   Date: ${date6 ?? "unknown"}${url2 ? ` | URL: ${url2}` : ""}`);
+    lines.push(`   Date: ${date6 ?? "unknown"}${url2 ? ` | URL: ${url2}` : ""}`);
     const replies = asArray(asRecord(record3.replies)?.items);
     const nestedQuotable = partitionComments(replies).quotable.slice(0, 2);
-    for (const reply2 of nestedQuotable) lines2.push(commentLine(reply2, "     \u21B3 "));
-    if (replies.length > nestedQuotable.length) lines2.push(`     (${replies.length} direct repl${replies.length === 1 ? "y" : "ies"} returned; ${nestedQuotable.length} shown)`);
+    for (const reply2 of nestedQuotable) lines.push(commentLine(reply2, "     \u21B3 "));
+    if (replies.length > nestedQuotable.length) lines.push(`     (${replies.length} direct repl${replies.length === 1 ? "y" : "ies"} returned; ${nestedQuotable.length} shown)`);
     const token2 = replyCursor(record3);
-    if (token2) lines2.push(`     Replies cursor: "${token2}"`);
-    return lines2.join("\n");
+    if (token2) lines.push(`     Replies cursor: "${token2}"`);
+    return lines.join("\n");
   });
   if (shown2.length === 0) {
     body.push(
@@ -44168,9 +44173,9 @@ function formatCommentHighlight(comment, index) {
     comment.subreddit ? `r/${comment.subreddit.replace(/^r\//, "")}` : null,
     comment.score !== null ? `${comment.score} pts` : null
   ].filter(Boolean);
-  const lines2 = [`${index}. ${parts.length ? `${parts.join(" | ")} \u2014 ` : ""}"${comment.text}"`];
-  if (comment.permalink) lines2.push(`   URL: ${comment.permalink.startsWith("http") ? comment.permalink : `https://reddit.com${comment.permalink}`}`);
-  return lines2.join("\n");
+  const lines = [`${index}. ${parts.length ? `${parts.join(" | ")} \u2014 ` : ""}"${comment.text}"`];
+  if (comment.permalink) lines.push(`   URL: ${comment.permalink.startsWith("http") ? comment.permalink : `https://reddit.com${comment.permalink}`}`);
+  return lines.join("\n");
 }
 function formatCommunitySignal(community2, index) {
   const parts = [
@@ -44178,11 +44183,11 @@ function formatCommunitySignal(community2, index) {
     community2.subscribers !== null ? `${community2.subscribers} subscribers` : null
   ].filter(Boolean);
   const name2 = community2.name ? `r/${community2.name.replace(/^r\//, "")}` : "unknown subreddit";
-  const lines2 = [`${index}. **${name2}**${parts.length ? ` \u2014 ${parts.join(" | ")}` : ""}`];
-  if (community2.title) lines2.push(`   Title: ${community2.title}`);
-  if (community2.description) lines2.push(`   Description: ${community2.description}`);
-  if (community2.url) lines2.push(`   URL: ${community2.url.startsWith("http") ? community2.url : `https://reddit.com${community2.url.startsWith("/") ? community2.url : `/${community2.url}`}`}`);
-  return lines2.join("\n");
+  const lines = [`${index}. **${name2}**${parts.length ? ` \u2014 ${parts.join(" | ")}` : ""}`];
+  if (community2.title) lines.push(`   Title: ${community2.title}`);
+  if (community2.description) lines.push(`   Description: ${community2.description}`);
+  if (community2.url) lines.push(`   URL: ${community2.url.startsWith("http") ? community2.url : `https://reddit.com${community2.url.startsWith("/") ? community2.url : `/${community2.url}`}`}`);
+  return lines.join("\n");
 }
 function formatQuerySignal(signal, index) {
   const parts = [signal.kind ? `kind: ${signal.kind}` : null, signal.score !== null ? `score/count: ${signal.score}` : null].filter(Boolean);
@@ -44229,12 +44234,12 @@ function formatCandidate(candidate, index) {
     candidate.score !== null ? `${candidate.score} pts` : null,
     candidate.comments !== null ? `${candidate.comments} comments` : null
   ].filter(Boolean);
-  const lines2 = [`${index}. **${candidate.title || candidate.id || "Untitled item"}**${parts.length ? ` \u2014 ${parts.join(" | ")}` : ""}`];
-  if (candidate.id) lines2.push(`   ID: ${candidate.id}`);
-  if (candidate.url) lines2.push(`   URL: ${candidate.url.startsWith("http") ? candidate.url : `https://reddit.com${candidate.url}`}`);
-  if (candidate.sourceUrl) lines2.push(`   Linked source: ${candidate.sourceUrl}`);
-  if (candidate.snippet && candidate.snippet !== candidate.title) lines2.push(`   Snippet: ${candidate.snippet}`);
-  return lines2.join("\n");
+  const lines = [`${index}. **${candidate.title || candidate.id || "Untitled item"}**${parts.length ? ` \u2014 ${parts.join(" | ")}` : ""}`];
+  if (candidate.id) lines.push(`   ID: ${candidate.id}`);
+  if (candidate.url) lines.push(`   URL: ${candidate.url.startsWith("http") ? candidate.url : `https://reddit.com${candidate.url}`}`);
+  if (candidate.sourceUrl) lines.push(`   Linked source: ${candidate.sourceUrl}`);
+  if (candidate.snippet && candidate.snippet !== candidate.title) lines.push(`   Snippet: ${candidate.snippet}`);
+  return lines.join("\n");
 }
 async function tikhubGet(endpoint, params, ctx) {
   const url2 = new URL(endpoint, tikhubBaseUrl());
@@ -44588,15 +44593,15 @@ function formatOutput(args, calls) {
   const postIds = Array.from(new Set(calls.flatMap((call) => collectStringsByKey(call.data, /(^id$|name|post.*id|thing_id)/i, /^t3_[A-Za-z0-9_]+$/)))).slice(0, 20);
   const subredditIds = Array.from(new Set(calls.flatMap((call) => collectStringsByKey(call.data, /(^id$|name|subreddit.*id)/i, /^t5_[A-Za-z0-9_]+$/)))).slice(0, 12);
   const replyCursors = extractReplyCursors(calls, 10);
-  const lines2 = [];
-  if (successCount === 0) lines2.push("ERROR: All TikHub Reddit endpoint calls failed; see per-call diagnostics below.", "");
-  lines2.push(`# TikHub Reddit ${args.operation}`);
-  lines2.push("");
-  lines2.push(`Calls: ${successCount}/${calls.length} succeeded`);
-  lines2.push(`Useful records: ${classified.reduce((total2, call) => total2 + call.usefulRecords, 0)} extracted (${thin.length} thin successful calls)`);
-  lines2.push(`TikHub base: ${tikhubBaseUrl()}`);
-  lines2.push(`Display cap: ${maxItems} per evidence section; raw excerpts are truncated, not a complete dataset.`);
-  lines2.push("");
+  const lines = [];
+  if (successCount === 0) lines.push("ERROR: All TikHub Reddit endpoint calls failed; see per-call diagnostics below.", "");
+  lines.push(`# TikHub Reddit ${args.operation}`);
+  lines.push("");
+  lines.push(`Calls: ${successCount}/${calls.length} succeeded`);
+  lines.push(`Useful records: ${classified.reduce((total2, call) => total2 + call.usefulRecords, 0)} extracted (${thin.length} thin successful calls)`);
+  lines.push(`TikHub base: ${tikhubBaseUrl()}`);
+  lines.push(`Display cap: ${maxItems} per evidence section; raw excerpts are truncated, not a complete dataset.`);
+  lines.push("");
   const notes = calls.flatMap((call) => (call.notes ?? []).map((note) => `${call.label}: ${note}`));
   if (args.timeRange !== void 0 && !calls.some((call) => ["time_range", "time", "range"].some((key) => call.params[key] !== void 0))) notes.push(`Unsupported timeRange for ${args.operation}/${args.feed ?? ""}; not applied.`);
   if (args.sort !== void 0 && !calls.some((call) => call.params.sort !== void 0 || call.params.sort_type !== void 0)) notes.push(`Unsupported sort for ${args.operation}/${args.feed ?? ""}; not applied.`);
@@ -44620,70 +44625,70 @@ function formatOutput(args, calls) {
   }
   if (args.operation === "thread_intelligence" && (args.maxReplyCursors ?? 0) > 5) notes.push("thread_intelligence caps maxReplyCursors at 5 per post.");
   if (args.operation === "discovery_bundle") notes.push("Bundle filters/cursor apply to post search; comment/community searches and contextual feeds have separate coverage.");
-  if (notes.length) lines2.push("## Filter / Coverage Notes", ...notes.map((note) => `- ${note}`), "");
-  lines2.push("## Endpoint Calls");
-  lines2.push("| Label | Endpoint | Status | Key Params |");
-  lines2.push("|---|---|---|---|");
+  if (notes.length) lines.push("## Filter / Coverage Notes", ...notes.map((note) => `- ${note}`), "");
+  lines.push("## Endpoint Calls");
+  lines.push("| Label | Endpoint | Status | Key Params |");
+  lines.push("|---|---|---|---|");
   for (const call of calls) {
     const params = Object.entries(call.params).filter(([, value]) => value !== void 0 && value !== null && value !== "").map(([key, value]) => `${key}=${Array.isArray(value) ? value.join(",") : String(value)}`).join("; ");
-    lines2.push(`| ${call.label} | \`${call.endpoint}\` | ${call.error ? "failed" : "ok"} | ${params.replace(/\|/g, "\\|")} |`);
+    lines.push(`| ${call.label} | \`${call.endpoint}\` | ${call.error ? "failed" : "ok"} | ${params.replace(/\|/g, "\\|")} |`);
   }
-  lines2.push("");
+  lines.push("");
   if (failed2.length > 0) {
-    lines2.push("## Call Failures");
+    lines.push("## Call Failures");
     for (const call of failed2) {
-      lines2.push(`- ${call.label}: ${call.error}`);
+      lines.push(`- ${call.label}: ${call.error}`);
     }
-    lines2.push("");
+    lines.push("");
   }
   if (thin.length > 0) {
-    lines2.push("## Thin Successful Calls");
+    lines.push("## Thin Successful Calls");
     for (const call of thin) {
-      lines2.push(`- ${call.label}: request succeeded but no query/community/post/comment records were confidently extracted.`);
+      lines.push(`- ${call.label}: request succeeded but no query/community/post/comment records were confidently extracted.`);
     }
-    lines2.push("");
+    lines.push("");
   }
   if (querySignals.length > 0) {
-    lines2.push("## Query Suggestions");
-    querySignals.forEach((signal, index) => lines2.push(formatQuerySignal(signal, index + 1)));
-    lines2.push("");
+    lines.push("## Query Suggestions");
+    querySignals.forEach((signal, index) => lines.push(formatQuerySignal(signal, index + 1)));
+    lines.push("");
   }
   if (communities.length > 0) {
-    lines2.push("## Candidate Communities");
-    communities.forEach((community2, index) => lines2.push(formatCommunitySignal(community2, index + 1)));
-    lines2.push("");
+    lines.push("## Candidate Communities");
+    communities.forEach((community2, index) => lines.push(formatCommunitySignal(community2, index + 1)));
+    lines.push("");
   }
   if (candidates.length > 0) {
-    lines2.push("## Candidate Posts / Items");
-    candidates.forEach((candidate, index) => lines2.push(formatCandidate(candidate, index + 1)));
-    lines2.push("");
+    lines.push("## Candidate Posts / Items");
+    candidates.forEach((candidate, index) => lines.push(formatCandidate(candidate, index + 1)));
+    lines.push("");
   }
   if (commentHighlights.length > 0) {
-    lines2.push("## Comment Highlights");
-    commentHighlights.forEach((comment, index) => lines2.push(formatCommentHighlight(comment, index + 1)));
-    lines2.push("");
+    lines.push("## Comment Highlights");
+    commentHighlights.forEach((comment, index) => lines.push(formatCommentHighlight(comment, index + 1)));
+    lines.push("");
   }
-  lines2.push("## Follow-Up Handles");
+  lines.push("## Follow-Up Handles");
   const followUpPostIds = Array.from(/* @__PURE__ */ new Set([...postIds, ...candidates.flatMap((candidate) => candidate.id?.startsWith("t3_") ? [candidate.id] : [])]));
-  lines2.push(`- Post IDs: ${followUpPostIds.length ? followUpPostIds.map((id) => `\`${id}\``).join(", ") : "none surfaced"}`);
-  lines2.push(`- Subreddit IDs: ${subredditIds.length ? subredditIds.map((id) => `\`${id}\``).join(", ") : "none surfaced"}`);
-  lines2.push(`- Reply cursors: ${replyCursors.length ? replyCursors.slice(0, 5).map((cursor) => `\`${cursor}\``).join(", ") : "none surfaced"}`);
+  lines.push(`- Post IDs: ${followUpPostIds.length ? followUpPostIds.map((id) => `\`${id}\``).join(", ") : "none surfaced"}`);
+  lines.push(`- Subreddit IDs: ${subredditIds.length ? subredditIds.map((id) => `\`${id}\``).join(", ") : "none surfaced"}`);
+  lines.push(`- Reply cursors: ${replyCursors.length ? replyCursors.slice(0, 5).map((cursor) => `\`${cursor}\``).join(", ") : "none surfaced"}`);
   for (const call of calls) {
     if (call.error) continue;
     const envelope = asRecord2(call.data);
     const cursors = collectStringsByKey(envelope?.data ?? call.data, /^(after|endCursor|end_cursor|next_cursor|nextCursor)$/i, /[\s\S]+/);
-    if (cursors.length) lines2.push(`- Listing pagination for ${call.label} (${call.endpoint}): ${JSON.stringify(cursors)}. Reuse only for this listing, keeping its query/filter context.`);
+    if (cursors.length) lines.push(`- Listing pagination for ${call.label} (${call.endpoint}): ${JSON.stringify(cursors)}. Reuse only for this listing, keeping its query/filter context.`);
   }
-  lines2.push("- Collapsed replies are bounded by maxReplyCursors; surfaced cursors do not prove the entire tree was completed.");
-  lines2.push("");
-  lines2.push("## Raw Response Samples");
+  lines.push("- Collapsed replies are bounded by maxReplyCursors; surfaced cursors do not prove the entire tree was completed.");
+  lines.push("");
+  lines.push("## Raw Response Samples");
   for (const call of calls.filter((item) => !item.error).slice(0, 6)) {
-    lines2.push(`### ${call.label}`);
-    lines2.push("```json");
-    lines2.push(safeJsonSnippet(call.data, 2200));
-    lines2.push("```");
+    lines.push(`### ${call.label}`);
+    lines.push("```json");
+    lines.push(safeJsonSnippet(call.data, 2200));
+    lines.push("```");
   }
-  return lines2.join("\n");
+  return lines.join("\n");
 }
 var reddit = {
   description: "Use TikHub's native Reddit API surface for advanced Reddit discovery and enrichment: discovery bundles with typeahead/search/trending/context, subreddit context cards, thread intelligence with collapsed replies, author activity context, batch post enrichment, and feed/trend discovery. Requires TIKHUB_API_KEY.",
@@ -44921,11 +44926,7 @@ Warning: ${w3}`).join("")}`,
               signal.throwIfAborted();
               mkdirSync2(transcriptDir, { recursive: true });
               const file2 = join8(transcriptDir, `${video.id}.md`);
-              try {
-                writeFileSync2(file2, content2, { encoding: "utf8", flag: "wx" });
-              } catch (e) {
-                if (e.code !== "EEXIST") throw e;
-              }
+              saveTranscript(file2, content2);
               video.transcriptFile = file2;
               video.transcriptWords = readFileSync4(file2, "utf8").split(
                 /\s+/
@@ -44965,6 +44966,15 @@ Warning: ${w3}`).join("")}`,
     }
   }
 });
+function saveTranscript(file2, content2, mode) {
+  try {
+    writeFileSync2(file2, redactText(content2, knownSecrets()), { encoding: "utf8", flag: "wx", ...mode === void 0 ? {} : { mode } });
+    return true;
+  } catch (error51) {
+    if (error51.code !== "EEXIST") throw error51;
+    return false;
+  }
+}
 function redact(text5) {
   return redactText(text5, knownSecrets()).replace(/([?&]key=)[^&\s]+/gi, "$1[redacted]");
 }
@@ -45239,7 +45249,7 @@ function formatDuration(seconds2) {
 }
 
 // src/providers/tools/youtube_transcript.ts
-import { mkdirSync as mkdirSync3, lstatSync as lstatSync2, writeFileSync as writeFileSync3 } from "node:fs";
+import { mkdirSync as mkdirSync3, lstatSync as lstatSync2 } from "node:fs";
 import { join as join9 } from "node:path";
 var transcript = creditMetered({
   description: "Fetch a timestamped YouTube transcript through ScrapeCreators and save it in the existing transcript library. Paid, explicit fallback when yt-dlp captions are unavailable. Supports requested language, original audio and provider cache. Existing transcript files are never replaced.",
@@ -45278,15 +45288,9 @@ var transcript = creditMetered({
       const directory2 = join9(loadConfig2().library, "youtube-transcripts");
       mkdirSync3(directory2, { recursive: true });
       const file2 = join9(directory2, `${id}-scrapecreators-${args.originalAudio ? "original" : language ?? "auto"}.md`);
-      const content2 = redactText([`# YouTube transcript ${id}`, `Source: https://www.youtube.com/watch?v=${id}`, "Provider: ScrapeCreators", `Language: ${body.language ?? "not reported"}`, `Requested language: ${language ?? "automatic"}; original audio only: ${args.originalAudio === true}`, `Retrieved: ${(/* @__PURE__ */ new Date()).toISOString()}`, "", "## Full Transcript", "", ...segments].join("\n\n"), knownSecrets());
-      let reused = false;
-      try {
-        writeFileSync3(file2, content2, { encoding: "utf8", flag: "wx", mode: 384 });
-      } catch (error51) {
-        if (error51.code !== "EEXIST") throw error51;
-        if (!lstatSync2(file2).isFile()) throw new Error("Existing transcript is not a regular file");
-        reused = true;
-      }
+      const content2 = [`# YouTube transcript ${id}`, `Source: https://www.youtube.com/watch?v=${id}`, "Provider: ScrapeCreators", `Language: ${body.language ?? "not reported"}`, `Requested language: ${language ?? "automatic"}; original audio only: ${args.originalAudio === true}`, `Retrieved: ${(/* @__PURE__ */ new Date()).toISOString()}`, "", "## Full Transcript", "", ...segments].join("\n\n");
+      const reused = !saveTranscript(file2, content2, 384);
+      if (reused && !lstatSync2(file2).isFile()) throw new Error("Existing transcript is not a regular file");
       return outcome("success", `Transcript: ${file2}
 ${reused ? "The existing saved transcript was kept; this request's current response is retained separately." : "Saved timestamped transcript."}
 Language returned by this request: ${body.language ?? "unknown"}
@@ -45411,18 +45415,18 @@ function formatSemanticScholarExternalIds(externalIds) {
   if (!externalIds) {
     return [];
   }
-  const lines2 = [];
+  const lines = [];
   const doiUrl = toDoiUrl(externalIds.DOI);
   if (doiUrl) {
-    lines2.push(`DOI: ${doiUrl}`);
+    lines.push(`DOI: ${doiUrl}`);
   }
   if (externalIds.ArXiv) {
-    lines2.push(`ArXiv: https://arxiv.org/abs/${externalIds.ArXiv}`);
+    lines.push(`ArXiv: https://arxiv.org/abs/${externalIds.ArXiv}`);
   }
   if (externalIds.PMID) {
-    lines2.push(`PMID: ${externalIds.PMID}`);
+    lines.push(`PMID: ${externalIds.PMID}`);
   }
-  return lines2;
+  return lines;
 }
 function sortSemanticScholarPapers(papers, sort) {
   if (sort === "relevance") {
@@ -45439,7 +45443,7 @@ function sortSemanticScholarPapers(papers, sort) {
 }
 function formatSemanticScholarPapers(papers, header) {
   const formatted = papers.map((paper) => {
-    const lines2 = [];
+    const lines = [];
     const title = paper.title?.trim() || "(untitled paper)";
     const paperId = paper.paperId?.trim() || "unknown";
     const date6 = normalizePaperDate(paper.year, paper.publicationDate);
@@ -45448,8 +45452,8 @@ function formatSemanticScholarPapers(papers, header) {
     const abstract = truncateText(paper.abstract, 320);
     const fields = formatSemanticScholarFields(paper);
     const externalIds = formatSemanticScholarExternalIds(paper.externalIds);
-    lines2.push(`**${title}**`);
-    lines2.push(
+    lines.push(`**${title}**`);
+    lines.push(
       [
         `Paper ID: ${paperId}`,
         date6 ? `Published: ${date6}` : null,
@@ -45458,33 +45462,33 @@ function formatSemanticScholarPapers(papers, header) {
       ].filter(Boolean).join(" | ")
     );
     if (authors) {
-      lines2.push(`  Authors: ${authors}`);
+      lines.push(`  Authors: ${authors}`);
     }
     if (paper.venue?.trim()) {
-      lines2.push(`  Venue: ${paper.venue.trim()}`);
+      lines.push(`  Venue: ${paper.venue.trim()}`);
     }
     if (paper.publicationTypes?.length) {
-      lines2.push(`  Type: ${paper.publicationTypes.slice(0, 3).join(", ")}`);
+      lines.push(`  Type: ${paper.publicationTypes.slice(0, 3).join(", ")}`);
     }
     if (fields) {
-      lines2.push(`  Fields: ${fields}`);
+      lines.push(`  Fields: ${fields}`);
     }
     if (tldr) {
-      lines2.push(`  TLDR: ${tldr}`);
+      lines.push(`  TLDR: ${tldr}`);
     }
     if (abstract) {
-      lines2.push(`  Abstract: ${abstract}`);
+      lines.push(`  Abstract: ${abstract}`);
     }
     for (const externalIdLine of externalIds) {
-      lines2.push(`  ${externalIdLine}`);
+      lines.push(`  ${externalIdLine}`);
     }
     if (paper.openAccessPdf?.url) {
-      lines2.push(`  Open access PDF: ${paper.openAccessPdf.url}`);
+      lines.push(`  Open access PDF: ${paper.openAccessPdf.url}`);
     }
     if (paper.url) {
-      lines2.push(`  Semantic Scholar: ${paper.url}`);
+      lines.push(`  Semantic Scholar: ${paper.url}`);
     }
-    return lines2.join("\n");
+    return lines.join("\n");
   });
   return `${header}
 
@@ -45566,7 +45570,7 @@ function formatOpenAlexOaUrl(work) {
 }
 function formatOpenAlexWorks(works, header) {
   const formatted = works.map((work) => {
-    const lines2 = [];
+    const lines = [];
     const title = work.display_name?.trim() || "(untitled work)";
     const openAlexId = stripOpenAlexIdPrefix(work.id) || "unknown";
     const authors = formatOpenAlexAuthors(work);
@@ -45575,8 +45579,8 @@ function formatOpenAlexWorks(works, header) {
     const abstract = reconstructOpenAlexAbstract(work.abstract_inverted_index);
     const oaUrl = formatOpenAlexOaUrl(work);
     const doiUrl = toDoiUrl(work.doi || work.ids?.doi);
-    lines2.push(`**${title}**`);
-    lines2.push(
+    lines.push(`**${title}**`);
+    lines.push(
       [
         `OpenAlex ID: ${openAlexId}`,
         work.publication_date ? `Published: ${work.publication_date}` : null,
@@ -45586,27 +45590,27 @@ function formatOpenAlexWorks(works, header) {
       ].filter(Boolean).join(" | ")
     );
     if (authors) {
-      lines2.push(`  Authors: ${authors}`);
+      lines.push(`  Authors: ${authors}`);
     }
     if (institutions) {
-      lines2.push(`  Institutions: ${institutions}`);
+      lines.push(`  Institutions: ${institutions}`);
     }
     if (topics) {
-      lines2.push(`  Topics: ${topics}`);
+      lines.push(`  Topics: ${topics}`);
     }
     if (abstract) {
-      lines2.push(`  Abstract: ${abstract}`);
+      lines.push(`  Abstract: ${abstract}`);
     }
     if (oaUrl) {
-      lines2.push(`  Open access: ${oaUrl}`);
+      lines.push(`  Open access: ${oaUrl}`);
     }
     if (doiUrl) {
-      lines2.push(`  DOI: ${doiUrl}`);
+      lines.push(`  DOI: ${doiUrl}`);
     }
     if (work.id) {
-      lines2.push(`  OpenAlex: ${work.id}`);
+      lines.push(`  OpenAlex: ${work.id}`);
     }
-    return lines2.join("\n");
+    return lines.join("\n");
   });
   return `${header}
 
@@ -47051,36 +47055,36 @@ function resolveProvider(requestedProvider, platform) {
   return provider;
 }
 function formatPlatformResult(result2) {
-  const lines2 = [];
-  lines2.push(`## ${platformLabel(result2.platform)}`);
-  lines2.push(`Provider: ${providerLabel(result2.provider)} | Endpoint: ${result2.endpoint}`);
-  lines2.push(
+  const lines = [];
+  lines.push(`## ${platformLabel(result2.platform)}`);
+  lines.push(`Provider: ${providerLabel(result2.provider)} | Endpoint: ${result2.endpoint}`);
+  lines.push(
     `Run evidence: HTTP ${result2.httpStatus} | Attempts ${result2.attempts} | ${result2.durationMs}ms | Normalized ${result2.items.length}${result2.requestId ? ` | Request ${result2.requestId}` : ""}`
   );
   if (result2.nextCursor) {
-    lines2.push(`Next cursor: ${typeof result2.nextCursor === "string" ? result2.nextCursor : JSON.stringify(result2.nextCursor)}`);
+    lines.push(`Next cursor: ${typeof result2.nextCursor === "string" ? result2.nextCursor : JSON.stringify(result2.nextCursor)}`);
   }
-  if (result2.availability) lines2.push(`WeChat availability: ${JSON.stringify(result2.availability)}`);
+  if (result2.availability) lines.push(`WeChat availability: ${JSON.stringify(result2.availability)}`);
   if (result2.rawCount !== null) {
-    lines2.push(`Reported result count: ${result2.rawCount}`);
+    lines.push(`Reported result count: ${result2.rawCount}`);
   }
   if (result2.notes.length > 0) {
-    lines2.push(`Notes: ${result2.notes.join("; ")}`);
+    lines.push(`Notes: ${result2.notes.join("; ")}`);
   }
-  lines2.push("");
+  lines.push("");
   if (result2.items.length === 0) {
-    lines2.push(`No normalized ${platformLabel(result2.platform)} results were extracted for this query.`);
+    lines.push(`No normalized ${platformLabel(result2.platform)} results were extracted for this query.`);
     if (result2.rawFallback) {
-      lines2.push("");
-      lines2.push("Raw data excerpt:");
-      lines2.push("```json");
-      lines2.push(result2.rawFallback);
-      lines2.push("```");
+      lines.push("");
+      lines.push("Raw data excerpt:");
+      lines.push("```json");
+      lines.push(result2.rawFallback);
+      lines.push("```");
     }
-    return lines2.join("\n");
+    return lines.join("\n");
   }
-  lines2.push(`Top normalized results: ${result2.items.length}`);
-  lines2.push("");
+  lines.push(`Top normalized results: ${result2.items.length}`);
+  lines.push("");
   for (const item of result2.items) {
     const stats = [
       item.views !== null ? `Views ${formatNumber3(item.views)}` : null,
@@ -47089,17 +47093,17 @@ function formatPlatformResult(result2) {
       item.shares !== null ? `Shares ${formatNumber3(item.shares)}` : null,
       item.saves !== null ? `Saves ${formatNumber3(item.saves)}` : null
     ].filter(Boolean);
-    lines2.push(`- **${item.title}**`);
-    if (item.id) lines2.push(`  - ID: ${item.id}`);
-    if (item.handles && Object.keys(item.handles).length) lines2.push(`  - Follow-up handles: ${JSON.stringify(item.handles)}`);
-    if (item.author) lines2.push(`  - Author: ${item.author}`);
-    if (item.publishedAt) lines2.push(`  - Published: ${item.publishedAt}`);
-    if (stats.length > 0) lines2.push(`  - Engagement: ${stats.join(" | ")}`);
-    if (item.url) lines2.push(`  - URL: ${item.url}`);
-    if (item.tags.length > 0) lines2.push(`  - Tags: ${item.tags.slice(0, 8).join(", ")}`);
-    if (item.summary) lines2.push(`  - Summary: ${item.summary}`);
+    lines.push(`- **${item.title}**`);
+    if (item.id) lines.push(`  - ID: ${item.id}`);
+    if (item.handles && Object.keys(item.handles).length) lines.push(`  - Follow-up handles: ${JSON.stringify(item.handles)}`);
+    if (item.author) lines.push(`  - Author: ${item.author}`);
+    if (item.publishedAt) lines.push(`  - Published: ${item.publishedAt}`);
+    if (stats.length > 0) lines.push(`  - Engagement: ${stats.join(" | ")}`);
+    if (item.url) lines.push(`  - URL: ${item.url}`);
+    if (item.tags.length > 0) lines.push(`  - Tags: ${item.tags.slice(0, 8).join(", ")}`);
+    if (item.summary) lines.push(`  - Summary: ${item.summary}`);
   }
-  return lines2.join("\n");
+  return lines.join("\n");
 }
 function platformLabel(platform) {
   switch (platform) {
@@ -47198,35 +47202,35 @@ var search = {
         );
       }
       const totalItems = results.reduce((sum, result2) => sum + result2.items.length, 0);
-      const lines2 = [];
-      lines2.push("# China Social Search");
-      lines2.push("");
-      lines2.push(`Query: ${args.query}`);
-      lines2.push(`Platforms: ${platforms.map(platformLabel).join(", ")}`);
-      lines2.push(`Provider mode: ${providerChoice}`);
-      lines2.push(`Normalized results: ${totalItems}`);
-      lines2.push("");
-      lines2.push(
+      const lines = [];
+      lines.push("# China Social Search");
+      lines.push("");
+      lines.push(`Query: ${args.query}`);
+      lines.push(`Platforms: ${platforms.map(platformLabel).join(", ")}`);
+      lines.push(`Provider mode: ${providerChoice}`);
+      lines.push(`Normalized results: ${totalItems}`);
+      lines.push("");
+      lines.push(
         "Provider standing below is evidence from this run, not a permanent platform-health claim. TikHub is the automatic primary; Just One API is an explicit credential-gated alternative."
       );
-      lines2.push("");
+      lines.push("");
       if (failures.length > 0) {
-        lines2.push("## Warnings");
-        lines2.push(
+        lines.push("## Warnings");
+        lines.push(
           "Some requested platforms failed in this run, so successful platforms are returned as partial results. A run failure is provider evidence, not proof that the platform itself is unavailable."
         );
         for (const failure3 of failures) {
-          lines2.push(formatPlatformFailure(failure3));
+          lines.push(formatPlatformFailure(failure3));
         }
-        lines2.push("");
+        lines.push("");
       }
       for (const result2 of results) {
-        lines2.push(formatPlatformResult(result2));
-        lines2.push("");
+        lines.push(formatPlatformResult(result2));
+        lines.push("");
       }
       return {
         status: failures.length > 0 ? "partial" : "success",
-        text: lines2.join("\n").trim(),
+        text: lines.join("\n").trim(),
         details: {
           source: "china-social",
           providerMode: providerChoice,
@@ -48175,37 +48179,37 @@ function formatShipping(offer) {
   }
   return parts.length > 0 ? parts.join(" | ") : null;
 }
-function pushSearchItemLines(lines2, result2, options) {
+function pushSearchItemLines(lines, result2, options) {
   const heading = options.showRank && result2.rank !== null ? `#${result2.rank} ` : "";
-  lines2.push(`- ${heading}**${result2.title}**`);
-  if (result2.asin) lines2.push(`  - ASIN: ${result2.asin}`);
-  if (!options.showRank && result2.position !== null) lines2.push(`  - Position: ${result2.position}`);
-  if (result2.badge) lines2.push(`  - Badge: ${result2.badge}`);
-  if (result2.price) lines2.push(`  - Current price: ${formatMoney(result2.price)}`);
+  lines.push(`- ${heading}**${result2.title}**`);
+  if (result2.asin) lines.push(`  - ASIN: ${result2.asin}`);
+  if (!options.showRank && result2.position !== null) lines.push(`  - Position: ${result2.position}`);
+  if (result2.badge) lines.push(`  - Badge: ${result2.badge}`);
+  if (result2.price) lines.push(`  - Current price: ${formatMoney(result2.price)}`);
   if (result2.priceBeforeDeal) {
-    lines2.push(
+    lines.push(
       `  - Struck-through reference price: ${formatMoney(result2.priceBeforeDeal)} | Savings vs. reference (computed locally): ${formatPercent(computedSavingsPercent(result2.price, result2.priceBeforeDeal))}`
     );
   }
-  lines2.push(`  - Rating: ${result2.rating ?? "Unavailable"} | Ratings: ${formatCount(result2.ratingsTotal)}`);
-  if (result2.reviewCountLabel) lines2.push(`  - Review count label: ${result2.reviewCountLabel}`);
-  if (result2.salesVolume) lines2.push(`  - Sales volume text: ${result2.salesVolume}`);
-  lines2.push(`  - Prime: ${boolLabel(result2.isPrime)} | Sponsored: ${boolLabel(result2.sponsored)}`);
+  lines.push(`  - Rating: ${result2.rating ?? "Unavailable"} | Ratings: ${formatCount(result2.ratingsTotal)}`);
+  if (result2.reviewCountLabel) lines.push(`  - Review count label: ${result2.reviewCountLabel}`);
+  if (result2.salesVolume) lines.push(`  - Sales volume text: ${result2.salesVolume}`);
+  lines.push(`  - Prime: ${boolLabel(result2.isPrime)} | Sponsored: ${boolLabel(result2.sponsored)}`);
   const delivery = formatDelivery(result2.delivery);
-  if (delivery) lines2.push(`  - Delivery: ${delivery}`);
-  if (result2.imageUrl) lines2.push(`  - Image: ${result2.imageUrl}`);
-  if (result2.link) lines2.push(`  - URL: ${result2.link}`);
+  if (delivery) lines.push(`  - Delivery: ${delivery}`);
+  if (result2.imageUrl) lines.push(`  - Image: ${result2.imageUrl}`);
+  if (result2.link) lines.push(`  - URL: ${result2.link}`);
 }
-function pushFilterLines(lines2, groups) {
+function pushFilterLines(lines, groups) {
   if (groups.length === 0) return;
-  lines2.push("");
-  lines2.push("## Refinement Filters (pass an `rh` value back via `refinement`)");
+  lines.push("");
+  lines.push("## Refinement Filters (pass an `rh` value back via `refinement`)");
   for (const group of groups.slice(0, 8)) {
     const options = group.options.slice(0, 6).map((option) => option.rh ? `${option.label} (rh=${option.rh})` : option.label);
-    lines2.push(`- ${group.name}: ${options.length > 0 ? options.join("; ") : "No labelled options"}`);
-    if (group.options.length > 6) lines2.push(`  - ${group.options.length - 6} more options omitted`);
+    lines.push(`- ${group.name}: ${options.length > 0 ? options.join("; ") : "No labelled options"}`);
+    if (group.options.length > 6) lines.push(`  - ${group.options.length - 6} more options omitted`);
   }
-  if (groups.length > 8) lines2.push(`- ${groups.length - 8} more filter groups omitted`);
+  if (groups.length > 8) lines.push(`- ${groups.length - 8} more filter groups omitted`);
 }
 async function searchProducts(args) {
   requirePriceOrder(args.lowPrice, args.highPrice);
@@ -48310,14 +48314,14 @@ var search2 = scrapeDoMetered({
       const relatedSearches = normalizeRelatedSearches(payload.related_searches);
       const totalResultsText = firstString3(payload.totalResults);
       const totalResultsExtracted = firstNumber3(payload.total_results_extracted);
-      const lines2 = [];
-      lines2.push("# Commerce Search");
-      lines2.push("");
-      if (query) lines2.push(`Query: ${query}`);
-      if (seller) lines2.push(`Seller catalog: ${seller}`);
-      lines2.push(`Amazon domain: ${amazonDomain}`);
-      lines2.push(`Provider: ${providerLabel2(provider === "auto" ? "scrape-do" : provider)}`);
-      lines2.push(`Page: ${page}`);
+      const lines = [];
+      lines.push("# Commerce Search");
+      lines.push("");
+      if (query) lines.push(`Query: ${query}`);
+      if (seller) lines.push(`Seller catalog: ${seller}`);
+      lines.push(`Amazon domain: ${amazonDomain}`);
+      lines.push(`Provider: ${providerLabel2(provider === "auto" ? "scrape-do" : provider)}`);
+      lines.push(`Page: ${page}`);
       const applied = [
         sort ? `sort=${sort}` : null,
         refinement ? `rh=${refinement}` : null,
@@ -48326,49 +48330,49 @@ var search2 = scrapeDoMetered({
         args.high_price !== void 0 ? `high_price=${args.high_price}` : null,
         language ? `language=${language}` : null
       ].filter((entry) => entry !== null);
-      if (applied.length > 0) lines2.push(`Requested filters: ${applied.join(", ")}`);
+      if (applied.length > 0) lines.push(`Requested filters: ${applied.join(", ")}`);
       if (totalResultsText) {
-        lines2.push(`Amazon result count text: ${totalResultsText}`);
+        lines.push(`Amazon result count text: ${totalResultsText}`);
       }
       if (totalResultsExtracted !== null) {
-        lines2.push(`Largest integer parsed from that text by the provider: ${formatCount(totalResultsExtracted)}`);
+        lines.push(`Largest integer parsed from that text by the provider: ${formatCount(totalResultsExtracted)}`);
       }
-      lines2.push(`Normalized results: ${results.length}${allResults.length > results.length ? ` (of ${allResults.length} on this page)` : ""}`);
-      lines2.push(locationNote(amazonDomain));
-      lines2.push("");
-      lines2.push(scopeNote());
-      lines2.push("");
+      lines.push(`Normalized results: ${results.length}${allResults.length > results.length ? ` (of ${allResults.length} on this page)` : ""}`);
+      lines.push(locationNote(amazonDomain));
+      lines.push("");
+      lines.push(scopeNote());
+      lines.push("");
       if (results.length === 0) {
-        lines2.push("No normalized Amazon search results were extracted for this query.");
+        lines.push("No normalized Amazon search results were extracted for this query.");
         const excerpt = safeJsonSnippet3(payload);
         if (excerpt) {
-          lines2.push("");
-          lines2.push("## Raw Response Excerpt");
-          lines2.push("```json");
-          lines2.push(excerpt);
-          lines2.push("```");
+          lines.push("");
+          lines.push("## Raw Response Excerpt");
+          lines.push("```json");
+          lines.push(excerpt);
+          lines.push("```");
         }
-        return lines2.join("\n");
+        return lines.join("\n");
       }
-      lines2.push("## Results");
+      lines.push("## Results");
       for (const result2 of results) {
-        pushSearchItemLines(lines2, result2, { showRank: false });
+        pushSearchItemLines(lines, result2, { showRank: false });
       }
-      pushFilterLines(lines2, filterGroups);
+      pushFilterLines(lines, filterGroups);
       if (categories.length > 0) {
-        lines2.push("");
-        lines2.push("## Department Picker (pass `node` back to scope a search)");
+        lines.push("");
+        lines.push("## Department Picker (pass `node` back to scope a search)");
         for (const category of categories.slice(0, 10)) {
-          lines2.push(`- ${category.name}${category.node ? ` (node=${category.node})` : ""}`);
+          lines.push(`- ${category.name}${category.node ? ` (node=${category.node})` : ""}`);
         }
-        if (categories.length > 10) lines2.push(`- ${categories.length - 10} more departments omitted`);
+        if (categories.length > 10) lines.push(`- ${categories.length - 10} more departments omitted`);
       }
       if (relatedSearches.length > 0) {
-        lines2.push("");
-        lines2.push("## Related Searches");
-        lines2.push(relatedSearches.slice(0, 10).join(" | "));
+        lines.push("");
+        lines.push("## Related Searches");
+        lines.push(relatedSearches.slice(0, 10).join(" | "));
       }
-      return lines2.join("\n");
+      return lines.join("\n");
     } catch (error51) {
       return `ERROR: Commerce search failed: ${errorMessage(error51)}`;
     }
@@ -48408,114 +48412,114 @@ var product = scrapeDoMetered({
       const product2 = normalizeScrapeDoProduct(productPayload);
       const offers = requireArray(offersPayload, "offers", "Scrape.do offer-listing").map(normalizeScrapeDoOffer).filter((item) => item !== null);
       const buyBoxOffer = offers.find((offer) => offer.isBuyBoxWinner === true) ?? null;
-      const lines2 = [];
-      lines2.push("# Commerce Product");
-      lines2.push("");
-      lines2.push(`Provider: ${providerLabel2(provider === "auto" ? "scrape-do" : provider)}`);
-      lines2.push(`Amazon domain: ${target.amazonDomain}`);
-      lines2.push(`ASIN: ${target.asin}`);
-      lines2.push(locationNote(target.amazonDomain));
-      lines2.push("");
-      lines2.push(scopeNote());
-      lines2.push("");
+      const lines = [];
+      lines.push("# Commerce Product");
+      lines.push("");
+      lines.push(`Provider: ${providerLabel2(provider === "auto" ? "scrape-do" : provider)}`);
+      lines.push(`Amazon domain: ${target.amazonDomain}`);
+      lines.push(`ASIN: ${target.asin}`);
+      lines.push(locationNote(target.amazonDomain));
+      lines.push("");
+      lines.push(scopeNote());
+      lines.push("");
       if (target.resolutionNotes.length > 0) {
-        lines2.push("## Resolution Notes");
+        lines.push("## Resolution Notes");
         for (const note of target.resolutionNotes) {
-          lines2.push(`- ${note}`);
+          lines.push(`- ${note}`);
         }
-        lines2.push("");
+        lines.push("");
       }
-      lines2.push("## Summary");
-      lines2.push(`- Title: ${product2.title}`);
-      if (product2.brand) lines2.push(`- Brand: ${product2.brand}`);
-      if (product2.asin) lines2.push(`- ASIN: ${product2.asin}`);
+      lines.push("## Summary");
+      lines.push(`- Title: ${product2.title}`);
+      if (product2.brand) lines.push(`- Brand: ${product2.brand}`);
+      if (product2.asin) lines.push(`- ASIN: ${product2.asin}`);
       if (product2.parentAsin) {
-        lines2.push(
+        lines.push(
           `- Parent ASIN: ${product2.parentAsin}${product2.asin && product2.parentAsin === product2.asin ? " (no variation family)" : " (variation family; siblings share it)"}`
         );
       }
-      if (product2.link) lines2.push(`- URL: ${product2.link}`);
-      if (product2.thumbnail) lines2.push(`- Thumbnail: ${product2.thumbnail}`);
-      lines2.push(`- Current price: ${formatMoney(product2.price)}`);
-      if (product2.listPrice) lines2.push(`- List price: ${formatMoney(product2.listPrice)}`);
-      lines2.push(`- Rating: ${product2.rating ?? "Unavailable"} | Ratings: ${formatCount(product2.ratingsTotal)}`);
-      lines2.push(`- Prime: ${boolLabel(product2.isPrime)} | Sponsored listing: ${boolLabel(product2.isSponsored)}`);
-      lines2.push(
+      if (product2.link) lines.push(`- URL: ${product2.link}`);
+      if (product2.thumbnail) lines.push(`- Thumbnail: ${product2.thumbnail}`);
+      lines.push(`- Current price: ${formatMoney(product2.price)}`);
+      if (product2.listPrice) lines.push(`- List price: ${formatMoney(product2.listPrice)}`);
+      lines.push(`- Rating: ${product2.rating ?? "Unavailable"} | Ratings: ${formatCount(product2.ratingsTotal)}`);
+      lines.push(`- Prime: ${boolLabel(product2.isPrime)} | Sponsored listing: ${boolLabel(product2.isSponsored)}`);
+      lines.push(
         `- In stock: ${product2.inStock === null ? "Unknown (page shows no stock signal)" : boolLabel(product2.inStock)}${product2.availabilityText ? ` | Availability text: ${product2.availabilityText}` : ""}`
       );
-      lines2.push(`- Amazon's Choice: ${boolLabel(product2.amazonChoice)} | #1 Best Seller badge: ${boolLabel(product2.bestSeller)}`);
-      if (product2.badges.length > 0) lines2.push(`- Badges shown: ${product2.badges.join(" | ")}`);
+      lines.push(`- Amazon's Choice: ${boolLabel(product2.amazonChoice)} | #1 Best Seller badge: ${boolLabel(product2.bestSeller)}`);
+      if (product2.badges.length > 0) lines.push(`- Badges shown: ${product2.badges.join(" | ")}`);
       if (product2.description) {
-        lines2.push("");
-        lines2.push("## Description (provider-parsed, truncated)");
-        lines2.push(product2.description);
+        lines.push("");
+        lines.push("## Description (provider-parsed, truncated)");
+        lines.push(product2.description);
       }
       if (buyBoxOffer) {
-        lines2.push("");
-        lines2.push("## Buy Box / Seller Context");
-        lines2.push(`- Seller: ${buyBoxOffer.merchantName || "Unavailable"}`);
-        if (buyBoxOffer.sellerId) lines2.push(`- Seller ID: ${buyBoxOffer.sellerId} (inspect with \`commerce_discover\` kind=seller)`);
-        if (buyBoxOffer.offerHeader) lines2.push(`- Offer header: ${buyBoxOffer.offerHeader}`);
-        if (buyBoxOffer.condition) lines2.push(`- Condition: ${buyBoxOffer.condition}`);
-        lines2.push(`- Buy Box price: ${formatMoney(buyBoxOffer.listingPrice)}`);
-        if (buyBoxOffer.listPrice) lines2.push(`- Seller list price: ${formatMoney(buyBoxOffer.listPrice)}`);
-        if (buyBoxOffer.discountPercent !== null) lines2.push(`- Provider-reported discount: ${formatPercent(buyBoxOffer.discountPercent)}`);
+        lines.push("");
+        lines.push("## Buy Box / Seller Context");
+        lines.push(`- Seller: ${buyBoxOffer.merchantName || "Unavailable"}`);
+        if (buyBoxOffer.sellerId) lines.push(`- Seller ID: ${buyBoxOffer.sellerId} (inspect with \`commerce_discover\` kind=seller)`);
+        if (buyBoxOffer.offerHeader) lines.push(`- Offer header: ${buyBoxOffer.offerHeader}`);
+        if (buyBoxOffer.condition) lines.push(`- Condition: ${buyBoxOffer.condition}`);
+        lines.push(`- Buy Box price: ${formatMoney(buyBoxOffer.listingPrice)}`);
+        if (buyBoxOffer.listPrice) lines.push(`- Seller list price: ${formatMoney(buyBoxOffer.listPrice)}`);
+        if (buyBoxOffer.discountPercent !== null) lines.push(`- Provider-reported discount: ${formatPercent(buyBoxOffer.discountPercent)}`);
         const shipping = formatShipping(buyBoxOffer);
-        if (shipping) lines2.push(`- ${shipping}`);
-        if (buyBoxOffer.shipsFrom) lines2.push(`- Ships from: ${buyBoxOffer.shipsFrom}`);
-        lines2.push(`- Fulfilled by Amazon: ${boolLabel(buyBoxOffer.isFulfilledByAmazon)}`);
-        lines2.push(`- Prime: ${boolLabel(buyBoxOffer.isPrime)}`);
-        if (buyBoxOffer.quantity !== null) lines2.push(`- Quantity shown: ${formatCount(buyBoxOffer.quantity)}`);
+        if (shipping) lines.push(`- ${shipping}`);
+        if (buyBoxOffer.shipsFrom) lines.push(`- Ships from: ${buyBoxOffer.shipsFrom}`);
+        lines.push(`- Fulfilled by Amazon: ${boolLabel(buyBoxOffer.isFulfilledByAmazon)}`);
+        lines.push(`- Prime: ${boolLabel(buyBoxOffer.isPrime)}`);
+        if (buyBoxOffer.quantity !== null) lines.push(`- Quantity shown: ${formatCount(buyBoxOffer.quantity)}`);
       } else if (offers.length > 0) {
-        lines2.push("");
-        lines2.push("## Seller / Offer Context");
-        lines2.push("- No explicit Buy Box winner flag was returned, but seller offers were available.");
+        lines.push("");
+        lines.push("## Seller / Offer Context");
+        lines.push("- No explicit Buy Box winner flag was returned, but seller offers were available.");
       }
       if (offers.length > 0) {
-        lines2.push("");
-        lines2.push(`## Additional Offers (${Math.min(offers.length, 3)} of ${offers.length} shown)`);
+        lines.push("");
+        lines.push(`## Additional Offers (${Math.min(offers.length, 3)} of ${offers.length} shown)`);
         for (const offer of offers.slice(0, 3)) {
-          lines2.push(`- **${offer.merchantName || offer.offerHeader || "Seller offer"}**`);
-          if (offer.condition) lines2.push(`  - Condition: ${offer.condition}`);
-          lines2.push(`  - Price: ${formatMoney(offer.listingPrice)}`);
-          if (offer.discountPercent !== null) lines2.push(`  - Provider-reported discount: ${formatPercent(offer.discountPercent)}`);
-          if (offer.sellerId) lines2.push(`  - Seller ID: ${offer.sellerId}`);
+          lines.push(`- **${offer.merchantName || offer.offerHeader || "Seller offer"}**`);
+          if (offer.condition) lines.push(`  - Condition: ${offer.condition}`);
+          lines.push(`  - Price: ${formatMoney(offer.listingPrice)}`);
+          if (offer.discountPercent !== null) lines.push(`  - Provider-reported discount: ${formatPercent(offer.discountPercent)}`);
+          if (offer.sellerId) lines.push(`  - Seller ID: ${offer.sellerId}`);
           const shipping = formatShipping(offer);
-          if (shipping) lines2.push(`  - ${shipping}`);
-          if (offer.shipsFrom) lines2.push(`  - Ships from: ${offer.shipsFrom}`);
-          lines2.push(
+          if (shipping) lines.push(`  - ${shipping}`);
+          if (offer.shipsFrom) lines.push(`  - Ships from: ${offer.shipsFrom}`);
+          lines.push(
             `  - Buy Box winner: ${boolLabel(offer.isBuyBoxWinner)} | Fulfilled by Amazon: ${boolLabel(offer.isFulfilledByAmazon)} | Prime: ${boolLabel(offer.isPrime)}`
           );
         }
       }
-      lines2.push("");
-      lines2.push("## Review / Demand Signal");
-      lines2.push(`- Aggregate rating: ${product2.rating ?? "Unavailable"}`);
-      lines2.push(`- Ratings count: ${formatCount(product2.ratingsTotal)}`);
+      lines.push("");
+      lines.push("## Review / Demand Signal");
+      lines.push(`- Aggregate rating: ${product2.rating ?? "Unavailable"}`);
+      lines.push(`- Ratings count: ${formatCount(product2.ratingsTotal)}`);
       if (product2.bestSellerRankings.length > 0) {
-        lines2.push(`- Best seller rankings: ${product2.bestSellerRankings.join(" | ")}`);
+        lines.push(`- Best seller rankings: ${product2.bestSellerRankings.join(" | ")}`);
       }
       if (product2.moreBuyingChoices) {
-        lines2.push(`- ${product2.moreBuyingChoices}`);
+        lines.push(`- ${product2.moreBuyingChoices}`);
       }
-      lines2.push(
+      lines.push(
         "- Current product-page signal is aggregate-only. Use `commerce_history` for retrospective price, rank, seller-count, rating, and review-count series, and `commerce_reviews` for review text with reviewer metadata."
       );
       if (product2.shippingInfo.length > 0) {
-        lines2.push("");
-        lines2.push("## Shipping Snapshot");
+        lines.push("");
+        lines.push("## Shipping Snapshot");
         for (const entry of product2.shippingInfo) {
-          lines2.push(`- ${entry}`);
+          lines.push(`- ${entry}`);
         }
       }
       if (product2.technicalDetails.length > 0) {
-        lines2.push("");
-        lines2.push("## Technical Details");
+        lines.push("");
+        lines.push("## Technical Details");
         for (const detail2 of product2.technicalDetails) {
-          lines2.push(`- ${detail2}`);
+          lines.push(`- ${detail2}`);
         }
       }
-      return lines2.join("\n");
+      return lines.join("\n");
     } catch (error51) {
       return `ERROR: Commerce product lookup failed: ${errorMessage(error51)}`;
     }
@@ -48545,7 +48549,7 @@ var history2 = {
       const series = collectHistorySeries({ payload, selected, days });
       const usableSeries = series.filter((entry) => entry.points.length > 0);
       const costToken = firstNumber3(payload.costToken);
-      const lines2 = [
+      const lines = [
         "# Commerce Price History",
         "",
         "Provider: Nexscope",
@@ -48565,25 +48569,25 @@ var history2 = {
         const summary = summarizeHistoryPoints(entry.points);
         const label = `${entry.label}${entry.detail ? ` \u2014 ${entry.detail}` : ""}`.replace(/\|/g, "\\|");
         if (!summary) {
-          lines2.push(`| ${label} | 0 | \u2014 | \u2014 | \u2014 | \u2014 | \u2014 |`);
+          lines.push(`| ${label} | 0 | \u2014 | \u2014 | \u2014 | \u2014 | \u2014 |`);
           continue;
         }
         const value = (point) => `${historyValueLabel(entry.key, point.value, amazonDomain)} (${point.time}${point.carriedIntoWindow ? ", carry-in" : ""})`;
         const change = summary.changePercent === null ? "\u2014" : `${summary.changePercent >= 0 ? "+" : ""}${summary.changePercent.toFixed(1)}%`;
-        lines2.push(
+        lines.push(
           `| ${label} | ${entry.points.length} | ${value(summary.first)} | ${value(summary.latest)} | ${value(summary.minimum)} | ${value(summary.maximum)} | ${change} |`
         );
       }
       if (usableSeries.length === 0) {
-        lines2.push(
+        lines.push(
           "",
           "No usable observations were returned for the selected series and requested window. This can mean the ASIN is unavailable, unsupported, or not covered by the provider."
         );
-        return outcome("empty", lines2.join("\n"));
+        return outcome("empty", lines.join("\n"));
       }
       for (const entry of usableSeries) {
         const sampled = sampleHistoryPoints(entry.points, maxPoints);
-        lines2.push(
+        lines.push(
           "",
           `## ${entry.label}${entry.detail ? ` \u2014 ${entry.detail}` : ""}`,
           `Full observations: ${entry.points.length}. Displayed observations: ${sampled.length}.`,
@@ -48592,12 +48596,12 @@ var history2 = {
           "|---|---:|"
         );
         for (const point of sampled) {
-          lines2.push(
+          lines.push(
             `| ${point.time}${point.carriedIntoWindow ? " (carry-in)" : ""} | ${historyValueLabel(entry.key, point.value, amazonDomain)} |`
           );
         }
       }
-      return lines2.join("\n");
+      return lines.join("\n");
     } catch (error51) {
       return `ERROR: Commerce history lookup failed: ${errorMessage(error51)}`;
     }
@@ -48671,7 +48675,7 @@ var reviews = {
         if (review.rating === null) continue;
         perRating.set(review.rating, (perRating.get(review.rating) ?? 0) + 1);
       }
-      const lines2 = [
+      const lines = [
         "# Commerce Reviews",
         "",
         "Provider: Nexscope (amazon-reviews-list)",
@@ -48691,42 +48695,42 @@ var reviews = {
         `- Ratings count: ${formatCount(summary.ratingsCount)} | Reviews count: ${formatCount(summary.reviewsCount)}`
       ];
       if (perRating.size > 0) {
-        lines2.push("");
-        lines2.push("## Returned Per Rating");
+        lines.push("");
+        lines.push("## Returned Per Rating");
         for (const star of [...REVIEW_STAR_VALUES].reverse()) {
           const count3 = perRating.get(star) ?? 0;
-          lines2.push(`- ${star} star: ${count3}${stars.has(star) ? "" : " (not requested)"}`);
+          lines.push(`- ${star} star: ${count3}${stars.has(star) ? "" : " (not requested)"}`);
         }
       }
       if (reviewList.length === 0) {
-        lines2.push("");
-        lines2.push("No reviews were returned for the requested filters. This can mean the ASIN has no matching reviews, the marketplace is not covered, or the filters excluded every review.");
+        lines.push("");
+        lines.push("No reviews were returned for the requested filters. This can mean the ASIN has no matching reviews, the marketplace is not covered, or the filters excluded every review.");
         const excerpt = safeJsonSnippet3(payload);
         if (excerpt) {
-          lines2.push("");
-          lines2.push("## Raw Response Excerpt");
-          lines2.push("```json");
-          lines2.push(excerpt);
-          lines2.push("```");
+          lines.push("");
+          lines.push("## Raw Response Excerpt");
+          lines.push("```json");
+          lines.push(excerpt);
+          lines.push("```");
         }
-        return outcome("empty", lines2.join("\n"));
+        return outcome("empty", lines.join("\n"));
       }
-      lines2.push("");
-      lines2.push("## Reviews");
+      lines.push("");
+      lines.push("## Reviews");
       for (const review of reviewList) {
         const ratingLabel = review.rating === null ? "Rating unavailable" : `${review.rating} star`;
-        lines2.push(`- **${review.title || "(untitled)"}** \u2014 ${ratingLabel}`);
-        lines2.push(
+        lines.push(`- **${review.title || "(untitled)"}** \u2014 ${ratingLabel}`);
+        lines.push(
           `  - Date: ${review.date ?? "Unavailable"} | Reviewer: ${review.userName ?? "Unavailable"} | Verified purchase: ${boolLabel(review.verified)} | Vine: ${boolLabel(review.vine)} | Helpful votes: ${formatCount(review.helpful)}`
         );
         if (review.imageCount > 0 || review.videoCount > 0) {
-          lines2.push(`  - Media: ${review.imageCount} image(s), ${review.videoCount} video(s)`);
+          lines.push(`  - Media: ${review.imageCount} image(s), ${review.videoCount} video(s)`);
         }
-        if (review.variation) lines2.push(`  - Variation: ${review.variation}`);
-        if (review.id) lines2.push(`  - Review ID: ${review.id}`);
-        lines2.push(`  - Text: ${review.text ?? "Unavailable"}`);
+        if (review.variation) lines.push(`  - Variation: ${review.variation}`);
+        if (review.id) lines.push(`  - Review ID: ${review.id}`);
+        lines.push(`  - Text: ${review.text ?? "Unavailable"}`);
       }
-      return lines2.join("\n");
+      return lines.join("\n");
     } catch (error51) {
       return `ERROR: Commerce reviews lookup failed: ${errorMessage(error51)}`;
     }
@@ -48744,11 +48748,11 @@ function rejectInapplicableDiscoverArgs(kind, args) {
     `${inapplicable.join(", ")} ${verb} not apply to kind=${kind} and would not be sent to the provider; kind=${kind} accepts ${[...DISCOVER_COMMON_ARGS, ...accepted].join(", ")}`
   );
 }
-function pushPaginationLine(lines2, payload, page) {
+function pushPaginationLine(lines, payload, page) {
   const pagination = asRecord4(payload.pagination);
   const hasNext = firstBoolean(pagination?.has_next);
   const currentPage = firstNumber3(pagination?.current_page) ?? page;
-  lines2.push(`Page: ${currentPage} | Next page available: ${hasNext === null ? "Unknown (provider returned no pagination block)" : boolLabel(hasNext)}`);
+  lines.push(`Page: ${currentPage} | Next page available: ${hasNext === null ? "Unknown (provider returned no pagination block)" : boolLabel(hasNext)}`);
 }
 async function discoverDeals(args) {
   requirePriceOrder(args.lowPrice, args.highPrice);
@@ -48770,8 +48774,8 @@ async function discoverDeals(args) {
   const allProducts = normalizeScrapeDoSearchItems(requireArray(payload, "products", "Scrape.do deals"));
   const products = allProducts.slice(0, args.limit);
   const filterGroups = normalizeScrapeDoFilterGroups(payload.filters);
-  const lines2 = ["# Commerce Discover \u2014 Deals", "", "Provider: Scrape.do (/plugin/amazon/deals)"];
-  lines2.push(`Amazon domain: ${args.amazonDomain}`);
+  const lines = ["# Commerce Discover \u2014 Deals", "", "Provider: Scrape.do (/plugin/amazon/deals)"];
+  lines.push(`Amazon domain: ${args.amazonDomain}`);
   const applied = [
     args.node ? `node=${args.node}` : null,
     args.lowPrice !== void 0 ? `low_price=${args.lowPrice}` : null,
@@ -48779,27 +48783,27 @@ async function discoverDeals(args) {
     args.refinement ? `rh=${args.refinement}` : null,
     args.sortBy ? `sort_by=${args.sortBy}` : null
   ].filter((entry) => entry !== null);
-  lines2.push(`Scope: ${applied.length > 0 ? applied.join(", ") : "whole marketplace, Amazon default order"}`);
-  pushPaginationLine(lines2, payload, args.page);
-  lines2.push(`Products on page: ${allProducts.length} | Shown: ${products.length}`);
-  lines2.push(`Captured at: ${(/* @__PURE__ */ new Date()).toISOString()}`);
-  lines2.push(locationNote(args.amazonDomain));
-  lines2.push("");
-  lines2.push(
+  lines.push(`Scope: ${applied.length > 0 ? applied.join(", ") : "whole marketplace, Amazon default order"}`);
+  pushPaginationLine(lines, payload, args.page);
+  lines.push(`Products on page: ${allProducts.length} | Shown: ${products.length}`);
+  lines.push(`Captured at: ${(/* @__PURE__ */ new Date()).toISOString()}`);
+  lines.push(locationNote(args.amazonDomain));
+  lines.push("");
+  lines.push(
     "Deal membership turns over quickly; two requests minutes apart can differ. Amazon renders no savings percentage on deal grids, so any percentage below is computed locally from the current and struck-through prices. An empty list is a valid result when filters match nothing."
   );
-  lines2.push("");
+  lines.push("");
   if (products.length === 0) {
-    lines2.push("No deal products were returned for this scope.");
-    pushFilterLines(lines2, filterGroups);
-    return outcome("empty", lines2.join("\n"));
+    lines.push("No deal products were returned for this scope.");
+    pushFilterLines(lines, filterGroups);
+    return outcome("empty", lines.join("\n"));
   }
-  lines2.push("## Deals");
+  lines.push("## Deals");
   for (const product2 of products) {
-    pushSearchItemLines(lines2, product2, { showRank: false });
+    pushSearchItemLines(lines, product2, { showRank: false });
   }
-  pushFilterLines(lines2, filterGroups);
-  return lines2.join("\n");
+  pushFilterLines(lines, filterGroups);
+  return lines.join("\n");
 }
 async function discoverChart(args) {
   const chartType = args.kind === "new_releases" ? "new-releases" : "bestsellers";
@@ -48825,39 +48829,39 @@ async function discoverChart(args) {
   const firstPosition = (args.page - 1) * BESTSELLERS_PAGE_SIZE + 1;
   const lastPosition = args.page * BESTSELLERS_PAGE_SIZE;
   const chartLabel = args.kind === "new_releases" ? "New Releases" : "Best Sellers";
-  const lines2 = [`# Commerce Discover \u2014 ${chartLabel}`, "", "Provider: Scrape.do (/plugin/amazon/bestsellers)"];
-  lines2.push(`Amazon domain: ${args.amazonDomain}`);
-  lines2.push(`Category slug: ${firstString3(payload.category) ?? args.category}${args.node ? ` | node=${args.node}` : ""}`);
-  lines2.push(`Chart type: ${firstString3(payload.type) ?? chartType}`);
-  pushPaginationLine(lines2, payload, args.page);
-  lines2.push(`Positions covered by this page: ${firstPosition}-${lastPosition}`);
-  lines2.push(`Chart entries returned: ${formatCount(rankingCount)} | Entries with full product cards: ${formatCount(productsCount)} | Cards shown: ${Math.min(products.length, args.limit)}`);
-  lines2.push(`Captured at: ${(/* @__PURE__ */ new Date()).toISOString()}`);
-  lines2.push(locationNote(args.amazonDomain));
-  lines2.push("");
-  lines2.push(
+  const lines = [`# Commerce Discover \u2014 ${chartLabel}`, "", "Provider: Scrape.do (/plugin/amazon/bestsellers)"];
+  lines.push(`Amazon domain: ${args.amazonDomain}`);
+  lines.push(`Category slug: ${firstString3(payload.category) ?? args.category}${args.node ? ` | node=${args.node}` : ""}`);
+  lines.push(`Chart type: ${firstString3(payload.type) ?? chartType}`);
+  pushPaginationLine(lines, payload, args.page);
+  lines.push(`Positions covered by this page: ${firstPosition}-${lastPosition}`);
+  lines.push(`Chart entries returned: ${formatCount(rankingCount)} | Entries with full product cards: ${formatCount(productsCount)} | Cards shown: ${Math.min(products.length, args.limit)}`);
+  lines.push(`Captured at: ${(/* @__PURE__ */ new Date()).toISOString()}`);
+  lines.push(locationNote(args.amazonDomain));
+  lines.push("");
+  lines.push(
     "Amazon renders full product cards for only the first 30 positions of each 50-position page; the remaining positions carry rank, ASIN, and URL only. Chart membership changes hourly. Category slugs are marketplace-specific."
   );
-  lines2.push("");
+  lines.push("");
   if (ranking.length === 0 && products.length === 0) {
-    lines2.push("The provider returned an empty chart for this category and page (a successful response with no entries, not an error).");
-    return outcome("empty", lines2.join("\n"));
+    lines.push("The provider returned an empty chart for this category and page (a successful response with no entries, not an error).");
+    return outcome("empty", lines.join("\n"));
   }
   if (products.length > 0) {
-    lines2.push("## Ranked Products (full cards)");
+    lines.push("## Ranked Products (full cards)");
     for (const product2 of products.slice(0, args.limit)) {
-      pushSearchItemLines(lines2, product2, { showRank: true });
+      pushSearchItemLines(lines, product2, { showRank: true });
     }
-    if (products.length > args.limit) lines2.push(`- ${products.length - args.limit} more product cards omitted by limit`);
+    if (products.length > args.limit) lines.push(`- ${products.length - args.limit} more product cards omitted by limit`);
   }
   if (cardlessEntries.length > 0) {
-    lines2.push("");
-    lines2.push("## Remaining Chart Positions (rank and ASIN only)");
+    lines.push("");
+    lines.push("## Remaining Chart Positions (rank and ASIN only)");
     for (const entry of cardlessEntries) {
-      lines2.push(`- #${entry.rank ?? "?"} ${entry.asin ?? "ASIN unavailable"}${entry.link ? ` (${entry.link})` : ""}`);
+      lines.push(`- #${entry.rank ?? "?"} ${entry.asin ?? "ASIN unavailable"}${entry.link ? ` (${entry.link})` : ""}`);
     }
   }
-  return lines2.join("\n");
+  return lines.join("\n");
 }
 async function discoverSeller(args) {
   const payload = await scrapeDoRequest({
@@ -48874,20 +48878,20 @@ async function discoverSeller(args) {
     throw new Error("Scrape.do returned a seller response without the documented `seller_id`/`name` fields");
   }
   const profile = normalizeScrapeDoSeller(payload);
-  const lines2 = ["# Commerce Discover \u2014 Seller Profile", "", "Provider: Scrape.do (/plugin/amazon/seller)"];
-  lines2.push(`Amazon domain: ${args.amazonDomain}`);
-  lines2.push(`Seller ID: ${profile.sellerId ?? args.seller}`);
-  lines2.push("");
-  lines2.push(
+  const lines = ["# Commerce Discover \u2014 Seller Profile", "", "Provider: Scrape.do (/plugin/amazon/seller)"];
+  lines.push(`Amazon domain: ${args.amazonDomain}`);
+  lines.push(`Seller ID: ${profile.sellerId ?? args.seller}`);
+  lines.push("");
+  lines.push(
     "Seller profiles carry only the headline positive-feedback percentage; feedback and rating history are not included. EU marketplaces publish the trader-transparency block; other marketplaces often publish little beyond the display name, so every field below is optional."
   );
-  lines2.push("");
-  lines2.push("## Profile");
-  lines2.push(`- Display name: ${profile.name ?? "Unavailable"}`);
-  lines2.push(`- Positive feedback: ${profile.positiveFeedbackPercent === null ? "Not shown on seller page" : formatPercent(profile.positiveFeedbackPercent)}`);
-  if (profile.about) lines2.push(`- About (seller's own text, truncated): ${profile.about}`);
-  lines2.push("");
-  lines2.push("## Business Details");
+  lines.push("");
+  lines.push("## Profile");
+  lines.push(`- Display name: ${profile.name ?? "Unavailable"}`);
+  lines.push(`- Positive feedback: ${profile.positiveFeedbackPercent === null ? "Not shown on seller page" : formatPercent(profile.positiveFeedbackPercent)}`);
+  if (profile.about) lines.push(`- About (seller's own text, truncated): ${profile.about}`);
+  lines.push("");
+  lines.push("## Business Details");
   const details = [
     ["Business name", profile.businessName],
     ["Business type", profile.businessType],
@@ -48899,14 +48903,14 @@ async function discoverSeller(args) {
   ];
   const present2 = details.filter((entry) => entry[1] !== null);
   if (present2.length === 0 && profile.otherFields.length === 0) {
-    lines2.push("- No business details were published for this seller on this marketplace.");
+    lines.push("- No business details were published for this seller on this marketplace.");
   } else {
-    for (const [label, value] of present2) lines2.push(`- ${label}: ${value}`);
-    for (const line of profile.otherFields) lines2.push(`- ${line}`);
+    for (const [label, value] of present2) lines.push(`- ${label}: ${value}`);
+    for (const line of profile.otherFields) lines.push(`- ${line}`);
   }
-  lines2.push("");
-  lines2.push("Use `commerce_search` with `seller` set to this id to list the seller's catalog.");
-  return lines2.join("\n");
+  lines.push("");
+  lines.push("Use `commerce_search` with `seller` set to this id to list the seller's catalog.");
+  return lines.join("\n");
 }
 var discover = scrapeDoMetered({
   description: "Discover Amazon inventory beyond keyword search through Scrape.do: `deals` (discounted grid with current and struck-through prices; currently documented for amazon.com only, pages 1-20), `bestsellers` and `new_releases` (Top 100 chart for a marketplace-specific category slug, two pages of 50 with full cards for the first 30 of each), and `seller` (public seller profile: display name, positive-feedback percentage, published business details). Use commerce_product for a specific ASIN and commerce_search with `seller` for a seller's catalog.",
@@ -49216,32 +49220,32 @@ function resultDetails(response, extra) {
     ...extra
   };
 }
-function formatResult(r2, lines2) {
+function formatResult(r2, lines) {
   const indent = "  ";
-  lines2.push(`**${r2.title || "(no title)"}**`);
-  lines2.push(
+  lines.push(`**${r2.title || "(no title)"}**`);
+  lines.push(
     `${indent}URL: ${r2.url}` + (r2.publishedDate ? ` | Published: ${r2.publishedDate.split("T")[0]}` : "") + (r2.author ? ` | Author: ${r2.author}` : "")
   );
-  if (r2.summary) lines2.push(`${indent}Summary: ${r2.summary}`);
-  if (r2.entities?.length) lines2.push(`${indent}Structured entities: ${JSON.stringify(r2.entities)}`);
+  if (r2.summary) lines.push(`${indent}Summary: ${r2.summary}`);
+  if (r2.entities?.length) lines.push(`${indent}Structured entities: ${JSON.stringify(r2.entities)}`);
   if (r2.highlights && r2.highlights.length > 0) {
-    lines2.push(`${indent}Highlights:`);
-    for (const h2 of r2.highlights) lines2.push(`${indent}  > ${h2}`);
+    lines.push(`${indent}Highlights:`);
+    for (const h2 of r2.highlights) lines.push(`${indent}  > ${h2}`);
   }
   if (r2.text) {
     const preview = r2.text.slice(0, TEXT_PREVIEW_CHARACTERS).replace(/\n+/g, " ");
-    lines2.push(`${indent}Text preview (first ${Math.min(r2.text.length, TEXT_PREVIEW_CHARACTERS)} of ${r2.text.length} returned characters): ${preview}${r2.text.length > TEXT_PREVIEW_CHARACTERS ? "..." : ""}`);
+    lines.push(`${indent}Text preview (first ${Math.min(r2.text.length, TEXT_PREVIEW_CHARACTERS)} of ${r2.text.length} returned characters): ${preview}${r2.text.length > TEXT_PREVIEW_CHARACTERS ? "..." : ""}`);
   }
-  lines2.push("");
+  lines.push("");
 }
 function formatResults(header, notes, response) {
-  const lines2 = [header];
+  const lines = [header];
   const cost = costLine(response);
-  if (cost) lines2.push(`(${cost})`);
-  for (const note of notes) lines2.push(`Note: ${note}`);
-  lines2.push("");
-  for (const r2 of response.results) formatResult(r2, lines2);
-  return lines2.join("\n");
+  if (cost) lines.push(`(${cost})`);
+  for (const note of notes) lines.push(`Note: ${note}`);
+  lines.push("");
+  for (const r2 of response.results) formatResult(r2, lines);
+  return lines.join("\n");
 }
 function contentsPlan(args, textCharacters, summaryQuery) {
   if (args.snapshotAsOf !== void 0 && args.contents === false) return { error: "ERROR: snapshotAsOf requires contents." };
@@ -49368,53 +49372,53 @@ var contents = exaMetered({
     const unaccounted = requested.filter((u2) => !returned.has(u2) && !reported.has(u2));
     const sources = { cached: 0, crawled: 0 };
     for (const s of statuses) if (s.status === "success" && s.source) sources[s.source] += 1;
-    const lines2 = [];
-    lines2.push(`Content extracted for ${results.length} of ${requested.length} requested URLs`);
+    const lines = [];
+    lines.push(`Content extracted for ${results.length} of ${requested.length} requested URLs`);
     const cost = costLine(response);
-    if (cost) lines2.push(`(${cost})`);
-    if (sources.cached || sources.crawled) lines2.push(`Sources: ${sources.cached} cached, ${sources.crawled} freshly crawled`);
-    for (const note of notes) lines2.push(`Note: ${note}`);
+    if (cost) lines.push(`(${cost})`);
+    if (sources.cached || sources.crawled) lines.push(`Sources: ${sources.cached} cached, ${sources.crawled} freshly crawled`);
+    for (const note of notes) lines.push(`Note: ${note}`);
     if (failures.length > 0) {
-      lines2.push("Fetch failures (per-URL status from Exa):");
+      lines.push("Fetch failures (per-URL status from Exa):");
       for (const f2 of failures) {
         const tag = f2.error?.tag ?? "ERROR";
         const http = typeof f2.error?.httpStatusCode === "number" ? ` (HTTP ${f2.error.httpStatusCode})` : "";
-        lines2.push(redactText(`- ${f2.id} \u2014 ${tag}${http}`, knownSecrets()));
+        lines.push(redactText(`- ${f2.id} \u2014 ${tag}${http}`, knownSecrets()));
       }
     }
     if (unaccounted.length > 0) {
-      lines2.push("Not returned and no status reported by Exa:");
-      for (const u2 of unaccounted) lines2.push(`- ${u2}`);
+      lines.push("Not returned and no status reported by Exa:");
+      for (const u2 of unaccounted) lines.push(`- ${u2}`);
     }
-    lines2.push("");
+    lines.push("");
     for (const r2 of results) {
-      lines2.push(`## ${r2.title || r2.url}`);
-      lines2.push(`URL: ${r2.url}`);
-      if (r2.publishedDate) lines2.push(`Published: ${r2.publishedDate.split("T")[0]}`);
-      if (r2.author) lines2.push(`Author: ${r2.author}`);
-      lines2.push("");
-      if (r2.entities?.length) lines2.push(`Structured entities: ${JSON.stringify(r2.entities)}`, "");
+      lines.push(`## ${r2.title || r2.url}`);
+      lines.push(`URL: ${r2.url}`);
+      if (r2.publishedDate) lines.push(`Published: ${r2.publishedDate.split("T")[0]}`);
+      if (r2.author) lines.push(`Author: ${r2.author}`);
+      lines.push("");
+      if (r2.entities?.length) lines.push(`Structured entities: ${JSON.stringify(r2.entities)}`, "");
       if (r2.summary) {
-        lines2.push(`**Summary:** ${r2.summary}`);
-        lines2.push("");
+        lines.push(`**Summary:** ${r2.summary}`);
+        lines.push("");
       }
       if (r2.highlights && r2.highlights.length > 0) {
-        lines2.push("**Key passages:**");
-        for (const h2 of r2.highlights) lines2.push(`> ${h2}`);
-        lines2.push("");
+        lines.push("**Key passages:**");
+        for (const h2 of r2.highlights) lines.push(`> ${h2}`);
+        lines.push("");
       }
       if (r2.text) {
-        lines2.push(
+        lines.push(
           `**Page text (${r2.text.length} characters returned against a ${textCharacters ?? CONTENTS_TEXT_CHARACTERS}-character request; completeness not established):**`
         );
-        lines2.push(r2.text);
-        lines2.push("");
+        lines.push(r2.text);
+        lines.push("");
       }
-      lines2.push("---");
-      lines2.push("");
+      lines.push("---");
+      lines.push("");
     }
     return {
-      text: lines2.join("\n"),
+      text: lines.join("\n"),
       details: resultDetails(response, {
         requested: requested.length,
         failed: failures.map((f2) => redactText(f2.id, knownSecrets())),
@@ -49509,40 +49513,40 @@ var research = exaMetered({
     }
     const results = response.results;
     const output = response.output;
-    const lines2 = [];
-    lines2.push(`## Exa Deep Research (${RESEARCH_TYPE})`);
+    const lines = [];
+    lines.push(`## Exa Deep Research (${RESEARCH_TYPE})`);
     const cost = costLine(response);
-    if (cost) lines2.push(`(${cost})`);
-    if (note) lines2.push(`Note: ${note}`);
-    lines2.push("");
+    if (cost) lines.push(`(${cost})`);
+    if (note) lines.push(`Note: ${note}`);
+    lines.push("");
     if (output) {
-      lines2.push(...formatSynthesis(output.content));
-      lines2.push("");
-      lines2.push("### Grounding (Exa field-level citations; confidence is Exa-reported)");
+      lines.push(...formatSynthesis(output.content));
+      lines.push("");
+      lines.push("### Grounding (Exa field-level citations; confidence is Exa-reported)");
       if (output.grounding.length === 0) {
-        lines2.push("Exa returned no grounding entries for this output; treat the synthesis as unsupported.");
+        lines.push("Exa returned no grounding entries for this output; treat the synthesis as unsupported.");
       }
       for (const g2 of output.grounding) {
         const cites = g2.citations.map((c) => `${c.title || "(no title)"} <${c.url}>`).join("; ");
-        lines2.push(`- \`${g2.field}\` \u2014 confidence ${g2.confidence}: ${cites || "no citations"}`);
+        lines.push(`- \`${g2.field}\` \u2014 confidence ${g2.confidence}: ${cites || "no citations"}`);
       }
     } else {
-      lines2.push("Exa returned no synthesized output for this request; the selected pages below are the only evidence.");
+      lines.push("Exa returned no synthesized output for this request; the selected pages below are the only evidence.");
     }
-    lines2.push("");
-    lines2.push(`### Selected sources (${results.length})`);
-    lines2.push("");
-    if (results.length === 0) lines2.push("Exa selected no source pages.");
+    lines.push("");
+    lines.push(`### Selected sources (${results.length})`);
+    lines.push("");
+    if (results.length === 0) lines.push("Exa selected no source pages.");
     results.forEach((r2, index) => {
-      lines2.push(`${index + 1}. **${r2.title || "(no title)"}**`);
-      lines2.push(
+      lines.push(`${index + 1}. **${r2.title || "(no title)"}**`);
+      lines.push(
         `   URL: ${r2.url}` + (r2.publishedDate ? ` | Published: ${r2.publishedDate.split("T")[0]}` : "") + (r2.author ? ` | Author: ${r2.author}` : "")
       );
-      for (const h2 of r2.highlights ?? []) lines2.push(`   > ${h2}`);
-      lines2.push("");
+      for (const h2 of r2.highlights ?? []) lines.push(`   > ${h2}`);
+      lines.push("");
     });
     return {
-      text: lines2.join("\n"),
+      text: lines.join("\n"),
       details: resultDetails(response, {
         type: RESEARCH_TYPE,
         synthesized: output !== void 0,
@@ -49688,12 +49692,12 @@ async function makeApiRequest(endpoint, body, ctx) {
 }
 function sourceLines(source, label) {
   if (!nonempty(source.url)) throw new Error("Perplexity returned a source without a URL");
-  const lines2 = [`${label}${text2(source.title) ? ` ${source.title}` : ""}`, `URL: ${source.url}`];
-  if (text2(source.date)) lines2.push(`Published: ${source.date}`);
-  if (text2(source.last_updated)) lines2.push(`Last updated: ${source.last_updated}`);
-  if (text2(source.source)) lines2.push(`Source type: ${source.source}`);
-  if (text2(source.snippet)) lines2.push(`Snippet: ${source.snippet}`);
-  return lines2;
+  const lines = [`${label}${text2(source.title) ? ` ${source.title}` : ""}`, `URL: ${source.url}`];
+  if (text2(source.date)) lines.push(`Published: ${source.date}`);
+  if (text2(source.last_updated)) lines.push(`Last updated: ${source.last_updated}`);
+  if (text2(source.source)) lines.push(`Source type: ${source.source}`);
+  if (text2(source.snippet)) lines.push(`Snippet: ${source.snippet}`);
+  return lines;
 }
 function formatAgent(data, preset) {
   if (data.error || !["completed", "incomplete"].includes(String(data.status))) {
@@ -49744,17 +49748,17 @@ function formatAgent(data, preset) {
   for (const match of answer.matchAll(/\[(?:web:)?(\d+)\]/g)) {
     if (!sourceIds.has(Number(match[1]))) unresolved.add(match[0]);
   }
-  const lines2 = [
+  const lines = [
     ...data.status === "incomplete" ? ["ERROR: Perplexity Agent returned incomplete output; partial evidence follows."] : [],
     `Perplexity Agent preset: ${preset} | Status: ${data.status}${text2(data.model) ? ` | Model: ${data.model}` : ""}`,
     "",
     answer
   ];
-  if (sources.length) lines2.push("", "Sources (provider IDs preserved):", ...sources);
-  if (annotations.length) lines2.push("", "Provider URL annotations (not numbered by this adapter):", ...annotations);
-  if (!sources.length && !annotations.length) lines2.push("", "Grounding warning: provider returned no source records; this answer is not verified web evidence.");
-  if (unresolved.size) lines2.push("", `Grounding warning: no returned source ID resolves ${[...unresolved].join(", ")}; do not treat those markers as verified citations.`);
-  return lines2.join("\n");
+  if (sources.length) lines.push("", "Sources (provider IDs preserved):", ...sources);
+  if (annotations.length) lines.push("", "Provider URL annotations (not numbered by this adapter):", ...annotations);
+  if (!sources.length && !annotations.length) lines.push("", "Grounding warning: provider returned no source records; this answer is not verified web evidence.");
+  if (unresolved.size) lines.push("", `Grounding warning: no returned source ID resolves ${[...unresolved].join(", ")}; do not treat those markers as verified citations.`);
+  return lines.join("\n");
 }
 var agentMetered = (spec) => ({
   ...spec,
@@ -49832,12 +49836,12 @@ var search4 = {
       const data = await makeApiRequest("search", body, ctx);
       if (data.error || !Array.isArray(data.results)) throw new Error("Perplexity Search returned an error or malformed results array");
       if (!data.results.length) return outcome("empty", `No search results found for ${JSON.stringify(query)}.`);
-      const lines2 = [`Found ${data.results.length} search results for ${JSON.stringify(query)}:`, ""];
+      const lines = [`Found ${data.results.length} search results for ${JSON.stringify(query)}:`, ""];
       for (const [index, result2] of data.results.entries()) {
         if (!isRecord(result2)) throw new Error("Perplexity Search returned a malformed result");
-        lines2.push(...sourceLines(result2, `${index + 1}.`), "");
+        lines.push(...sourceLines(result2, `${index + 1}.`), "");
       }
-      return lines2.join("\n");
+      return lines.join("\n");
     } catch (error51) {
       return `ERROR: ${safeMessage(error51)}`;
     }
@@ -50583,12 +50587,12 @@ function pollLines(post2, inc) {
 function placeLines(post2, inc) {
   const geo = rec(post2.geo);
   if (!geo) return [];
-  const lines2 = [];
+  const lines = [];
   const place = inc.places.get(String(geo.place_id ?? ""));
-  if (place) lines2.push(`Place: ${str(place.full_name) ?? str(place.name) ?? place.id} (${[str(place.place_type), str(place.country)].filter(Boolean).join(", ")})`);
+  if (place) lines.push(`Place: ${str(place.full_name) ?? str(place.name) ?? place.id} (${[str(place.place_type), str(place.country)].filter(Boolean).join(", ")})`);
   const point = rec(geo.coordinates);
-  if (point && Array.isArray(point.coordinates)) lines2.push(`Point (longitude, latitude): ${point.coordinates.join(", ")}`);
-  return lines2;
+  if (point && Array.isArray(point.coordinates)) lines.push(`Point (longitude, latitude): ${point.coordinates.join(", ")}`);
+  return lines;
 }
 function linkLines(post2) {
   return recs(textEntities(post2)?.urls).filter((link2) => !str(link2.media_key)).flatMap((link2) => {
@@ -50607,11 +50611,11 @@ function articleLines(post2) {
   if (!fields.length && !title) return [];
   return ["X Article:", ...title ? [`title: ${title}`] : [], ...fields];
 }
-var quoteBlock = (lines2) => lines2.map((line) => `> ${line}`);
+var quoteBlock = (lines) => lines.map((line) => `> ${line}`);
 var REPOST_TYPES = /* @__PURE__ */ new Set(["retweeted", "reposted"]);
 var referenceVerb = (type) => type === "quoted" ? "Quoting" : REPOST_TYPES.has(String(type)) ? "Reposting" : type === "replied_to" ? "Replying to" : "Referencing";
 function referenceLines(post2, inc, full) {
-  const lines2 = [];
+  const lines = [];
   for (const reference of references(post2)) {
     const id = str(reference.id);
     if (!id) continue;
@@ -50621,13 +50625,13 @@ function referenceLines(post2, inc, full) {
     const link2 = permalink(id, handleOf(author));
     const original = target ? quoteBlock([...fullText(target).split("\n"), ...mediaLines(target, inc), ...linkLines(target)]) : [];
     if (!full || !target) {
-      lines2.push(`${verb} ${author ? `@${handleOf(author)}` : "a post"}: ${link2}${target || !full ? "" : " (not expanded by X)"}`);
-      if (verb === "Reposting") lines2.push(...original);
+      lines.push(`${verb} ${author ? `@${handleOf(author)}` : "a post"}: ${link2}${target || !full ? "" : " (not expanded by X)"}`);
+      if (verb === "Reposting") lines.push(...original);
       continue;
     }
-    lines2.push("", `${verb} ${byline(author, target.author_id)} \xB7 ${[stamp(target.created_at, id), ...metrics(target)].filter(Boolean).join(" \xB7 ")}`, link2, ...original);
+    lines.push("", `${verb} ${byline(author, target.author_id)} \xB7 ${[stamp(target.created_at, id), ...metrics(target)].filter(Boolean).join(" \xB7 ")}`, link2, ...original);
   }
-  return lines2;
+  return lines;
 }
 function editLines(post2, inc) {
   const versions = editHistory(post2);
@@ -50671,7 +50675,7 @@ function formatPost(post2, inc) {
     ...referenceLines(post2, inc, true)
   ];
 }
-var withGap = (lines2) => lines2.length ? ["", ...lines2] : [];
+var withGap = (lines) => lines.length ? ["", ...lines] : [];
 function formatListPost(post2, inc) {
   const id = String(post2.id);
   const author = authorOf(post2, inc);
@@ -50734,12 +50738,12 @@ function refusedLookup(requested, refusal, nouns, mark, note) {
 function noneReturned(requested, resources, nouns, mark) {
   const missing = missingOf(requested, /* @__PURE__ */ new Set(), resources);
   const status = lookupStatus(0, missing, resources, 0);
-  const lines2 = [
+  const lines = [
     `${status === "failed" ? "ERROR: " : ""}X API: ${count(0, ...nouns)} of ${requested.length} requested.`,
     ...missing.map((item) => `Not returned: ${mark}${item.id} \u2014 ${item.reason}`),
     ...status === "failed" && resources.length ? [`X reported: ${problemList(resources)}`] : []
   ];
-  return { status, missing, text: lines2.join("\n") };
+  return { status, missing, text: lines.join("\n") };
 }
 function withProblem(problem, text5, details) {
   if (!problem) return outcome("success", bounded2(text5), details);
@@ -50886,14 +50890,14 @@ function tikhubFacts(post2, skipZero = false) {
 }
 function formatTikhubPost(post2) {
   const media = (item) => item.media.map((entry) => `Media: ${entry.kind} ${entry.url}`);
-  const lines2 = [`X post by ${tikhubByline(post2)}`, permalink(post2.id, post2.handle), tikhubFacts(post2)];
-  if (post2.replyToId) lines2.push(`Replying to ${post2.replyToHandle ? `@${post2.replyToHandle}` : "a post"}: ${permalink(post2.replyToId, post2.replyToHandle)}`);
-  lines2.push("", post2.text || "(no text)", ...withGap(media(post2)));
+  const lines = [`X post by ${tikhubByline(post2)}`, permalink(post2.id, post2.handle), tikhubFacts(post2)];
+  if (post2.replyToId) lines.push(`Replying to ${post2.replyToHandle ? `@${post2.replyToHandle}` : "a post"}: ${permalink(post2.replyToId, post2.replyToHandle)}`);
+  lines.push("", post2.text || "(no text)", ...withGap(media(post2)));
   if (post2.quoted) {
     const quoted = post2.quoted;
-    lines2.push("", `Quoting ${tikhubByline(quoted)} \xB7 ${tikhubFacts(quoted)}`, permalink(quoted.id, quoted.handle), ...quoteBlock([...(quoted.text || "(no text)").split("\n"), ...media(quoted)]));
+    lines.push("", `Quoting ${tikhubByline(quoted)} \xB7 ${tikhubFacts(quoted)}`, permalink(quoted.id, quoted.handle), ...quoteBlock([...(quoted.text || "(no text)").split("\n"), ...media(quoted)]));
   }
-  return lines2;
+  return lines;
 }
 function formatTikhubListPost(post2) {
   const media = (item) => item.media.map((entry) => `Media: ${entry.kind} ${entry.url}`);
@@ -50949,13 +50953,13 @@ async function tikhubFallback(id, reason2, extras, ctx) {
   if (!post2 || post2.id !== id || !post2.text && !post2.media.length)
     return failed(`X post ${id} could not be read through the X API (${reason2}), and TikHub fetch_tweet_detail did not return that post with its text or media.`);
   const unserved = anyExtras(extras);
-  const lines2 = [
+  const lines = [
     `X post ${id} via TikHub: the X API could not serve it (${reason2}).`,
     ...unserved ? ["The thread, replies, quote posts and reposters need the X API; TikHub read only the post."] : [],
     "",
     ...formatTikhubPost(post2)
   ];
-  return outcome(unserved ? "partial" : "success", bounded2(lines2.join("\n")), { provider: "tikhub", via: "TikHub", requested: [id], returned: [post2.id], author: post2.handle, xApiFailure: reason2 });
+  return outcome(unserved ? "partial" : "success", bounded2(lines.join("\n")), { provider: "tikhub", via: "TikHub", requested: [id], returned: [post2.id], author: post2.handle, xApiFailure: reason2 });
 }
 function postTime(post2) {
   const at = Date.parse(String(post2.created_at ?? ""));
@@ -51063,7 +51067,7 @@ var post = {
     }
     const status = lookupStatus(ids.length - missing.length, missing, lookup.resources, failures.length);
     const head = `${status === "failed" ? "ERROR: " : ""}X API: ${count(ids.length - missing.length, "post", "posts")} of ${ids.length} requested.`;
-    const lines2 = [
+    const lines = [
       head,
       ...missing.map((item) => `Not returned: ${item.id} \u2014 ${item.reason}`),
       // X returned nothing without answering for every post; a resource problem it did name still keeps them from TikHub.
@@ -51071,7 +51075,7 @@ var post = {
       ...failures.length ? [`Some requested reads failed: ${failures.join(" | ")}`] : [],
       ...blocks.flatMap((block2) => ["", "---", "", ...block2])
     ];
-    return outcome(status, bounded2(lines2.join("\n")), {
+    return outcome(status, bounded2(lines.join("\n")), {
       provider: "x-api",
       requested: ids,
       returned: found.map((item) => String(item.id)),
@@ -51103,14 +51107,14 @@ var search_posts = {
     const details = { endpoint: archive ? "/2/tweets/search/all" : "/2/tweets/search/recent", pages: result2.pages, returned: result2.posts.length, more: result2.more, capped: result2.capped };
     if (result2.error && !result2.posts.length) return outcome("failed", `ERROR: ${result2.error}
 ${head}`, details);
-    const lines2 = [
+    const lines = [
       head,
       ...result2.error ? [`Page ${result2.pages} failed or reported a problem, so later matches may be missing: ${result2.error}`] : [],
       ...result2.capped ? [`Stopped at the ${MAX_SEARCH_PAGES}-page safety limit with ${result2.posts.length} of the ${limit2} posts asked for; X has more. Narrow the window with start_time and end_time to read further.`] : [],
       ...result2.posts.length ? ["", ZERO_NOTE, ...result2.posts.flatMap((item) => formatListPost(item, inc))] : ["", "X found no posts matching this query."]
     ];
     const status = result2.error || result2.capped ? "partial" : result2.posts.length ? "success" : "empty";
-    return outcome(status, bounded2(lines2.join("\n")), details);
+    return outcome(status, bounded2(lines.join("\n")), details);
   }
 };
 var GRANULARITIES = ["minute", "hour", "day"];
@@ -51158,7 +51162,7 @@ var count_posts = {
     if (error51 && !buckets.length) return outcome("failed", `ERROR: ${error51}
 ${head}`, details);
     const label = (bucketStart) => granularity === "day" ? bucketStart.slice(0, 10) : utc(bucketStart);
-    const lines2 = [
+    const lines = [
       head,
       ...error51 ? [`Page ${pages} failed or reported a problem, so later buckets may be missing and the total may be incomplete: ${error51}`] : [],
       ...pageToken && !error51 ? [`Stopped after ${count(pages, "page", "pages")}; X has more buckets, so the total is incomplete. Narrow the window or count per hour or day.`] : [],
@@ -51166,7 +51170,7 @@ ${head}`, details);
       ...buckets.map((bucket) => `${label(bucket.start)}: ${bucket.count.toLocaleString("en-US")}`)
     ];
     const status = error51 || pageToken ? "partial" : total2 > 0 ? "success" : "empty";
-    return outcome(status, bounded2(lines2.join("\n")), details);
+    return outcome(status, bounded2(lines.join("\n")), details);
   }
 };
 async function userTimeline(user, kind, wanted, inc, ctx, token2) {
@@ -51221,14 +51225,14 @@ var users = {
     }
     const status = handles.length ? lookupStatus(wanted.length - missing.length, missing, answer.resources, failures.length) : !found.length ? "empty" : failures.length ? "partial" : "success";
     const head = handles.length ? `${status === "failed" ? "ERROR: " : ""}X API: ${count(wanted.length - missing.length, "account", "accounts")} of ${wanted.length} requested.` : `X people search for "${query}": ${count(found.length, "account", "accounts")}.`;
-    const lines2 = [
+    const lines = [
       head,
       ...missing.map((item) => `Not returned: @${item.id} \u2014 ${item.reason}`),
       ...failures.length ? [`Some requested reads failed: ${failures.join(" | ")}`] : [],
       ...!found.length && !handles.length ? ["", "X found no accounts for this search."] : [],
       ...blocks.flatMap((block2) => ["", "---", "", ...block2])
     ];
-    return outcome(status, bounded2(lines2.join("\n")), { returned: found.map((user) => String(user.username ?? user.id)), missing, failures });
+    return outcome(status, bounded2(lines.join("\n")), { returned: found.map((user) => String(user.username ?? user.id)), missing, failures });
   }
 };
 function stringLists(value, path2 = "") {
@@ -51368,8 +51372,8 @@ async function tikhubCommunitySearch(query, wanted, apiKey2, ctx) {
 ${head}`, details);
   if (!communities.length) return outcome("empty", `${head} TikHub found none.`, details);
   const cap = capped ? [`Stopped at the ${TIKHUB_PAGES}-page safety limit with ${count(communities.length, "Community", "Communities")} of the ${wanted} asked for; TikHub has more.`] : [];
-  const lines2 = [head, ...error51 ? [`Page ${pages} failed, so later Communities may be missing: ${error51}`] : [], ...cap, "", ...communities.flatMap(formatTikhubCommunity)];
-  return outcome(error51 || capped ? "partial" : "success", bounded2(lines2.join("\n")), { ...details, capped });
+  const lines = [head, ...error51 ? [`Page ${pages} failed, so later Communities may be missing: ${error51}`] : [], ...cap, "", ...communities.flatMap(formatTikhubCommunity)];
+  return outcome(error51 || capped ? "partial" : "success", bounded2(lines.join("\n")), { ...details, capped });
 }
 var explore = {
   description: "Explore X through the X API by kind: trends (woeid, default 1 = worldwide; limit up to 50, default 20), spaces (query; state live, scheduled or all, default all; limit), communities (query; limit) or list (a List id or link; limit, default 25), each limit up to 100 and default 25 unless stated. Arguments that do not belong to the kind are refused. Trends, Spaces and Lists use X_BEARER_TOKEN. Communities search runs signed in when X sign-in is set (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET), because X serves it only to a signed-in account; otherwise it is read through TikHub (TIKHUB_API_KEY) and labelled via TikHub. Each Community comes with its link, which x_community reads. X and TikHub report no per-call charge, so the cost is recorded as unknown.",
@@ -51410,11 +51414,11 @@ var explore = {
       const trends = dataItems(answer2.body);
       const place = woeid === WORLDWIDE_WOEID ? "worldwide (WOEID 1)" : `WOEID ${woeid}`;
       if (!trends.length) return outcome("empty", `X returned no trends for ${place}.`, { kind, items: 0 });
-      const lines2 = trends.map((trend, index) => {
+      const lines = trends.map((trend, index) => {
         const posts2 = num(trend.tweet_count ?? trend.post_count);
         return `${index + 1}. ${String(trend.trend_name ?? "(unnamed)")}${posts2 === null ? "" : ` \u2014 ${count(posts2, "post", "posts")}`}`;
       });
-      return withProblem(answer2.problem, [`X trends ${place}: ${count(trends.length, "trend", "trends")}.`, "", ...lines2].join("\n"), { kind, items: trends.length });
+      return withProblem(answer2.problem, [`X trends ${place}: ${count(trends.length, "trend", "trends")}.`, "", ...lines].join("\n"), { kind, items: trends.length });
     }
     if (kind === "spaces") {
       const state = SPACE_STATES.includes(args.state) ? args.state : "all";
@@ -51480,7 +51484,7 @@ function ownOutcome(read5, words, inc, details) {
   ];
   const all = { ...details, read: read5.posts.length, matching: shown2.length, more: read5.more, missing: read5.missing, failures: read5.failures };
   if (!read5.posts.length && (read5.error || read5.failures.length)) return outcome("failed", [`ERROR: ${read5.error ?? read5.failures[0]}`, head, ...read5.missing.map((item) => `Not returned: ${item.id} \u2014 ${item.reason}`)].join("\n"), all);
-  const lines2 = [
+  const lines = [
     head,
     ...read5.missing.map((item) => `Not returned: ${item.id} \u2014 ${item.reason}`),
     ...(read5.also ?? []).map((problem) => `X also reported: ${problem}`),
@@ -51489,7 +51493,7 @@ function ownOutcome(read5, words, inc, details) {
     ...!read5.posts.length ? [`X returned no ${read5.noun}.`] : !shown2.length ? [`None of the ${count(read5.posts.length, "post", "posts")} read match "${asked}".`] : [ZERO_NOTE, ...shown2.flatMap((post2) => formatListPost(post2, inc))]
   ];
   const status = problems.length || read5.lookup === "partial" ? "partial" : shown2.length ? "success" : "empty";
-  return outcome(status, bounded2(lines2.join("\n")), all);
+  return outcome(status, bounded2(lines.join("\n")), all);
 }
 async function bookmarkFolders(userId, keys, ctx) {
   const folders = [];
@@ -51726,10 +51730,10 @@ var community = {
       }
     }
     const head = `X Community ${id}${name2 ? ` "${name2}"` : ""} (${communityLink(id)}): ${source ? `details ${source === "TikHub" ? "via TikHub" : "from the X API"}` : "details not read"}${wanted > 0 ? `, ${count(postsRead, "post", "posts")} via TikHub` : ""}.`;
-    const lines2 = [head, ...failures.length ? [`Not read: ${failures.join(" | ")}`] : [], ...withGap(details), ...withGap(postLines)];
+    const lines = [head, ...failures.length ? [`Not read: ${failures.join(" | ")}`] : [], ...withGap(details), ...withGap(postLines)];
     const result2 = { community: id, details: source, posts: postsRead, ...source === "TikHub" || postsRead ? { via: "TikHub" } : {} };
-    if (failures.length && !source && !postsRead) return outcome("failed", bounded2([`ERROR: ${failures[0]}`, ...lines2].join("\n")), result2);
-    return outcome(failures.length ? "partial" : "success", bounded2(lines2.join("\n")), result2);
+    if (failures.length && !source && !postsRead) return outcome("failed", bounded2([`ERROR: ${failures[0]}`, ...lines].join("\n")), result2);
+    return outcome(failures.length ? "partial" : "success", bounded2(lines.join("\n")), result2);
   }
 };
 
@@ -52117,9 +52121,9 @@ function name(value) {
 function indented(text5, indent = INDENT) {
   return text5.split(/\r?\n/).map((line) => line ? `${indent}${line}` : "");
 }
-function pushField(lines2, label, value, indent = "") {
+function pushField(lines, label, value, indent = "") {
   const text5 = shown(value);
-  if (text5 !== null) lines2.push(`${indent}${label}: ${text5}`);
+  if (text5 !== null) lines.push(`${indent}${label}: ${text5}`);
 }
 function reactionBreakdown(value) {
   const reactions = asRecord(value);
@@ -52170,15 +52174,15 @@ function pairedContinuation(payload) {
 }
 function listResult(page) {
   const { entries: entries2, ids, unreadable } = page.read;
-  const lines2 = [page.heading, ...page.notes, provenanceLine(page.payload)];
-  lines2.push(`${page.noun}: ${entries2.length} on this page${unreadable ? `; ${unreadable} entr${unreadable === 1 ? "y" : "ies"} without an id or URL skipped` : ""}`);
-  lines2.push(page.continuation.line);
-  if (page.media && entries2.length) lines2.push(MEDIA_NOTE);
-  if (entries2.length === 0) lines2.push("", `The provider returned an empty ${page.noun.toLowerCase()} list for this page.`);
-  for (const [index, entry] of entries2.entries()) lines2.push("", ...page.render(entry, index));
+  const lines = [page.heading, ...page.notes, provenanceLine(page.payload)];
+  lines.push(`${page.noun}: ${entries2.length} on this page${unreadable ? `; ${unreadable} entr${unreadable === 1 ? "y" : "ies"} without an id or URL skipped` : ""}`);
+  lines.push(page.continuation.line);
+  if (page.media && entries2.length) lines.push(MEDIA_NOTE);
+  if (entries2.length === 0) lines.push("", `The provider returned an empty ${page.noun.toLowerCase()} list for this page.`);
+  for (const [index, entry] of entries2.entries()) lines.push("", ...page.render(entry, index));
   return {
     status: unreadable ? "partial" : entries2.length ? "success" : "empty",
-    text: lines2.join("\n"),
+    text: lines.join("\n"),
     details: {
       ...page.details,
       ...page.continuation.details,
@@ -52218,47 +52222,47 @@ function profileResult(response, target, includeGated, base2) {
   if (!gated && !id && !pageName) return "ERROR: ScrapeCreators Facebook profile returned an unexpected payload: no id, name or gate status";
   const limited = gated && Boolean(id || pageName);
   const status = !gated ? "success" : limited ? "partial" : "failed";
-  const lines2 = [`Facebook page: ${pageName ?? "(name not returned)"}${id ? ` (id ${id})` : ""}`, `URL: ${asString(data.url) ?? target}`, provenanceLine(data)];
+  const lines = [`Facebook page: ${pageName ?? "(name not returned)"}${id ? ` (id ${id})` : ""}`, `URL: ${asString(data.url) ?? target}`, provenanceLine(data)];
   if (gated) {
     const gate = accountStatus === "age-restricted" ? "an 18+ content gate" : "a private content gate";
-    lines2.push(
+    lines.push(
       `Access: gated (account_status: ${accountStatus ?? "not reported"}; isPrivate: ${data.isPrivate === true}). Facebook shows ${gate}, so the page's content is unavailable without a login, which Dig does not use. ` + (limited ? "Only the limited public fields below came back." : `No page fields came back${includeGated ? "" : "; include_gated_profile=true asks for the limited public fields Facebook still shows"}.`)
     );
   } else {
-    lines2.push(`Access: public${accountStatus ? ` (account_status: ${accountStatus})` : ""}; no login used.`);
+    lines.push(`Access: public${accountStatus ? ` (account_status: ${accountStatus})` : ""}; no login used.`);
   }
-  pushField(lines2, "Category", data.category);
-  pushField(lines2, "Intro", data.pageIntro);
-  pushField(lines2, "Created", data.creationDate);
-  pushField(lines2, "Address", data.address);
-  pushField(lines2, "Email", data.email);
-  pushField(lines2, "Phone", data.phone);
-  pushField(lines2, "Website", data.website);
-  pushField(lines2, "Services", data.services);
-  pushField(lines2, "Price range", data.priceRange);
+  pushField(lines, "Category", data.category);
+  pushField(lines, "Intro", data.pageIntro);
+  pushField(lines, "Created", data.creationDate);
+  pushField(lines, "Address", data.address);
+  pushField(lines, "Email", data.email);
+  pushField(lines, "Phone", data.phone);
+  pushField(lines, "Website", data.website);
+  pushField(lines, "Services", data.services);
+  pushField(lines, "Price range", data.priceRange);
   const ratingCount = asNumber(data.ratingCount);
-  if (asString(data.rating)) lines2.push(`Rating: ${asString(data.rating)}${ratingCount !== null ? ` (${fmtNum(ratingCount)} ratings)` : ""}`);
-  if (!gated || limited) lines2.push(`Likes: ${count2(data.likeCount)} | Followers: ${count2(data.followerCount)} | Talking about: ${count2(data.talkingAboutCount)}`);
+  if (asString(data.rating)) lines.push(`Rating: ${asString(data.rating)}${ratingCount !== null ? ` (${fmtNum(ratingCount)} ratings)` : ""}`);
+  if (!gated || limited) lines.push(`Likes: ${count2(data.likeCount)} | Followers: ${count2(data.followerCount)} | Talking about: ${count2(data.talkingAboutCount)}`);
   const adLibrary = asRecord(data.adLibrary);
   if (adLibrary) {
     const adPageId = idText(adLibrary.pageId);
-    lines2.push(`Ad Library: ${asString(adLibrary.adStatus) ?? "status not reported"}${adPageId ? ` (Ad Library page id ${adPageId})` : ""}`);
+    lines.push(`Ad Library: ${asString(adLibrary.adStatus) ?? "status not reported"}${adPageId ? ` (Ad Library page id ${adPageId})` : ""}`);
   }
   const links = asArray(data.links).map(shown).filter((value) => value !== null);
-  if (links.length) lines2.push("Links:", ...links.map((link2) => `- ${link2}`));
+  if (links.length) lines.push("Links:", ...links.map((link2) => `- ${link2}`));
   const picture = asString(data.profilePicLarge) ?? asString(data.profilePicMedium) ?? asString(data.profilePicSmall);
-  if (picture) lines2.push(`Profile picture: ${picture}`);
+  if (picture) lines.push(`Profile picture: ${picture}`);
   const coverPhoto = asRecord(asRecord(data.coverPhoto)?.photo);
   const coverImage = asString(asRecord(coverPhoto?.image)?.uri);
-  if (coverImage) lines2.push(`Cover photo: ${coverImage}${asString(coverPhoto?.url) ? ` (photo page ${asString(coverPhoto?.url)})` : ""}`);
+  if (coverImage) lines.push(`Cover photo: ${coverImage}${asString(coverPhoto?.url) ? ` (photo page ${asString(coverPhoto?.url)})` : ""}`);
   const hours = asArray(data.businessHours).flatMap(
     (entry) => Object.entries(asRecord(entry) ?? {}).map(([day, value]) => `- ${day}: ${asString(asRecord(value)?.fullText) ?? "(no hours text)"}`)
   );
-  if (hours.length) lines2.push("Business hours:", ...hours);
-  if (picture || coverImage) lines2.push(MEDIA_NOTE);
+  if (hours.length) lines.push("Business hours:", ...hours);
+  if (picture || coverImage) lines.push(MEDIA_NOTE);
   return {
     status,
-    text: lines2.join("\n"),
+    text: lines.join("\n"),
     details: {
       ...base2,
       id,
@@ -52274,79 +52278,79 @@ function feedPostLines(post2, index) {
   const author = asRecord(post2.author);
   const authorId = idText(author?.id);
   const published = when(post2.publishTime);
-  const lines2 = [`${index + 1}. ${name(author?.name) ?? "(author not returned)"}${authorId ? ` (id ${authorId})` : ""} \u2014 ${published ?? "publish time not reported"}`];
+  const lines = [`${index + 1}. ${name(author?.name) ?? "(author not returned)"}${authorId ? ` (id ${authorId})` : ""} \u2014 ${published ?? "publish time not reported"}`];
   const text5 = asString(post2.text);
-  lines2.push(...text5 ? indented(text5) : [`${INDENT}(no text)`]);
-  lines2.push(`${INDENT}Reactions: ${count2(post2.reactionCount)} | Comments: ${count2(post2.commentCount)} | Video views: ${count2(post2.videoViewCount)}`);
-  pushField(lines2, "URL", post2.url, INDENT);
-  if (asString(post2.permalink) && post2.permalink !== post2.url) pushField(lines2, "Permalink", post2.permalink, INDENT);
-  pushField(lines2, "Post id", idText(post2.id), INDENT);
+  lines.push(...text5 ? indented(text5) : [`${INDENT}(no text)`]);
+  lines.push(`${INDENT}Reactions: ${count2(post2.reactionCount)} | Comments: ${count2(post2.commentCount)} | Video views: ${count2(post2.videoViewCount)}`);
+  pushField(lines, "URL", post2.url, INDENT);
+  if (asString(post2.permalink) && post2.permalink !== post2.url) pushField(lines, "Permalink", post2.permalink, INDENT);
+  pushField(lines, "Post id", idText(post2.id), INDENT);
   const video = asRecord(post2.videoDetails);
   if (video) {
-    pushField(lines2, "Video (SD)", video.sdUrl, INDENT);
-    pushField(lines2, "Video (HD)", video.hdUrl, INDENT);
-    pushField(lines2, "Video thumbnail", video.thumbnailUrl, INDENT);
+    pushField(lines, "Video (SD)", video.sdUrl, INDENT);
+    pushField(lines, "Video (HD)", video.hdUrl, INDENT);
+    pushField(lines, "Video thumbnail", video.thumbnailUrl, INDENT);
   }
   const comments = asArray(post2.topComments).map(asRecord).filter((comment) => comment !== null);
   if (comments.length) {
-    lines2.push(`${INDENT}Top comments returned with the post:`);
+    lines.push(`${INDENT}Top comments returned with the post:`);
     for (const comment of comments) {
       const commenter = asRecord(comment.author);
       const commentUrl = asString(commenter?.url);
-      lines2.push(`${INDENT}- ${name(commenter?.name) ?? "(author not returned)"}${commentUrl ? ` (${commentUrl})` : ""}, ${when(comment.publishTime) ?? "time not reported"}:`);
+      lines.push(`${INDENT}- ${name(commenter?.name) ?? "(author not returned)"}${commentUrl ? ` (${commentUrl})` : ""}, ${when(comment.publishTime) ?? "time not reported"}:`);
       const body = asString(comment.text);
-      lines2.push(...body ? indented(body, `${INDENT}  `) : [`${INDENT}  (no text)`]);
+      lines.push(...body ? indented(body, `${INDENT}  `) : [`${INDENT}  (no text)`]);
     }
   }
-  return lines2;
+  return lines;
 }
 function reelLines(reel, index) {
   const author = asRecord(reel.author);
-  const lines2 = [`${index + 1}. ${name(author?.name) ?? "(author not returned)"}${author?.is_verified === true ? " (verified)" : ""} \u2014 ${when(reel.creation_time) ?? "creation time not reported"}`];
+  const lines = [`${index + 1}. ${name(author?.name) ?? "(author not returned)"}${author?.is_verified === true ? " (verified)" : ""} \u2014 ${when(reel.creation_time) ?? "creation time not reported"}`];
   const description = asString(reel.description);
-  lines2.push(...description ? indented(description) : [`${INDENT}(no description)`]);
+  lines.push(...description ? indented(description) : [`${INDENT}(no description)`]);
   const duration3 = seconds(reel.play_time_in_ms);
-  lines2.push(`${INDENT}Views: ${count2(reel.view_count)}${duration3 ? ` | Duration: ${duration3}` : ""}`);
-  pushField(lines2, "URL", reel.url, INDENT);
-  pushField(lines2, "Video", reel.video_url, INDENT);
-  pushField(lines2, "Thumbnail", reel.thumbnail, INDENT);
+  lines.push(`${INDENT}Views: ${count2(reel.view_count)}${duration3 ? ` | Duration: ${duration3}` : ""}`);
+  pushField(lines, "URL", reel.url, INDENT);
+  pushField(lines, "Video", reel.video_url, INDENT);
+  pushField(lines, "Thumbnail", reel.thumbnail, INDENT);
   const music = asRecord(reel.music);
-  if (asString(music?.track_title)) lines2.push(`${INDENT}Music: ${asString(music?.track_title)}`);
-  pushField(lines2, "Post id", idText(reel.post_id), INDENT);
-  pushField(lines2, "Video id", idText(reel.video_id), INDENT);
+  if (asString(music?.track_title)) lines.push(`${INDENT}Music: ${asString(music?.track_title)}`);
+  pushField(lines, "Post id", idText(reel.post_id), INDENT);
+  pushField(lines, "Video id", idText(reel.video_id), INDENT);
   const feedbackId = asString(reel.feedback_id);
-  if (feedbackId) lines2.push(`${INDENT}Feedback id: ${feedbackId} (pass as feedback_id to kind='comments')`);
-  return lines2;
+  if (feedbackId) lines.push(`${INDENT}Feedback id: ${feedbackId} (pass as feedback_id to kind='comments')`);
+  return lines;
 }
 function photoLines(photo, index) {
-  const lines2 = [`${index + 1}. Photo ${idText(photo.photo_id) ?? idText(photo.id) ?? "(id not returned)"}`];
-  pushField(lines2, "URL", photo.url, INDENT);
+  const lines = [`${index + 1}. Photo ${idText(photo.photo_id) ?? idText(photo.id) ?? "(id not returned)"}`];
+  pushField(lines, "URL", photo.url, INDENT);
   const image = asRecord(photo.viewer_image);
   if (asString(image?.uri)) {
     const width = asNumber(image?.width);
     const height = asNumber(image?.height);
-    lines2.push(`${INDENT}Image: ${asString(image?.uri)}${width !== null && height !== null ? ` (${width}\xD7${height})` : ""}`);
+    lines.push(`${INDENT}Image: ${asString(image?.uri)}${width !== null && height !== null ? ` (${width}\xD7${height})` : ""}`);
   }
-  pushField(lines2, "Thumbnail", photo.thumbnail, INDENT);
-  pushField(lines2, "Alt text (Facebook's automatic description)", photo.accessibility_caption, INDENT);
-  return lines2;
+  pushField(lines, "Thumbnail", photo.thumbnail, INDENT);
+  pushField(lines, "Alt text (Facebook's automatic description)", photo.accessibility_caption, INDENT);
+  return lines;
 }
 function searchVideoLines(video, index) {
   const author = asRecord(video.author);
-  const lines2 = [`${index + 1}. ${name(video.title) ?? "(no title)"} \u2014 ${name(author?.name) ?? "(author not returned)"}`];
+  const lines = [`${index + 1}. ${name(video.title) ?? "(no title)"} \u2014 ${name(author?.name) ?? "(author not returned)"}`];
   const description = asString(video.description);
-  if (description) lines2.push(...indented(description));
+  if (description) lines.push(...indented(description));
   const published = when(video.publish_time);
   const created = when(video.creation_time);
-  lines2.push(`${INDENT}Published: ${published ?? "not reported"}${created && created !== published ? ` | Created: ${created}` : ""}`);
-  pushField(lines2, "Facebook's display text (not a normalized time)", video.relative_time_text, INDENT);
+  lines.push(`${INDENT}Published: ${published ?? "not reported"}${created && created !== published ? ` | Created: ${created}` : ""}`);
+  pushField(lines, "Facebook's display text (not a normalized time)", video.relative_time_text, INDENT);
   const duration3 = seconds(video.duration_ms) ?? asString(video.duration_text);
-  if (duration3) lines2.push(`${INDENT}Duration: ${duration3}`);
-  pushField(lines2, "URL", video.url, INDENT);
-  pushField(lines2, "Author URL", author?.url, INDENT);
-  pushField(lines2, "Thumbnail", video.thumbnail_url, INDENT);
-  pushField(lines2, "Video id", idText(video.id), INDENT);
-  return lines2;
+  if (duration3) lines.push(`${INDENT}Duration: ${duration3}`);
+  pushField(lines, "URL", video.url, INDENT);
+  pushField(lines, "Author URL", author?.url, INDENT);
+  pushField(lines, "Thumbnail", video.thumbnail_url, INDENT);
+  pushField(lines, "Video id", idText(video.id), INDENT);
+  return lines;
 }
 function postResult(data, target, base2) {
   const postId2 = idText(data.post_id);
@@ -52354,45 +52358,45 @@ function postResult(data, target, base2) {
   if (!postId2 && !url2) return "ERROR: ScrapeCreators Facebook post returned an unexpected payload: no post_id or url";
   const author = asRecord(data.author);
   const video = asRecord(data.video);
-  const lines2 = [`Facebook post: ${url2 ?? target}`, provenanceLine(data)];
+  const lines = [`Facebook post: ${url2 ?? target}`, provenanceLine(data)];
   if (author) {
     const handle = asString(author.handle);
     const authorUrl = asString(author.url);
     const authorId = idText(author.id);
-    lines2.push(
+    lines.push(
       `Author: ${name(author.name) ?? "(name not returned)"}${handle ? ` (@${handle})` : ""}${author.is_verified === true ? " (verified)" : ""}${authorUrl ? ` \u2014 ${authorUrl}` : ""}${authorId ? ` (id ${authorId})` : ""}`
     );
   }
-  lines2.push(`Published: ${when(data.creation_time) ?? "not reported"}`);
-  lines2.push(`Likes: ${count2(data.like_count)} | Comments: ${count2(data.comment_count)} | Shares: ${count2(data.share_count)} | Views: ${count2(data.view_count)}`);
+  lines.push(`Published: ${when(data.creation_time) ?? "not reported"}`);
+  lines.push(`Likes: ${count2(data.like_count)} | Comments: ${count2(data.comment_count)} | Shares: ${count2(data.share_count)} | Views: ${count2(data.view_count)}`);
   if (video) {
-    lines2.push("Views note: for some reels this count is null or lower than the public badge on the page's Reels grid; kind='profile_reels' returns the badge count (match the reel by post id).");
+    lines.push("Views note: for some reels this count is null or lower than the public badge on the page's Reels grid; kind='profile_reels' returns the badge count (match the reel by post id).");
   }
-  pushField(lines2, "Post id", postId2);
+  pushField(lines, "Post id", postId2);
   const feedbackId = asString(data.feedback_id);
-  if (feedbackId) lines2.push(`Feedback id: ${feedbackId} (pass as feedback_id to kind='comments' for a faster comments read)`);
+  if (feedbackId) lines.push(`Feedback id: ${feedbackId} (pass as feedback_id to kind='comments' for a faster comments read)`);
   const description = asString(data.description);
-  lines2.push("Text:", ...description ? indented(description) : [`${INDENT}(no text)`]);
+  lines.push("Text:", ...description ? indented(description) : [`${INDENT}(no text)`]);
   if (video) {
-    lines2.push("Video:");
-    pushField(lines2, "Video id", idText(video.id), INDENT);
-    pushField(lines2, "SD", video.sd_url, INDENT);
-    pushField(lines2, "HD", video.hd_url, INDENT);
+    lines.push("Video:");
+    pushField(lines, "Video id", idText(video.id), INDENT);
+    pushField(lines, "SD", video.sd_url, INDENT);
+    pushField(lines, "HD", video.hd_url, INDENT);
     const width = asNumber(video.width);
     const height = asNumber(video.height);
-    if (width !== null && height !== null) lines2.push(`${INDENT}Size: ${width}\xD7${height}`);
+    if (width !== null && height !== null) lines.push(`${INDENT}Size: ${width}\xD7${height}`);
     const length = asNumber(video.length_in_second);
-    if (length !== null) lines2.push(`${INDENT}Length: ${length}s`);
-    pushField(lines2, "Thumbnail", video.thumbnail, INDENT);
-    pushField(lines2, "Captions file (not fetched)", video.captions_url, INDENT);
+    if (length !== null) lines.push(`${INDENT}Length: ${length}s`);
+    pushField(lines, "Thumbnail", video.thumbnail, INDENT);
+    pushField(lines, "Captions file (not fetched)", video.captions_url, INDENT);
   }
-  pushField(lines2, "Image", data.image_url);
+  pushField(lines, "Image", data.image_url);
   const music = asRecord(data.music);
-  if (asString(music?.track_title)) lines2.push(`Music: ${asString(music?.track_title)}${asString(music?.type) ? ` (${asString(music?.type)})` : ""}`);
-  if (video || asString(data.image_url)) lines2.push(MEDIA_NOTE);
+  if (asString(music?.track_title)) lines.push(`Music: ${asString(music?.track_title)}${asString(music?.type) ? ` (${asString(music?.type)})` : ""}`);
+  if (video || asString(data.image_url)) lines.push(MEDIA_NOTE);
   return {
     status: "success",
-    text: lines2.join("\n"),
+    text: lines.join("\n"),
     details: {
       ...base2,
       post_id: postId2,
@@ -52410,38 +52414,38 @@ function transcriptResult(data, target, base2) {
   if (transcript2 !== null && typeof transcript2 !== "string") {
     return `ERROR: ScrapeCreators Facebook transcript returned an unexpected payload: \`transcript\` is not a string (${typeof transcript2})`;
   }
-  const lines2 = [
+  const lines = [
     `Facebook transcript: ${target}`,
     provenanceLine(data),
     "Source: the transcript ScrapeCreators returns for the video, as written; its docs limit transcripts to videos under 2 minutes.",
     ""
   ];
   const text5 = transcript2?.trim() ? transcript2 : null;
-  if (text5) lines2.push(text5);
-  else lines2.push(`No transcript came back (transcript: ${transcript2 === null ? "null" : "empty"}). ScrapeCreators documents transcripts only for videos under 2 minutes.`);
+  if (text5) lines.push(text5);
+  else lines.push(`No transcript came back (transcript: ${transcript2 === null ? "null" : "empty"}). ScrapeCreators documents transcripts only for videos under 2 minutes.`);
   return {
     status: text5 ? "success" : "empty",
-    text: lines2.join("\n"),
+    text: lines.join("\n"),
     details: { ...base2, characters: text5?.length ?? 0, cached: data.cached === true, credits_charged: asNumber(data.credits_charged) }
   };
 }
 function commentLines(comment, index) {
   const author = asRecord(comment.author);
-  const lines2 = [`${index + 1}. ${name(author?.name) ?? "(author not returned)"} \u2014 ${when(comment.created_at) ?? "time not reported"}`];
+  const lines = [`${index + 1}. ${name(author?.name) ?? "(author not returned)"} \u2014 ${when(comment.created_at) ?? "time not reported"}`];
   const text5 = asString(comment.text);
-  lines2.push(...text5 ? indented(text5) : [`${INDENT}(no text)`]);
+  lines.push(...text5 ? indented(text5) : [`${INDENT}(no text)`]);
   const breakdown = reactionBreakdown(comment.reactions);
   const replies = asNumber(comment.reply_count);
-  lines2.push(`${INDENT}Reactions: ${count2(comment.reaction_count)}${breakdown ? ` (${breakdown})` : ""} | Replies: ${count2(comment.reply_count)}`);
+  lines.push(`${INDENT}Reactions: ${count2(comment.reaction_count)}${breakdown ? ` (${breakdown})` : ""} | Replies: ${count2(comment.reply_count)}`);
   const feedbackId = asString(comment.feedback_id);
   const expansionToken = asString(comment.expansion_token);
   if (feedbackId && expansionToken) {
-    lines2.push(`${INDENT}Read replies with kind='replies', feedback_id="${feedbackId}", expansion_token="${expansionToken}"`);
+    lines.push(`${INDENT}Read replies with kind='replies', feedback_id="${feedbackId}", expansion_token="${expansionToken}"`);
   } else if (replies !== null && replies > 0) {
-    lines2.push(`${INDENT}Replies cannot be read from here: this comment came back without the feedback_id and expansion_token they need.`);
+    lines.push(`${INDENT}Replies cannot be read from here: this comment came back without the feedback_id and expansion_token they need.`);
   }
-  pushField(lines2, "Comment id", idText(comment.id), INDENT);
-  return lines2;
+  pushField(lines, "Comment id", idText(comment.id), INDENT);
+  return lines;
 }
 function groupResult(data, target, base2) {
   const id = idText(data.id);
@@ -52450,40 +52454,40 @@ function groupResult(data, target, base2) {
   const privacy = asRecord(data.privacy);
   const visibility = asRecord(data.visibility);
   const privacyLabel = asString(privacy?.label);
-  const lines2 = [`Facebook group: ${groupName ?? "(name not returned)"}${id ? ` (id ${id})` : ""}`, `URL: ${asString(data.url) ?? target}`, provenanceLine(data)];
-  lines2.push(`Privacy: ${privacyLabel ?? "not reported"}${asString(privacy?.description) ? ` \u2014 ${asString(privacy?.description)}` : ""}`);
-  if (privacyLabel && privacyLabel !== "Public") lines2.push("Note: ScrapeCreators documents group posts for public groups only; this About page is what Facebook shows publicly.");
-  if (visibility) lines2.push(`Visibility: ${asString(visibility.label) ?? "not reported"}${asString(visibility.description) ? ` \u2014 ${asString(visibility.description)}` : ""}`);
+  const lines = [`Facebook group: ${groupName ?? "(name not returned)"}${id ? ` (id ${id})` : ""}`, `URL: ${asString(data.url) ?? target}`, provenanceLine(data)];
+  lines.push(`Privacy: ${privacyLabel ?? "not reported"}${asString(privacy?.description) ? ` \u2014 ${asString(privacy?.description)}` : ""}`);
+  if (privacyLabel && privacyLabel !== "Public") lines.push("Note: ScrapeCreators documents group posts for public groups only; this About page is what Facebook shows publicly.");
+  if (visibility) lines.push(`Visibility: ${asString(visibility.label) ?? "not reported"}${asString(visibility.description) ? ` \u2014 ${asString(visibility.description)}` : ""}`);
   const categories = asArray(data.categories).map((entry) => name(asRecord(entry)?.name) ?? shown(entry)).filter((value) => value !== null);
-  if (categories.length) lines2.push(`Categories: ${categories.join(", ")}`);
-  pushField(lines2, "Created", data.created_at);
-  pushField(lines2, "History", data.history_summary);
-  lines2.push(`Members: ${count2(data.member_count)}${asString(data.member_count_text) ? ` (${asString(data.member_count_text)})` : ""}`);
-  lines2.push(`Administrators: ${count2(data.administrator_count)} | Moderators: ${count2(data.moderator_count)}`);
+  if (categories.length) lines.push(`Categories: ${categories.join(", ")}`);
+  pushField(lines, "Created", data.created_at);
+  pushField(lines, "History", data.history_summary);
+  lines.push(`Members: ${count2(data.member_count)}${asString(data.member_count_text) ? ` (${asString(data.member_count_text)})` : ""}`);
+  lines.push(`Administrators: ${count2(data.administrator_count)} | Moderators: ${count2(data.moderator_count)}`);
   const activity = asRecord(data.activity);
   if (activity) {
-    lines2.push(`Activity: ${count2(activity.posts_last_day)} posts in the last day | ${count2(activity.posts_last_month)} posts in the last month${asString(activity.new_members_text) ? ` | ${asString(activity.new_members_text)}` : ""}`);
+    lines.push(`Activity: ${count2(activity.posts_last_day)} posts in the last day | ${count2(activity.posts_last_month)} posts in the last month${asString(activity.new_members_text) ? ` | ${asString(activity.new_members_text)}` : ""}`);
   }
   const description = asString(data.description);
-  if (description) lines2.push("Description:", ...indented(description));
+  if (description) lines.push("Description:", ...indented(description));
   for (const [label, key] of [["Administrators listed", "administrators"], ["Moderators listed", "moderators"]]) {
     const people = asArray(data[key]).map(asRecord).filter((person) => person !== null);
     if (!people.length) continue;
-    lines2.push(`${label}:`);
-    for (const person of people) lines2.push(`- ${name(person.name) ?? "(name not returned)"}${asString(person.url) ? ` \u2014 ${asString(person.url)}` : ""}`);
+    lines.push(`${label}:`);
+    for (const person of people) lines.push(`- ${name(person.name) ?? "(name not returned)"}${asString(person.url) ? ` \u2014 ${asString(person.url)}` : ""}`);
   }
   const rules = asArray(data.rules).map(asRecord).filter((rule) => rule !== null);
   if (rules.length) {
-    lines2.push("Rules:");
+    lines.push("Rules:");
     for (const [index, rule] of rules.entries()) {
-      lines2.push(`${index + 1}. ${name(rule.title) ?? "(untitled rule)"}`);
+      lines.push(`${index + 1}. ${name(rule.title) ?? "(untitled rule)"}`);
       const ruleText = asString(rule.description);
-      if (ruleText) lines2.push(...indented(ruleText));
+      if (ruleText) lines.push(...indented(ruleText));
     }
   }
   return {
     status: "success",
-    text: lines2.join("\n"),
+    text: lines.join("\n"),
     details: { ...base2, id, name: groupName, privacy: privacyLabel, member_count: asNumber(data.member_count), credits_charged: asNumber(data.credits_charged) }
   };
 }
@@ -52613,81 +52617,81 @@ function eventCover(event) {
   return { uri: uri2, caption: asString(cover?.accessibility_caption) ?? asString(photo?.accessibility_caption) };
 }
 function eventListLines(event, index) {
-  const lines2 = [`${index + 1}. ${name(event.name) ?? "(name not returned)"}${eventFlags(event)}`];
+  const lines = [`${index + 1}. ${name(event.name) ?? "(name not returned)"}${eventFlags(event)}`];
   const start = when(event.start_timestamp);
-  lines2.push(`${INDENT}When: ${asString(event.day_time_sentence) ?? "not reported"}${start ? ` (starts ${start})` : ""}`);
+  lines.push(`${INDENT}When: ${asString(event.day_time_sentence) ?? "not reported"}${start ? ` (starts ${start})` : ""}`);
   const place = asRecord(event.event_place);
   const city = asString(asRecord(asRecord(place?.location)?.reverse_geocode)?.city);
   const where = [asString(place?.contextual_name) ?? asString(place?.name), city].filter((part) => part !== null);
-  if (where.length) lines2.push(`${INDENT}Where: ${where.join(", ")}`);
+  if (where.length) lines.push(`${INDENT}Where: ${where.join(", ")}`);
   const creator = asRecord(event.event_creator);
-  if (creator) lines2.push(`${INDENT}Created by: ${name(creator.name) ?? "(name not returned)"}${asString(creator.url) ? ` \u2014 ${asString(creator.url)}` : ""}`);
+  if (creator) lines.push(`${INDENT}Created by: ${name(creator.name) ?? "(name not returned)"}${asString(creator.url) ? ` \u2014 ${asString(creator.url)}` : ""}`);
   const social = asRecord(event.social_context);
   if (social) {
     const went = asNumber(social.went_count);
-    lines2.push(
+    lines.push(
       `${INDENT}Interested: ${count2(social.interested_count)} | Going: ${count2(social.going_count)}${went !== null ? ` | Went: ${fmtNum(went)}` : ""}${asString(social.text) ? ` (Facebook shows "${asString(social.text)}")` : ""}`
     );
   }
-  pushField(lines2, "Price", asRecord(event.ticketing_context_row)?.price_range_text, INDENT);
-  pushField(lines2, "Kind", event.event_kind, INDENT);
-  pushField(lines2, "URL", eventUrl(event), INDENT);
-  pushField(lines2, "Event id", idText(event.id), INDENT);
+  pushField(lines, "Price", asRecord(event.ticketing_context_row)?.price_range_text, INDENT);
+  pushField(lines, "Kind", event.event_kind, INDENT);
+  pushField(lines, "URL", eventUrl(event), INDENT);
+  pushField(lines, "Event id", idText(event.id), INDENT);
   const cover = eventCover(event);
   if (cover) {
-    lines2.push(`${INDENT}Cover: ${cover.uri}`);
-    if (cover.caption) lines2.push(`${INDENT}Cover alt text (Facebook's automatic description): ${cover.caption}`);
+    lines.push(`${INDENT}Cover: ${cover.uri}`);
+    if (cover.caption) lines.push(`${INDENT}Cover alt text (Facebook's automatic description): ${cover.caption}`);
   }
-  return lines2;
+  return lines;
 }
 function eventDetailsResult(data, target, base2) {
   const id = idText(data.id);
   const eventName = name(data.name);
   if (!id && !eventName) return "ERROR: ScrapeCreators Facebook event details returned an unexpected payload: no id or name";
-  const lines2 = [`Facebook event: ${eventName ?? "(name not returned)"}${eventFlags(data)}`, `URL: ${eventUrl(data) ?? target}`, provenanceLine(data)];
-  pushField(lines2, "Event id", id);
+  const lines = [`Facebook event: ${eventName ?? "(name not returned)"}${eventFlags(data)}`, `URL: ${eventUrl(data) ?? target}`, provenanceLine(data)];
+  pushField(lines, "Event id", id);
   const start = when(data.start_timestamp) ?? when(data.current_start_timestamp);
-  lines2.push(`When: ${asString(data.day_time_sentence) ?? "not reported"}${start ? ` (starts ${start})` : ""}`);
-  pushField(lines2, "Start time", data.start_time);
-  pushField(lines2, "End time", data.end_time);
-  pushField(lines2, "Time text", data.time_text);
-  pushField(lines2, "Duration", data.duration);
+  lines.push(`When: ${asString(data.day_time_sentence) ?? "not reported"}${start ? ` (starts ${start})` : ""}`);
+  pushField(lines, "Start time", data.start_time);
+  pushField(lines, "End time", data.end_time);
+  pushField(lines, "Time text", data.time_text);
+  pushField(lines, "Duration", data.duration);
   const place = asRecord(data.event_place);
   const where = [asString(data.location_name) ?? asString(place?.contextual_name), asString(data.address), asString(data.city)].filter((part) => part !== null);
-  if (where.length) lines2.push(`Where: ${where.join(" | ")}`);
+  if (where.length) lines.push(`Where: ${where.join(" | ")}`);
   const latitude = asNumber(data.latitude);
   const longitude = asNumber(data.longitude);
-  if (latitude !== null && longitude !== null) lines2.push(`Coordinates: ${latitude}, ${longitude}`);
-  pushField(lines2, "Online", typeof data.is_online === "boolean" ? data.is_online : null);
-  pushField(lines2, "Privacy", data.privacy);
-  pushField(lines2, "Kind", data.event_kind);
-  pushField(lines2, "Host line", data.host_context_text);
+  if (latitude !== null && longitude !== null) lines.push(`Coordinates: ${latitude}, ${longitude}`);
+  pushField(lines, "Online", typeof data.is_online === "boolean" ? data.is_online : null);
+  pushField(lines, "Privacy", data.privacy);
+  pushField(lines, "Kind", data.event_kind);
+  pushField(lines, "Host line", data.host_context_text);
   const hosts = asArray(data.hosts).map(asRecord).filter((host) => host !== null);
   if (hosts.length) {
-    lines2.push("Hosts:");
+    lines.push("Hosts:");
     for (const host of hosts) {
-      lines2.push(`- ${name(host.name) ?? "(name not returned)"}${host.is_verified === true ? " (verified)" : ""}${asString(host.url) ? ` \u2014 ${asString(host.url)}` : ""}`);
+      lines.push(`- ${name(host.name) ?? "(name not returned)"}${host.is_verified === true ? " (verified)" : ""}${asString(host.url) ? ` \u2014 ${asString(host.url)}` : ""}`);
     }
   }
-  lines2.push(`Interested: ${count2(data.interested_count)} | Going: ${count2(data.going_count)} | Attendance count (as the provider reports it): ${count2(data.attendance_count)}`);
-  pushField(lines2, "Price", data.price);
-  pushField(lines2, "Price info", data.price_info);
-  pushField(lines2, "Tickets", data.ticket_url);
-  pushField(lines2, "Ticket provider", data.ticket_provider);
-  pushField(lines2, "Ticket source", data.ticket_source);
+  lines.push(`Interested: ${count2(data.interested_count)} | Going: ${count2(data.going_count)} | Attendance count (as the provider reports it): ${count2(data.attendance_count)}`);
+  pushField(lines, "Price", data.price);
+  pushField(lines, "Price info", data.price_info);
+  pushField(lines, "Tickets", data.ticket_url);
+  pushField(lines, "Ticket provider", data.ticket_provider);
+  pushField(lines, "Ticket source", data.ticket_source);
   const categories = [shown(data.category), ...asArray(data.categories).map((entry) => name(asRecord(entry)?.name) ?? shown(entry))].filter(
     (value) => value !== null
   );
-  if (categories.length) lines2.push(`Categories: ${categories.join(", ")}`);
+  if (categories.length) lines.push(`Categories: ${categories.join(", ")}`);
   const description = asString(data.description);
-  lines2.push("Description:", ...description ? indented(description) : [`${INDENT}(no description)`]);
+  lines.push("Description:", ...description ? indented(description) : [`${INDENT}(no description)`]);
   const links = asArray(data.description_links).map(shown).filter((value) => value !== null);
-  if (links.length) lines2.push("Description links:", ...links.map((link2) => `- ${link2}`));
+  if (links.length) lines.push("Description links:", ...links.map((link2) => `- ${link2}`));
   const cover = asString(data.cover_photo_url);
-  if (cover) lines2.push(`Cover photo: ${cover}`, MEDIA_NOTE);
+  if (cover) lines.push(`Cover photo: ${cover}`, MEDIA_NOTE);
   return {
     status: "success",
-    text: lines2.join("\n"),
+    text: lines.join("\n"),
     details: { ...base2, id, name: eventName, url: eventUrl(data), start: start ?? null, credits_charged: asNumber(data.credits_charged) }
   };
 }
@@ -52995,22 +52999,22 @@ function mediaLines2(images, videos, indent) {
 }
 var records = (...values) => values.flatMap((value) => asArray(value).map(asRecord).filter(present));
 function creativeLines(source, indent) {
-  const lines2 = [];
+  const lines = [];
   const body = creativeText(source.body);
-  if (body) lines2.push(...block("Text", body, indent));
+  if (body) lines.push(...block("Text", body, indent));
   const headline = [asString(source.title) && `Headline: ${source.title}`, asString(source.link_description) && `Link description: ${source.link_description}`].filter(present);
-  if (headline.length) lines2.push(`${indent}${headline.join(" | ")}`);
+  if (headline.length) lines.push(`${indent}${headline.join(" | ")}`);
   const link2 = asString(source.link_url);
   const caption = asString(source.caption);
   const cta = asString(source.cta_text);
   const action = [link2 && `Link: ${link2}`, caption && `Caption: ${caption}`, cta && `Call to action: ${cta}`].filter(present);
-  if (action.length) lines2.push(`${indent}${action.join(" | ")}`);
+  if (action.length) lines.push(`${indent}${action.join(" | ")}`);
   const images = records(source.images, source.extra_images);
   const videos = records(source.videos, source.extra_videos);
   if (!images.length && imageUrl(source)) images.push(source);
   if (!videos.length && videoUrl(source)) videos.push(source);
-  lines2.push(...mediaLines2(images, videos, indent));
-  return { lines: lines2, media: images.length + videos.length, dynamic: DYNAMIC_PLACEHOLDER.test(`${body ?? ""} ${asString(source.title) ?? ""}`) };
+  lines.push(...mediaLines2(images, videos, indent));
+  return { lines, media: images.length + videos.length, dynamic: DYNAMIC_PLACEHOLDER.test(`${body ?? ""} ${asString(source.title) ?? ""}`) };
 }
 function adLines(ad, id, index) {
   const indent = index === null ? "" : "   ";
@@ -53020,7 +53024,7 @@ function adLines(ad, id, index) {
   const shownName = asString(snapshot2.page_name);
   const shownId = idOf(snapshot2.page_id);
   const active = field(ad, "is_active", "isActive");
-  const lines2 = [
+  const lines = [
     `${index === null ? "" : `${index + 1}. `}${pageName ?? shownName ?? "(page name not returned)"} \u2014 ad ${id} \u2014 ${active === true ? "active" : active === false ? "inactive" : "status not reported"}`,
     `${indent}Ad Library: ${asString(ad.url) ?? `${LIBRARY_AD_URL}${id}`}`
   ];
@@ -53028,93 +53032,93 @@ function adLines(ad, id, index) {
   const end = isoDate(field(ad, "end_date", "endDate"));
   const platforms = strings3(field(ad, "publisher_platform", "publisherPlatform"));
   const format2 = asString(snapshot2.display_format);
-  lines2.push(
+  lines.push(
     `${indent}${[`Ran: ${start ?? "start not reported"} \u2192 ${end ?? "end not reported"}`, platforms.length > 0 && `Platforms: ${platforms.join(", ")}`, format2 && `Format: ${format2}`].filter(present).join(" | ")}`
   );
   const differs = pageName !== null && shownName !== null && (shownName !== pageName || shownId !== null && pageId !== null && shownId !== pageId);
   const headId = pageId ?? (differs ? null : shownId);
-  lines2.push(
+  lines.push(
     `${indent}Page: ${pageName ?? shownName ?? "(not returned)"}${headId ? ` (page id ${headId})` : ""}${differs ? `; shown as ${shownName}${shownId ? ` (page id ${shownId})` : ""}` : ""}`
   );
   const likes2 = asNumber(snapshot2.page_like_count);
   const pageCategories = strings3(snapshot2.page_categories);
   const profile = [asString(snapshot2.page_profile_uri), likes2 !== null && `${fmtNum(likes2)} page likes`, pageCategories.length > 0 && pageCategories.join(", ")].filter(present);
-  if (profile.length) lines2.push(`${indent}${differs ? "Shown-as page profile" : "Profile"}: ${profile.join(" | ")}`);
+  if (profile.length) lines.push(`${indent}${differs ? "Shown-as page profile" : "Profile"}: ${profile.join(" | ")}`);
   const branded = asRecord(snapshot2.branded_content);
   const brandedName = asString(branded?.page_name);
-  if (brandedName) lines2.push(`${indent}Branded content with: ${brandedName}${asString(branded?.page_profile_uri) ? ` (${branded?.page_profile_uri})` : ""}`);
+  if (brandedName) lines.push(`${indent}Branded content with: ${brandedName}${asString(branded?.page_profile_uri) ? ` (${branded?.page_profile_uri})` : ""}`);
   const sponsor = asString(asRecord(snapshot2.instagram_branded_content)?.instagram_bc_sponsor_name);
-  if (sponsor) lines2.push(`${indent}Instagram branded-content sponsor: ${sponsor}`);
+  if (sponsor) lines.push(`${indent}Instagram branded-content sponsor: ${sponsor}`);
   const disclaimer = [asString(snapshot2.disclaimer_label) && `Disclaimer: ${snapshot2.disclaimer_label}`, asString(snapshot2.byline) && `Byline: ${snapshot2.byline}`].filter(present);
-  if (disclaimer.length) lines2.push(`${indent}${disclaimer.join(" | ")}`);
+  if (disclaimer.length) lines.push(`${indent}${disclaimer.join(" | ")}`);
   const categories = strings3(ad.categories).filter((category) => category !== UNKNOWN_CATEGORY);
-  if (categories.length) lines2.push(`${indent}Categories: ${categories.join(", ")}`);
+  if (categories.length) lines.push(`${indent}Categories: ${categories.join(", ")}`);
   const collationCount = asNumber(field(ad, "collation_count", "collationCount"));
   const collationId = idOf(field(ad, "collation_id", "collationID"));
-  if (collationCount !== null && collationCount > 1) lines2.push(`${indent}Related ads: ${collationCount} in Meta's group ${collationId ?? "(id not returned)"}`);
+  if (collationCount !== null && collationCount > 1) lines.push(`${indent}Related ads: ${collationCount} in Meta's group ${collationId ?? "(id not returned)"}`);
   const reached = strings3(field(ad, "targeted_or_reached_countries", "targetedOrReachedCountries"));
-  if (reached.length) lines2.push(`${indent}Targeted or reached countries: ${reached.join(", ")}`);
+  if (reached.length) lines.push(`${indent}Targeted or reached countries: ${reached.join(", ")}`);
   const political = strings3(field(ad, "political_countries", "politicalCountries"));
-  if (political.length) lines2.push(`${indent}Political ad countries: ${political.join(", ")}`);
-  if (field(ad, "contains_digital_created_media", "containsDigitallyCreatedMedia") === true) lines2.push(`${indent}Meta label: contains digitally created or altered media`);
-  if (field(ad, "page_is_deleted", "pageIsDeleted") === true) lines2.push(`${indent}Page deleted`);
+  if (political.length) lines.push(`${indent}Political ad countries: ${political.join(", ")}`);
+  if (field(ad, "contains_digital_created_media", "containsDigitallyCreatedMedia") === true) lines.push(`${indent}Meta label: contains digitally created or altered media`);
+  if (field(ad, "page_is_deleted", "pageIsDeleted") === true) lines.push(`${indent}Page deleted`);
   const impressions = asString(field(asRecord(field(ad, "impressions_with_index", "impressionsWithIndex")) ?? {}, "impressions_text", "impressionsText"));
   const spend = disclosed(ad.spend);
   const reach = disclosed(field(ad, "reach_estimate", "reachEstimate"));
   const currency = asString(ad.currency);
   const delivery = [impressions && `impressions ${impressions}`, spend && `spend ${spend}${currency ? ` ${currency}` : ""}`, reach && `estimated audience ${reach}`].filter(present);
-  lines2.push(`${indent}${delivery.length ? `Delivery (Meta's disclosure): ${delivery.join(" | ")}` : "Delivery: no impressions, spend or reach disclosed in this record"}`);
+  lines.push(`${indent}${delivery.length ? `Delivery (Meta's disclosure): ${delivery.join(" | ")}` : "Delivery: no impressions, spend or reach disclosed in this record"}`);
   const creative = creativeLines(snapshot2, indent);
   const cards = records(snapshot2.cards);
   let media = creative.media;
   let dynamic = creative.dynamic;
-  lines2.push(...creative.lines);
+  lines.push(...creative.lines);
   for (const [cardIndex, card] of cards.entries()) {
     const cardCreative = creativeLines(card, `${indent}  `);
-    lines2.push(`${indent}Card ${cardIndex + 1}:`, ...cardCreative.lines);
+    lines.push(`${indent}Card ${cardIndex + 1}:`, ...cardCreative.lines);
     media += cardCreative.media;
     dynamic ||= cardCreative.dynamic;
   }
   const extraTexts = asArray(snapshot2.extra_texts).map(creativeText).filter(present);
-  for (const [textIndex, text5] of extraTexts.entries()) lines2.push(...block(`Extra text ${textIndex + 1}`, text5, indent));
+  for (const [textIndex, text5] of extraTexts.entries()) lines.push(...block(`Extra text ${textIndex + 1}`, text5, indent));
   const extraLinks = strings3(snapshot2.extra_links);
-  if (extraLinks.length) lines2.push(`${indent}Extra links: ${extraLinks.join(" | ")}`);
-  if (!creativeText(snapshot2.body) && !cards.length && !extraTexts.length) lines2.push(`${indent}Text: none returned for this ad`);
-  if (dynamic) lines2.push(`${indent}Dynamic template: Meta fills the {{\u2026}} placeholders per viewer; the text above is the template.`);
-  return { lines: lines2, media };
+  if (extraLinks.length) lines.push(`${indent}Extra links: ${extraLinks.join(" | ")}`);
+  if (!creativeText(snapshot2.body) && !cards.length && !extraTexts.length) lines.push(`${indent}Text: none returned for this ad`);
+  if (dynamic) lines.push(`${indent}Dynamic template: Meta fills the {{\u2026}} placeholders per viewer; the text above is the template.`);
+  return { lines, media };
 }
 function transparencyLines(info) {
-  const lines2 = ["Transparency (Meta's regulated-ad data):", `  ${DELIVERY_SHARES_NOTE}`];
+  const lines = ["Transparency (Meta's regulated-ad data):", `  ${DELIVERY_SHARES_NOTE}`];
   const reach = asNumber(info.eu_total_reach);
   const scope = [typeof info.targets_eu === "boolean" && `Targets EU: ${info.targets_eu ? "yes" : "no"}`, reach !== null && `EU total reach: ${reach}`].filter(present);
-  if (scope.length) lines2.push(`  ${scope.join(" | ")}`);
+  if (scope.length) lines.push(`  ${scope.join(" | ")}`);
   const ages = asRecord(info.age_audience);
   const audience = [
     asString(info.gender_audience) && `gender ${info.gender_audience}`,
     ages && (asNumber(ages.min) !== null || asNumber(ages.max) !== null) && `ages ${asNumber(ages.min) ?? "?"}\u2013${asNumber(ages.max) ?? "?"}`
   ].filter(present);
-  if (audience.length) lines2.push(`  Audience: ${audience.join(", ")}`);
+  if (audience.length) lines.push(`  Audience: ${audience.join(", ")}`);
   const locations = records(info.location_audience).map((location2) => {
     const name2 = asString(location2.name) ?? "(unnamed)";
     const extra = [asString(location2.type), location2.excluded === true && "excluded", asNumber(location2.reach) !== null && `reach ${asNumber(location2.reach)}`].filter(present);
     return `${name2}${extra.length ? ` (${extra.join(", ")})` : ""}`;
   });
-  if (locations.length) lines2.push(`  Locations: ${locations.join("; ")}`);
+  if (locations.length) lines.push(`  Locations: ${locations.join("; ")}`);
   for (const country of records(info.age_country_gender_reach_breakdown)) {
     const rows = records(country.age_gender_breakdowns).map((row) => {
       const values = ["male", "female", "unknown"].flatMap((sex) => asNumber(row[sex]) === null ? [] : [`${sex} ${asNumber(row[sex])}`]);
       return `${asString(row.age_range) ?? "?"}: ${values.length ? values.join(", ") : "no values"}`;
     });
-    if (rows.length) lines2.push(`  Reach by age and gender, ${asString(country.country) ?? "country not named"}: ${rows.join("; ")}`);
+    if (rows.length) lines.push(`  Reach by age and gender, ${asString(country.country) ?? "country not named"}: ${rows.join("; ")}`);
   }
   const payers = records(info.payer_beneficiary_data).map((entry) => `payer ${asString(entry.payer) ?? "?"}, beneficiary ${asString(entry.beneficiary) ?? "?"}`);
-  if (payers.length) lines2.push(`  Payer and beneficiary: ${payers.join("; ")}`);
-  if (info.has_violating_payer_beneficiary === true) lines2.push("  Meta flags the payer or beneficiary as violating its rules");
-  if (info.is_ad_taken_down === true) lines2.push("  Meta reports the ad as taken down");
-  return lines2;
+  if (payers.length) lines.push(`  Payer and beneficiary: ${payers.join("; ")}`);
+  if (info.has_violating_payer_beneficiary === true) lines.push("  Meta flags the payer or beneficiary as violating its rules");
+  if (info.is_ad_taken_down === true) lines.push("  Meta reports the ad as taken down");
+  return lines;
 }
-function result(status, lines2, details) {
-  const text5 = lines2.join("\n");
+function result(status, lines, details) {
+  const text5 = lines.join("\n");
   const truncated = text5.length > OUTPUT_LIMIT3;
   return {
     status,
@@ -53179,7 +53183,7 @@ async function listAds(kind, args, headers, ctx) {
     return [`${name2}|${id}`, { name: name2, id }];
   })).values()];
   const formatted = ads.map(({ ad, id }, index) => adLines(ad, id, index));
-  const lines2 = [
+  const lines = [
     subject,
     `Filters: ${filters.shown.join(" | ")}`,
     cursor ? "Page: continuation page (cursor sent by POST, as ScrapeCreators documents for long cursors)" : "Page: first page",
@@ -53188,10 +53192,10 @@ async function listAds(kind, args, headers, ctx) {
     `Ads on this page: ${ads.length}${total2 !== null ? ` | Ad Library result count reported: ${total2}` : ""}`,
     nextCursor ? `Next page: pass cursor="${nextCursor}" with the same other arguments` : "Next page: no cursor returned; the provider gave no further page."
   ];
-  if (unreadable) lines2.push(`Unreadable entries: ${plural(unreadable, "returned entry", "returned entries")} carried no ad id and ${unreadable === 1 ? "was" : "were"} skipped; see the retained original.`);
-  if (kind === "company" && pages.length) lines2.push(`Advertiser pages in these results: ${pages.map((page) => `${page.name}${page.id ? ` (${page.id})` : ""}`).join("; ")}`);
-  lines2.push(EVIDENCE_SCOPE);
-  if (formatted.some((ad) => ad.media > 0)) lines2.push(MEDIA_NOTE2);
+  if (unreadable) lines.push(`Unreadable entries: ${plural(unreadable, "returned entry", "returned entries")} carried no ad id and ${unreadable === 1 ? "was" : "were"} skipped; see the retained original.`);
+  if (kind === "company" && pages.length) lines.push(`Advertiser pages in these results: ${pages.map((page) => `${page.name}${page.id ? ` (${page.id})` : ""}`).join("; ")}`);
+  lines.push(EVIDENCE_SCOPE);
+  if (formatted.some((ad) => ad.media > 0)) lines.push(MEDIA_NOTE2);
   const details = {
     kind,
     ...kind === "search" ? { query: target.query } : { page_id: target.pageId ?? null, company_name: target.companyName ?? null },
@@ -53206,14 +53210,14 @@ async function listAds(kind, args, headers, ctx) {
     credits_charged: asNumber(payload.credits_charged)
   };
   if (!ads.length) {
-    lines2.push(
+    lines.push(
       "",
       `The Ad Library returned no ads for this ${kind === "search" ? "query" : "advertiser"} and filter set.${args.status ? "" : " status defaults to ACTIVE, so inactive ads are not included unless status=ALL or INACTIVE."}`
     );
-    return result("empty", lines2, details);
+    return result("empty", lines, details);
   }
-  for (const ad of formatted) lines2.push("", ...ad.lines);
-  return result(unreadable ? "partial" : "success", lines2, details);
+  for (const ad of formatted) lines.push("", ...ad.lines);
+  return result(unreadable ? "partial" : "success", lines, details);
 }
 async function adDetail(args, headers, ctx) {
   const target = adTarget(args, "ad");
@@ -53229,12 +53233,12 @@ async function adDetail(args, headers, ctx) {
   if (returnedId !== target.id) return `ERROR: ${label} returned ad ${returnedId} instead of requested ad ${target.id}`;
   const id = returnedId;
   const formatted = adLines(ad, id, null);
-  const lines2 = [`Facebook Ad Library ad ${id}`, `Requested: ${target.shown}`, provenanceLine(ad), EVIDENCE_SCOPE];
-  if (formatted.media) lines2.push(MEDIA_NOTE2);
-  lines2.push("", ...formatted.lines);
+  const lines = [`Facebook Ad Library ad ${id}`, `Requested: ${target.shown}`, provenanceLine(ad), EVIDENCE_SCOPE];
+  if (formatted.media) lines.push(MEDIA_NOTE2);
+  lines.push("", ...formatted.lines);
   const info = asRecord(ad.aaa_info);
-  if (info) lines2.push("", ...transparencyLines(info));
-  return result("success", lines2, {
+  if (info) lines.push("", ...transparencyLines(info));
+  return result("success", lines, {
     kind: "ad",
     ad_id: returnedId ?? target.id,
     page_id: idOf(ad.pageID),
@@ -53259,25 +53263,25 @@ async function adTranscript(args, headers, ctx) {
   }
   const id = idOf(data.ad_id) ?? target.id;
   const available = typeof data.transcript_available === "boolean" ? data.transcript_available : null;
-  const lines2 = [
+  const lines = [
     `Facebook ad transcript: ad ${id ?? "(id not returned)"}`,
     `Ad Library: ${asString(data.url) ?? (id ? `${LIBRARY_AD_URL}${id}` : target.shown)}`,
     provenanceLine(payload)
   ];
   const details = { kind: "transcript", ad_id: id, transcript_available: available, cached: payload.cached === true, credits_charged: asNumber(payload.credits_charged) };
   if (transcript2 === null || !transcript2.trim()) {
-    lines2.push(
+    lines.push(
       "",
       `No transcript: the provider returned ${transcript2 === null ? "none (transcript: null" : 'an empty transcript (transcript: ""'}${available === null ? "" : `, transcript_available: ${available}`}). This does not show that the ad has no spoken words. The response's reported charge is shown above; a missing charge stays unknown.`
     );
-    return result("empty", lines2, details);
+    return result("empty", lines, details);
   }
-  lines2.push(
+  lines.push(
     "Source: Facebook's captions when it exposes them, otherwise ScrapeCreators' transcription of the public video; the response does not say which. Dig has not watched the video.",
     "",
     ...block("Transcript", transcript2, "")
   );
-  return result("success", lines2, details);
+  return result("success", lines, details);
 }
 async function companySearch(args, headers, ctx) {
   const query = args.query?.trim();
@@ -53298,13 +53302,13 @@ async function companySearch(args, headers, ctx) {
   if (!pages.length && unreadable) {
     return `ERROR: ${label} returned an unexpected payload: none of the ${plural(unreadable, "entry", "entries")} carried a page_id`;
   }
-  const lines2 = [
+  const lines = [
     `Facebook Ad Library advertiser search: "${query}"`,
     "Source: the Ad Library's page lookup; one request, no paging documented. A page listed here may have no ads running; pass its page_id to kind='company' for its ads.",
     provenanceLine(response.payload),
     `Pages returned: ${pages.length}`
   ];
-  if (unreadable) lines2.push(`Unreadable entries: ${plural(unreadable, "returned entry", "returned entries")} carried no page_id and ${unreadable === 1 ? "was" : "were"} skipped; see the retained original.`);
+  if (unreadable) lines.push(`Unreadable entries: ${plural(unreadable, "returned entry", "returned entries")} carried no page_id and ${unreadable === 1 ? "was" : "were"} skipped; see the retained original.`);
   const details = {
     kind: "companies",
     query,
@@ -53314,8 +53318,8 @@ async function companySearch(args, headers, ctx) {
     credits_charged: asNumber(response.payload.credits_charged)
   };
   if (!pages.length) {
-    lines2.push("", "The Ad Library returned no advertiser pages for this name.");
-    return result("empty", lines2, details);
+    lines.push("", "The Ad Library returned no advertiser pages for this name.");
+    return result("empty", lines, details);
   }
   for (const [index, { page, id }] of pages.entries()) {
     const likes2 = asNumber(page.likes);
@@ -53326,17 +53330,17 @@ async function companySearch(args, headers, ctx) {
       asString(page.country) && `country ${page.country}`,
       page.page_is_deleted === true && "page deleted"
     ].filter(present);
-    lines2.push("", `${index + 1}. ${asString(page.name) ?? "(name not returned)"} \u2014 page id ${id}`);
-    if (facts.length) lines2.push(`   ${facts.join(" | ")}`);
+    lines.push("", `${index + 1}. ${asString(page.name) ?? "(name not returned)"} \u2014 page id ${id}`);
+    if (facts.length) lines.push(`   ${facts.join(" | ")}`);
     const alias = asString(page.page_alias);
-    if (alias) lines2.push(`   Facebook: https://www.facebook.com/${alias}`);
+    if (alias) lines.push(`   Facebook: https://www.facebook.com/${alias}`);
     const instagram2 = asString(page.ig_username);
     if (instagram2) {
       const followers = asNumber(page.ig_followers);
-      lines2.push(`   Instagram: @${instagram2}${followers !== null ? ` (${fmtNum(followers)} followers)` : ""}${page.ig_verification === true ? ", verified" : ""}`);
+      lines.push(`   Instagram: @${instagram2}${followers !== null ? ` (${fmtNum(followers)} followers)` : ""}${page.ig_verification === true ? ", verified" : ""}`);
     }
   }
-  return result(unreadable ? "partial" : "success", lines2, details);
+  return result(unreadable ? "partial" : "success", lines, details);
 }
 var library = creditMetered({
   description: "Read Meta's public Ad Library via ScrapeCreators, one request per call. kind='search': ads matching a keyword, with status (provider default ACTIVE), country, media_type, language, date range, sort_by, exact-phrase search_type and political ad_type filters. kind='company': one advertiser's ads by page_id (exact) or company_name (resolved by the provider), with the same filters. kind='companies': find advertiser pages and their page_id by name. kind='ad': one ad's details by ad_id or Ad Library url, including Meta's EU and political transparency data when present. kind='transcript': one video ad's transcript (null, and free, when there is none). search and company return one page and a cursor for the next. Creative text is shown in full with links, run dates, platforms and media URLs. The library does not report performance; impressions, spend and reach appear only when Meta discloses them. Requires SCRAPECREATORS_API_KEY; 1 credit per request, a transcript only when returned, ad and transcript cache hits free with cache_max_age.",
@@ -53682,14 +53686,14 @@ function formatSearchItem(item, index) {
   const flags = [];
   if (item.archived) flags.push("ARCHIVED");
   if (item.fork) flags.push("fork");
-  const lines2 = [
+  const lines = [
     `${index + 1}. ${item.fullName}${flags.length ? ` [${flags.join(", ")}]` : ""}`,
     `   Stars: ${fmtNum2(item.stars)} | Forks: ${fmtNum2(item.forks)} | Open issues+PRs: ${fmtNum2(item.openIssuesAndPrs)} | Language: ${item.language ?? "n/a"} | License: ${item.license ?? "none detected"}`,
     `   Created: ${fmtDate(item.createdAt)} | Last push (any branch): ${fmtDate(item.pushedAt)} | ${item.htmlUrl}`
   ];
-  if (item.description) lines2.push(`   ${truncate3(item.description, 220)}`);
-  if (item.topics.length) lines2.push(`   Topics: ${item.topics.slice(0, 12).join(", ")}${item.topics.length > 12 ? ", \u2026" : ""}`);
-  return lines2.join("\n");
+  if (item.description) lines.push(`   ${truncate3(item.description, 220)}`);
+  if (item.topics.length) lines.push(`   Topics: ${item.topics.slice(0, 12).join(", ")}${item.topics.length > 12 ? ", \u2026" : ""}`);
+  return lines.join("\n");
 }
 var search6 = free({
   description: "Search public GitHub repositories with GitHub's native repository search. The query is forced to is:public and supports GitHub qualifiers (in:name,description,readme, topic:, language:, created:, pushed:, stars:, archived:false, fork:). Returns total_count, incomplete_results, the explicit query sent, and per-repo stars, forks, license, language, created and pushed dates, topics. GitHub exposes at most 1,000 results per query; search has its own rate limit (30/min authenticated, 10/min anonymous). Uses GH_TOKEN, GITHUB_TOKEN, or gh auth token when available.",
@@ -54195,64 +54199,64 @@ function formatMetadata(meta3) {
   ].filter((line) => line !== null);
 }
 function formatStars(section) {
-  const lines2 = ["Star history (weekly star-creation buckets from GitHub; gross stars created, unstars not subtracted \u2014 not net growth):"];
-  if (!section.ok) return [...lines2, `  unavailable: ${section.error}`];
+  const lines = ["Star history (weekly star-creation buckets from GitHub; gross stars created, unstars not subtracted \u2014 not net growth):"];
+  if (!section.ok) return [...lines, `  unavailable: ${section.error}`];
   const data = section.data;
-  if (section.partialNote) lines2.push(`  PARTIAL: ${section.partialNote}`);
-  lines2.push(
+  if (section.partialNote) lines.push(`  PARTIAL: ${section.partialNote}`);
+  lines.push(
     data.current ? `  Current week (started ${data.current.weekStart}, about ${data.current.daysElapsed} of 7 days elapsed): ${fmtNum2(data.current.total)} stars so far \u2014 partial, excluded from the windows below` : "  Current week: no bucket containing today was returned"
   );
   const missingReason = data.historyExhausted ? "history reaches the repository's creation" : section.partialNote ? "later pages unavailable" : `star-history pages capped at ${STAR_HISTORY_PAGE_CAP}`;
-  lines2.push(
+  lines.push(
     data.window ? `  Window (${data.window.weeks} of ${data.weeksPerWindow} complete weeks, ${data.window.start} \u2192 ${data.window.end}): ${fmtNum2(data.window.total)} stars created${data.window.weeks < data.weeksPerWindow ? ` \u2014 short window (${missingReason})` : ""}` : `  Window: no complete weeks available (${missingReason})`
   );
-  lines2.push(
+  lines.push(
     data.prior ? `  Prior window (${data.prior.weeks} complete weeks, ${data.prior.start} \u2192 ${data.prior.end}): ${fmtNum2(data.prior.total)} stars created \u2014 same unit as the window above` : `  Prior window: not comparable \u2014 both runs must hold ${data.weeksPerWindow} complete weeks (${missingReason})`
   );
   const shown2 = data.weeks.filter((week) => week.bucket === "window" || week.bucket === "current");
   if (shown2.length) {
-    lines2.push(`  Weekly (most recent first; * = partial current week; week boundaries are GitHub's and may not align with UTC):`);
-    lines2.push(`    ${shown2.map((week) => `${week.weekStart}: ${week.total}${week.bucket === "current" ? "*" : ""}`).join(" | ")}`);
+    lines.push(`  Weekly (most recent first; * = partial current week; week boundaries are GitHub's and may not align with UTC):`);
+    lines.push(`    ${shown2.map((week) => `${week.weekStart}: ${week.total}${week.bucket === "current" ? "*" : ""}`).join(" | ")}`);
   }
-  return lines2;
+  return lines;
 }
 function formatCommits(section, branch, days) {
-  const lines2 = [`Default-branch activity (${branch}, commits whose committer date falls in the last ${days} days; merge commits included; up to ${COMMITS_PER_PAGE * COMMITS_PAGE_CAP} listed):`];
-  if (!section.ok) return [...lines2, `  unavailable: ${section.error}`];
+  const lines = [`Default-branch activity (${branch}, commits whose committer date falls in the last ${days} days; merge commits included; up to ${COMMITS_PER_PAGE * COMMITS_PAGE_CAP} listed):`];
+  if (!section.ok) return [...lines, `  unavailable: ${section.error}`];
   const data = section.data;
-  if (section.partialNote) lines2.push(`  PARTIAL: ${section.partialNote}`);
+  if (section.partialNote) lines.push(`  PARTIAL: ${section.partialNote}`);
   if (data.count === 0) {
-    lines2.push(`  No commits on ${branch} in the window.`);
-    lines2.push(
+    lines.push(`  No commits on ${branch} in the window.`);
+    lines.push(
       data.latestOutsideWindow ? `  Latest ${branch} commit: ${data.latestOutsideWindow.sha.slice(0, 10)} on ${fmtDate(data.latestOutsideWindow.date)} by ${data.latestOutsideWindow.author} \u2014 ${data.latestOutsideWindow.message}` : `  No commits found on ${branch} at all.`
     );
-    return lines2;
+    return lines;
   }
-  lines2.push(`  Commits: ${fmtNum2(data.count)}${data.capped ? "+ (listing capped; more exist in the window)" : ""} | merge commits: ${data.mergeCommits} | authors with GitHub accounts: ${data.humanAuthors.length} human, ${data.botAuthors.length} bot | commits without a linked account: ${data.unlinkedAuthors}`);
-  if (data.latest) lines2.push(`  Latest: ${data.latest.sha.slice(0, 10)} on ${fmtDate(data.latest.date)} by ${data.latest.author} \u2014 ${data.latest.message}`);
-  if (data.humanAuthors.length) lines2.push(`  Human authors: ${data.humanAuthors.slice(0, 15).join(", ")}${data.humanAuthors.length > 15 ? ", \u2026" : ""}`);
-  if (data.botAuthors.length) lines2.push(`  Bot authors: ${data.botAuthors.join(", ")}`);
-  return lines2;
+  lines.push(`  Commits: ${fmtNum2(data.count)}${data.capped ? "+ (listing capped; more exist in the window)" : ""} | merge commits: ${data.mergeCommits} | authors with GitHub accounts: ${data.humanAuthors.length} human, ${data.botAuthors.length} bot | commits without a linked account: ${data.unlinkedAuthors}`);
+  if (data.latest) lines.push(`  Latest: ${data.latest.sha.slice(0, 10)} on ${fmtDate(data.latest.date)} by ${data.latest.author} \u2014 ${data.latest.message}`);
+  if (data.humanAuthors.length) lines.push(`  Human authors: ${data.humanAuthors.slice(0, 15).join(", ")}${data.humanAuthors.length > 15 ? ", \u2026" : ""}`);
+  if (data.botAuthors.length) lines.push(`  Bot authors: ${data.botAuthors.join(", ")}`);
+  return lines;
 }
 function formatReleases(section, days) {
-  const lines2 = [`Releases (first ${RELEASES_PER_PAGE} GitHub API entries; rolling tags can affect API order; package-registry publishing is not checked here):`];
-  if (!section.ok) return [...lines2, `  unavailable: ${section.error}`];
+  const lines = [`Releases (first ${RELEASES_PER_PAGE} GitHub API entries; rolling tags can affect API order; package-registry publishing is not checked here):`];
+  if (!section.ok) return [...lines, `  unavailable: ${section.error}`];
   const data = section.data;
-  if (data.listed === 0) return [...lines2, "  No GitHub releases published."];
-  lines2.push(`  Published in the last ${days} days: ${data.inWindow}${data.moreMayExist ? " (within the retrieved page; further pages not fetched)" : ` of ${data.listed} total`}`);
+  if (data.listed === 0) return [...lines, "  No GitHub releases published."];
+  lines.push(`  Published in the last ${days} days: ${data.inWindow}${data.moreMayExist ? " (within the retrieved page; further pages not fetched)" : ` of ${data.listed} total`}`);
   if (data.latest) {
-    lines2.push(`  Latest publication in retrieved page: ${data.latest.tag} on ${fmtDate(data.latest.publishedAt)}${data.latest.prerelease ? " (pre-release)" : ""}${data.latest.url ? ` \u2014 ${data.latest.url}` : ""}`);
+    lines.push(`  Latest publication in retrieved page: ${data.latest.tag} on ${fmtDate(data.latest.publishedAt)}${data.latest.prerelease ? " (pre-release)" : ""}${data.latest.url ? ` \u2014 ${data.latest.url}` : ""}`);
   }
-  return lines2;
+  return lines;
 }
 function formatContributors(section) {
-  const lines2 = [`Contributors (GitHub-reported commit counts, first ${CONTRIBUTORS_PER_PAGE}; not a count of unique people or a quality measure):`];
-  if (!section.ok) return [...lines2, `  unavailable: ${section.error}`];
+  const lines = [`Contributors (GitHub-reported commit counts, first ${CONTRIBUTORS_PER_PAGE}; not a count of unique people or a quality measure):`];
+  if (!section.ok) return [...lines, `  unavailable: ${section.error}`];
   const data = section.data;
-  if (data.listed === 0) return [...lines2, "  None listed."];
-  lines2.push(`  Listed: ${data.listed}${data.moreExist ? "+ (more pages exist)" : ""} | bots among listed: ${data.bots}`);
-  lines2.push(`  Top by commit count: ${data.top.map((entry) => `${entry.login}${entry.bot ? " [bot]" : ""} (${fmtNum2(entry.contributions)})`).join(", ")}`);
-  return lines2;
+  if (data.listed === 0) return [...lines, "  None listed."];
+  lines.push(`  Listed: ${data.listed}${data.moreExist ? "+ (more pages exist)" : ""} | bots among listed: ${data.bots}`);
+  lines.push(`  Top by commit count: ${data.top.map((entry) => `${entry.login}${entry.bot ? " [bot]" : ""} (${fmtNum2(entry.contributions)})`).join(", ")}`);
+  return lines;
 }
 function median(values) {
   if (values.length === 0) return null;
@@ -54264,16 +54268,16 @@ function formatIssueSample(issues) {
   return issues.flatMap((issue2) => {
     const reply2 = issue2.firstMaintainerResponse;
     const response = reply2 ? `first ${reply2.association} reply by ${reply2.login} after ${reply2.hours}h` : `no owner/member/collaborator reply among the first ${issue2.commentsSampled} of ${issue2.commentCount} comment(s)`;
-    const lines2 = [
+    const lines = [
       `    #${issue2.number} ${issue2.title} \u2014 ${issue2.author}${issue2.authorBot ? " [bot]" : ""} (${issue2.association}) opened ${fmtDate(issue2.createdAt)}${issue2.closedAt ? `, closed ${fmtDate(issue2.closedAt)}` : ""}${issue2.url ? ` ${issue2.url}` : ""}; ${response}`
     ];
-    if (reply2?.quote) lines2.push(`      reply: "${reply2.quote}"${reply2.url ? ` ${reply2.url}` : ""}`);
-    return lines2;
+    if (reply2?.quote) lines.push(`      reply: "${reply2.quote}"${reply2.url ? ` ${reply2.url}` : ""}`);
+    return lines;
   });
 }
 function formatEvidence(section, samples) {
-  const lines2 = [`Public collaboration samples (GraphQL; ${samples} items per sample \u2014 samples, not project-wide statistics):`];
-  if (!section.ok) return [...lines2, `  unavailable: ${section.error}`];
+  const lines = [`Public collaboration samples (GraphQL; ${samples} items per sample \u2014 samples, not project-wide statistics):`];
+  if (!section.ok) return [...lines, `  unavailable: ${section.error}`];
   const data = section.data;
   const external = data.pulls.filter((pull) => !MAINTAINER_ASSOCIATIONS.has(pull.association) && !pull.authorBot).length;
   const humanReviewed = data.pulls.filter((pull) => pull.humanReviewers.length > 0).length;
@@ -54281,7 +54285,7 @@ function formatEvidence(section, samples) {
   const botOnlyReviewed = data.pulls.filter((pull) => !pull.reviewsCapped && pull.humanReviewers.length === 0 && pull.botReviewers.length > 0).length;
   const unresolvedReview = data.pulls.filter((pull) => pull.reviewsCapped && pull.humanReviewers.length === 0).length;
   const botPulls = data.pulls.filter((pull) => pull.authorBot).length;
-  lines2.push(
+  lines.push(
     `  Merged PRs (${data.pulls.length} most recently updated of ${fmtNum2(data.mergedTotal)} merged): ${external} by contributors outside owner/member/collaborator, ${botPulls} by bots, ${humanReviewed} reviewed by another human (${humanApproved} human-approved), ${botOnlyReviewed} reviewed only by bots${unresolvedReview ? `, ${unresolvedReview} with no human review among the first ${PR_REVIEW_SAMPLE} of their reviews (later reviews not fetched, so not classified)` : ""}`
   );
   for (const pull of data.pulls) {
@@ -54290,19 +54294,19 @@ function formatEvidence(section, samples) {
     if (pull.botReviewers.length) parts.push(`bot reviews by ${pull.botReviewers.join(", ")}${pull.approvedByBot ? " (bot approval)" : ""}`);
     const reviewers = parts.length ? parts.join("; ") : `no review by another account${pull.reviewsCapped ? " in the fetched reviews" : ""}`;
     const coverage = pull.reviewsCapped ? `; only the first ${pull.reviewsSampled} of ${fmtNum2(pull.reviewCount)} reviews were fetched \u2014 later reviews are unexamined` : "";
-    lines2.push(`    #${pull.number} ${pull.title} \u2014 ${pull.author}${pull.authorBot ? " [bot]" : ""} (${pull.association}), merged ${fmtDate(pull.mergedAt)}${pull.mergedBy ? ` by ${pull.mergedBy}` : ""}${pull.url ? ` ${pull.url}` : ""}; ${reviewers}${coverage}`);
+    lines.push(`    #${pull.number} ${pull.title} \u2014 ${pull.author}${pull.authorBot ? " [bot]" : ""} (${pull.association}), merged ${fmtDate(pull.mergedAt)}${pull.mergedBy ? ` by ${pull.mergedBy}` : ""}${pull.url ? ` ${pull.url}` : ""}; ${reviewers}${coverage}`);
     for (const review of pull.reviews) {
-      lines2.push(`      ${review.state} by ${review.reviewer}${review.bot ? " [bot]" : ""}${review.submittedAt ? ` on ${fmtDate(review.submittedAt)}` : ""}: ${review.quote ? `"${review.quote}"` : "(no review text)"}${review.url ? ` ${review.url}` : ""}`);
+      lines.push(`      ${review.state} by ${review.reviewer}${review.bot ? " [bot]" : ""}${review.submittedAt ? ` on ${fmtDate(review.submittedAt)}` : ""}: ${review.quote ? `"${review.quote}"` : "(no review text)"}${review.url ? ` ${review.url}` : ""}`);
     }
   }
   const openHours = data.openIssues.map((issue2) => issue2.firstMaintainerResponse?.hours).filter((hours) => hours !== void 0);
   const closedHours = data.closedIssues.map((issue2) => issue2.firstMaintainerResponse?.hours).filter((hours) => hours !== void 0);
-  lines2.push(`  Open issues (${data.openIssues.length} newest of ${fmtNum2(data.openTotal)} open): ${openHours.length} with a maintainer reply in the sampled comments${openHours.length ? `, median ${median(openHours)}h` : ""}`);
-  lines2.push(...formatIssueSample(data.openIssues));
-  lines2.push(`  Closed issues (${data.closedIssues.length} most recently updated of ${fmtNum2(data.closedTotal)} closed): ${closedHours.length} with a maintainer reply in the sampled comments${closedHours.length ? `, median ${median(closedHours)}h` : ""}`);
-  lines2.push(...formatIssueSample(data.closedIssues));
-  lines2.push(`  Reviews are examined up to the first ${PR_REVIEW_SAMPLE} per PR; quotes are bounded to ${QUOTE_MAX_CHARS} characters of untrusted text, ${REVIEWS_QUOTED_PER_PR} quoted per PR. Association labels are GitHub's; they show repository affiliation, not employment or expertise.`);
-  return lines2;
+  lines.push(`  Open issues (${data.openIssues.length} newest of ${fmtNum2(data.openTotal)} open): ${openHours.length} with a maintainer reply in the sampled comments${openHours.length ? `, median ${median(openHours)}h` : ""}`);
+  lines.push(...formatIssueSample(data.openIssues));
+  lines.push(`  Closed issues (${data.closedIssues.length} most recently updated of ${fmtNum2(data.closedTotal)} closed): ${closedHours.length} with a maintainer reply in the sampled comments${closedHours.length ? `, median ${median(closedHours)}h` : ""}`);
+  lines.push(...formatIssueSample(data.closedIssues));
+  lines.push(`  Reviews are examined up to the first ${PR_REVIEW_SAMPLE} per PR; quotes are bounded to ${QUOTE_MAX_CHARS} characters of untrusted text, ${REVIEWS_QUOTED_PER_PR} quoted per PR. Association labels are GitHub's; they show repository affiliation, not employment or expertise.`);
+  return lines;
 }
 var inspect = free({
   description: "Gather comparable public evidence for one GitHub repository over a window: metadata, weekly star-creation buckets (gross, not net growth; partial current week reported separately, equal runs of complete weeks compared), default-branch commits by committer date and authors, releases, contributors, and with a token merged-PR review samples (human vs bot reviewers, bounded quoted review text with links) and issue first-maintainer-reply samples (delay, bounded quote, link). Every section states its window, cap, sampling, or failure; pages fetched before a failure are kept and labelled partial. No quality score is computed. Public repositories only. Roughly 6\u20138 REST calls plus one GraphQL call per repository.",
@@ -54509,9 +54513,9 @@ Binary content is not displayed.`,
       };
     }
     const content2 = bytes.toString("utf8");
-    const lines2 = content2 === "" ? [] : content2.split(/\r?\n/);
-    if (lines2.length > 0 && lines2[lines2.length - 1] === "") lines2.pop();
-    const totalLines = lines2.length;
+    const lines = content2 === "" ? [] : content2.split(/\r?\n/);
+    if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+    const totalLines = lines.length;
     if (startLine > totalLines && totalLines > 0) {
       return `ERROR: startLine ${startLine} is past the end of ${displayPath} (${fmtNum2(totalLines)} lines)`;
     }
@@ -54519,7 +54523,7 @@ Binary content is not displayed.`,
     let chars = 0;
     let endLine = startLine - 1;
     for (let index = startLine - 1; index < totalLines && selected.length < maxLines; index++) {
-      const line = lines2[index];
+      const line = lines[index];
       if (selected.length > 0 && chars + line.length + 1 > READ_MAX_CHARS) break;
       selected.push(line);
       chars += line.length + 1;
@@ -54977,11 +54981,11 @@ function normalizeCreativeCenterAd(raw) {
   };
 }
 function formatCreativeCenterAd(ad, index) {
-  const lines2 = [];
+  const lines = [];
   const title = truncate4(ad.title, 160) ?? "(untitled)";
-  lines2.push(`${index + 1}. ${title}`);
-  lines2.push(`   Ad id: ${ad.id}${ad.brand ? ` | Brand: ${ad.brand}` : ""}`);
-  lines2.push(
+  lines.push(`${index + 1}. ${title}`);
+  lines.push(`   Ad id: ${ad.id}${ad.brand ? ` | Brand: ${ad.brand}` : ""}`);
+  lines.push(
     `   CTR: ${fmtPercent(ad.ctr)} | Likes: ${fmtNum3(ad.likes)}` + (ad.comments !== null ? ` | Comments: ${fmtNum3(ad.comments)}` : "") + (ad.shares !== null ? ` | Shares: ${fmtNum3(ad.shares)}` : "") + (ad.costTier !== null ? ` | Cost tier: ${ad.costTier}` : "") + (ad.durationSeconds !== null ? ` | Duration: ${ad.durationSeconds.toFixed(0)}s` : "")
   );
   const context = [];
@@ -54989,11 +54993,11 @@ function formatCreativeCenterAd(ad, index) {
   else if (ad.industryId) context.push(`Industry id: ${ad.industryId}`);
   if (ad.objective) context.push(`Objective: ${ad.objective}`);
   if (ad.countries.length) context.push(`Countries: ${ad.countries.join(", ")}`);
-  if (context.length) lines2.push(`   ${context.join(" | ")}`);
-  if (ad.landingPage) lines2.push(`   Landing page: ${ad.landingPage}`);
-  if (ad.highlight) lines2.push(`   Why it works (TikTok): ${truncate4(ad.highlight, 240)}`);
-  if (ad.cover) lines2.push(`   Cover: ${ad.cover}`);
-  return lines2.join("\n");
+  if (context.length) lines.push(`   ${context.join(" | ")}`);
+  if (ad.landingPage) lines.push(`   Landing page: ${ad.landingPage}`);
+  if (ad.highlight) lines.push(`   Why it works (TikTok): ${truncate4(ad.highlight, 240)}`);
+  if (ad.cover) lines.push(`   Cover: ${ad.cover}`);
+  return lines.join("\n");
 }
 var CREATIVE_CENTER_CAVEAT = "TikTok's Creative Center is a curated set of popular ads, not a census; absence here does not mean an advertiser is not running ads. CTR and likes are TikTok-reported; cost tier is TikTok's relative bucket, not spend.";
 var search7 = {
@@ -55148,10 +55152,10 @@ function formatRetention(retention) {
     const delta = retention.points[index - 1].value - point.value;
     return !worst || delta > worst.delta ? { second: point.second, delta } : worst;
   }, null);
-  const lines2 = [`   Retention curve (${retention.seconds}s, share of viewers still watching, CTR-weighted): ${sample}`];
-  if (drop && drop.delta > 0) lines2.push(`   Largest drop: ${fmtPercent(drop.delta)} at second ${drop.second}`);
-  if (retention.highlightSeconds.length) lines2.push(`   TikTok-flagged key frames: second ${retention.highlightSeconds.join(", ")}`);
-  return lines2.join("\n");
+  const lines = [`   Retention curve (${retention.seconds}s, share of viewers still watching, CTR-weighted): ${sample}`];
+  if (drop && drop.delta > 0) lines.push(`   Largest drop: ${fmtPercent(drop.delta)} at second ${drop.second}`);
+  if (retention.highlightSeconds.length) lines.push(`   TikTok-flagged key frames: second ${retention.highlightSeconds.join(", ")}`);
+  return lines.join("\n");
 }
 var detail = {
   description: "Fetch one TikTok Creative Center ad by id (via TikHub) with its title, brand, objective, landing page, countries, CTR, likes, comments, shares, and cost tier; by default also its CTR percentile within the industry and second-by-second retention curve, and optionally TikTok's recommended similar ads. Requires TIKHUB_API_KEY. Each analytics block is a separate metered request.",
@@ -55204,28 +55208,28 @@ var detail = {
       if ("error" in similarResult) notes.push(`Similar ads unavailable: ${similarResult.error}`);
       else similar2 = asArray6(asRecord7(similarResult.data)?.materials).map(normalizeCreativeCenterAd).filter((entry) => entry !== null);
     }
-    const lines2 = [`TikTok Creative Center ad ${ad.id}`, "", formatCreativeCenterAd(ad, 0)];
+    const lines = [`TikTok Creative Center ad ${ad.id}`, "", formatCreativeCenterAd(ad, 0)];
     const extra = [];
     if (objectives.length > 1) extra.push(`All objectives: ${objectives.join(", ")}`);
     if (source) extra.push(`Source: ${source}`);
     if (voiceOver) extra.push("Voice-over: yes");
     if (patternLabels.length) extra.push(`Creative patterns: ${patternLabels.join(", ")}`);
-    if (extra.length) lines2.push(`   ${extra.join(" | ")}`);
+    if (extra.length) lines.push(`   ${extra.join(" | ")}`);
     if (withAnalytics) {
-      lines2.push("");
-      lines2.push(percentile === null ? "   CTR percentile: unavailable" : `   CTR percentile within industry (180d): ${fmtPercent(percentile)} \u2014 beats that share of peer ads`);
-      if (retention) lines2.push(formatRetention(retention));
-      else lines2.push("   Retention curve: unavailable");
+      lines.push("");
+      lines.push(percentile === null ? "   CTR percentile: unavailable" : `   CTR percentile within industry (180d): ${fmtPercent(percentile)} \u2014 beats that share of peer ads`);
+      if (retention) lines.push(formatRetention(retention));
+      else lines.push("   Retention curve: unavailable");
     }
     if (withSimilar) {
-      lines2.push("", `Similar ads (TikTok recommended, ${similar2.length}):`);
-      if (similar2.length) lines2.push(...similar2.map(formatCreativeCenterAd));
-      else lines2.push("   none returned");
+      lines.push("", `Similar ads (TikTok recommended, ${similar2.length}):`);
+      if (similar2.length) lines.push(...similar2.map(formatCreativeCenterAd));
+      else lines.push("   none returned");
     }
-    if (notes.length) lines2.push("", ...notes.map((note) => `Note: ${note}`));
-    lines2.push("", CREATIVE_CENTER_CAVEAT);
+    if (notes.length) lines.push("", ...notes.map((note) => `Note: ${note}`));
+    lines.push("", CREATIVE_CENTER_CAVEAT);
     return {
-      text: lines2.join("\n"),
+      text: lines.join("\n"),
       details: {
         provider: "tikhub",
         ad_id: ad.id,
@@ -55267,8 +55271,8 @@ function normalizeLibraryAd(raw) {
   };
 }
 function formatLibraryAd(ad, index) {
-  const lines2 = [`${index + 1}. ${ad.advertiser ?? "(advertiser unknown)"} \u2014 ad ${ad.id}`];
-  if (ad.advertiserIds) lines2.push(`   Advertiser business IDs: ${ad.advertiserIds}`);
+  const lines = [`${index + 1}. ${ad.advertiser ?? "(advertiser unknown)"} \u2014 ad ${ad.id}`];
+  if (ad.advertiserIds) lines.push(`   Advertiser business IDs: ${ad.advertiserIds}`);
   const run = ad.firstShown && ad.lastShown ? ad.firstShown === ad.lastShown ? `Shown: ${ad.firstShown}` : `Shown: ${ad.firstShown} \u2192 ${ad.lastShown}` : ad.firstShown ? `First shown: ${ad.firstShown}` : null;
   const facts = [];
   if (run) facts.push(run);
@@ -55276,10 +55280,10 @@ function formatLibraryAd(ad, index) {
   if (ad.impressions !== null) facts.push(`Impressions: ${fmtNum3(ad.impressions)}`);
   if (ad.spent) facts.push(`Spent: ${ad.spent}`);
   facts.push(`Media: ${ad.videoCount} video${ad.videoCount === 1 ? "" : "s"}, ${ad.imageCount} image${ad.imageCount === 1 ? "" : "s"}`);
-  lines2.push(`   ${facts.join(" | ")}`);
-  if (ad.url) lines2.push(`   Library page: ${ad.url}`);
-  if (ad.cover) lines2.push(`   Cover: ${ad.cover}`);
-  return lines2.join("\n");
+  lines.push(`   ${facts.join(" | ")}`);
+  if (ad.url) lines.push(`   Library page: ${ad.url}`);
+  if (ad.cover) lines.push(`   Cover: ${ad.cover}`);
+  return lines.join("\n");
 }
 var library2 = creditMetered({
   description: "Search TikTok's public Ad Library (via ScrapeCreators) for the ads an advertiser is actually running: advertiser, first/last shown dates, estimated audience band, and creative media. Search by advertiser_name (resolved to a TikTok advertiser entity when one matches) or by free-text query, not both. Requires SCRAPECREATORS_API_KEY. 1 credit per request. No spend or targeting is disclosed for ordinary ads.",
@@ -55589,11 +55593,11 @@ var docs_sections = free({
         if (entry.trail[1]) section.parts.add(entry.trail[1]);
         sections2.set(entry.section, section);
       }
-      const lines2 = [...sections2].map(
+      const lines = [...sections2].map(
         ([name2, { pages, parts }]) => `- ${name2} (${pages} pages)${parts.size ? `: ${[...parts].join(", ")}` : ""}`
       );
       return outcome("success", `DataForSEO documentation sections:
-${lines2.join("\n")}
+${lines.join("\n")}
 
 List a section's pages with dataforseo_docs_index.`);
     } catch (error51) {
@@ -55622,14 +55626,14 @@ ${entry.summary}`.toLowerCase();
         return outcome("empty", `No DataForSEO documentation pages matched${section ? ` section "${args.section}"` : ""}${words.length ? ` and "${args.query}"` : ""}. List sections with dataforseo_docs_sections.`);
       const page = matches2.slice(offset, offset + limit2);
       const next = offset + limit2 < matches2.length ? offset + limit2 : null;
-      const lines2 = page.map(
+      const lines = page.map(
         (entry) => `- ${entry.title} \u2014 ${entry.path || entry.url} \u2014 ${entry.trail.join(" \u203A ")}${entry.summary ? ` \u2014 ${entry.summary}` : ""}`
       );
       const range = page.length ? `${offset + 1}\u2013${offset + page.length}` : "none";
       return outcome(
         page.length ? "success" : "empty",
         `DataForSEO documentation pages ${range} of ${matches2.length}${next === null ? "" : `; continue at offset ${next}`}:
-${lines2.join("\n")}
+${lines.join("\n")}
 
 Read a page with dataforseo_docs_read before calling its endpoint.`,
         { total: matches2.length, nextOffset: next }
@@ -55694,7 +55698,7 @@ function describe3(payload, httpStatus, call) {
     return failed(`${head}: HTTP ${httpStatus} without a DataForSEO response envelope.`);
   const body = redactValue(payload, knownSecrets());
   const tasks = Array.isArray(body.tasks) ? body.tasks : [];
-  const lines2 = [
+  const lines = [
     head,
     `Status ${body.status_code ?? "missing"} ${body.status_message ?? ""}`.trim() + ` \xB7 returned cost ${usd(body.cost)} \xB7 ${tasks.length} task${tasks.length === 1 ? "" : "s"}, ${body.tasks_error ?? 0} with errors \xB7 ${body.time ?? "time not reported"}`,
     ...tasks.map(
@@ -55715,7 +55719,7 @@ function describe3(payload, httpStatus, call) {
     }))
   };
   if (!ACCEPTED.has(Number(body.status_code)))
-    return outcome("failed", `${lines2.join("\n")}
+    return outcome("failed", `${lines.join("\n")}
 The request failed; look up the status code in the documentation's Appendix (errors).`, details);
   const classes = tasks.map(classify);
   const status = classes.length && classes.every((c) => c === "error") ? "failed" : classes.some((c) => c === "error" || c === "partial") ? "partial" : classes.some((c) => c === "results" || c === "notReady") ? "success" : "empty";
@@ -55728,7 +55732,7 @@ The request failed; look up the status code in the documentation's Appendix (err
   const truncated = results.length > OUTPUT_LIMIT4;
   const shown2 = truncated ? `${results.slice(0, OUTPUT_LIMIT4)}
 [Truncated at ${OUTPUT_LIMIT4} of ${results.length} characters. The complete response is this call's original response when raw retention is on; read it with library_read using the receipt's raw file.]` : results;
-  return outcome(status, `${[...lines2, ...notes].join("\n")}
+  return outcome(status, `${[...lines, ...notes].join("\n")}
 
 Tasks (data echoes the request; null and empty fields omitted):
 ${shown2}`, { ...details, truncated });
@@ -58095,7 +58099,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
 }
 
 // src/version.mjs
-var VERSION2 = "0.4.1";
+var VERSION2 = "0.4.2";
 
 // src/server.mjs
 loadKeys();

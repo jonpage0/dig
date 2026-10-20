@@ -168,11 +168,7 @@ export default free({
               signal.throwIfAborted();
               mkdirSync(transcriptDir, { recursive: true });
               const file = join(transcriptDir, `${video.id}.md`);
-              try {
-                writeFileSync(file, content, { encoding: "utf8", flag: "wx" });
-              } catch (e) {
-                if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-              }
+              saveTranscript(file, content);
               video.transcriptFile = file;
               video.transcriptWords = readFileSync(file, "utf8").split(
                 /\s+/,
@@ -216,6 +212,21 @@ export default free({
     }
   },
 } satisfies ToolSpec);
+
+/**
+ * Saves a transcript file in the library once, for yt-dlp captions and `youtube_transcript` alike. The whole text is
+ * redacted of every known credential in every spelling `redactText` covers, so none reaches disk: captions, titles
+ * and provider metadata can all echo one. An existing file is kept; the result says whether this call wrote the file.
+ */
+export function saveTranscript(file: string, content: string, mode?: number): boolean {
+  try {
+    writeFileSync(file, redactText(content, knownSecrets()), { encoding: "utf8", flag: "wx", ...(mode === undefined ? {} : { mode }) });
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    return false;
+  }
+}
 
 /** Known credentials in any spelling, and any `key=` query value, since a request URL carries the Google key there. */
 function redact(text: string): string {

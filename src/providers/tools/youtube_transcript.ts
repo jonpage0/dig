@@ -1,4 +1,4 @@
-import { mkdirSync, lstatSync, writeFileSync } from "node:fs"
+import { mkdirSync, lstatSync } from "node:fs"
 import { join } from "node:path"
 import { loadConfig } from "../runtime-config.js"
 import { outcome } from "../outcome.js"
@@ -6,6 +6,7 @@ import { requestJson } from "../http.js"
 import { creditMetered, scrapecreatorsHeaders, MISSING_KEY_ERROR } from "./scrapecreators.js"
 import { knownSecrets, redactText } from "../secrets.js"
 import type { ToolSpec } from "../types.js"
+import { saveTranscript } from "./youtube.js"
 
 export const transcript = creditMetered({
   description: "Fetch a timestamped YouTube transcript through ScrapeCreators and save it in the existing transcript library. Paid, explicit fallback when yt-dlp captions are unavailable. Supports requested language, original audio and provider cache. Existing transcript files are never replaced.",
@@ -44,10 +45,9 @@ export const transcript = creditMetered({
       const directory = join(loadConfig().library, "youtube-transcripts")
       mkdirSync(directory, { recursive: true })
       const file = join(directory, `${id}-scrapecreators-${args.originalAudio ? "original" : language ?? "auto"}.md`)
-      const content = redactText([`# YouTube transcript ${id}`, `Source: https://www.youtube.com/watch?v=${id}`, "Provider: ScrapeCreators", `Language: ${body.language ?? "not reported"}`, `Requested language: ${language ?? "automatic"}; original audio only: ${args.originalAudio === true}`, `Retrieved: ${new Date().toISOString()}`, "", "## Full Transcript", "", ...segments].join("\n\n"), knownSecrets())
-      let reused = false
-      try { writeFileSync(file, content, { encoding: "utf8", flag: "wx", mode: 0o600 }) } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; if (!lstatSync(file).isFile()) throw new Error("Existing transcript is not a regular file"); reused = true }
-      // Read the preserved file so output describes the file the caller will inspect.
+      const content = [`# YouTube transcript ${id}`, `Source: https://www.youtube.com/watch?v=${id}`, "Provider: ScrapeCreators", `Language: ${body.language ?? "not reported"}`, `Requested language: ${language ?? "automatic"}; original audio only: ${args.originalAudio === true}`, `Retrieved: ${new Date().toISOString()}`, "", "## Full Transcript", "", ...segments].join("\n\n")
+      const reused = !saveTranscript(file, content, 0o600)
+      if (reused && !lstatSync(file).isFile()) throw new Error("Existing transcript is not a regular file")
       return outcome("success", `Transcript: ${file}\n${reused ? "The existing saved transcript was kept; this request's current response is retained separately." : "Saved timestamped transcript."}\nLanguage returned by this request: ${body.language ?? "unknown"}\nRead the saved file before quoting it.`, { transcriptFile: file })
     } catch (error) {
       ctx.abort.throwIfAborted()

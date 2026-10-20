@@ -17,6 +17,8 @@ interface PolymarketMarket {
   conditionId?: string
   clobTokenIds?: string
   question: string
+  /** Gamma's short label for one market in a grouped event ("No change", "25 bps decrease"). */
+  groupItemTitle?: string
   description?: string
   outcomes: string // JSON-encoded: '["Yes","No"]'
   outcomePrices: string // JSON-encoded: '["0.20","0.80"]'
@@ -143,8 +145,6 @@ export default free({
           for (const market of markets) {
             const outcomes = safeJsonParse<string[]>(market.outcomes, [])
             const prices = safeJsonParse<string[]>(market.outcomePrices, [])
-            if (market.conditionId) lines.push(`  Condition ID: ${market.conditionId}`)
-            if (market.clobTokenIds) lines.push(`  Outcome token IDs (outcome order): ${market.clobTokenIds}`)
 
             for (let i = 0; i < outcomes.length; i++) {
               const outcome = outcomes[i]
@@ -249,14 +249,16 @@ export default free({
               const outcomes = safeJsonParse<string[]>(m.outcomes, [])
               const yesIdx = outcomes.findIndex((o) => o.toLowerCase() === "yes")
               const yesPrice = yesIdx >= 0 ? parseFloat(prices[yesIdx] || "0") : 0
-              return { question: shortenQuestion(m.question), price: yesPrice }
+              // Gamma names each market of a grouped event; the question's wording is only a fallback
+              // ("Will there be no change…" would otherwise shorten to "there").
+              return { question: m.groupItemTitle?.trim() || shortenQuestion(m.question), price: yesPrice, market: m }
             })
             .filter((x) => x.price > 0.005)
             .sort((a, b) => b.price - a.price)
 
           lines.push(`  Odds:`)
           for (const item of leaderboard.slice(0, 8)) {
-            lines.push(`    ${item.question}: ${(item.price * 100).toFixed(1)}%`)
+            lines.push(`    ${item.question}: ${(item.price * 100).toFixed(1)}%`, ...marketIds(item.market, "      "))
           }
           if (leaderboard.length > 8) {
             lines.push(`    ... +${leaderboard.length - 8} more`)
@@ -284,6 +286,7 @@ export default free({
                 lines.push(`    ... +${pairs.length - 5} more outcomes`)
               }
             }
+            lines.push(...marketIds(market, "    "))
           }
           if (markets.length > 3) {
             lines.push(`  ... +${markets.length - 3} more markets`)
@@ -305,6 +308,14 @@ export default free({
     }
   },
 })
+
+/** A market's condition ID and outcome token IDs: what polymarket_resolution and polymarket_history take. */
+function marketIds(market: PolymarketMarket, indent: string): string[] {
+  return [
+    ...(market.conditionId ? [`${indent}Condition ID: ${market.conditionId}`] : []),
+    ...(market.clobTokenIds ? [`${indent}Outcome token IDs (outcome order): ${market.clobTokenIds}`] : []),
+  ]
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
