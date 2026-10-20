@@ -16,6 +16,7 @@ import {
 } from "./tools/papers.js";
 import {
 	multi_search as papers_multi_search_impl,
+	sections as papers_sections,
 	fulltext_read as papers_fulltext_read_impl,
 	pdf_download as papers_pdf_download_impl,
 } from "./tools/paper_search.js";
@@ -58,6 +59,7 @@ export const providerTools: Record<string, ToolSpec> = {
 	papers_semantic_scholar_relations,
 	papers_openalex_content,
 	papers_openalex_search: openalex_search,
+	papers_sections,
 	papers_multi_search: papers_multi_search_impl,
 	papers_fulltext_read: papers_fulltext_read_impl,
 	papers_pdf_download: papers_pdf_download_impl,

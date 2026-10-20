@@ -374,6 +374,7 @@ export function createSchemas(
         "Sort mode.",
       ),
     }),
+    papers_sections: T.Object({file:T.String(),maxPages:T.Optional(T.Integer({minimum:1,maximum:100})),maxCharacters:T.Optional(T.Integer({minimum:1,maximum:200000}))},{additionalProperties:false}),
     papers_multi_search: T.Object(
       {
         query: T.String({
@@ -383,7 +384,7 @@ export function createSchemas(
         sources: T.Optional(
           T.Union([T.String(), T.Array(T.String())], {
             description:
-              "Comma-separated string or array of sources (arxiv, pubmed, biorxiv, medrxiv, pmc, europepmc, crossref, openalex, semantic, dblp, doaj, zenodo, hal, iacr, core, openaire, ssrn, unpaywall, google_scholar). Default: all 19 enabled connectors (slower), not a guarantee of availability. base/citeseerx are disabled; unknown/disabled requests fail explicitly. Inspect per-source health before treating zero counts as no matches.",
+              "Comma-separated string or array of sources (arxiv, pubmed, biorxiv, medrxiv, pmc, europepmc, crossref, openalex, semantic, dblp, doaj, zenodo, hal, iacr, core, openaire, ssrn, unpaywall, google_scholar, openreview). Default: all 20 enabled connectors (slower), not a guarantee of availability. base/citeseerx are disabled; unknown/disabled requests fail explicitly. Inspect per-source health before treating zero counts as no matches.",
           }),
         ),
         maxResults: T.Optional(

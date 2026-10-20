@@ -46,7 +46,7 @@ Quit and reopen ChatGPT, then type **`$dig:setup`** in a new conversation. It wa
 
 Ask a question in Codex. Dig researches it source by source, writes a report for each source, and keeps the original responses behind every claim.
 
-**22 sources · 25 research methods · 67 provider tools**
+**22 sources · 25 research methods · 68 provider tools**
 
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
 | :---: | --- | --- |

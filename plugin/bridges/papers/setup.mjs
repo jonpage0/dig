@@ -14,14 +14,16 @@ import { delimiter, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const UPSTREAM_REPO = 'https://github.com/openags/paper-search-mcp.git';
-const UPSTREAM_COMMIT = 'c8b642183bb725f0a7faec89e58b558df09079d1';
+const UPSTREAM_COMMIT = 'cab1b5cc276a0cd004a0044003926a6440088049';
+const PREVIOUS_COMMIT = 'c8b642183bb725f0a7faec89e58b558df09079d1';
 const PATCH_PATH = fileURLToPath(new URL('paper-search-mcp.patch', import.meta.url));
 // The exact patch earlier Dig versions installed, kept only so setup can
 // recognize and replace it. SHA-256:
 // 236e7e3ce6bf8b52d2c84a4fce768c91f5158b3e7cf58f36e3d142ac7cb1c183
 const PREVIOUS_PATCH_PATH = fileURLToPath(new URL('paper-search-mcp.previous.patch', import.meta.url));
 /** The only patches setup removes, current first; any other change is refused. */
-const RECOGNIZED_PATCHES = [PATCH_PATH, PREVIOUS_PATCH_PATH];
+const LEGACY_PATCH_PATH = fileURLToPath(new URL('paper-search-mcp.0.2.32.patch', import.meta.url));
+const RECOGNIZED_PATCHES = [{ path: PATCH_PATH, commit: UPSTREAM_COMMIT }, { path: LEGACY_PATCH_PATH, commit: PREVIOUS_COMMIT }, { path: PREVIOUS_PATCH_PATH, commit: PREVIOUS_COMMIT }];
 const EMAIL_KEY = 'PAPER_SEARCH_MCP_UNPAYWALL_EMAIL';
 // src/config.mjs stateDirectory() applies this rule; the server looks for the bridge here.
 const STATE = resolve(process.env.DIG_STATE_DIR || join(homedir(), '.local', 'share', 'dig'));
@@ -147,17 +149,17 @@ async function exists(target) {
 async function recognizeInstalledPatch(target) {
 	const head = (await runRequired(['git', 'rev-parse', 'HEAD'], target)).trim();
 	const staged = await run(['git', '--no-optional-locks', 'diff', '--cached', '--quiet', '--no-ext-diff'], target);
-	if (head !== UPSTREAM_COMMIT || staged.code !== 0) {
+	if (!RECOGNIZED_PATCHES.some(entry => entry.commit === head) || staged.code !== 0) {
 		fail(`${target} has a different HEAD or staged changes; refusing to remove any patch`);
 	}
 	for (const patch of RECOGNIZED_PATCHES) {
-		if (await matchesPatch(target, patch)) return patch;
+		if (patch.commit === head && await matchesPatch(target, patch.path, patch.commit)) return patch.path;
 	}
 	fail(`${target} has changes beyond the recognized compatibility patch; refusing to overwrite them`);
 }
 
 /** Whether the clone's worktree is exactly the pin plus `patch`; a failed preflight refuses. */
-async function matchesPatch(target, patch) {
+async function matchesPatch(target, patch, commit) {
 	// Build the expected tree in a disposable clone. Neither the installed
 	// worktree nor its index is mutated by this preflight, including on a failed match.
 	const scratch = await fs.mkdtemp(join(tmpdir(), 'paper-search-patch-'));
@@ -169,7 +171,7 @@ async function matchesPatch(target, patch) {
 	let failure = '';
 	try {
 		await preflight(['git', 'clone', '--shared', '--no-checkout', target, scratch]);
-		await preflight(['git', 'checkout', '--detach', UPSTREAM_COMMIT], scratch);
+		await preflight(['git', 'checkout', '--detach', commit], scratch);
 		await preflight(['git', 'apply', '--index', patch], scratch);
 		const comparison = ['git', `--git-dir=${join(scratch, '.git')}`, `--work-tree=${target}`];
 		const diff = await run([...comparison, 'diff', '--quiet', '--no-ext-diff', '--no-textconv']);
@@ -248,9 +250,9 @@ async function configure(email) {
 }
 
 async function install(target, liveSmoke) {
-	const syncArgs = (await exists(join(target, '.venv', 'bin', 'paper-search'))) ? ['--no-sync'] : [];
-	print('Installing the bridge environment if needed and checking source registration (an existing environment is not reinstalled)...');
-	await runRequired(['uv', 'run', ...syncArgs, '--directory', target, 'paper-search', 'sources'], undefined, BRIDGE_ENV);
+	print('Synchronizing the pinned bridge dependencies and checking source registration...');
+    await runRequired(['uv', 'sync', '--frozen', '--directory', target], undefined, BRIDGE_ENV);
+    await runRequired(['uv', 'run', '--no-sync', '--directory', target, 'paper-search', 'sources'], undefined, BRIDGE_ENV);
 	if (!liveSmoke) return;
 
 	print('Running the live SSRN/OpenAlex compatibility smoke check...');
@@ -273,7 +275,7 @@ const options = parseOptions(process.argv.slice(2));
 if (!onPath('git')) fail('git is required');
 if (!onPath('uv')) fail('uv is required; install it from https://docs.astral.sh/uv/ (for example: brew install uv)');
 for (const patch of RECOGNIZED_PATCHES) {
-	if (!(await exists(patch))) fail(`missing compatibility patch: ${patch}`);
+	if (!(await exists(patch.path))) fail(`missing compatibility patch: ${patch.path}`);
 }
 
 await prepareClone(TARGET);

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-10-19
 
 - Exa 3.0: Lite search, historical Snapshot retrieval and structured result entities, while retaining existing search modes.
 - Direct Hacker News item reads, GitHub REST 2026-03-10, and a DataForSEO AI-brand-visibility research method.
@@ -8,6 +8,7 @@
 - Hosted YouTube transcripts with timestamps and language, TikTok photo search/comments, Instagram comments, and a Threads source.
 - Semantic Scholar passages, citation/reference reads and provider-side bulk sorting; OpenAlex semantic search and cached content.
 - Polymarket price-history and resolution reads through Data API v2.
+- Updated Papers bridge with OpenReview and bounded PDF section extraction; preserved provider health and per-response billing, and supported macOS parser memory supervision.
 
 ## 0.2.32 — 2026-10-14
 

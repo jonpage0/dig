@@ -38311,7 +38311,7 @@ var Type = type_exports2;
 // src/server.mjs
 import { readFile as readFile4, realpath as realpath2, stat as stat2 } from "node:fs/promises";
 import { watchFile } from "node:fs";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve5 } from "node:path";
+import { isAbsolute as isAbsolute4, relative as relative3, resolve as resolve5 } from "node:path";
 import { createHash as createHash3 } from "node:crypto";
 
 // src/config.mjs
@@ -38416,6 +38416,7 @@ var MODULES = [
       "papers_openalex_search",
       "papers_openalex_content",
       "papers_multi_search",
+      "papers_sections",
       "papers_fulltext_read",
       "papers_pdf_download"
     ],
@@ -40495,8 +40496,8 @@ async function recordCall(config3, project2, dig2, { tool: tool4, source, args, 
 }
 function assertReport(parts) {
   if (!parts.card) throw new Error("The report must begin with its source_card block: a ```yaml fenced block whose first line is source_card:, closed by its fence");
-  const sections = new Set(parts.headings.filter((heading) => heading.depth === 2).map((heading) => heading.text));
-  for (const section of REPORT_SECTIONS) if (!sections.has(section)) throw new Error(`Missing report section: ${section} (a "## ${section}" heading of the report itself, outside code, lists and quotes)`);
+  const sections2 = new Set(parts.headings.filter((heading) => heading.depth === 2).map((heading) => heading.text));
+  for (const section of REPORT_SECTIONS) if (!sections2.has(section)) throw new Error(`Missing report section: ${section} (a "## ${section}" heading of the report itself, outside code, lists and quotes)`);
 }
 async function saveReport(config3, { project: project2, dig: dig2, source, agent = source, content: content2, topic, question, topic_volatility, supersedes, session = SESSION_UNAVAILABLE }) {
   session = safeSegment(session, SESSION_UNAVAILABLE);
@@ -45843,7 +45844,8 @@ var ACTIVE_SOURCES = [
   "semantic",
   "ssrn",
   "unpaywall",
-  "zenodo"
+  "zenodo",
+  "openreview"
 ];
 var OPENALEX_BACKED_SOURCES = ["openalex", "ssrn"];
 var OPENALEX_CREDITS = "OpenAlex credits";
@@ -45869,7 +45871,15 @@ function openAlexBackedCharge(output, source) {
 }
 function multiSearchBilling(response, args) {
   const output = record2(response.body);
-  const charges = requestedSources(args.sources).filter((source) => OPENALEX_BACKED_SOURCES.includes(source)).map((source) => openAlexBackedCharge(output, source));
+  const charges = requestedSources(args.sources).filter((source) => OPENALEX_BACKED_SOURCES.includes(source)).flatMap((source) => {
+    const observations = record2(record2(output?.billing)?.[source])?.responses;
+    if (!Array.isArray(observations)) return [openAlexBackedCharge(output, source)];
+    if (!observations.length) return [null];
+    return observations.map((item) => {
+      const entry = record2(item);
+      return openAlexBackedCharge({ billing: { [source]: entry }, rate_limits: { [source]: { "credits-used": entry?.credits_used } } }, source);
+    });
+  });
   const totals = /* @__PURE__ */ new Map();
   for (const { amount, unit } of charges.flatMap((charge) => charge ?? [])) totals.set(unit, (totals.get(unit) ?? 0) + amount);
   const known = [...totals].filter(([, amount]) => amount > 0).map(([unit, amount]) => ({ amount, unit }));
@@ -45950,7 +45960,7 @@ function runBridge(command, signal) {
       // Exported variables reach the bridge as they are; without an explicit
       // PAPER_SEARCH_MCP_ENV_FILE the upstream config reads only this clone's
       // own `.env`, never a user-global file another installation wrote.
-      env: { ...process.env, PAPER_SEARCH_MCP_ENV_FILE: paperSearchEnvFile() },
+      env: { ...process.env, PAPER_SEARCH_MCP_ENV_FILE: paperSearchEnvFile(), PAPER_SEARCH_MCP_SECTION_PDF_ROOT: downloadsDir() },
       stdio: ["ignore", "pipe", "pipe"],
       signal
     });
@@ -46037,6 +46047,25 @@ var pdf_download = free({
     } catch (error51) {
       if (context.abort.aborted) throw error51;
       return `ERROR: papers_pdf_download failed: ${error51 instanceof Error ? error51.message : "Unknown error"}`;
+    }
+  }
+});
+var sections = free({
+  description: "Extract bounded sections from a PDF already saved under the Dig paper library. Takes a relative filename, not an arbitrary path. Headings are recognized heuristically; page and character limits stay explicit.",
+  async execute(args, context) {
+    try {
+      const file2 = String(args.file ?? "");
+      if (!file2 || path.isAbsolute(file2) || file2.split(/[\\/]/).some((part) => !part || part === "." || part === "..") || !file2.toLowerCase().endsWith(".pdf")) return "ERROR: file must be a relative PDF filename inside the paper library";
+      const maxPages = args.maxPages ?? 30, maxCharacters = args.maxCharacters ?? 6e4;
+      if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 100 || !Number.isInteger(maxCharacters) || maxCharacters < 1 || maxCharacters > 2e5) return "ERROR: maxPages must be 1\u2013100 and maxCharacters 1\u2013200000";
+      const out = await runPaperSearch(["tool", "extract_sections", file2, "--max-pages", String(maxPages), "--max-chars", String(maxCharacters)], context);
+      if (out.startsWith("ERROR:")) return out;
+      const value = JSON.parse(out);
+      if (!value || !Array.isArray(value.sections) || typeof value.truncated !== "boolean") return "ERROR: paper sections returned a malformed result";
+      return { status: value.truncated ? "partial" : "success", text: bounded(out) };
+    } catch (error51) {
+      context.abort.throwIfAborted();
+      return `ERROR: papers_sections failed: ${error51 instanceof Error ? error51.message : "Unknown error"}`;
     }
   }
 });
@@ -49233,7 +49262,7 @@ function snapshotTime(value) {
   return value;
 }
 var search3 = exaMetered({
-  description: "Search the web with Exa and get ranked documents with page text and query-relevant highlights. Search modes: 'auto' (default), 'fast', 'instant' for latency, and the Deep modes 'deep-lite', 'deep', 'deep-reasoning' ($12\u201315/1k) for iterative research over the selected pages. Filters: domains/paths (wildcards like '*.substack.com'), publication dates, category. Exa returns source documents for your analysis; lite is low-cost cached retrieval. Use exa_research when a synthesized, source-grounded answer is explicitly requested.",
+  description: "Search the web with Exa and get ranked documents with page text and query-relevant highlights. Search modes: 'auto' (default), 'lite' for low-cost cached retrieval, legacy 'fast'/'instant', and the Deep modes 'deep-lite', 'deep', 'deep-reasoning' ($12\u201315/1k) for iterative research over the selected pages. Filters: domains/paths (wildcards like '*.substack.com'), publication dates, category. Exa returns source documents for your analysis; lite is low-cost cached retrieval. Use exa_research when a synthesized, source-grounded answer is explicitly requested.",
   async execute(args, ctx) {
     const key = apiKey();
     if (!key) return MISSING_KEY;
@@ -50939,14 +50968,14 @@ async function postNeighbourhood(post2, extras, inc, ctx, token2, requested) {
   };
   const coverage = (result2, what, query) => result2.more && !result2.error ? [`Coverage incomplete: X has more ${what} than the ${count(result2.posts.length, "post", "posts")} read here; read on with ${readOn(query, result2.posts)}.`] : [];
   const shortfall = (result2, what) => result2.error ?? (result2.capped ? `the rest of ${what}: the search stopped at its ${MAX_SEARCH_PAGES}-page safety limit after ${count(result2.posts.length, "post", "posts")}` : null);
-  const sections = [];
+  const sections2 = [];
   const listed = /* @__PURE__ */ new Set([...requested, root]);
   if (extras.thread) {
     const query = `conversation_id:${root} from:${from}`;
     const result2 = from ? await searchPages(endpoint, { query, sort_order: "recency", start_time: start }, THREAD_PAGE, `thread of ${id}`, inc, ctx, token2) : { posts: [], pages: 0, more: false, capped: false, error: `thread of ${id}: X returned no author for this post, so its thread cannot be searched` };
     const thread = result2.posts.filter((item) => !requested.has(String(item.id))).sort(byId);
     for (const item of thread) listed.add(String(item.id));
-    sections.push({
+    sections2.push({
       lines: [`Thread: ${count(thread.length, "post", "posts")} by ${from ? `@${from}` : "the author"} in conversation ${root} (${where}), oldest first.${thread.length ? ` ${ZERO_NOTE}` : ""}`, ...coverage(result2, "of this thread", query), ...thread.flatMap((item) => formatListPost(item, inc))],
       failure: shortfall(result2, `the thread of ${id}`)
     });
@@ -50955,7 +50984,7 @@ async function postNeighbourhood(post2, extras, inc, ctx, token2, requested) {
     const query = `conversation_id:${root}${extras.thread && from ? ` -from:${from}` : ""}`;
     const result2 = await searchPages(endpoint, { query, sort_order: "recency", start_time: start }, extras.replies, `replies to ${id}`, inc, ctx, token2);
     const replies = result2.posts.filter((item) => !listed.has(String(item.id))).slice(0, extras.replies);
-    sections.push({
+    sections2.push({
       lines: [`Replies: ${count(replies.length, "post", "posts")} from conversation ${root}${extras.thread ? ", besides the author's thread" : ""} (${where}, newest first).${replies.length ? ` ${ZERO_NOTE}` : ""}`, ...coverage(result2, "replies in this conversation", query), ...replies.flatMap((item) => formatListPost(item, inc))],
       failure: shortfall(result2, `the replies to ${id}`)
     });
@@ -50964,7 +50993,7 @@ async function postNeighbourhood(post2, extras, inc, ctx, token2, requested) {
     const answer = await xRead(`/2/tweets/${id}/quote_tweets`, { ...POST_PARAMS, max_results: clamp(extras.quotes, QUOTES_MIN, SEARCH_PAGE.max) }, `quote posts of ${id}`, ctx, token2);
     if (answer.ok) addIncludes(inc, answer.body);
     const quotes = answer.ok ? dataItems(answer.body).slice(0, extras.quotes) : [];
-    sections.push({
+    sections2.push({
       lines: [`Quote posts: ${count(quotes.length, "post", "posts")}${answer.ok && nextToken(answer.body) ? " (X has more)" : ""}.${quotes.length ? ` ${ZERO_NOTE}` : ""}`, ...quotes.flatMap((item) => formatListPost(item, inc))],
       failure: answer.ok ? answer.problem : answer.message
     });
@@ -50973,12 +51002,12 @@ async function postNeighbourhood(post2, extras, inc, ctx, token2, requested) {
     const answer = await xRead(`/2/tweets/${id}/retweeted_by`, { ...USER_PARAMS, max_results: extras.reposters }, `reposters of ${id}`, ctx, token2);
     if (answer.ok) addIncludes(inc, answer.body);
     const users2 = answer.ok ? dataItems(answer.body).slice(0, extras.reposters) : [];
-    sections.push({
+    sections2.push({
       lines: [`Reposted by: ${count(users2.length, "account", "accounts")}${answer.ok && nextToken(answer.body) ? " (X has more)" : ""}.`, ...users2.map(userLine)],
       failure: answer.ok ? answer.problem : answer.message
     });
   }
-  return sections;
+  return sections2;
 }
 function byId(a, b2) {
   const x2 = BigInt(String(a.id));
@@ -51017,9 +51046,9 @@ var post = {
     const blocks = [];
     const failures = lookup.problem ? [lookup.problem] : [];
     for (const item of found) {
-      const sections = anyExtras(extras) ? await postNeighbourhood(item, extras, inc, context, token2, requested) : [];
-      failures.push(...sections.flatMap((section) => section.failure ?? []));
-      blocks.push([...formatPost(item, inc), ...sections.flatMap((section) => ["", ...section.lines, ...section.failure ? [`Not read: ${section.failure}`] : []])]);
+      const sections2 = anyExtras(extras) ? await postNeighbourhood(item, extras, inc, context, token2, requested) : [];
+      failures.push(...sections2.flatMap((section) => section.failure ?? []));
+      blocks.push([...formatPost(item, inc), ...sections2.flatMap((section) => ["", ...section.lines, ...section.failure ? [`Not read: ${section.failure}`] : []])]);
     }
     const status = lookupStatus(ids.length - missing.length, missing, lookup.resources, failures.length);
     const head = `${status === "failed" ? "ERROR: " : ""}X API: ${count(ids.length - missing.length, "post", "posts")} of ${ids.length} requested.`;
@@ -51173,11 +51202,11 @@ var users = {
     const failures = answer.problem ? [answer.problem] : [];
     const blocks = [];
     for (const user of found) {
-      const sections = [];
-      if (posts > 0 && token2) sections.push(await userTimeline(user, "tweets", posts, inc, context, token2));
-      if (mentions > 0 && token2) sections.push(await userTimeline(user, "mentions", mentions, inc, context, token2));
-      failures.push(...sections.flatMap((section) => section.failure ?? []));
-      blocks.push([...formatUser(user), ...sections.flatMap((section) => ["", ...section.lines, ...section.failure ? [`Not read: ${section.failure}`] : []])]);
+      const sections2 = [];
+      if (posts > 0 && token2) sections2.push(await userTimeline(user, "tweets", posts, inc, context, token2));
+      if (mentions > 0 && token2) sections2.push(await userTimeline(user, "mentions", mentions, inc, context, token2));
+      failures.push(...sections2.flatMap((section) => section.failure ?? []));
+      blocks.push([...formatUser(user), ...sections2.flatMap((section) => ["", ...section.lines, ...section.failure ? [`Not read: ${section.failure}`] : []])]);
     }
     const status = handles.length ? lookupStatus(wanted.length - missing.length, missing, answer.resources, failures.length) : !found.length ? "empty" : failures.length ? "partial" : "success";
     const head = handles.length ? `${status === "failed" ? "ERROR: " : ""}X API: ${count(wanted.length - missing.length, "account", "accounts")} of ${wanted.length} requested.` : `X people search for "${query}": ${count(found.length, "account", "accounts")}.`;
@@ -54299,14 +54328,14 @@ var inspect = free({
     } catch (error51) {
       return `ERROR: GitHub inspect cancelled: ${errorMessage2(error51)}`;
     }
-    const sections = [
+    const sections2 = [
       ["star history", stars],
       ["default-branch commits", commits],
       ["releases", releases],
       ["contributors", contributors],
       ["collaboration samples", evidence]
     ];
-    const failures = sections.flatMap(
+    const failures = sections2.flatMap(
       ([label, section]) => section.ok ? section.partialNote ? [`${label} (partial): ${section.partialNote}`] : [] : [`${label}: ${section.error}`]
     );
     const caveats = [
@@ -55542,14 +55571,14 @@ var docs_sections = free({
   description: "List DataForSEO v3 documentation sections (SERP, Labs, Keywords Data, Backlinks, Business Data, \u2026) with their subsections and page counts.",
   async execute(_args, context) {
     try {
-      const sections = /* @__PURE__ */ new Map();
+      const sections2 = /* @__PURE__ */ new Map();
       for (const entry of await docsIndex(context)) {
-        const section = sections.get(entry.section) ?? { pages: 0, parts: /* @__PURE__ */ new Set() };
+        const section = sections2.get(entry.section) ?? { pages: 0, parts: /* @__PURE__ */ new Set() };
         section.pages += 1;
         if (entry.trail[1]) section.parts.add(entry.trail[1]);
-        sections.set(entry.section, section);
+        sections2.set(entry.section, section);
       }
-      const lines2 = [...sections].map(
+      const lines2 = [...sections2].map(
         ([name2, { pages, parts }]) => `- ${name2} (${pages} pages)${parts.size ? `: ${[...parts].join(", ")}` : ""}`
       );
       return outcome("success", `DataForSEO documentation sections:
@@ -55784,6 +55813,7 @@ var providerTools = {
   papers_semantic_scholar_relations: relations,
   papers_openalex_content: content,
   papers_openalex_search: openalex_search,
+  papers_sections: sections,
   papers_multi_search: multi_search,
   papers_fulltext_read: fulltext_read,
   papers_pdf_download: pdf_download,
@@ -56179,6 +56209,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
         "Sort mode."
       )
     }),
+    papers_sections: T3.Object({ file: T3.String(), maxPages: T3.Optional(T3.Integer({ minimum: 1, maximum: 100 })), maxCharacters: T3.Optional(T3.Integer({ minimum: 1, maximum: 2e5 })) }, { additionalProperties: false }),
     papers_multi_search: T3.Object(
       {
         query: T3.String({
@@ -56186,7 +56217,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
         }),
         sources: T3.Optional(
           T3.Union([T3.String(), T3.Array(T3.String())], {
-            description: "Comma-separated string or array of sources (arxiv, pubmed, biorxiv, medrxiv, pmc, europepmc, crossref, openalex, semantic, dblp, doaj, zenodo, hal, iacr, core, openaire, ssrn, unpaywall, google_scholar). Default: all 19 enabled connectors (slower), not a guarantee of availability. base/citeseerx are disabled; unknown/disabled requests fail explicitly. Inspect per-source health before treating zero counts as no matches."
+            description: "Comma-separated string or array of sources (arxiv, pubmed, biorxiv, medrxiv, pmc, europepmc, crossref, openalex, semantic, dblp, doaj, zenodo, hal, iacr, core, openaire, ssrn, unpaywall, google_scholar, openreview). Default: all 20 enabled connectors (slower), not a guarantee of availability. base/citeseerx are disabled; unknown/disabled requests fail explicitly. Inspect per-source health before treating zero counts as no matches."
           })
         ),
         maxResults: T3.Optional(
@@ -58053,7 +58084,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
 }
 
 // src/version.mjs
-var VERSION2 = "0.2.32";
+var VERSION2 = "0.3.0";
 
 // src/server.mjs
 loadKeys();
@@ -58075,7 +58106,7 @@ var OUTPUT = {
 };
 var libraryFile = async (c, path2) => relative3(await realpath2(c.library), path2);
 var entrypoint = (type) => ({ ui: { resourceUri: URI }, "openai/ui": { entrypoints: [{ type }] }, "openai/iconStyle": "monochrome" });
-var project = external_exports.string().min(1).refine(isAbsolute3, "An absolute project directory is required").describe("Explicit absolute project directory. Never infer this from the plugin cwd.");
+var project = external_exports.string().min(1).refine(isAbsolute4, "An absolute project directory is required").describe("Explicit absolute project directory. Never infer this from the plugin cwd.");
 var dig = external_exports.string().min(1).describe("Optional grouping id returned by dig_start or an existing saved report. A provider call\u2019s receipt records it, so the call counts toward that dig even if no report is saved.");
 var readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 var localWrite = { destructiveHint: false, openWorldHint: false };

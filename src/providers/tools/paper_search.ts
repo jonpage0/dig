@@ -74,7 +74,7 @@ const DISABLED_SOURCES = new Set(["base", "citeseerx"]);
 const ACTIVE_SOURCES = [
 	"arxiv", "biorxiv", "core", "crossref", "dblp", "doaj", "europepmc", "google_scholar",
 	"hal", "iacr", "medrxiv", "openaire", "openalex", "pmc", "pubmed", "semantic", "ssrn",
-	"unpaywall", "zenodo",
+	"unpaywall", "zenodo", "openreview",
 ];
 
 /** Connectors that search api.openalex.org, which reports each request's usage cost. */
@@ -126,7 +126,15 @@ function multiSearchBilling(response: RetainedResponse, args: { sources?: unknow
 	const output = record(response.body);
 	const charges = requestedSources(args.sources)
 		.filter(source => OPENALEX_BACKED_SOURCES.includes(source))
-		.map(source => openAlexBackedCharge(output, source));
+		.flatMap(source => {
+            const observations = record(record(output?.billing)?.[source])?.responses;
+            if (!Array.isArray(observations)) return [openAlexBackedCharge(output, source)];
+            if (!observations.length) return [null];
+            return observations.map(item => {
+                const entry = record(item);
+                return openAlexBackedCharge({ billing: { [source]: entry }, rate_limits: { [source]: { "credits-used": entry?.credits_used } } }, source);
+            });
+        });
 	const totals = new Map<string, number>();
 	for (const { amount, unit } of charges.flatMap(charge => charge ?? [])) totals.set(unit, (totals.get(unit) ?? 0) + amount);
 	const known = [...totals].filter(([, amount]) => amount > 0).map(([unit, amount]) => ({ amount, unit }));
@@ -257,7 +265,7 @@ function runBridge(command: string[], signal: AbortSignal): Promise<BridgeRun> {
 			// Exported variables reach the bridge as they are; without an explicit
 			// PAPER_SEARCH_MCP_ENV_FILE the upstream config reads only this clone's
 			// own `.env`, never a user-global file another installation wrote.
-			env: { ...process.env, PAPER_SEARCH_MCP_ENV_FILE: paperSearchEnvFile() },
+			env: { ...process.env, PAPER_SEARCH_MCP_ENV_FILE: paperSearchEnvFile(), PAPER_SEARCH_MCP_SECTION_PDF_ROOT: downloadsDir() },
 			stdio: ["ignore", "pipe", "pipe"],
 			signal,
 		});
@@ -354,4 +362,22 @@ export const pdf_download: ToolSpec = free({
 			return `ERROR: papers_pdf_download failed: ${error instanceof Error ? error.message : "Unknown error"}`;
 		}
 	},
+});
+
+/** Read sections from an already downloaded library PDF. The root is fixed by Dig. */
+export const sections: ToolSpec = free({
+  description: "Extract bounded sections from a PDF already saved under the Dig paper library. Takes a relative filename, not an arbitrary path. Headings are recognized heuristically; page and character limits stay explicit.",
+  async execute(args, context) {
+    try {
+      const file = String(args.file ?? "");
+      if (!file || path.isAbsolute(file) || file.split(/[\\/]/).some(part => !part || part === "." || part === "..") || !file.toLowerCase().endsWith(".pdf")) return "ERROR: file must be a relative PDF filename inside the paper library";
+      const maxPages=args.maxPages??30,maxCharacters=args.maxCharacters??60000;
+      if (!Number.isInteger(maxPages)||maxPages<1||maxPages>100||!Number.isInteger(maxCharacters)||maxCharacters<1||maxCharacters>200000) return "ERROR: maxPages must be 1–100 and maxCharacters 1–200000";
+      const out=await runPaperSearch(["tool","extract_sections",file,"--max-pages",String(maxPages),"--max-chars",String(maxCharacters)],context);
+      if(out.startsWith("ERROR:")) return out;
+      const value=JSON.parse(out);
+      if (!value || !Array.isArray(value.sections) || typeof value.truncated !== "boolean") return "ERROR: paper sections returned a malformed result";
+      return {status:value.truncated?"partial":"success",text:bounded(out)};
+    } catch(error) {context.abort.throwIfAborted();return `ERROR: papers_sections failed: ${error instanceof Error?error.message:"Unknown error"}`;}
+  },
 });

@@ -1,312 +1,27 @@
---- a/paper_search_mcp/cli.py
-+++ b/paper_search_mcp/cli.py
-@@ -6,6 +6,10 @@
- import argparse
- import asyncio
- import json
-+import logging
-+import os
-+import re
-+import threading
- import sys
- from typing import Any, Dict, List
+diff --git a/paper_search_mcp/_section_worker.py b/paper_search_mcp/_section_worker.py
+index 3b55176..050620f 100644
+--- a/paper_search_mcp/_section_worker.py
++++ b/paper_search_mcp/_section_worker.py
+@@ -10,8 +10,12 @@ STREAM_LIMIT = 8 * 1024 * 1024
  
-@@ -86,6 +90,9 @@
-     "ssrn", "unpaywall",
- ]
- 
-+# Connectors that search api.openalex.org, which reports each request's usage cost.
-+OPENALEX_BACKED_SOURCES = ("openalex", "ssrn")
-+
- 
- def _parse_sources(sources: str) -> List[str]:
-     if not sources or sources.strip().lower() == "all":
-@@ -120,12 +127,50 @@
- # Async helpers
- # ---------------------------------------------------------------------------
- 
--async def _async_search(searcher: Any, query: str, max_results: int, **kwargs) -> List[Dict]:
--    if kwargs:
--        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, **kwargs)
--    else:
--        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results)
--    return [p.to_dict() for p in papers]
-+def _safe_diagnostic(value) -> str:
-+    text = str(value)
-+    # HTTP exception strings may contain complete request URLs.
-+    text = re.sub(r"(?i)(api_key|access_token|token|key)=([^&\s]+)", r"\1=[redacted]", text)
-+    for name, secret in os.environ.items():
-+        if secret and any(part in name.upper() for part in ("KEY", "TOKEN", "SECRET", "PASSWORD")):
-+            text = text.replace(secret, "[redacted]")
-+    return text[:1000]
-+
-+
-+class _SourceDiagnostics(logging.Handler):
-+    """Capture upstream swallowed errors without mixing concurrent sources."""
-+    def __init__(self):
-+        super().__init__(logging.WARNING)
-+        self.thread = threading.get_ident()
-+        self.errors = []
-+        self.warnings = []
-+
-+    def emit(self, record):
-+        if record.thread != self.thread:
-+            return
-+        target = self.errors if record.levelno >= logging.ERROR else self.warnings
-+        target.append(_safe_diagnostic(record.getMessage()))
-+
-+
-+def _search_with_diagnostics(searcher, query, max_results, kwargs):
-+    capture = _SourceDiagnostics()
-+    root = logging.getLogger()
-+    root.addHandler(capture)
-+    papers = []
-+    searcher.empty_result_confirmed = False
-+    try:
-+        papers = [p.to_dict() for p in searcher.search(query, max_results=max_results, **kwargs)]
-+        if not papers and not capture.errors and not searcher.empty_result_confirmed:
-+            capture.warnings.append("Connector returned no papers without a validated empty provider response; not confirmed no matches")
-+    except Exception as exc:
-+        capture.errors.append(_safe_diagnostic(exc))
-+    finally:
-+        root.removeHandler(capture)
-+    return papers, capture.errors, capture.warnings
-+
-+
-+async def _async_search(searcher: Any, query: str, max_results: int, **kwargs):
-+    return await asyncio.to_thread(_search_with_diagnostics, searcher, query, max_results, kwargs)
- 
- 
- # ---------------------------------------------------------------------------
-@@ -153,17 +198,37 @@
-     merged: List[Dict[str, Any]] = []
-     errors: Dict[str, str] = {}
-     source_counts: Dict[str, int] = {}
-+    source_status = {}
-+    warnings = {}
-+    rate_limits = {}
-+    billing = {}
- 
-     for name, result in zip(names, results):
-         if isinstance(result, Exception):
--            errors[name] = str(result)
--            source_counts[name] = 0
-+            papers, source_errors, source_warnings = [], [_safe_diagnostic(result)], []
-         else:
--            source_counts[name] = len(result)
--            for p in result:
--                if not p.get("source"):
--                    p["source"] = name
--                merged.append(p)
-+            papers, source_errors, source_warnings = result
-+        source_counts[name] = len(papers)
-+        if source_errors:
-+            errors[name] = "; ".join(source_errors)
-+        if source_warnings:
-+            warnings[name] = source_warnings
-+        source_status[name] = (
-+            "partial" if papers and (source_errors or source_warnings) else
-+            "failed" if source_errors else
-+            "partial" if source_warnings else
-+            "ok" if papers else "empty"
-+        )
-+        budget = getattr(SEARCHERS[name], "rate_limit", None)
-+        if budget:
-+            rate_limits[name] = budget
-+        if name in OPENALEX_BACKED_SOURCES:
-+            # Every requested OpenAlex-backed connector, including one that got no response.
-+            billing[name] = getattr(SEARCHERS[name], "billing", None) or {"http_status": None, "cost_usd": None}
-+        for p in papers:
-+            if not p.get("source"):
-+                p["source"] = name
-+            merged.append(p)
- 
-     deduped = _dedupe(merged)
- 
-@@ -172,6 +237,16 @@
-         "sources_used": names,
-         "source_results": source_counts,
-         "errors": errors,
-+        "warnings": warnings,
-+        "source_status": source_status,
-+        "rate_limits": rate_limits,
-+        **({"billing": billing} if billing else {}),
-+        "coverage": {
-+            "max_results_per_source": args.max_results,
-+            "year_applied_to": ["semantic"] if args.year and "semantic" in names else [],
-+            "year_not_applied_to": [name for name in names if name != "semantic"] if args.year else [],
-+            "note": "Counts are bounded retrieval counts, not provider totals. Only empty denotes a validated zero-result provider response with no reported errors/warnings.",
-+        },
-         "total": len(deduped),
-         "papers": deduped,
-     }
---- a/paper_search_mcp/config.py
-+++ b/paper_search_mcp/config.py
-@@ -76,7 +76,8 @@
- 
-     keys = [f"{ENV_PREFIX}{normalized}", normalized]
-     for key in keys:
--        if key in os.environ:
--            return os.environ.get(key, "")
-+        value = os.environ.get(key, "").strip()
-+        if value:
-+            return value
- 
-     return "" if default is None else str(default)
---- a/paper_search_mcp/academic_platforms/pubmed.py
-+++ b/paper_search_mcp/academic_platforms/pubmed.py
-@@ -4,6 +4,7 @@
- from xml.etree import ElementTree as ET
- from datetime import datetime
- from ..paper import Paper
-+from ..ncbi import ncbi_get
- from ..utils import extract_doi
- from .base import PaperSource
- import os
-@@ -21,10 +22,13 @@
-             'retmode': 'xml',
-             'sort': sort,
-         }
--        search_response = requests.get(self.SEARCH_URL, params=search_params)
-+        search_response = ncbi_get(self.SEARCH_URL, search_params)
-         search_root = ET.fromstring(search_response.content)
-         ids = [id.text for id in search_root.findall('.//Id') if id.text]
-         if not ids:
-+            if search_root.find('IdList') is None:
-+                raise RuntimeError('NCBI search response omitted IdList')
-+            self.empty_result_confirmed = True
-             return []
-         
-         fetch_params = {
-@@ -32,7 +36,7 @@
-             'id': ','.join(ids),
-             'retmode': 'xml'
-         }
--        fetch_response = requests.get(self.FETCH_URL, params=fetch_params)
-+        fetch_response = ncbi_get(self.FETCH_URL, fetch_params)
-         fetch_root = ET.fromstring(fetch_response.content)
-         
-         papers = []
---- a/paper_search_mcp/academic_platforms/pmc.py
-+++ b/paper_search_mcp/academic_platforms/pmc.py
-@@ -7,6 +7,7 @@
- import os
- from pathlib import Path
- from ..paper import Paper
-+from ..ncbi import ncbi_get
- from ..utils import extract_doi
- from .base import PaperSource
- from pypdf import PdfReader
-@@ -45,58 +46,54 @@
-         """
-         papers = []
- 
--        try:
--            # Step 1: Use E-utilities to search PMC database
--            search_params = {
--                'db': 'pmc',
--                'term': query,
--                'retmax': max_results,
--                'retmode': 'xml',
--                'tool': 'paper-search-mcp',
--                'email': 'openags@example.com'
--            }
--
--            search_response = self.session.get(self.EUTILS_SEARCH_URL, params=search_params, timeout=30)
--            search_response.raise_for_status()
--            search_root = ET.fromstring(search_response.content)
--
--            # Get PMC IDs
--            pmcids = [id_elem.text for id_elem in search_root.findall('.//Id') if id_elem.text]
--            if not pmcids:
--                logger.info(f"No PMC results found for query: {query}")
--                return papers
--
--            # Step 2: Fetch compact summaries (more stable than full-text efetch)
--            summary_params = {
--                'db': 'pmc',
--                'id': ','.join(pmcids),
--                'retmode': 'xml',
--                'tool': 'paper-search-mcp',
--                'email': 'openags@example.com'
--            }
--
--            summary_response = self.session.get(self.EUTILS_SUMMARY_URL, params=summary_params, timeout=30)
--            summary_response.raise_for_status()
--            summary_root = ET.fromstring(summary_response.content)
--
--            # Step 3: Parse each summary record
--            for docsum in summary_root.findall('.//DocSum'):
--                try:
--                    paper = self._parse_docsum(docsum)
--                    if paper:
--                        papers.append(paper)
--                        if len(papers) >= max_results:
--                            break
--                except Exception as e:
--                    logger.warning(f"Error parsing PMC summary: {e}")
--                    continue
--
--        except requests.RequestException as e:
--            logger.error(f"PMC search request error: {e}")
--        except ET.ParseError as e:
--            logger.error(f"PMC XML parsing error: {e}")
--        except Exception as e:
--            logger.error(f"Unexpected error in PMC search: {e}")
-+        # Step 1: Use E-utilities to search PMC database
-+        search_params = {
-+            'db': 'pmc',
-+            'term': query,
-+            'retmax': max_results,
-+            'retmode': 'xml',
-+            'tool': 'paper-search-mcp',
-+            'email': 'openags@example.com'
-+        }
-+
-+        search_response = ncbi_get(self.EUTILS_SEARCH_URL, search_params, self.session)
-+        search_response.raise_for_status()
-+        search_root = ET.fromstring(search_response.content)
-+
-+        # Get PMC IDs
-+        pmcids = [id_elem.text for id_elem in search_root.findall('.//Id') if id_elem.text]
-+        if not pmcids:
-+            if search_root.find('IdList') is None:
-+                raise RuntimeError('NCBI search response omitted IdList')
-+            self.empty_result_confirmed = True
-+            logger.info(f"No PMC results found for query: {query}")
-+            return papers
-+
-+        # Step 2: Fetch compact summaries (more stable than full-text efetch)
-+        summary_params = {
-+            'db': 'pmc',
-+            'id': ','.join(pmcids),
-+            'retmode': 'xml',
-+            'tool': 'paper-search-mcp',
-+            'email': 'openags@example.com'
-+        }
-+
-+        summary_response = ncbi_get(self.EUTILS_SUMMARY_URL, summary_params, self.session)
-+        summary_response.raise_for_status()
-+        summary_root = ET.fromstring(summary_response.content)
-+
-+        # Step 3: Parse each summary record
-+        for docsum in summary_root.findall('.//DocSum'):
-+            try:
-+                paper = self._parse_docsum(docsum)
-+                if paper:
-+                    papers.append(paper)
-+                    if len(papers) >= max_results:
-+                        break
-+            except Exception as e:
-+                logger.warning(f"Error parsing PMC summary: {e}")
-+                continue
-+
- 
-         return papers
- 
+ def _resource_limits(seconds):
+     import resource
+-    for kind, cap in ((resource.RLIMIT_AS, MEMORY_LIMIT),
+-                      (resource.RLIMIT_CPU, math.ceil(seconds) + 1)):
++    limits = [(resource.RLIMIT_CPU, math.ceil(seconds) + 1)]
++    # Darwin rejects RLIMIT_AS. The parent supervises RSS there; other POSIX
++    # platforms retain the hard address-space limit.
++    if sys.platform != "darwin":
++        limits.insert(0, (resource.RLIMIT_AS, MEMORY_LIMIT))
++    for kind, cap in limits:
+         soft, hard = resource.getrlimit(kind)
+         cap = min([cap] + [value for value in (soft, hard) if value != resource.RLIM_INFINITY])
+         resource.setrlimit(kind, (cap, cap))
+diff --git a/paper_search_mcp/academic_platforms/dblp.py b/paper_search_mcp/academic_platforms/dblp.py
+index 46a2857..84a454d 100644
 --- a/paper_search_mcp/academic_platforms/dblp.py
 +++ b/paper_search_mcp/academic_platforms/dblp.py
-@@ -89,6 +89,8 @@
+@@ -89,6 +89,8 @@ class DBLPSearcher(PaperSource):
  
              # Parse XML response
              root = ET.fromstring(response.content)
@@ -315,7 +30,7 @@
  
              # dblp XML structure: result > hits > hit > info
              hits = root.findall('.//hit')
-@@ -109,8 +111,12 @@
+@@ -109,8 +111,12 @@ class DBLPSearcher(PaperSource):
              if papers:
                  return papers
  
@@ -330,7 +45,7 @@
  
          except requests.RequestException as e:
              logger.error(f"dblp API request error: {e}")
-@@ -129,81 +135,83 @@
+@@ -129,81 +135,83 @@ class DBLPSearcher(PaperSource):
      def _search_html_fallback(self, query: str, max_results: int) -> List[Paper]:
          """Fallback search via dblp HTML endpoint when API is unavailable."""
          papers: List[Paper] = []
@@ -488,41 +203,318 @@
  
          return papers
  
---- a/paper_search_mcp/academic_platforms/zenodo.py
-+++ b/paper_search_mcp/academic_platforms/zenodo.py
-@@ -92,18 +92,18 @@
-         if year:
-             params["q"] = f"{query} AND publication_date:[{year}-01-01 TO {year}-12-31]"
+diff --git a/paper_search_mcp/academic_platforms/google_scholar.py b/paper_search_mcp/academic_platforms/google_scholar.py
+index 28b1b4b..0def196 100644
+--- a/paper_search_mcp/academic_platforms/google_scholar.py
++++ b/paper_search_mcp/academic_platforms/google_scholar.py
+@@ -170,7 +170,9 @@ class GoogleScholarSearcher(PaperSource):
+                 return None
+ 
+             # Process title and URL
+-            title = title_elem.get_text(strip=True).replace('[PDF]', '').replace('[HTML]', '')
++            # Local patch (OMP): join text nodes with spaces + collapse, so titles
++            # spanning <b>/<i> segments don't concatenate without separators.
++            title = re.sub(r"\s+", " ", title_elem.get_text(" ", strip=True)).replace('[PDF]', '').replace('[HTML]', '').strip()
+             link = title_elem.find('a', href=True)
+             url = link['href'] if link else ''
+ 
+diff --git a/paper_search_mcp/academic_platforms/openalex.py b/paper_search_mcp/academic_platforms/openalex.py
+index a2277c7..c1dfe73 100644
+--- a/paper_search_mcp/academic_platforms/openalex.py
++++ b/paper_search_mcp/academic_platforms/openalex.py
+@@ -1,7 +1,9 @@
+ from typing import List
++from collections.abc import Mapping
+ from datetime import datetime
+ import requests
+ import logging
++import math
+ from ..paper import Paper
+ from .base import PaperSource
+ from ..utils import extract_doi
+@@ -20,7 +22,7 @@ class OpenAlexSearcher(PaperSource):
+ 
+     BASE_URL = "https://api.openalex.org/works"
+     DEFAULT_USER_AGENT = "paper-search-mcp/1.0"
+-    DEFAULT_EMAIL = "openags@example.com"
++    DEFAULT_EMAIL = ""
+ 
+     def __init__(
+         self,
+@@ -46,6 +48,28 @@ class OpenAlexSearcher(PaperSource):
+                 {"Authorization": f"Bearer {self.api_key}"}
+             )
+ 
++    def _get(self, url, **kwargs):
++        self.billing = getattr(self, "billing", {"responses": []})
++        try:
++            response = self.session.get(url, **kwargs)
++        except Exception:
++            self.billing["responses"].append({"http_status": None, "cost_usd": None, "credits_used": None})
++            raise
++        try:
++            data = response.json()
++            value = (data.get("meta") or {}).get("cost_usd") if isinstance(data, dict) else None
++            cost = float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0 else None
++        except Exception:
++            cost = None
++        raw = (response.headers.get("X-RateLimit-Credits-Used") if isinstance(response.headers, Mapping) else None)
++        try:
++            credits = float(raw) if raw is not None and math.isfinite(float(raw)) and float(raw) >= 0 else None
++        except (TypeError, ValueError):
++            credits = None
++        self.billing["responses"].append({"http_status": response.status_code, "cost_usd": cost, "credits_used": credits})
++        self.rate_limit = {k.lower().removeprefix("x-ratelimit-"): v for k,v in (response.headers.items() if isinstance(response.headers, Mapping) else []) if k.lower().startswith("x-ratelimit-")}
++        return response
++
+     def _reconstruct_abstract(self, inverted_index: dict) -> str:
+         """
+         OpenAlex provides abstracts as an inverted index to save space.
+@@ -184,6 +208,8 @@ class OpenAlexSearcher(PaperSource):
+             List[Paper]: List of found papers with metadata.
+         """
+         papers = []
++        self.billing = {"responses": []}
++        self.empty_result_confirmed = False
+ 
+         try:
+             params = {
+@@ -194,14 +220,15 @@ class OpenAlexSearcher(PaperSource):
+             if filter_value:
+                 params["filter"] = filter_value
+ 
+-            response = self.session.get(self.BASE_URL, params=params, timeout=30)
++            response = self._get(self.BASE_URL, params=params, timeout=30)
+             
+             if response.status_code != 200:
+-                logger.error(f"OpenAlex search failed with status {response.status_code}")
+-                return papers
++                raise RuntimeError(f"OpenAlex search failed with status {response.status_code}")
+ 
+             data = response.json()
+-            results = data.get("results", [])
++            if not isinstance(data, dict) or not isinstance(data.get("results"), list): raise RuntimeError("OpenAlex returned malformed results")
++            results = data["results"]
++            self.empty_result_confirmed = len(results) == 0
+ 
+             for item in results:
+                 if len(papers) >= max_results:
+@@ -212,7 +239,7 @@ class OpenAlexSearcher(PaperSource):
+                     papers.append(paper)
+ 
+         except Exception as e:
+-            logger.error(f"OpenAlex search error: {e}")
++            raise RuntimeError(f"OpenAlex search error: {type(e).__name__}") from None
+ 
+         return papers
+ 
+@@ -277,6 +304,8 @@ class OpenAlexSearcher(PaperSource):
+             return []
+         if not isinstance(query, str) or not query.strip():
+             raise ValueError("SSRN query must not be empty")
++        self.billing = {"responses": []}
++        self.empty_result_confirmed = False
+         papers, seen, cursors = [], set(), set()
+         cursor = "*"
+         for _ in range(self.SSRN_MAX_PAGES):
+@@ -284,7 +313,7 @@ class OpenAlexSearcher(PaperSource):
+                 raise RuntimeError("OpenAlex SSRN pagination repeated a cursor")
+             cursors.add(cursor)
+             try:
+-                response = self.session.get(self.BASE_URL, params={
++                response = self._get(self.BASE_URL, params={
+                     "search": query, "filter": f"locations.source.id:{self.SSRN_SOURCE_ID}",
+                     "per_page": min(max_results, self.SSRN_PAGE_SIZE), "cursor": cursor,
+                 }, timeout=30, allow_redirects=False)
+@@ -335,6 +364,7 @@ class OpenAlexSearcher(PaperSource):
+                     return papers
+             next_cursor = data["meta"]["next_cursor"]
+             if next_cursor is None or not data["results"]:
++                self.empty_result_confirmed = not papers
+                 return papers
+             if not isinstance(next_cursor, str) or not next_cursor:
+                 raise RuntimeError("OpenAlex SSRN returned an invalid cursor")
+diff --git a/paper_search_mcp/academic_platforms/openreview.py b/paper_search_mcp/academic_platforms/openreview.py
+index 1c9437b..bd112e8 100644
+--- a/paper_search_mcp/academic_platforms/openreview.py
++++ b/paper_search_mcp/academic_platforms/openreview.py
+@@ -159,8 +159,10 @@ class OpenReviewSearcher(PaperSource):
+                         seen.add(paper.paper_id)
+                         papers.append(paper)
+                         if len(papers) == max_results:
++                            self.empty_result_confirmed = not papers
+                             return papers
+             if not notes or len(notes) < limit:
++                self.empty_result_confirmed = not papers
+                 return papers
+             if page_ids and len(seen) == previous_count:
+                 raise OpenReviewError("OpenReview pagination did not advance")
+diff --git a/paper_search_mcp/academic_platforms/pmc.py b/paper_search_mcp/academic_platforms/pmc.py
+index 5c2beb8..d6ef45f 100644
+--- a/paper_search_mcp/academic_platforms/pmc.py
++++ b/paper_search_mcp/academic_platforms/pmc.py
+@@ -7,6 +7,7 @@ import logging
+ import os
+ from pathlib import Path
+ from ..paper import Paper
++from ..ncbi import ncbi_get
+ from ..utils import extract_doi
+ from .base import PaperSource
+ from pypdf import PdfReader
+@@ -45,58 +46,54 @@ class PMCSearcher(PaperSource):
+         """
+         papers = []
  
 -        try:
--            response = self.session.get(
--                f"{self.BASE_URL}/records", params=params, timeout=20
--            )
--            response.raise_for_status()
--            data = response.json()
--        except Exception as exc:
--            logger.error("Zenodo search failed: %s", exc)
--            return []
+-            # Step 1: Use E-utilities to search PMC database
+-            search_params = {
+-                'db': 'pmc',
+-                'term': query,
+-                'retmax': max_results,
+-                'retmode': 'xml',
+-                'tool': 'paper-search-mcp',
+-                'email': 'openags@example.com'
+-            }
 -
-+        response = self.session.get(
-+            f"{self.BASE_URL}/records", params=params, timeout=20
-+        )
-+        response.raise_for_status()
-+        data = response.json()
-+        if not isinstance(data, dict) or not isinstance(data.get("hits"), dict) or not isinstance(data["hits"].get("hits"), list) or "error" in data or "errors" in data or "message" in data:
-+            raise RuntimeError("Zenodo returned an invalid/error search payload")
+-            search_response = self.session.get(self.EUTILS_SEARCH_URL, params=search_params, timeout=30)
+-            search_response.raise_for_status()
+-            search_root = ET.fromstring(search_response.content)
+-
+-            # Get PMC IDs
+-            pmcids = [id_elem.text for id_elem in search_root.findall('.//Id') if id_elem.text]
+-            if not pmcids:
+-                logger.info(f"No PMC results found for query: {query}")
+-                return papers
+-
+-            # Step 2: Fetch compact summaries (more stable than full-text efetch)
+-            summary_params = {
+-                'db': 'pmc',
+-                'id': ','.join(pmcids),
+-                'retmode': 'xml',
+-                'tool': 'paper-search-mcp',
+-                'email': 'openags@example.com'
+-            }
+-
+-            summary_response = self.session.get(self.EUTILS_SUMMARY_URL, params=summary_params, timeout=30)
+-            summary_response.raise_for_status()
+-            summary_root = ET.fromstring(summary_response.content)
+-
+-            # Step 3: Parse each summary record
+-            for docsum in summary_root.findall('.//DocSum'):
+-                try:
+-                    paper = self._parse_docsum(docsum)
+-                    if paper:
+-                        papers.append(paper)
+-                        if len(papers) >= max_results:
+-                            break
+-                except Exception as e:
+-                    logger.warning(f"Error parsing PMC summary: {e}")
+-                    continue
++        # Step 1: Use E-utilities to search PMC database
++        search_params = {
++            'db': 'pmc',
++            'term': query,
++            'retmax': max_results,
++            'retmode': 'xml',
++            'tool': 'paper-search-mcp',
++            'email': 'openags@example.com'
++        }
 +
++        search_response = ncbi_get(self.EUTILS_SEARCH_URL, search_params, self.session)
++        search_response.raise_for_status()
++        search_root = ET.fromstring(search_response.content)
 +
-+        self.empty_result_confirmed = not data["hits"]["hits"]
-         papers: List[Paper] = []
--        for hit in data.get("hits", {}).get("hits", []):
-+        for hit in data["hits"]["hits"]:
-             paper = self._parse_record(hit)
-             if paper:
-                 papers.append(paper)
++        # Get PMC IDs
++        pmcids = [id_elem.text for id_elem in search_root.findall('.//Id') if id_elem.text]
++        if not pmcids:
++            if search_root.find('IdList') is None:
++                raise RuntimeError('NCBI search response omitted IdList')
++            self.empty_result_confirmed = True
++            logger.info(f"No PMC results found for query: {query}")
++            return papers
++
++        # Step 2: Fetch compact summaries (more stable than full-text efetch)
++        summary_params = {
++            'db': 'pmc',
++            'id': ','.join(pmcids),
++            'retmode': 'xml',
++            'tool': 'paper-search-mcp',
++            'email': 'openags@example.com'
++        }
++
++        summary_response = ncbi_get(self.EUTILS_SUMMARY_URL, summary_params, self.session)
++        summary_response.raise_for_status()
++        summary_root = ET.fromstring(summary_response.content)
++
++        # Step 3: Parse each summary record
++        for docsum in summary_root.findall('.//DocSum'):
++            try:
++                paper = self._parse_docsum(docsum)
++                if paper:
++                    papers.append(paper)
++                    if len(papers) >= max_results:
++                        break
++            except Exception as e:
++                logger.warning(f"Error parsing PMC summary: {e}")
++                continue
+ 
+-        except requests.RequestException as e:
+-            logger.error(f"PMC search request error: {e}")
+-        except ET.ParseError as e:
+-            logger.error(f"PMC XML parsing error: {e}")
+-        except Exception as e:
+-            logger.error(f"Unexpected error in PMC search: {e}")
+ 
+         return papers
+ 
+diff --git a/paper_search_mcp/academic_platforms/pubmed.py b/paper_search_mcp/academic_platforms/pubmed.py
+index bbd15f2..ab61f02 100644
+--- a/paper_search_mcp/academic_platforms/pubmed.py
++++ b/paper_search_mcp/academic_platforms/pubmed.py
+@@ -5,6 +5,7 @@ from xml.etree import ElementTree as ET
+ from datetime import datetime
+ from ..paper import Paper
+ from ..utils import extract_doi
++from ..ncbi import ncbi_get
+ from .base import PaperSource
+ 
+ class PubMedSearcher(PaperSource):
+@@ -21,14 +22,12 @@ class PubMedSearcher(PaperSource):
+             'retmode': 'xml',
+             'sort': sort,
+         }
+-        search_response = requests.get(
+-            self.SEARCH_URL,
+-            params=search_params,
+-            timeout=self.REQUEST_TIMEOUT_SECONDS,
+-        )
++        search_response = ncbi_get(self.SEARCH_URL, search_params)
+         search_root = ET.fromstring(search_response.content)
+         ids = [id.text for id in search_root.findall('.//Id') if id.text]
+         if not ids:
++            if search_root.find(".//IdList") is None: raise RuntimeError("NCBI omitted IdList")
++            self.empty_result_confirmed = True
+             return []
+         
+         fetch_params = {
+@@ -36,11 +35,7 @@ class PubMedSearcher(PaperSource):
+             'id': ','.join(ids),
+             'retmode': 'xml'
+         }
+-        fetch_response = requests.get(
+-            self.FETCH_URL,
+-            params=fetch_params,
+-            timeout=self.REQUEST_TIMEOUT_SECONDS,
+-        )
++        fetch_response = ncbi_get(self.FETCH_URL, fetch_params)
+         fetch_root = ET.fromstring(fetch_response.content)
+         
+         papers = []
+diff --git a/paper_search_mcp/academic_platforms/semantic.py b/paper_search_mcp/academic_platforms/semantic.py
+index 7be53a3..e3838cd 100644
 --- a/paper_search_mcp/academic_platforms/semantic.py
 +++ b/paper_search_mcp/academic_platforms/semantic.py
-@@ -152,117 +152,32 @@
+@@ -158,137 +158,32 @@ class SemanticSearcher(PaperSource):
          """
          api_key = get_env("SEMANTIC_SCHOLAR_API_KEY", "")
          if not api_key or api_key.strip() == "":
@@ -537,10 +529,10 @@
 -        """
 -        Make a request to the Semantic Scholar API with optional API key.
 -        """
--        max_retries = 3
 +    def request_api(self, path: str, params: dict) -> requests.Response:
 +        """Request with explicit authentication; never downgrade a rejected key."""
          api_key = self.get_api_key()
+-        max_retries = 3 if api_key else 1
 -        retry_delay = 5 if api_key is None else 2
 -        has_retried_without_key = False
 -
@@ -562,21 +554,20 @@
 -                    )
 -                    api_key = None
 -                    has_retried_without_key = True
-+        max_attempts = 3
-+        for attempt in range(max_attempts):
-+            response = self.session.get(
-+                f"{self.SEMANTIC_BASE_URL}/{path}", params=params,
-+                headers={"x-api-key": api_key} if api_key else {}, timeout=30,
-+            )
-+            if response.status_code == 429:
-+                if attempt < max_attempts - 1:
-+                    retry_after = response.headers.get("Retry-After", "")
-+                    delay = int(retry_after) if retry_after.isdigit() else (2 if api_key else 5) * (2 ** attempt)
-+                    time.sleep(delay)
-                     continue
+-                    continue
 -
 -                # 检查是否是429错误（限流）
 -                if response.status_code == 429:
+-                    if api_key is None:
+-                        logger.warning(
+-                            "Semantic Scholar anonymous access is rate-limited (429). "
+-                            "Skipping retries; set SEMANTIC_SCHOLAR_API_KEY for higher limits."
+-                        )
+-                        return {
+-                            "error": "rate_limited",
+-                            "status_code": 429,
+-                            "message": "Too many requests. Set SEMANTIC_SCHOLAR_API_KEY for higher limits.",
+-                        }
 -                    if attempt < max_retries - 1:
 -                        retry_after = response.headers.get("Retry-After")
 -                        wait_time = (
@@ -613,8 +604,29 @@
 -                    )
 -                    api_key = None
 -                    has_retried_without_key = True
--                    continue
++        max_attempts = 3
++        for attempt in range(max_attempts):
++            response = self.session.get(
++                f"{self.SEMANTIC_BASE_URL}/{path}", params=params,
++                headers={"x-api-key": api_key} if api_key else {}, timeout=30,
++            )
++            if response.status_code == 429:
++                if attempt < max_attempts - 1:
++                    retry_after = response.headers.get("Retry-After", "")
++                    delay = int(retry_after) if retry_after.isdigit() else (2 if api_key else 5) * (2 ** attempt)
++                    time.sleep(delay)
+                     continue
 -                if e.response.status_code == 429:
+-                    if api_key is None:
+-                        logger.warning(
+-                            "Semantic Scholar anonymous access is rate-limited (429). "
+-                            "Skipping retries; set SEMANTIC_SCHOLAR_API_KEY for higher limits."
+-                        )
+-                        return {
+-                            "error": "rate_limited",
+-                            "status_code": 429,
+-                            "message": "Too many requests. Set SEMANTIC_SCHOLAR_API_KEY for higher limits.",
+-                        }
 -                    if attempt < max_retries - 1:
 -                        retry_after = e.response.headers.get("Retry-After")
 -                        wait_time = (
@@ -661,7 +673,7 @@
  
      def search(
          self,
-@@ -291,68 +206,51 @@
+@@ -317,78 +212,51 @@ class SemanticSearcher(PaperSource):
          """
          papers = []
  
@@ -696,7 +708,13 @@
 -                    logger.error(f"Rate limited by Semantic Scholar API: {error_msg}")
 -                else:
 -                    logger.error(f"Semantic Scholar API error: {error_msg}")
--                return papers
+-                status_code = response.get("status_code")
+-                reason = response.get("error")
+-                if status_code:
+-                    reason = f"{reason}, HTTP {status_code}"
+-                raise SemanticScholarRequestError(
+-                    f"Semantic Scholar API request failed ({reason}): {error_msg}"
+-                )
 -
 -            # Check response status code
 -            if not hasattr(response, "status_code") or response.status_code != 200:
@@ -704,7 +722,9 @@
 -                logger.error(
 -                    f"Semantic Scholar search failed with status {status_code}"
 -                )
--                return papers
+-                raise SemanticScholarRequestError(
+-                    f"Semantic Scholar search failed with status {status_code}"
+-                )
 -
 -            data = response.json()
 -            results = data["data"]
@@ -724,9 +744,6 @@
 -                paper = self._parse_paper(item)
 -                if paper:
 -                    papers.append(paper)
--
--        except Exception as e:
--            logger.error(f"Semantic Scholar search error: {e}")
 +        fields = [
 +            "title",
 +            "abstract",
@@ -771,15 +788,18 @@
 +            paper = self._parse_paper(item)
 +            if paper:
 +                papers.append(paper)
-+
+ 
+-        except SemanticScholarRequestError:
+-            raise
+-        except Exception as e:
+-            logger.error(f"Semantic Scholar search error: {e}")
  
          return papers[:max_results]
  
-@@ -507,23 +405,6 @@
-             }
+@@ -572,23 +440,6 @@ class SemanticSearcher(PaperSource):
  
              response = self.request_api(f"paper/{paper_id}", params)
--
+ 
 -            # Check for errors
 -            if isinstance(response, dict) and "error" in response:
 -                error_msg = response.get("message", "Unknown error")
@@ -796,277 +816,15 @@
 -                    f"Semantic Scholar paper details fetch failed with status {status_code}"
 -                )
 -                return None
- 
+-
              results = response.json()
              paper = self._parse_paper(results)
---- a/paper_search_mcp/academic_platforms/openalex.py
-+++ b/paper_search_mcp/academic_platforms/openalex.py
-@@ -3,12 +3,41 @@
- import requests
- import logging
- from ..paper import Paper
-+from ..config import get_env
- from .base import PaperSource
- from ..utils import extract_doi
- 
- logger = logging.getLogger(__name__)
- 
- 
-+def openalex_headers():
-+    key = get_env("OPENALEX_API_KEY", "")
-+    return {"Authorization": f"Bearer {key}"} if key else {}
-+
-+
-+def openalex_budget(response):
-+    # Only numeric allowlisted budget headers; never headers containing credentials.
-+    budget = {}
-+    for name in ("limit", "limit-usd", "remaining", "credits-used", "reset"):
-+        raw = response.headers.get(f"X-RateLimit-{name}", "")
-+        try:
-+            value = float(raw)
-+            if 0 <= value < float("inf"):
-+                budget[name] = value
-+        except (ValueError, TypeError):
-+            pass
-+    return budget
-+
-+
-+def openalex_cost_usd(data):
-+    # OpenAlex's own usage cost for this request (meta.cost_usd); None when missing or invalid.
-+    meta = data.get("meta") if isinstance(data, dict) else None
-+    cost = meta.get("cost_usd") if isinstance(meta, dict) else None
-+    if isinstance(cost, (int, float)) and not isinstance(cost, bool) and 0 <= cost < float("inf"):
-+        return float(cost)
-+    return None
-+
-+
- class OpenAlexSearcher(PaperSource):
-     """OpenAlex paper search implementation"""
- 
-@@ -16,10 +45,8 @@
- 
-     def __init__(self):
-         self.session = requests.Session()
--        # OpenAlex encourages providing an email in User-Agent for the "polite pool"
--        self.session.headers.update(
--            {"User-Agent": "paper-search-mcp/1.0 (mailto:openags@example.com)"}
--        )
-+        self.session.headers.update({"User-Agent": "paper-search-mcp/1.0"})
-+        self.rate_limit = {}
- 
-     def _reconstruct_abstract(self, inverted_index: dict) -> str:
-         """
-@@ -46,110 +73,110 @@
- 
-         Args:
-             query: Search query string
--            max_results: Maximum results to return (natively max 200 per page)
-+            max_results: Maximum results to return (natively max 100 per page)
- 
-         Returns:
-             List[Paper]: List of found papers with metadata.
-         """
-         papers = []
- 
--        try:
--            params = {
--                "search": query,
--                "per_page": min(max_results, 200),
--            }
--
--            response = self.session.get(self.BASE_URL, params=params, timeout=30)
--            
--            if response.status_code != 200:
--                logger.error(f"OpenAlex search failed with status {response.status_code}")
--                return papers
--
--            data = response.json()
--            results = data.get("results", [])
--
--            for item in results:
--                if len(papers) >= max_results:
--                    break
--
--                # ID usually looks like 'https://openalex.org/W2741809807'
--                paper_id = item.get("id", "").replace("https://openalex.org/", "")
--                title = item.get("title")
--                if not title:
--                    continue  # Skip items without a title
--
--                # Process Authors
--                authors = [
--                    author.get("author", {}).get("display_name", "")
--                    for author in item.get("authorships", [])
--                    if author.get("author", {}).get("display_name")
--                ]
--
--                # Abstract
--                abstract = self._reconstruct_abstract(
--                    item.get("abstract_inverted_index")
-+        params = {
-+            "search": query,
-+            "per_page": min(max_results, 100),
-+        }
-+
-+        self.billing = {"http_status": None, "cost_usd": None}
-+        response = self.session.get(self.BASE_URL, params=params, headers=openalex_headers(), timeout=30)
-+        self.rate_limit = openalex_budget(response)
-+        self.billing["http_status"] = response.status_code
-+        data = response.json()
-+        self.billing["cost_usd"] = openalex_cost_usd(data)
-+        response.raise_for_status()
-+        if not isinstance(data, dict) or not isinstance(data.get("results"), list) or "error" in data or "errors" in data or "message" in data:
-+            raise RuntimeError("OpenAlex returned an invalid/error search payload")
-+        results = data["results"]
-+        self.empty_result_confirmed = not results
-+
-+        for item in results:
-+            if len(papers) >= max_results:
-+                break
-+
-+            # ID usually looks like 'https://openalex.org/W2741809807'
-+            paper_id = item.get("id", "").replace("https://openalex.org/", "")
-+            title = item.get("title")
-+            if not title:
-+                continue  # Skip items without a title
-+
-+            # Process Authors
-+            authors = [
-+                author.get("author", {}).get("display_name", "")
-+                for author in item.get("authorships", [])
-+                if author.get("author", {}).get("display_name")
-+            ]
-+
-+            # Abstract
-+            abstract = self._reconstruct_abstract(
-+                item.get("abstract_inverted_index")
-+            )
-+
-+            # Process DOI
-+            doi = item.get("doi", "")
-+            if doi:
-+                # OpenAlex DOI is returned as a full url e.g. https://doi.org/10...
-+                doi = doi.replace("https://doi.org/", "")
-+
-+            if not doi and abstract:
-+                doi = extract_doi(abstract)
-+
-+            # Process URLs (Landing page vs direct PDF)
-+            url = ""
-+            pdf_url = ""
-+
-+            primary_location = item.get("primary_location")
-+            if primary_location:
-+                url = primary_location.get("landing_page_url", "")
-+                pdf_url = primary_location.get("pdf_url", "")
-+
-+            if not url:
-+                url = item.get("id", "")
-+
-+            # Check general open access availability for PDF fallback
-+            open_access = item.get("open_access", {})
-+            if not pdf_url and open_access.get("is_oa"):
-+                pdf_url = open_access.get("oa_url", "")
-+
-+            # Dates
-+            pub_date_str = item.get("publication_date")
-+            published_date = None
-+            if pub_date_str:
-+                try:
-+                    published_date = datetime.strptime(pub_date_str, "%Y-%m-%d")
-+                except ValueError:
-+                    pass
-+
-+            # Categories / Concepts
-+            concepts = [
-+                concept.get("display_name")
-+                for concept in item.get("concepts", [])
-+                if concept.get("display_name")
-+            ]
-+
-+            papers.append(
-+                Paper(
-+                    paper_id=paper_id,
-+                    title=title,
-+                    authors=authors,
-+                    abstract=abstract,
-+                    url=url,
-+                    pdf_url=pdf_url or "",
-+                    published_date=published_date,
-+                    source="openalex",
-+                    categories=concepts[:5],  # Keep top 5 concepts to reduce size
-+                    doi=doi,
-+                    citations=item.get("cited_by_count", 0),
-                 )
--
--                # Process DOI
--                doi = item.get("doi", "")
--                if doi:
--                    # OpenAlex DOI is returned as a full url e.g. https://doi.org/10...
--                    doi = doi.replace("https://doi.org/", "")
--
--                if not doi and abstract:
--                    doi = extract_doi(abstract)
--
--                # Process URLs (Landing page vs direct PDF)
--                url = ""
--                pdf_url = ""
--
--                primary_location = item.get("primary_location")
--                if primary_location:
--                    url = primary_location.get("landing_page_url", "")
--                    pdf_url = primary_location.get("pdf_url", "")
--
--                if not url:
--                    url = item.get("id", "")
--
--                # Check general open access availability for PDF fallback
--                open_access = item.get("open_access", {})
--                if not pdf_url and open_access.get("is_oa"):
--                    pdf_url = open_access.get("oa_url", "")
--
--                # Dates
--                pub_date_str = item.get("publication_date")
--                published_date = None
--                if pub_date_str:
--                    try:
--                        published_date = datetime.strptime(pub_date_str, "%Y-%m-%d")
--                    except ValueError:
--                        pass
--
--                # Categories / Concepts
--                concepts = [
--                    concept.get("display_name")
--                    for concept in item.get("concepts", [])
--                    if concept.get("display_name")
--                ]
--
--                papers.append(
--                    Paper(
--                        paper_id=paper_id,
--                        title=title,
--                        authors=authors,
--                        abstract=abstract,
--                        url=url,
--                        pdf_url=pdf_url or "",
--                        published_date=published_date,
--                        source="openalex",
--                        categories=concepts[:5],  # Keep top 5 concepts to reduce size
--                        doi=doi,
--                        citations=item.get("cited_by_count", 0),
--                    )
--                )
--
--        except Exception as e:
--            logger.error(f"OpenAlex search error: {e}")
-+            )
-+
- 
-         return papers
- 
+             if paper:
+diff --git a/paper_search_mcp/academic_platforms/ssrn.py b/paper_search_mcp/academic_platforms/ssrn.py
+index 15b7d9e..60dd664 100644
 --- a/paper_search_mcp/academic_platforms/ssrn.py
 +++ b/paper_search_mcp/academic_platforms/ssrn.py
-@@ -17,6 +17,7 @@
+@@ -12,6 +12,7 @@ controls. A discovered locator does not guarantee a downloadable PDF.
  
  from __future__ import annotations
  
@@ -1074,147 +832,249 @@
  import logging
  import re
  import time
-@@ -29,6 +30,7 @@
- 
- from .base import PaperSource
- from ..paper import Paper
-+from .openalex import openalex_headers, openalex_budget, openalex_cost_usd
- 
- logger = logging.getLogger(__name__)
- 
-@@ -68,39 +70,80 @@
-     # PaperSource interface
-     # ------------------------------------------------------------------
- 
-+    # Local patch (OMP, 2026-07-21): SSRN's HTML search endpoints are Cloudflare
-+    # bot-blocked (HTTP 403), so search goes through OpenAlex's works API filtered
-+    # to the SSRN venue (source S4210172589) instead. Metadata-only, no scraping.
-+    OPENALEX_WORKS_URL = "https://api.openalex.org/works"
-+    OPENALEX_SSRN_SOURCE = "S4210172589"
-+
-+    @staticmethod
-+    def _abstract_from_inverted_index(inverted: Optional[dict]) -> str:
-+        if not inverted:
-+            return ""
-+        positions: List[Tuple[int, str]] = []
-+        for word, indexes in inverted.items():
-+            for index in indexes:
-+                positions.append((index, word))
-+        return " ".join(word for _, word in sorted(positions))
-+
-     def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
--        """Search SSRN and return metadata records.
-+        """Search SSRN metadata via OpenAlex's SSRN-venue filter.
- 
-         Args:
-             query: Search terms.
--            max_results: Maximum results to return (practical limit ~30 without
--                         pagination; SSRN returns ~15 results per page).
-+            max_results: Maximum results to return (max 25).
-             **kwargs: Unused; reserved for future filter support.
- 
-         Returns:
-             List of :class:`~paper_search_mcp.paper.Paper` objects.
+@@ -82,7 +83,13 @@ class SSRNSearcher(PaperSource):
+         created and no key is required by this connector itself.
          """
-+        params = {
-+            "search": query,
-+            "filter": f"primary_location.source.id:{self.OPENALEX_SSRN_SOURCE}",
-+            "per-page": min(max_results, 25),
-+        }
-+        self.billing = {"http_status": None, "cost_usd": None}
-+        response = self.session.get(self.OPENALEX_WORKS_URL, params=params, headers=openalex_headers(), timeout=30)
-+        self.rate_limit = openalex_budget(response)
-+        self.billing["http_status"] = response.status_code
-+        data = response.json()
-+        self.billing["cost_usd"] = openalex_cost_usd(data)
-+        response.raise_for_status()
-+        if not isinstance(data, dict) or not isinstance(data.get("results"), list) or "error" in data or "errors" in data or "message" in data:
-+            raise RuntimeError("OpenAlex SSRN returned an invalid/error search payload")
-+        self.empty_result_confirmed = not data["results"]
-         papers: List[Paper] = []
--        page = 1
--        per_page = 15  # SSRN default
--
--        while len(papers) < max_results:
--            self._throttle()
--            html, err = self._fetch_page(query, page)
--            if err or not html:
--                logger.warning("SSRN search page %d fetch failed: %s", page, err)
--                break
--
--            page_papers = self._parse_results(html)
--            if not page_papers:
--                break
--
--            papers.extend(page_papers)
--            if len(page_papers) < per_page:
--                break  # last page
--
--            page += 1
--
-+        for work in data["results"]:
-+            primary = work.get("primary_location") or {}
-+            landing = primary.get("landing_page_url") or ""
-+            abstract_match = re.search(r"abstract(?:_id)?=(\d+)", landing)
-+            paper_id = abstract_match.group(1) if abstract_match else str(work.get("id", "")).rsplit("/", 1)[-1]
-+            doi = str(work.get("doi") or "").removeprefix("https://doi.org/")
-+            published = None
-+            date_str = work.get("publication_date") or ""
-+            if date_str:
-+                try:
-+                    published = datetime.strptime(date_str, "%Y-%m-%d")
-+                except ValueError:
-+                    published = None
-+            best_oa = work.get("best_oa_location") or {}
-+            papers.append(
-+                Paper(
-+                    paper_id=paper_id,
-+                    title=work.get("display_name") or "",
-+                    authors=[
-+                        (a.get("author") or {}).get("display_name") or ""
-+                        for a in work.get("authorships", [])
-+                    ],
-+                    abstract=self._abstract_from_inverted_index(work.get("abstract_inverted_index")),
-+                    doi=doi,
-+                    published_date=published,
-+                    pdf_url=primary.get("pdf_url") or best_oa.get("pdf_url") or "",
-+                    url=landing or (f"https://doi.org/{doi}" if doi else ""),
-+                    source="ssrn",
-+                    citations=work.get("cited_by_count") or 0,
-+                )
-+            )
-         return papers[:max_results]
+         from .openalex import OpenAlexSearcher
+-        return OpenAlexSearcher().search_ssrn(query, max_results=max_results)
++        searcher = OpenAlexSearcher()
++        try:
++            return searcher.search_ssrn(query, max_results=max_results)
++        finally:
++            self.rate_limit = getattr(searcher, "rate_limit", {})
++            self.billing = getattr(searcher, "billing", None)
++            self.empty_result_confirmed = getattr(searcher, "empty_result_confirmed", False)
  
      def download_pdf(self, paper_id: str, save_path: str = "./downloads") -> str:
---- a/paper_search_mcp/academic_platforms/google_scholar.py
-+++ b/paper_search_mcp/academic_platforms/google_scholar.py
-@@ -74,7 +74,9 @@
-                 return None
+         """Download PDF for an SSRN paper when a public direct link is available.
+diff --git a/paper_search_mcp/academic_platforms/zenodo.py b/paper_search_mcp/academic_platforms/zenodo.py
+index 686c0dd..bb5a35c 100644
+--- a/paper_search_mcp/academic_platforms/zenodo.py
++++ b/paper_search_mcp/academic_platforms/zenodo.py
+@@ -93,18 +93,18 @@ class ZenodoSearcher(PaperSource):
+         if year:
+             params["q"] = f"{query} AND publication_date:[{year}-01-01 TO {year}-12-31]"
  
-             # Process title and URL
--            title = title_elem.get_text(strip=True).replace('[PDF]', '').replace('[HTML]', '')
-+            # Local patch (OMP): join text nodes with spaces + collapse, so titles
-+            # spanning <b>/<i> segments don't concatenate without separators.
-+            title = re.sub(r"\s+", " ", title_elem.get_text(" ", strip=True)).replace('[PDF]', '').replace('[HTML]', '').strip()
-             link = title_elem.find('a', href=True)
-             url = link['href'] if link else ''
+-        try:
+-            response = self.session.get(
+-                f"{self.BASE_URL}/records", params=params, timeout=20
+-            )
+-            response.raise_for_status()
+-            data = response.json()
+-        except Exception as exc:
+-            logger.error("Zenodo search failed: %s", exc)
+-            return []
++        response = self.session.get(
++            f"{self.BASE_URL}/records", params=params, timeout=20
++        )
++        response.raise_for_status()
++        data = response.json()
++        if not isinstance(data, dict) or not isinstance(data.get("hits"), dict) or not isinstance(data["hits"].get("hits"), list) or "error" in data or "errors" in data or "message" in data:
++            raise RuntimeError("Zenodo returned an invalid/error search payload")
++
  
---- a/paper_search_mcp/paper.py
-+++ b/paper_search_mcp/paper.py
-@@ -46,11 +46,11 @@
-             'authors': '; '.join(self.authors) if self.authors else '',
-             'abstract': self.abstract,
-             'doi': self.doi,
--            'published_date': self.published_date.isoformat() if self.published_date else '',
-+            'published_date': self.published_date.isoformat() if hasattr(self.published_date, 'isoformat') else str(self.published_date or ''),
-             'pdf_url': self.pdf_url,
-             'url': self.url,
-             'source': self.source,
--            'updated_date': self.updated_date.isoformat() if self.updated_date else '',
-+            'updated_date': self.updated_date.isoformat() if hasattr(self.updated_date, 'isoformat') else str(self.updated_date or ''),
-             'categories': '; '.join(self.categories) if self.categories else '',
-             'keywords': '; '.join(self.keywords) if self.keywords else '',
-             'citations': self.citations,
++        self.empty_result_confirmed = not data["hits"]["hits"]
+         papers: List[Paper] = []
+-        for hit in data.get("hits", {}).get("hits", []):
++        for hit in data["hits"]["hits"]:
+             paper = self._parse_record(hit)
+             if paper:
+                 papers.append(paper)
+diff --git a/paper_search_mcp/cli.py b/paper_search_mcp/cli.py
+index 24b79fc..e0b9568 100644
+--- a/paper_search_mcp/cli.py
++++ b/paper_search_mcp/cli.py
+@@ -3,6 +3,8 @@
+ 
+ from __future__ import annotations
+ 
++import logging
++import threading
+ import argparse
+ import asyncio
+ import json
+@@ -214,65 +216,112 @@ def _sort_papers(papers: List[Dict[str, Any]], order: str) -> List[Dict[str, Any
+ # Async helpers
+ # ---------------------------------------------------------------------------
+ 
+-async def _async_search(searcher: Any, query: str, max_results: int, **kwargs) -> List[Dict]:
+-    if kwargs:
+-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, **kwargs)
+-    else:
+-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results)
+-    return [p.to_dict() for p in papers]
++
++
++
++def _safe_diagnostic(value) -> str:
++    text = str(value)
++    # HTTP exception strings may contain complete request URLs.
++    text = re.sub(r"(?i)(api_key|access_token|token|key)=([^&\s]+)", r"\1=[redacted]", text)
++    for name, secret in os.environ.items():
++        if secret and any(part in name.upper() for part in ("KEY", "TOKEN", "SECRET", "PASSWORD")):
++            text = text.replace(secret, "[redacted]")
++    return text[:1000]
++
++
++class _SourceDiagnostics(logging.Handler):
++    """Capture upstream swallowed errors without mixing concurrent sources."""
++    def __init__(self):
++        super().__init__(logging.WARNING)
++        self.thread = threading.get_ident()
++        self.errors = []
++        self.warnings = []
++
++    def emit(self, record):
++        if record.thread != self.thread:
++            return
++        target = self.errors if record.levelno >= logging.ERROR else self.warnings
++        target.append(_safe_diagnostic(record.getMessage()))
++
++
++def _search_with_diagnostics(searcher, query, max_results, kwargs):
++    capture = _SourceDiagnostics()
++    root = logging.getLogger()
++    root.addHandler(capture)
++    papers = []
++    searcher.empty_result_confirmed = False
++    try:
++        papers = [p.to_dict() for p in searcher.search(query, max_results=max_results, **kwargs)]
++        if not papers and not capture.errors and not searcher.empty_result_confirmed:
++            capture.warnings.append("Connector returned no papers without a validated empty provider response; not confirmed no matches")
++    except Exception as exc:
++        capture.errors.append(_safe_diagnostic(exc))
++    finally:
++        root.removeHandler(capture)
++    return papers, capture.errors, capture.warnings
++
++
++async def _async_search(searcher: Any, query: str, max_results: int, **kwargs):
++    return await asyncio.to_thread(_search_with_diagnostics, searcher, query, max_results, kwargs)
+ 
+ 
+ # ---------------------------------------------------------------------------
+ # Commands
+ # ---------------------------------------------------------------------------
+ 
++OPENALEX_BACKED_SOURCES = ("openalex", "ssrn")
++
+ async def cmd_search(args: argparse.Namespace) -> int:
+     selected = _parse_sources(args.sources)
+     if not selected:
+-        print(json.dumps({"error": "No valid sources selected", "available": sorted(_available_sources())}))
++        print(json.dumps({"error": "No valid sources selected", "available": sorted(SEARCHERS.keys())}))
+         return 1
+ 
+     tasks = {}
+-    jobs = []
+-    source_timeout = getattr(args, "source_timeout", None)
+     for src in selected:
++        searcher = _get_searcher(src)
+         extra = {}
+-        if src == "wos":
+-            extra["db"] = getattr(args, "wos_db", "WOS")
+         if src == "semantic" and args.year:
+             extra["year"] = args.year
+-        if src == "scopus":
+-            extra = {"view": getattr(args, "scopus_view", "STANDARD"),
+-                     "sort": getattr(args, "scopus_sort", "relevance"),
+-                     "field": getattr(args, "scopus_field", ""),
+-                     "date": getattr(args, "scopus_date", "")}
+-        if source_timeout is None:
+-            tasks[src] = _async_search(_get_searcher(src), args.query, args.max_results, **extra)
+-        else:
+-            jobs.append({"source": src, "query": args.query,
+-                         "max_results": args.max_results, "kwargs": extra})
++        tasks[src] = _async_search(searcher, args.query, args.max_results, **extra)
+ 
+-    names = selected
+-    if source_timeout is None:
+-        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+-    else:
+-        from .cli_search import search_sources
+-        results = await search_sources(jobs, source_timeout)
++    names = list(tasks.keys())
++    results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+ 
+     merged: List[Dict[str, Any]] = []
+     errors: Dict[str, str] = {}
+     source_counts: Dict[str, int] = {}
++    source_status = {}
++    warnings = {}
++    rate_limits = {}
++    billing = {}
+ 
+     for name, result in zip(names, results):
+         if isinstance(result, Exception):
+-            errors[name] = str(result)
+-            source_counts[name] = 0
++            papers, source_errors, source_warnings = [], [_safe_diagnostic(result)], []
+         else:
+-            source_counts[name] = len(result)
+-            for p in result:
+-                if not p.get("source"):
+-                    p["source"] = name
+-                merged.append(p)
++            papers, source_errors, source_warnings = result
++        source_counts[name] = len(papers)
++        if source_errors:
++            errors[name] = "; ".join(source_errors)
++        if source_warnings:
++            warnings[name] = source_warnings
++        source_status[name] = (
++            "partial" if papers and (source_errors or source_warnings) else
++            "failed" if source_errors else
++            "partial" if source_warnings else
++            "ok" if papers else "empty"
++        )
++        budget = getattr(_get_searcher(name), "rate_limit", None)
++        if budget:
++            rate_limits[name] = budget
++        if name in OPENALEX_BACKED_SOURCES:
++            # Every requested OpenAlex-backed connector, including one that got no response.
++            billing[name] = getattr(_get_searcher(name), "billing", None) or {"http_status": None, "cost_usd": None}
++        for p in papers:
++            if not p.get("source"):
++                p["source"] = name
++            merged.append(p)
+ 
+     deduped = _sort_papers(_dedupe(merged), getattr(args, "sort", "relevance"))
+ 
+@@ -281,6 +330,16 @@ async def cmd_search(args: argparse.Namespace) -> int:
+         "sources_used": names,
+         "source_results": source_counts,
+         "errors": errors,
++        "warnings": warnings,
++        "source_status": source_status,
++        "rate_limits": rate_limits,
++        **({"billing": billing} if billing else {}),
++        "coverage": {
++            "max_results_per_source": args.max_results,
++            "year_applied_to": ["semantic"] if args.year and "semantic" in names else [],
++            "year_not_applied_to": [name for name in names if name != "semantic"] if args.year else [],
++            "note": "Counts are bounded retrieval counts, not provider totals. Only empty denotes a validated zero-result provider response with no reported errors/warnings.",
++        },
+         "total": len(deduped),
+         "papers": deduped,
+     }
+diff --git a/paper_search_mcp/config.py b/paper_search_mcp/config.py
+index e5b4a53..f79c0fd 100644
+--- a/paper_search_mcp/config.py
++++ b/paper_search_mcp/config.py
+@@ -77,6 +77,9 @@ def get_env(name: str, default: Optional[str] = "") -> str:
+     keys = [f"{ENV_PREFIX}{normalized}", normalized]
+     for key in keys:
+         if key in os.environ:
+-            return os.environ.get(key, "")
++            value = os.environ[key]
++            if normalized.endswith(("KEY", "TOKEN", "SECRET", "PASSWORD")) and not value.strip():
++                continue
++            return value
+ 
+     return "" if default is None else str(default)
+diff --git a/paper_search_mcp/ncbi.py b/paper_search_mcp/ncbi.py
+new file mode 100644
+index 0000000..dedacd8
 --- /dev/null
 +++ b/paper_search_mcp/ncbi.py
 @@ -0,0 +1,60 @@
@@ -1278,3 +1138,106 @@
 +            raise RuntimeError(f"NCBI transport failure ({type(exc).__name__})") from None
 +        finally:
 +            fcntl.flock(lock, fcntl.LOCK_UN)
+diff --git a/paper_search_mcp/sections.py b/paper_search_mcp/sections.py
+index 118ef57..993194e 100644
+--- a/paper_search_mcp/sections.py
++++ b/paper_search_mcp/sections.py
+@@ -178,7 +178,7 @@ def _run_parser_process(data: bytes, options: dict, deadline: float, cancel_even
+     environment["PAPER_SEARCH_MCP_ENV_FILE"] = os.devnull
+     process = None
+     monitor = None
+-    finished, interrupted = Event(), Event()
++    finished, interrupted, memory_exceeded = Event(), Event(), Event()
+     def stop_child():
+         if process.poll() is None:
+             process.terminate()
+@@ -189,6 +189,21 @@ def _run_parser_process(data: bytes, options: dict, deadline: float, cancel_even
+                 process.wait(timeout=1)
+     def watch_cancellation():
+         while not finished.wait(0.02):
++            if sys.platform == "darwin" and process.poll() is None:
++                try:
++                    rss = subprocess.run(["/bin/ps", "-o", "rss=", "-p", str(process.pid)], capture_output=True, text=True, timeout=1)
++                    if rss.returncode != 0 and process.poll() is None:
++                        interrupted.set()
++                        stop_child()
++                        return
++                    if rss.returncode == 0 and rss.stdout.strip() and int(rss.stdout.strip()) > 512 * 1024:
++                        memory_exceeded.set()
++                        stop_child()
++                        return
++                except (OSError, ValueError, subprocess.TimeoutExpired):
++                    interrupted.set()
++                    stop_child()
++                    return
+             if time.monotonic() >= deadline or (cancel_event is not None and cancel_event.is_set()):
+                 interrupted.set()
+                 try:
+@@ -213,6 +228,8 @@ def _run_parser_process(data: bytes, options: dict, deadline: float, cancel_even
+             output, _ = process.communicate(input=payload, timeout=remaining)
+         except subprocess.TimeoutExpired as exc:
+             raise TimeoutError("PDF section extraction timed out or was cancelled") from exc
++        if memory_exceeded.is_set():
++            raise SectionExtractionError("The PDF exceeded the parser memory budget")
+         if interrupted.is_set() or time.monotonic() >= deadline:
+             raise TimeoutError("PDF section extraction timed out or was cancelled")
+         if process.returncode != 0 or len(output) > MAX_WORKER_OUTPUT_BYTES:
+diff --git a/tests/test_dig_contract.py b/tests/test_dig_contract.py
+new file mode 100644
+index 0000000..690fb03
+--- /dev/null
++++ b/tests/test_dig_contract.py
+@@ -0,0 +1,35 @@
++import argparse, asyncio, json
++from types import SimpleNamespace
++from unittest.mock import Mock
++from paper_search_mcp import cli
++from paper_search_mcp.academic_platforms.openalex import OpenAlexSearcher
++
++def test_dig_health_distinguishes_unknown_empty_and_confirmed_empty(monkeypatch,capsys):
++    class Source:
++        def search(self,*args,**kwargs): return []
++    source=Source()
++    monkeypatch.setattr(cli,'_get_searcher',lambda name:source)
++    args=argparse.Namespace(sources='arxiv',query='fixture',max_results=1,year='',sort='relevance')
++    asyncio.run(cli.cmd_search(args));assert json.loads(capsys.readouterr().out)['source_status']['arxiv']=='partial'
++    def empty(*args,**kwargs): source.empty_result_confirmed=True;return []
++    source.search=empty
++    asyncio.run(cli.cmd_search(args));assert json.loads(capsys.readouterr().out)['source_status']['arxiv']=='empty'
++
++def test_dig_source_failure_is_explicit(monkeypatch,capsys):
++    class Source:
++        def search(self,*args,**kwargs): raise RuntimeError('provider refused')
++    monkeypatch.setattr(cli,'_get_searcher',lambda name:Source())
++    args=argparse.Namespace(sources='arxiv',query='fixture',max_results=1,year='',sort='relevance')
++    asyncio.run(cli.cmd_search(args));value=json.loads(capsys.readouterr().out)
++    assert value['source_status']['arxiv']=='failed'
++    assert 'provider refused' in value['errors']['arxiv']
++
++def test_dig_openalex_captures_each_response_and_transport_failure():
++    source=OpenAlexSearcher(api_key='',email='')
++    good=Mock(status_code=200,headers={'X-RateLimit-Credits-Used':'2'})
++    good.json.return_value={'meta':{'cost_usd':0.01},'results':[]}
++    source.session.get=Mock(side_effect=[good,RuntimeError('transport')])
++    source._get('https://api.openalex.org/works')
++    try:source._get('https://api.openalex.org/works')
++    except RuntimeError:pass
++    assert source.billing['responses']==[{'http_status':200,'cost_usd':0.01,'credits_used':2.0},{'http_status':None,'cost_usd':None,'credits_used':None}]
+diff --git a/tests/test_sections.py b/tests/test_sections.py
+index 383b5b9..6fbb36e 100644
+--- a/tests/test_sections.py
++++ b/tests/test_sections.py
+@@ -361,6 +361,13 @@ def test_worker_memory_limit_rejects_large_allocation_without_harming_parent():
+     except SectionExtractionError:
+         pytest.skip("POSIX resource limits unavailable")
+     import subprocess, sys
++    if sys.platform == "darwin":
++        from unittest.mock import patch
++        command = [sys.executable, "-c", "import time; data=bytearray(600*1024*1024); time.sleep(5)"]
++        with patch.object(sections, "_worker_command", return_value=command):
++            with pytest.raises(SectionExtractionError, match="memory budget"):
++                sections._run_parser_process(b"pdf", {"max_pages": 1}, __import__("time").monotonic()+8, None)
++        return
+     command = [sys.executable, "-c", "from paper_search_mcp._section_worker import _resource_limits; _resource_limits(3); bytearray(600 * 1024 * 1024)"]
+     result = subprocess.run(command, capture_output=True, timeout=8)
+     assert result.returncode != 0

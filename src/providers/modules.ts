@@ -140,6 +140,7 @@ export const MODULES = [
       "papers_openalex_search",
       "papers_openalex_content",
       "papers_multi_search",
+      "papers_sections",
       "papers_fulltext_read",
       "papers_pdf_download",
     ],

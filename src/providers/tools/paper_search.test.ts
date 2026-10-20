@@ -6,7 +6,7 @@ import { executeSource } from "../outcome.js";
 import { loadConfig, paperSearchDirectory, paperSearchInterpreter } from "../runtime-config.js";
 import { expect } from "expect";
 import type { SourceToolResult, ToolContext } from "../types.js";
-import { multi_search, pdf_download } from "./paper_search.js";
+import { multi_search, pdf_download, sections } from "./paper_search.js";
 
 const context: ToolContext = { sessionID: "papers-bridge-test", directory: "/tmp", worktree: "/tmp", abort: new AbortController().signal, keep: () => {} };
 const text = (result: SourceToolResult) => (typeof result === "string" ? result : result.text);
@@ -39,7 +39,7 @@ beforeEach(() => {
 		"const args = process.argv.slice(2);",
 		'const out = args[args.indexOf("-o") + 1];',
 		'const id = args[args.indexOf("download") + 2];',
-		'if (args[args.indexOf("paper-search") + 1] === "search") { if (process.env.FAKE_SEARCH_FAIL) { console.error(process.env.FAKE_SEARCH_FAIL); process.exit(1); } process.stdout.write(process.env.FAKE_SEARCH_OUTPUT ?? ""); }',
+		'if (args[args.indexOf("paper-search") + 1] === "search" || args[args.indexOf("paper-search") + 1] === "tool") { if (process.env.FAKE_SEARCH_FAIL) { console.error(process.env.FAKE_SEARCH_FAIL); process.exit(1); } process.stdout.write(process.env.FAKE_SEARCH_OUTPUT ?? ""); }',
 		"else {",
 		'writeFileSync(`${out}/${id}.pdf`, process.env.FAKE_PDF_BYTES ?? "");',
 		'if (process.env.FAKE_PDF_HANG) { writeFileSync(process.env.FAKE_PDF_HANG, "started"); setTimeout(() => {}, 60_000); }',
@@ -243,4 +243,18 @@ test("public-only Papers calls stay no-charge through cancellation and setup fai
 		expect(result.details?.cost).toEqual(cost);
 		expect(result.details?.knownCost).toBeUndefined();
 	}
+});
+
+test("paged OpenAlex bridge billing preserves a paid subtotal when a later request failed", async () => {
+  process.env.FAKE_SEARCH_OUTPUT=JSON.stringify({papers:[],source_status:{openalex:"failed"},billing:{openalex:{responses:[{http_status:200,cost_usd:0.012,credits_used:3},{http_status:null,cost_usd:null,credits_used:null}]}}});
+  const result=await executeSource(multi_search,{query:"fixture",sources:["openalex"]},context);
+  expect(result.status).toBe("failed");expect(result.details?.cost).toBeNull();expect(result.details?.knownCost).toEqual([{amount:0.012,unit:"USD"}]);
+});
+
+test("section extraction rejects malformed bridge output and paths outside the library", async () => {
+  process.env.FAKE_SEARCH_OUTPUT=JSON.stringify({unexpected:true});
+  expect(text(await sections.execute({file:"paper.pdf"},context))).toContain("malformed result");
+  expect(text(await sections.execute({file:"../paper.pdf"},context))).toContain("relative PDF filename");
+  process.env.FAKE_SEARCH_OUTPUT=JSON.stringify({sections:[{heading:"Methods",text:"Evidence"}],truncated:true});
+  expect((await sections.execute({file:"paper.pdf"},context) as any).status).toBe("partial");
 });

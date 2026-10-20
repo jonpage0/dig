@@ -96,7 +96,7 @@ Setup downloads a pinned copy of [paper-search-mcp](https://github.com/openags/p
 
 ### Optional Papers credentials and settings
 
-Direct Semantic Scholar/OpenAlex searches work without the bridge. The bridge adds 19 search connectors, including arXiv, PubMed, PMC, Crossref, OpenAlex, Unpaywall and others; availability still depends on each upstream service. Keys are optional and are added outside chat to Dig's `keys.env`.
+Direct Semantic Scholar/OpenAlex searches work without the bridge. The bridge adds 20 search connectors, including OpenReview, arXiv, PubMed, PMC, Crossref, OpenAlex, Unpaywall and others; availability still depends on each upstream service. Keys are optional and are added outside chat to Dig's `keys.env`.
 
 | Name | What it enables |
 | --- | --- |

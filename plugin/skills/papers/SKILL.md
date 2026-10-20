@@ -11,6 +11,8 @@ Run this skill inline in the thread that needs it, or as an ordinary source work
 
 Additional direct tools: `papers_semantic_scholar_snippets` finds passages; `papers_semantic_scholar_relations` follows citations or references with explicit paging; non-relevance Semantic Scholar sorting uses provider bulk search and exposes a continuation token. `papers_openalex_search` supports `mode: semantic` for descriptions up to 2000 characters. `papers_openalex_content` fetches a cached PDF or TEI XML for a W-prefixed work ID, using an existing key and reported-cost rules. XML is machine extraction; inspect it before quoting, and distinguish a snippet from a full paper. Saved paper files are never overwritten.
 
+OpenReview is now available through `papers_multi_search` with sources `["openreview"]`. Use `papers_sections` with a relative filename already under the paper library to inspect bounded PDF sections; headings are heuristic and truncated results must remain partial.
+
 ## Your assignment
 
 As a worker, your assignment names the research question, today's date, the absolute `project` directory and, only when the parent is grouping several sources, a `dig` id. Read this whole skill before the first call; you run on the model and effort the parent assigned. Inline, take the question from the user and the project directory from the user's workspace. Never use the plugin's install or cache directory as the project.

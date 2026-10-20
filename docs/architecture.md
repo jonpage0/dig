@@ -1,6 +1,6 @@
 # Dig architecture
 
-Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the repository is also `dig`): a bundled Node MCP server, also named `dig`, two native MCP App resources (the library and an inline saved-research card), and source-specific skills for ordinary workers or inline use. Version 0.2.32 carries the source catalog of the original Dig edition forward. `src/version.mjs` is the one version source for the server, both views and the preview; the build refuses a package or plugin manifest that disagrees with it.
+Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the repository is also `dig`): a bundled Node MCP server, also named `dig`, two native MCP App resources (the library and an inline saved-research card), and source-specific skills for ordinary workers or inline use. Version 0.3.0 carries the source catalog of the original Dig edition forward. `src/version.mjs` is the one version source for the server, both views and the preview; the build refuses a package or plugin manifest that disagrees with it.
 
 ## Boundaries
 
@@ -47,7 +47,7 @@ Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the
 | TikTok ads | `tiktok_ads_search`, `tiktok_ads_top`, `tiktok_ads_detail`, `tiktok_ad_library` | TikHub Creative Center and ScrapeCreators Ad Library are separate datasets |
 | DataForSEO | `dataforseo_docs_sections`, `dataforseo_docs_index`, `dataforseo_docs_read`, `dataforseo_request` | `DATAFORSEO_USERNAME` and `DATAFORSEO_PASSWORD` (API login and API password); paid per request |
 
-The **67 local provider tools** use the shared cancellation, raw capture and reported-cost boundary. The native boundary adds a required absolute `project` and optional `dig`, validates them before retrieval, and strips them before calling the provider implementation; the call's receipt records the `dig`. Settings are read for every call; disabled tools disappear from discovery and refuse calls. Existing saved evidence remains readable when its source is disabled.
+The **68 local provider tools** use the shared cancellation, raw capture and reported-cost boundary. The native boundary adds a required absolute `project` and optional `dig`, validates them before retrieval, and strips them before calling the provider implementation; the call's receipt records the `dig`. Settings are read for every call; disabled tools disappear from discovery and refuse calls. Existing saved evidence remains readable when its source is disabled.
 
 `papers_multi_search` reads each requested connector's health from the bridge's `source_status` (`ok`, `empty`, `partial` or `failed`); output without it, or with anything else for a requested connector (another word or a non-string such as `["empty"]`), is an error, because it cannot establish coverage or no matches. The call's status follows the DataForSEO rule below: every requested connector failed is `failed`, and its text then opens with an `ERROR:` line naming them before the bridge's output; every one empty is `empty`; any failed or partial connector makes the call `partial`; the rest is `success`.
 
@@ -241,7 +241,7 @@ These read the existing research files and persist nothing (`src/surfaces.mjs`).
 
 ## Source provenance and verification
 
-The provider code and method skills are reused from Jon Page's MIT-licensed Dig implementation. Papers uses `openags/paper-search-mcp` (MIT, P.S Zhang) pinned to `c8b642183bb725f0a7faec89e58b558df09079d1` with the maintained patch. The shared OpenAI MCP App stylesheet is Apache-2.0 licensed; its license ships as `OpenAI-MCP-Extensions-LICENSE`. Skill, card, server and entrypoint glyphs are drawn from Lucide (ISC); its license ships as `Lucide-LICENSE`. Source brand logos on the Sources page are their owners' trademarks, described above. The plugin logos and composer icon were generated for this package. Licenses travel with the native package/bridge checkout.
+The provider code and method skills are reused from Jon Page's MIT-licensed Dig implementation. Papers uses `openags/paper-search-mcp` (MIT, P.S Zhang) pinned to `cab1b5cc276a0cd004a0044003926a6440088049` with the maintained patch. The shared OpenAI MCP App stylesheet is Apache-2.0 licensed; its license ships as `OpenAI-MCP-Extensions-LICENSE`. Skill, card, server and entrypoint glyphs are drawn from Lucide (ISC); its license ships as `Lucide-LICENSE`. Source brand logos on the Sources page are their owners' trademarks, described above. The plugin logos and composer icon were generated for this package. Licenses travel with the native package/bridge checkout.
 
 `npm run check` builds the standalone package and runs isolated offline native/provider regressions. `npm run smoke` performs one real keyless HN comment search, saves a direct single-source report, and reads the complete report/raw response. Neither substitutes for a native worker or desktop-view acceptance.
 
@@ -256,3 +256,7 @@ The provider update adds a Threads source through ScrapeCreators, plus separate 
 YouTube has a separate, paid `youtube_transcript` fallback through ScrapeCreators. It preserves segment timing and language in provider/language-specific immutable files; it does not silently turn a free yt-dlp call into a paid request. Public view counts are playback starts under YouTube's current definition, not engaged views.
 
 Direct paper tools add Semantic Scholar snippet/relationship reads and true provider-side sorting through bulk search, plus OpenAlex semantic queries and cached PDF/TEI content. Polymarket Data API v2 adds token price-history paging and resolution reads; the existing Gamma search stays. All dates, ID types and partial-page conditions remain provider-specific.
+
+The Papers bridge pins the October 2 upstream revision and recognizes both the current patch and the two earlier patches at their original revision before migration. Setup synchronizes the pinned dependency lock. OpenReview joins the enabled search connectors. `papers_sections` reads only PDFs under the existing paper library; its subprocess is limited by CPU/time and by address space on supported POSIX hosts, or sampled resident memory on macOS, where RLIMIT_AS is rejected. A macOS process can briefly exceed the resident-memory threshold between samples. No parser-side network or arbitrary file path is added.
+
+OpenAlex-backed bridge searches retain one billing observation per HTTP response, including unknown transport outcomes. Dig prices each observation independently and preserves a known subtotal if a later page's charge is unknown. This extends the bridge's provider payload only; the stored receipt and report schemas do not change.

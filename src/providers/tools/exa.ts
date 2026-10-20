@@ -528,7 +528,7 @@ function snapshotTime(value: unknown): string | undefined | Invalid {
 export const search = exaMetered({
   description:
     "Search the web with Exa and get ranked documents with page text and query-relevant highlights. " +
-    "Search modes: 'auto' (default), 'fast', 'instant' for latency, and the Deep modes 'deep-lite', 'deep', " +
+    "Search modes: 'auto' (default), 'lite' for low-cost cached retrieval, legacy 'fast'/'instant', and the Deep modes 'deep-lite', 'deep', " +
     "'deep-reasoning' ($12–15/1k) for iterative research over the selected pages. " +
     "Filters: domains/paths (wildcards like '*.substack.com'), publication dates, category. " +
     "Exa returns source documents for your analysis; lite is low-cost cached retrieval. Use exa_research " +
