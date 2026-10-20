@@ -39,6 +39,10 @@ When a concrete visual question about media from this source needs inspection, y
 
 If a linked YouTube video instead needs broader analysis, return its exact URL, relevant interval and remaining question for the initiating thread's `youtube-video` method: Gemini 3.8 Flash is the standard, then Argon for harder reasoning. A specific visual need can justify Glimpse directly on a YouTube clip. Keep the source URL, inspected interval and analysis receipt in this report; distinguish visual observations, speech transcription and model inference. Missing or incomplete analysis is a coverage limit, not permission to force a failed route or infer unseen visuals from captions.
 
+## Optional evidence ranking
+
+For a burdensome shortlist of snippets already obtained from this assigned source, you may use the optional `evidence_rank` helper within the user's authorized paid-provider scope. Read `source_info` for `evidence` and its `helperSkillPath` first. This exception ranks supplied text only; it does not authorize another source, retrieval or worker. Keep every candidate, including contradictions and unscored items. Scores do not establish truth or replace the full-report and original-evidence reading rules. Skip the helper for a few obvious candidates.
+
 ## Outcomes and reporting
 
 Give the report a concise, descriptive H1 title (roughly 4–10 words) after the `source_card` block. Name the actual topic; do not repeat the full question or use a generic title such as “Research report.” The original question stays in the save argument or existing dig. This uses the existing saved title field; no separate title-generation call is needed.

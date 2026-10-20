@@ -20,6 +20,8 @@ Pass `project` to stay within the current project; omit it to look across projec
 
 Query the question's key terms and their synonyms separately, and list by the likely source. A hit only locates a candidate, and a miss is not proof that no report mentions the term, because `query` sees only titles and summary snippets. For the three to six best candidates, read each relevant report in full with `library_read`, from offset 0 until `nextOffset` is null. A card's snippet or summary is never a substitute for the report. Check a load-bearing claim against its call before you lean on it: the card's `calls[]` gives each call's status and cost, and its `rawFile` reads the provider's retained response.
 
+If the bounded candidate list is burdensome to compare, return its IDs, snippets and original references so the initiating thread can choose the separate `evidence-rank` helper. This read-only library skill does not call that paid provider. Ranking only the candidates found cannot recover a report the queries missed, and an absent snippet fact does not establish absence from the report. The initiating thread still reads relied-on reports in full and checks important originals; a few obvious candidates need no ranking call.
+
 ## Recommend reuse or refresh
 
 Judge age from the report's `generated_at` against its `topic_volatility`; both are in the front matter at the top of the report. `generated_at` is when the report was written, not when a claim was last verified.

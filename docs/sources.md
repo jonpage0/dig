@@ -1,6 +1,6 @@
 # Sources and their keys
 
-Turn sources on and off on Dig's **Sources & tools** page. Each source card says whether it is ready, which keys it uses and where to get them; **Setup details** on the card opens the full list. Dig has 22 research sources, 26 methods and 71 provider tools, including the separate shared Video analysis tool.
+Turn sources on and off on Dig's **Sources & tools** page. Each source card says whether it is ready, which keys it uses and where to get them; **Setup details** on the card opens the full list. Dig has 22 research sources, 26 methods and 72 provider tools, including the separate shared Video analysis and Evidence ranking tools.
 
 No source requires that you configure every other source. Hacker News, DeepWiki and Polymarket need no account. GitHub public REST reads and direct Papers searches can run without keys, with provider-specific limits. YouTube's keyless path needs a local `yt-dlp`. Other sources use your own provider accounts; API charges are separate from your ChatGPT plan.
 
@@ -130,3 +130,9 @@ DataForSEO charges per request from a prepaid account. Set `DATAFORSEO_USERNAME`
 Video analysis is the optional standalone `video_analyze` tool, using Elorian Glimpse. It can run directly in a conversation without a dig or report, or inspect selected media for an appropriate source worker. Enable it under **Sources & tools → Shared tools** and put `ELORIAN_API_KEY` in keys.env, using [Elorian’s key page](https://platform.elorian.ai/settings/keys).
 
 For broader YouTube analysis, use Flash first and Argon for harder reasoning. Choose Glimpse for a focused visual need or an explicit provider preference. Direct video-file URLs work without local executables; local and YouTube clips need ffmpeg and ffprobe, plus yt-dlp for YouTube. The tool exposes token and media coverage; billed dollars remain unknown when the provider returns no charge. See [Glimpse video inspection](video-analysis.md).
+
+## Optional evidence ranking
+
+The shared `evidence_rank` tool uses TypeSafe Jev to suggest a reading order for caller-supplied excerpts. Enable **Evidence ranking** under **Sources & tools → Shared tools** and add `TYPESAFE_API_KEY` from the [TypeSafe console](https://console.typesafe.ai/keys) to keys.env. No local executable or separate worker-model setting is needed. It is disabled by default and runs only when an agent chooses the helper within the authorized scope.
+
+The helper sends the selected question, excerpts and optional claim to TypeSafe. It does not retrieve the references, filter out candidates or establish truth. Returned usage is shown when available; provider-reported dollar cost remains unknown. See [evidence ranking](evidence-ranking.md).

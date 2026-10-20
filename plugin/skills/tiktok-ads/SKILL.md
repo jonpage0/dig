@@ -53,6 +53,10 @@ Tie every claim to the exact ad id, advertiser or brand, industry, country, peri
 
 Structure the report with `## Summary`, `## Creative Center Findings` (patterns, then the analyzed ads), `## Ad Library Findings` (per advertiser: entity match status, ads, run dates, audience bands), and `## Stats` (calls made per tool, filters used, pages read), followed by the audit sections. Omit a findings section only when that dataset was not queried, and say so in `## Stats`. `## Summary` is the report's discovery summary: what was found, its scope and limits, and what this research is useful for later. Keep it inside the report; never write a separate summary file.
 
+## Optional evidence ranking
+
+For a burdensome shortlist of snippets already obtained from this assigned source, you may use the optional `evidence_rank` helper within the user's authorized paid-provider scope. Read `source_info` for `evidence` and its `helperSkillPath` first. This exception ranks supplied text only; it does not authorize another source, retrieval or worker. Keep every candidate, including contradictions and unscored items. Scores do not establish truth or replace the full-report and original-evidence reading rules. Skip the helper for a few obvious candidates.
+
 ## Wait for a real outcome
 
 Do not impose a timeout merely because a source call is slow or waiting for interactive permission. Some clients expose a pending approval only to the outer client, not as tool output. Wait for completion, an explicit provider failure, or an explicit cancellation. Surface a visible permission wait and never bypass the control.

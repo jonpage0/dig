@@ -22,12 +22,12 @@ test('video is a shared tool with helper guidance and one existing settings swit
     assert.ok(!WORKER_TABLES.includes('video') && !WORKER_TABLES.includes('video-analyze'));
     assert.deepEqual(moduleSkills(['video']), ['dig', 'library', 'setup', 'video-analyze']);
     assert.deepEqual(moduleEnvironment(['video']), ['ELORIAN_API_KEY']);
-    assert.deepEqual(SOURCE_GROUPS.find(group => group.id === 'tools').sources, ['video']);
+    assert.deepEqual(SOURCE_GROUPS.find(group => group.id === 'tools').sources, ['video', 'evidence']);
     const enabled = await updateConfig({ video_enabled: true }, state);
     assert.deepEqual(enabled.sources.enabled, ['hackernews', 'video']);
     const document = settingsDocument(enabled);
     assert.equal(document.values.video_enabled, true);
-    assert.deepEqual(document.layout.find(group => group.title === 'Shared tools').items, [{ kind: 'property', property: 'video_enabled' }]);
+    assert.deepEqual(document.layout.find(group => group.title === 'Shared tools').items, [{ kind: 'property', property: 'video_enabled' }, { kind: 'property', property: 'evidence_enabled' }]);
     assert.ok(!Object.keys(document.schema.properties).some(name => /^video.*worker/.test(name)));
     assert.doesNotMatch(await readFile(join(state, 'config.toml'), 'utf8'), /\[video\]|\[tools\]|video_enabled/);
     const info = sourceInfo(enabled, 'video').sources[0];

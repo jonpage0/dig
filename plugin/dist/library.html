@@ -19795,7 +19795,7 @@ container holding the app. Specify either width or maxWidth, and either height o
     { id: "video", label: "Video", sources: ["youtube"] },
     { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "facebook", "threads", "linkedin", "telegram", "china-social"] },
     { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "facebook-ads", "dataforseo"] },
-    { id: "tools", label: "Shared tools", sources: ["video"] }
+    { id: "tools", label: "Shared tools", sources: ["video", "evidence"] }
   ];
   var SCRAPECREATORS = { name: "ScrapeCreators", url: "https://scrapecreators.com" };
   var TIKHUB = { name: "TikHub", url: "https://tikhub.io" };
@@ -19947,6 +19947,21 @@ container holding the app. Specify either width or maxWidth, and either height o
       about: "Answers a focused visual question about a supplied video or bounded clip through Elorian Glimpse. Call it directly from the conversation, or use it to inspect media found during appropriate source research; no dig or report is required. For broader YouTube analysis, start with the YouTube method's Gemini 3.8 Flash and use Argon for harder reasoning. Glimpse remains available for a specific visual need or the user's explicit choice. Media is sent to Elorian, and its answer is model-generated analysis to check against the original.",
       providers: [{ name: "Elorian", url: "https://platform.elorian.ai/settings/docs" }],
       billing: "Paid from your Elorian account. Token usage is shown when returned; the API does not report a per-call charge, so Dig records cost as unknown."
+    },
+    {
+      id: "evidence",
+      kind: "tool",
+      label: "Evidence ranking",
+      description: "Suggest a reading order for supplied excerpts with TypeSafe Jev",
+      tools: ["evidence_rank"],
+      skills: [],
+      helperSkill: "evidence-rank",
+      env: ["TYPESAFE_API_KEY"],
+      keys: ["TYPESAFE_API_KEY"],
+      credential: "TYPESAFE_API_KEY from TypeSafe's console; optional and independent of research-source keys",
+      about: "Sends a caller-selected shortlist of text excerpts to TypeSafe Jev to suggest a reading order. It can also assess how each excerpt relates to a supplied claim. Supporting and contradictory evidence both count as relevant. Every candidate stays available, including unscored entries; the caller decides what to read. Scores and confidence do not establish truth, and ranking does not replace reading relied-on reports and original evidence. Nothing runs automatically when enabled.",
+      providers: [{ name: "TypeSafe Jev", url: "https://docs.typesafe.ai/introduction" }],
+      billing: "Uses your TypeSafe account. Returned token usage is shown when available; no per-call dollar charge is reported, so Dig records cost as unknown."
     },
     {
       id: "x",
@@ -20168,7 +20183,8 @@ container holding the app. Specify either width or maxWidth, and either height o
     { id: "scrape-do", name: "Scrape.do", signup: "https://dashboard.scrape.do/", keys: [["SCRAPE_DO_API_KEY", "SCRAPEDO_API_TOKEN"]], billing: "Scrape.do credits per request, which Dig records." },
     { id: "nexscope", name: "Nexscope", signup: "https://www.nexscope.ai/seller/api-access?tab=api-keys", keys: ["NEXSCOPE_API_KEY"], billing: `Paid from your Nexscope account. ${UNKNOWN_COST}` },
     { id: "dataforseo", name: "DataForSEO", signup: "https://app.dataforseo.com/api-access", keys: ["DATAFORSEO_USERNAME", "DATAFORSEO_PASSWORD"], billing: "Prepaid; US dollars per request, which Dig records. Use the API login and API password from the API Access page, not your dashboard password." },
-    { id: "elorian", name: "Elorian", signup: "https://platform.elorian.ai/settings/keys", keys: ["ELORIAN_API_KEY"], billing: "Paid video analysis. Token usage is shown when returned, but no per-call charge is reported, so Dig records cost as unknown." }
+    { id: "elorian", name: "Elorian", signup: "https://platform.elorian.ai/settings/keys", keys: ["ELORIAN_API_KEY"], billing: "Paid video analysis. Token usage is shown when returned, but no per-call charge is reported, so Dig records cost as unknown." },
+    { id: "typesafe", name: "TypeSafe", signup: "https://console.typesafe.ai/keys", keys: ["TYPESAFE_API_KEY"], billing: "Optional evidence ranking with Jev. Returned token usage is shown when available; no per-call dollar charge is reported, so Dig records cost as unknown." }
   ];
   function selectedModules(ids) {
     return MODULES.filter((m2) => ids.includes(m2.id));
@@ -22616,7 +22632,9 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   var SOURCE_GLYPHS = { "hackernews": "newspaper", "deepwiki": "book-open-text", "polymarket": "chart-candlestick", "github": "folder-git-2", "exa": "scan-search", "perplexity": "globe", "papers": "graduation-cap", "youtube": "square-play", "video": "clapperboard", "x": "scale", "reddit": "messages-square", "tikhub-reddit": "list-tree", "tiktok": "clapperboard", "instagram": "camera", "linkedin": "briefcase-business", "telegram": "send", "threads": "messages-square", "china-social": "languages", "commerce": "shopping-cart", "tiktok-ads": "megaphone", "dataforseo": "chart-no-axes-combined" };
   SOURCE_GLYPHS.facebook = "messages-square";
   SOURCE_GLYPHS["facebook-ads"] = "megaphone";
+  SOURCE_GLYPHS.evidence = "list-tree";
   var METHOD_GLYPHS = { "x-judge": "scale", "x-breadth": "radar", "x-post": "message-square-quote", "youtube-summarizer": "captions", "youtube-video": "clapperboard", "video-analyze": "clapperboard" };
+  METHOD_GLYPHS["evidence-rank"] = "list-tree";
   var glyphFor = (source, method) => METHOD_GLYPHS[method] ?? SOURCE_GLYPHS[source] ?? "shovel";
 
   // src/ui/settings.mjs
@@ -22787,6 +22805,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     papers: { tasks: ["Find papers, related work, citations and supporting passages.", "Read available full text, PDFs and sections through the configured Papers tools."], example: "Use Dig Papers to find research on [question]. Separate paper findings from your interpretation and retain the evidence." },
     youtube: { tasks: ["Find videos and check creator claims against saved transcripts. Local captions and the optional hosted transcript route remain available.", "Analyze supplied public YouTube videos with Gemini 3.8 Flash as the standard deeper method; choose Gemini 4 Argon for harder reasoning.", "Focus on intervals, compare up to ten videos and ask follow-up questions. Choose fixed sampling or let Gemini direct its inspection; adjust detail and request structured findings when useful.", "Continue or cancel longer analyses through the conversation. Optional web grounding and URL context require an explicit choice; video evidence stays separate. Glimpse remains available for a focused visual need."], example: "Use Dig\u2019s YouTube video method to analyze [public YouTube URL] for [question]. Start with Gemini 3.8 Flash, identify timestamped evidence and preserve the analysis limits." },
     video: { tasks: ["Ask a focused visual question about a supplied video or bounded clip directly in the conversation; no dig or report is required.", "Send the media to Elorian Glimpse for model-generated analysis, then check important claims against the original. Appropriate source methods can also use this shared tool.", "For broader YouTube analysis, use Gemini 3.8 Flash first and Argon for harder reasoning, unless you choose Glimpse or need focused visual inspection."], example: "Use Dig\u2019s Video analysis tool to inspect [video or local project file] for [specific visual question]. State the clip coverage and distinguish observed details from interpretation." },
+    evidence: { tasks: ["Suggest a reading order when a supplied shortlist is burdensome to compare. A few obvious candidates usually need no extra call.", "Compare each supplied excerpt with an optional claim; relevant contradictions deserve attention alongside supporting evidence.", "Send only the selected text to TypeSafe Jev. Every candidate remains available; scores and confidence guide reading and do not establish truth. Full reports and important originals still need reading."], example: "Use Dig\u2019s optional Evidence ranking helper to prioritize these supplied excerpts for [question]. Keep every candidate, include contradictions, and explain which originals still need reading." },
     x: { tasks: ["Weigh claims with X judge, discover broadly with X breadth, or inspect exact posts.", "Read threads, Communities and available media descriptions; account-only reads need the optional sign-in."], example: "Use Dig X judge to examine what practitioners are saying about [topic]. Read the original posts behind the important claims." },
     reddit: { tasks: ["Find public Reddit discussions.", "Read thread comments and separate anecdotes from corroborated claims."], example: "Use Dig Reddit to investigate firsthand experiences with [topic], including contrary experiences." },
     "tikhub-reddit": { tasks: ["Explore subreddit context and advanced Reddit discovery.", "Enrich selected posts and read available comment trees."], example: "Use Dig TikHub Reddit to investigate [topic] in [subreddit] and retain the relevant discussions." },
@@ -23528,7 +23547,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
 
   // src/version.mjs
-  var VERSION = "0.5.0";
+  var VERSION = "0.6.0";
 
   // src/app.mjs
   var POLL_MS = 2e3;

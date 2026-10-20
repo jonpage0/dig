@@ -34,7 +34,9 @@ export const GLYPHS = {
 export const SOURCE_GLYPHS = {"hackernews":"newspaper","deepwiki":"book-open-text","polymarket":"chart-candlestick","github":"folder-git-2","exa":"scan-search","perplexity":"globe","papers":"graduation-cap","youtube":"square-play","video":"clapperboard","x":"scale","reddit":"messages-square","tikhub-reddit":"list-tree","tiktok":"clapperboard","instagram":"camera","linkedin":"briefcase-business","telegram":"send","threads":"messages-square","china-social":"languages","commerce":"shopping-cart","tiktok-ads":"megaphone","dataforseo":"chart-no-axes-combined"};
 SOURCE_GLYPHS.facebook = "messages-square";
 SOURCE_GLYPHS["facebook-ads"] = "megaphone";
+SOURCE_GLYPHS.evidence = "list-tree";
 export const METHOD_GLYPHS = {"x-judge":"scale","x-breadth":"radar","x-post":"message-square-quote","youtube-summarizer":"captions","youtube-video":"clapperboard","video-analyze":"clapperboard"};
+METHOD_GLYPHS["evidence-rank"] = "list-tree";
 export const glyphFor = (source, method) => METHOD_GLYPHS[method] ?? SOURCE_GLYPHS[source] ?? 'shovel';
 
 const BRAND = ['#1d4a80', '#3d86d4'];

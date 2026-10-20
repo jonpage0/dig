@@ -444,6 +444,12 @@ test('Sources gives each source a card holding its own settings, Settings holds 
   assert.equal(named(videoCard, 'video_enabled').checked, false);
   assert.doesNotMatch(videoCard.textContent, /Research methods?|suggested worker/);
   assert.match(videoCard.textContent, /About this tool/);
+  const evidenceCard = cards.find(card => card.getAttribute('id') === 'source-evidence');
+  assert.ok(evidenceCard.parentNode.parentNode.textContent.includes('Shared tools'));
+  assert.equal(named(evidenceCard, 'evidence_enabled').checked, false);
+  assert.deepEqual(names(evidenceCard), ['evidence_enabled'], 'Ranking has one enablement control, no worker settings or request form');
+  assert.match(evidenceCard.textContent, /Every candidate remains available/);
+  assert.doesNotMatch(evidenceCard.textContent, /Research methods?|suggested worker/);
   const youtubeCard = cards.find(card => card.getAttribute('id') === 'source-youtube');
   assert.match(youtubeCard.textContent, /Gemini 3\.8 Flash/);
   assert.match(youtubeCard.textContent, /Gemini 4 Argon/);

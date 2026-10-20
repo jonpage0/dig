@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 — 2026-10-20
+
+- Add optional Evidence ranking with TypeSafe Jev: suggest a reading order for supplied excerpts and optionally assess their support, contradiction or insufficiency for one claim. Every candidate and its uncertainty remains available; no automatic filtering or source fetching.
+- Give the helper independent enablement, native key setup and compact source-card guidance. It is a shared tool with ordinary receipts, not a new report source or worker.
+- Validate bounded requests and provider distributions, retain unknown judgments and dollar costs honestly, and permit explicit use within source methods without weakening evidence-reading requirements.
+
 ## 0.5.0 — 2026-10-20
 
 - Add optional YouTube video understanding with Gemini 3.8 Flash by default, Gemini 4 Argon for harder reasoning, and an ordinary `youtube-video` source method. Search and transcripts remain available without a Gemini key.

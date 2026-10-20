@@ -1,3 +1,4 @@
+import { evidence_rank } from "./tools/evidence_rank.js";
 import { snippets as papers_semantic_scholar_snippets, relations as papers_semantic_scholar_relations } from "./tools/paper_evidence.js";
 import { content as papers_openalex_content } from "./tools/openalex_content.js";
 import hackernews from "./tools/hackernews.js";
@@ -54,6 +55,7 @@ export const providerTools: Record<string, ToolSpec> = {
 	instagram_comments,
 	threads,
 	youtube,
+	evidence_rank,
 	youtube_analyze,
 	youtube_analysis_status,
 	video_analyze,

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Dig · Evidence ranking"
+  short_description: "Prioritize supplied excerpts while keeping every candidate"
+  icon_small: "../../assets/skills/list-tree.svg"
+  icon_large: "../../assets/skills/list-tree.svg"
+  default_prompt: "Use $dig:evidence-rank to suggest a reading order for these excerpts, preserving contradictions and every candidate."

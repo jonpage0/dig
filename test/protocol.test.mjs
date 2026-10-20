@@ -24,6 +24,33 @@ const eventually = async (read, expected, message) => {
   assert.equal(value, expected, message);
 };
 
+test('optional evidence ranking uses native key authority, redacts outbound state and retains a shared-tool receipt', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dig-native-evidence-'));
+  const secret = 'typesafe-protocol-synthetic-key';
+  const { client } = await startServer(root, { TYPESAFE_API_KEY: secret });
+  try {
+    assert.equal((await client.listTools()).tools.some(t => t.name === 'evidence_rank'), false);
+    await client.callTool({ name: 'settings.update', arguments: { set: { evidence_enabled: true } } });
+    const copied = await client.callTool({ name: 'use_environment_keys', arguments: { source: 'evidence' } });
+    assert.deepEqual(copied.structuredContent.copied, ['TYPESAFE_API_KEY']);
+    const result = await client.callTool({ name: 'evidence_rank', arguments: { project: root, question: 'Which excerpt helps?', candidates: [{ id: 'a', text: `Public test excerpt with an accidental known credential ${secret}`, reference: 'https://example.test/original' }] } });
+    assert.equal(result.structuredContent.status, 'success');
+    assert.equal(result.structuredContent.cost, null);
+    assert.equal(result.structuredContent.call.source, 'evidence');
+    assert.deepEqual(result.structuredContent.suggestedOrder, ['a']);
+    assert.equal(result.structuredContent.candidates[0].reference, 'https://example.test/original');
+    assert.doesNotMatch(JSON.stringify(result), new RegExp(secret));
+    const tools = (await client.listTools()).tools;
+    assert.ok(!tools.find(t => t.name === 'research_save').inputSchema.properties.source.enum.includes('evidence'));
+    await client.callTool({ name: 'settings.update', arguments: { set: { evidence_enabled: false } } });
+    assert.equal((await client.listTools()).tools.some(t => t.name === 'evidence_rank'), false);
+    const unavailable = await client.callTool({ name: 'evidence_rank', arguments: { project: root, question: 'Test', candidates: [{id:'a',text:'Test'}] } });
+    assert.equal(unavailable.isError, true);
+    const library = (await client.callTool({ name: 'library_list', arguments: { project: root } })).structuredContent;
+    assert.ok(library.live.some(c => c.source === 'evidence'), 'Disabling the helper preserves its earlier receipt');
+  } finally { await client.close(); }
+});
+
 test('video utility discovery follows its switch and offers helper guidance without a research report method', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dig-native-video-catalog-'));
   const { client, isolated } = await startServer(root);

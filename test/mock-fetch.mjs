@@ -1,5 +1,12 @@
 globalThis.fetch = async (url, init) => {
   const target = new URL(url);
+  if (target.origin === 'https://api.typesafe.ai' && target.pathname === '/v1/systemone') {
+    const body = JSON.parse(init.body);
+    if ('project' in body || 'dig' in body || init.body.includes(process.env.TYPESAFE_API_KEY)) throw new Error('Local identity or credential reached provider state');
+    return Response.json({ model: body.model, answers: Object.fromEntries(Object.entries(body.questions).map(([key, q]) => [key, q.type === 'score'
+      ? { type: 'score', score: 3, confidence: 1, legend: Object.fromEntries(q.criteria.map((v,i) => [String(i),v])), probabilities: { 0: 0, 1: 0, 2: 0, 3: 1 } }
+      : { type: 'choice', choice: 'insufficient', confidence: 1, probabilities: { supported: 0, contradicted: 0, insufficient: 1 } }])), usage: { input_tokens: 100, output_tokens: 20 } });
+  }
   if (target.origin === 'https://generativelanguage.googleapis.com' && target.pathname.startsWith('/v1beta/interactions')) {
     const body = init?.body ? JSON.parse(init.body) : null;
     if (body && ('project' in body || 'dig' in body)) throw new Error('Local research identity reached the provider');

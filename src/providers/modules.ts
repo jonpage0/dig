@@ -49,7 +49,7 @@ export const SOURCE_GROUPS = [
   { id: "video", label: "Video", sources: ["youtube"] },
   { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "facebook", "threads", "linkedin", "telegram", "china-social"] },
   { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "facebook-ads", "dataforseo"] },
-  { id: "tools", label: "Shared tools", sources: ["video"] },
+  { id: "tools", label: "Shared tools", sources: ["video", "evidence"] },
 ] as const;
 const SCRAPECREATORS = { name: "ScrapeCreators", url: "https://scrapecreators.com" };
 const TIKHUB = { name: "TikHub", url: "https://tikhub.io" };
@@ -203,6 +203,21 @@ export const MODULES = [
     about: "Answers a focused visual question about a supplied video or bounded clip through Elorian Glimpse. Call it directly from the conversation, or use it to inspect media found during appropriate source research; no dig or report is required. For broader YouTube analysis, start with the YouTube method's Gemini 3.8 Flash and use Argon for harder reasoning. Glimpse remains available for a specific visual need or the user's explicit choice. Media is sent to Elorian, and its answer is model-generated analysis to check against the original.",
     providers: [{ name: "Elorian", url: "https://platform.elorian.ai/settings/docs" }],
     billing: "Paid from your Elorian account. Token usage is shown when returned; the API does not report a per-call charge, so Dig records cost as unknown.",
+  },
+  {
+    id: "evidence",
+    kind: "tool",
+    label: "Evidence ranking",
+    description: "Suggest a reading order for supplied excerpts with TypeSafe Jev",
+    tools: ["evidence_rank"],
+    skills: [],
+    helperSkill: "evidence-rank",
+    env: ["TYPESAFE_API_KEY"],
+    keys: ["TYPESAFE_API_KEY"],
+    credential: "TYPESAFE_API_KEY from TypeSafe's console; optional and independent of research-source keys",
+    about: "Sends a caller-selected shortlist of text excerpts to TypeSafe Jev to suggest a reading order. It can also assess how each excerpt relates to a supplied claim. Supporting and contradictory evidence both count as relevant. Every candidate stays available, including unscored entries; the caller decides what to read. Scores and confidence do not establish truth, and ranking does not replace reading relied-on reports and original evidence. Nothing runs automatically when enabled.",
+    providers: [{ name: "TypeSafe Jev", url: "https://docs.typesafe.ai/introduction" }],
+    billing: "Uses your TypeSafe account. Returned token usage is shown when available; no per-call dollar charge is reported, so Dig records cost as unknown.",
   },
   {
     id: "x",
@@ -441,6 +456,7 @@ export const ACCOUNTS = [
   { id: "nexscope", name: "Nexscope", signup: "https://www.nexscope.ai/seller/api-access?tab=api-keys", keys: ["NEXSCOPE_API_KEY"], billing: `Paid from your Nexscope account. ${UNKNOWN_COST}` },
   { id: "dataforseo", name: "DataForSEO", signup: "https://app.dataforseo.com/api-access", keys: ["DATAFORSEO_USERNAME", "DATAFORSEO_PASSWORD"], billing: "Prepaid; US dollars per request, which Dig records. Use the API login and API password from the API Access page, not your dashboard password." },
   { id: "elorian", name: "Elorian", signup: "https://platform.elorian.ai/settings/keys", keys: ["ELORIAN_API_KEY"], billing: "Paid video analysis. Token usage is shown when returned, but no per-call charge is reported, so Dig records cost as unknown." },
+  { id: "typesafe", name: "TypeSafe", signup: "https://console.typesafe.ai/keys", keys: ["TYPESAFE_API_KEY"], billing: "Optional evidence ranking with Jev. Returned token usage is shown when available; no per-call dollar charge is reported, so Dig records cost as unknown." },
 ] as const satisfies readonly ProviderAccount[];
 export const PRESETS: Record<string, readonly ModuleId[]> = {
   starter: ["hackernews", "deepwiki", "polymarket"],

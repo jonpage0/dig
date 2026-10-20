@@ -59,6 +59,10 @@ Verify load-bearing output against retained originals and available captions. Us
 
 When a selected clip leaves the question unresolved, state which interval or question needs another pass. Do not silently infer the unseen rest of a video. A refusal or access gate is not permission to use cookies, credentials, another downloader or another provider to force access.
 
+## Optional evidence ranking
+
+For a burdensome shortlist of snippets already obtained from this assigned source, you may use the optional `evidence_rank` helper within the user's authorized paid-provider scope. Read `source_info` for `evidence` and its `helperSkillPath` first. This exception ranks supplied text only; it does not authorize another source, retrieval or worker. Keep every candidate, including contradictions and unscored items. Scores do not establish truth or replace the full-report and original-evidence reading rules. Skip the helper for a few obvious candidates.
+
 ## Save the standard source report
 
 Keep the full report and its discovery summary together. Begin with this fenced source card, using actual values rather than copying this partial example, then a concise descriptive H1 title:

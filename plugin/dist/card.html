@@ -19063,6 +19063,9 @@ container holding the app. Specify either width or maxWidth, and either height o
   var SOURCE_GLYPHS = { "hackernews": "newspaper", "deepwiki": "book-open-text", "polymarket": "chart-candlestick", "github": "folder-git-2", "exa": "scan-search", "perplexity": "globe", "papers": "graduation-cap", "youtube": "square-play", "video": "clapperboard", "x": "scale", "reddit": "messages-square", "tikhub-reddit": "list-tree", "tiktok": "clapperboard", "instagram": "camera", "linkedin": "briefcase-business", "telegram": "send", "threads": "messages-square", "china-social": "languages", "commerce": "shopping-cart", "tiktok-ads": "megaphone", "dataforseo": "chart-no-axes-combined" };
   SOURCE_GLYPHS.facebook = "messages-square";
   SOURCE_GLYPHS["facebook-ads"] = "megaphone";
+  SOURCE_GLYPHS.evidence = "list-tree";
+  var METHOD_GLYPHS = { "x-judge": "scale", "x-breadth": "radar", "x-post": "message-square-quote", "youtube-summarizer": "captions", "youtube-video": "clapperboard", "video-analyze": "clapperboard" };
+  METHOD_GLYPHS["evidence-rank"] = "list-tree";
 
   // src/status.mjs
   var PATTERNS = {
@@ -19124,7 +19127,7 @@ container holding the app. Specify either width or maxWidth, and either height o
   }
 
   // src/version.mjs
-  var VERSION = "0.5.0";
+  var VERSION = "0.6.0";
 
   // src/card.mjs
   var SVG = "http://www.w3.org/2000/svg";

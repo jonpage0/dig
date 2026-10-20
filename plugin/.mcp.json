@@ -28,6 +28,7 @@
         "SCRAPECREATORS_API_KEY",
         "GEMINI_API_KEY",
         "ELORIAN_API_KEY",
+        "TYPESAFE_API_KEY",
         "XAI_API_KEY",
         "X_BEARER_TOKEN",
         "X_CONSUMER_KEY",

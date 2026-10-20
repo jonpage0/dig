@@ -48,7 +48,7 @@ For a first run, ask: **“Use Dig and Hacker News to research how developers ap
 
 Ask a question in Codex. Dig researches it source by source, writes a report for each source, and keeps the original responses behind every claim.
 
-**22 sources · 26 research methods · 71 tools, including shared video analysis**
+**22 sources · 26 research methods · 72 tools, including two optional shared helpers**
 
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
 | :---: | --- | --- |
@@ -96,6 +96,12 @@ Use the standalone **Video analysis** tool (`$dig:video-analyze`) with [Elorian 
 
 Analysis remains model interpretation. Check exact speech and timestamps against the original; with several videos, require a separate original-video timeline for each. Google’s stored interaction history and Elorian’s uploaded media have their own retention, separate from Dig’s library. Both providers return token usage without a per-call dollar charge, so Dig records cost as unknown. See [YouTube video understanding](docs/youtube-video.md) and [Glimpse video inspection](docs/video-analysis.md) for controls, storage and evidence limits.
 
+## Optional evidence ranking
+
+When a shortlist of collected excerpts is burdensome to compare, **Evidence ranking** can suggest what to read first and how each excerpt relates to a specific claim. It uses TypeSafe Jev on the supplied text, keeps every candidate available, and gives contradictions attention alongside supporting evidence. Scores and confidence are reading advice, not a truth check.
+
+Enable **Evidence ranking** under **Sources & tools → Shared tools** and add `TYPESAFE_API_KEY` in keys.env. Enabling it does not run it automatically; a few obvious candidates usually need no extra call. The agent still reads relied-on reports completely and checks important originals. See [evidence ranking](docs/evidence-ranking.md) for inputs, limits and interpretation.
+
 ## Services and API keys
 
 **You only need keys for the sources you turn on.** Each service bills you directly, separately from your ChatGPT plan.
@@ -106,6 +112,7 @@ Analysis remains model interpretation. Check exact speech and timestamps against
 | Service | Used by | Key name in `keys.env` |
 | --- | --- | --- |
 | [Elorian](https://platform.elorian.ai/settings/keys) | **Video analysis**: selected clips, visual events and available speech | `ELORIAN_API_KEY` |
+| [TypeSafe](https://console.typesafe.ai/keys) *(optional)* | **Evidence ranking**: a suggested reading order for supplied excerpts | `TYPESAFE_API_KEY` |
 | [Exa](https://dashboard.exa.ai/api-keys) | **Exa**: web search, page text, similar pages | `EXA_API_KEY` |
 | [Perplexity](https://console.perplexity.ai) | **Perplexity**: cited answers and web search | `PERPLEXITY_API_KEY` |
 | [GitHub](https://github.com/settings/tokens) *(optional)* | **GitHub**: higher limits, plus review and issue samples | `GH_TOKEN` or `GITHUB_TOKEN` |
@@ -165,7 +172,7 @@ Refresh Dig’s plugin/MCP connection, then verify the running version in About 
 ## Privacy and costs
 
 - **Runs on your computer.** Dig has no server of its own and collects nothing.
-- **What leaves your computer:** searches go to the services you turn on, with your keys. YouTube understanding sends selected public video references and your question to Google; Glimpse sends selected media or media references to Elorian. Their results enter your Codex conversation.
+- **What leaves your computer:** searches go to the services you turn on, with your keys. YouTube understanding sends selected public video references and your question to Google; Glimpse sends selected media or media references to Elorian; optional evidence ranking sends the selected question and excerpts to TypeSafe. Their results enter your Codex conversation.
 - **Provider history:** Google interaction storage is enabled by default for follow-ups and background results; a foreground first request can opt out with `store: false`. Elorian uploads expire according to its returned file metadata. These are separate from Dig’s local retention.
 - **Where things are kept:** settings, keys and research live in `~/.local/share/dig` (you can choose another research folder).
 - **Costs:** each service bills you. Dig shows what each reports; Codex model usage isn't included.
