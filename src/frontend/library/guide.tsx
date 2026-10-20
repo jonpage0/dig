@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Button, Disclosure } from '../shared/components';
+import { Button, Disclosure, Tabs, TabsList, TabsTrigger, TabsContent } from '../shared/components';
 import { Frame, FrameHeader, FramePanel, FrameFooter } from '../shared/frame';
 import { IconTile } from '../shared/icon-tile';
 import { Timeline, TimelineContent, TimelineHeader, TimelineIndicator, TimelineItem, TimelineSeparator, TimelineTitle } from '../shared/timeline';
@@ -67,6 +67,38 @@ function Prompt({ title, text, featured = false }: { title: string; text: string
 
 function SectionHeading({ label, title, children }: { label: string; title: string; children?: React.ReactNode }) {
   return <div className="guide-section-heading"><span className="guide-eyebrow">{label}</span><h3>{title}</h3>{children && <p>{children}</p>}</div>;
+}
+
+const WORKED_PASSAGE = 'You can create and edit notes offline. Changes sync when you reconnect.';
+function WorkedExample() {
+  return <section className="guide-section guide-worked" aria-labelledby="guide-worked-title">
+    <SectionHeading label="See how to check a finding" title="Follow the answer back to the words behind it" />
+    <Frame spacing="sm">
+      <FrameHeader className="guide-worked-header">
+        <div><span className="guide-eyebrow">Illustrative example</span><h4 id="guide-worked-title">Sample Notebook</h4></div>
+        <p>Made-up product and documentation for learning; no research was run.</p>
+      </FrameHeader>
+      <FramePanel>
+        <p className="guide-worked-question"><span>Question</span>Can I edit notes without internet?</p>
+        <div className="guide-worked-finding"><span className="guide-eyebrow">Finding</span><strong>Offline editing appears supported.</strong><p>Syncing requires a connection.</p></div>
+        <Tabs defaultValue="finding" className="guide-worked-tabs">
+          <TabsList aria-label="Inspect the illustrative evidence"><TabsTrigger value="finding">Finding</TabsTrigger><TabsTrigger value="passage">Supporting passage</TabsTrigger><TabsTrigger value="original">Original response</TabsTrigger></TabsList>
+          <TabsContent value="finding" className="guide-worked-panel">
+            <h5>The interpretation</h5><p>The sample documentation supports creating and editing notes while offline, with changes syncing after reconnection.</p>
+            <p className="guide-worked-limit"><strong>Still unknown:</strong> this does not establish sync reliability or how conflicting edits are handled.</p>
+          </TabsContent>
+          <TabsContent value="passage" className="guide-worked-panel">
+            <h5>The supporting words</h5><blockquote>{WORKED_PASSAGE}</blockquote><p className="guide-worked-caption">Passage from the made-up Sample Notebook documentation. Compare its exact wording with the finding.</p>
+          </TabsContent>
+          <TabsContent value="original" className="guide-worked-panel">
+            <h5>The illustrative original response</h5><p>This small, made-up response shows where the passage came from. Real retained responses vary by provider.</p>
+            <pre tabIndex={0} aria-label="Illustrative original response">{JSON.stringify({ illustrative: true, product: 'Sample Notebook', document: 'Offline editing', text: WORKED_PASSAGE }, null, 2)}</pre>
+          </TabsContent>
+        </Tabs>
+      </FramePanel>
+      <FrameFooter><p>One finding, three views: the interpretation, the supporting passage, and the original response.</p></FrameFooter>
+    </Frame>
+  </section>;
 }
 
 function Catalog({ onNavigate }: Pick<GuidePageProps, 'onNavigate'>) {
@@ -168,6 +200,8 @@ export function GuidePage({ hidden, onNavigate }: GuidePageProps) {
         </Frame>
       </section>
     </div>
+
+    <WorkedExample />
 
     <section className="guide-section" aria-label="Optional deeper understanding">
       <SectionHeading label="When the question needs more" title="A few specialist tools, used when they help" />

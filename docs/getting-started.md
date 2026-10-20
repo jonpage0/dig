@@ -51,6 +51,8 @@ The **Start here** tab includes a directory derived from the installed source ca
 
 Ask, “Use Dig to find what we already researched about [topic],” or invoke `$dig:library`. Reusing a saved report does not make its information current; ask for a refresh when that matters.
 
+The **Start here** tab includes a made-up worked example you can explore: a finding, the passage supporting it, and an illustrative original response. It shows why a passage can support one conclusion while leaving other questions unanswered. The example runs no research and is not saved in your library.
+
 ## Optional tools that help with the evidence
 
 **Video understanding** can add information that a transcript misses, such as an on-screen demonstration. YouTube's deeper-analysis method uses Gemini; Glimpse is available for focused visual inspection. Give a clear question and, where useful, a time range. Exact speech, timestamps and model interpretations still need checking.

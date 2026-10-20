@@ -3,6 +3,7 @@
 ## 0.8.1 — 2026-10-20
 
 - Add a ReUI Start here tab with a plain-language introduction, practical example questions, a research walkthrough, result/cost/privacy explanations and a directory derived from the installed source catalog.
+- Teach evidence inspection with a clearly illustrative finding, supporting passage and original-response example, revealed through local tabs without creating research records.
 - Add a companion getting-started guide linked from the README; keep technical version and file details in About Dig.
 
 ## 0.8.0 — 2026-10-20

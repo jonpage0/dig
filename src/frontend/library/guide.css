@@ -70,6 +70,25 @@
 .guide-page .guide-specialists > [data-slot=frame-panel] { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 14px; padding: 18px; }
 .guide-page .guide-specialists h4 { font-size: 13px; font-weight: 600; margin-bottom: 5px; }
 .guide-page .guide-specialists p { font-size: 13px; line-height: 1.75; color: var(--muted-foreground); max-width: 92ch; }
+.guide-page .guide-worked-header { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; }
+.guide-page .guide-worked-header h4 { margin-top: 4px; font-size: 15px; font-weight: 600; }
+.guide-page .guide-worked-header > p { max-width: 46ch; color: var(--muted-foreground); font-size: 11px; line-height: 1.6; }
+.guide-page .guide-worked-question { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; font-size: 14px; line-height: 1.6; font-weight: 550; }
+.guide-worked-question > span { color: var(--muted-foreground); font-size: 11px; font-weight: 400; }
+.guide-worked-finding { padding: 14px 16px; margin: 14px 0 18px; border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border)); border-inline-start: 3px solid var(--primary); border-radius: 8px; background: color-mix(in srgb, var(--primary) 5%, var(--background)); }
+.guide-worked-finding > strong { display: block; font-size: 16px; line-height: 1.5; font-weight: 600; margin-top: 4px; letter-spacing: -.2px; }
+.guide-page .guide-worked-finding > p { font-size: 13px; color: var(--muted-foreground); margin-top: 3px; }
+.guide-worked-tabs > .dig-tabs-list { border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.guide-worked-tabs .dig-tabs-trigger { font-size: 12px; min-height: 32px; }
+.guide-worked-panel { padding: 18px 2px 4px; min-height: 220px; }
+.guide-page .guide-worked-panel h5 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+.guide-page .guide-worked-panel p { font-size: 13px; line-height: 1.75; max-width: 86ch; color: var(--muted-foreground); }
+.guide-page .guide-worked-panel .guide-worked-limit { margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--border); }
+.guide-worked-limit strong { color: var(--foreground); font-weight: 550; }
+.guide-worked-panel blockquote { margin: 0 0 14px; padding: 12px 16px; border-left: 2px solid var(--primary); font-size: 15px; line-height: 1.75; max-width: 70ch; }
+.guide-page .guide-worked-panel .guide-worked-caption { font-size: 11px; }
+.guide-worked-panel pre { margin: 12px 0 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); color: var(--foreground); font: 11px/1.7 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.guide-page .guide-worked [data-slot=frame-panel-footer] { padding: 11px 18px; font-size: 11px; line-height: 1.6; color: var(--muted-foreground); }
 .guide-practical-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 36px; align-items: start; }
 .guide-page .guide-practical > header { padding: 16px 18px; gap: 4px; }
 .guide-page .guide-practical h3, .guide-page .guide-faq h3 { font-size: 16px; font-weight: 600; letter-spacing: -.2px; }
@@ -107,4 +126,6 @@
   .guide-page .guide-use-case > [data-slot=frame-panel] { padding: 15px; }
   .guide-page .guide-specialists > [data-slot=frame-panel] { gap: 10px; padding: 14px; }
   .guide-page .guide-practical > header, .guide-page .guide-faq > header { padding: 14px; }
+  .guide-page .guide-worked-header { flex-direction: column; align-items: start; gap: 8px; padding: 14px; }
+  .guide-worked-panel { min-height: 250px; }
 }

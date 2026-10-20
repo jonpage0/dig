@@ -116,3 +116,29 @@ test('guide refreshes preserve disclosure state and focus; entering the tab focu
   assert.equal(trigger.getAttribute('aria-expanded'), 'true');
   assert.deepEqual(ui.requests, []);
 });
+
+test('the illustrative walkthrough switches evidence views locally and keeps the question and finding in view', async t => {
+  const ui = await mount(t);
+  const example = document.querySelector('.guide-worked');
+  assert.match(example.textContent, /Illustrative example/);
+  assert.match(example.textContent, /Made-up product and documentation for learning; no research was run/);
+  const question = example.querySelector('.guide-worked-question');
+  const finding = example.querySelector('.guide-worked-finding');
+  const tabs = [...example.querySelectorAll('[role="tab"]')];
+  assert.deepEqual(tabs.map(tab => tab.textContent), ['Finding', 'Supporting passage', 'Original response']);
+  assert.equal(tabs[0].getAttribute('aria-selected'), 'true');
+  assert.match(example.querySelector('[role="tabpanel"]').textContent, /does not establish sync reliability or how conflicting edits are handled/);
+  await click(tabs[1]);
+  assert.equal(tabs[1].getAttribute('aria-selected'), 'true');
+  assert.equal(example.querySelector('blockquote').textContent, 'You can create and edit notes offline. Changes sync when you reconnect.');
+  await click(tabs[2]);
+  assert.equal(tabs[2].getAttribute('aria-selected'), 'true');
+  assert.deepEqual(JSON.parse(example.querySelector('pre').textContent), { illustrative: true, product: 'Sample Notebook', document: 'Offline editing', text: 'You can create and edit notes offline. Changes sync when you reconnect.' });
+  assert.equal(example.querySelector('.guide-worked-question'), question);
+  assert.equal(example.querySelector('.guide-worked-finding'), finding);
+  assert.match(question.textContent, /Can I edit notes without internet\?/);
+  assert.match(finding.textContent, /Offline editing appears supported/);
+  assert.equal(example.querySelectorAll('a').length, 0);
+  assert.deepEqual(ui.navigation, []);
+  assert.deepEqual(ui.requests, []);
+});
