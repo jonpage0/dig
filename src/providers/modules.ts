@@ -55,7 +55,7 @@ export const MODULES = [
     id: "hackernews",
     label: "Hacker News",
     description: "Developer stories and discussions",
-    tools: ["hackernews"],
+    tools: ["hackernews", "hackernews_read"],
     about: "Hacker News stories and comment threads, searched through Algolia's public Hacker News index, with comment trees read for context. Useful for how developers and founders react to a launch, a tool or an idea.",
     providers: [{ name: "Algolia Hacker News search", url: "https://hn.algolia.com/api" }, { name: "Hacker News API", url: "https://github.com/HackerNews/API" }],
     billing: "Free. No account or key.",
@@ -353,6 +353,7 @@ export const MODULES = [
   },
   {
     id: "dataforseo",
+    skills: ["dataforseo", "dataforseo-ai-visibility"],
     label: "DataForSEO",
     description: "SERPs, keywords, rankings, backlinks, local business and AI visibility",
     tools: [

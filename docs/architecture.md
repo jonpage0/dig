@@ -14,7 +14,7 @@ Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the
 
 ## Source catalog and execution
 
-`src/providers/modules.ts` owns the source and method identities. There are **21 catalog entries**, each a report source. X has three independent methods, giving **23 source-method skills**. The YouTube transcript helper, the `dig` and `library` guidance and the `setup` onboarding skill bring the packaged skill count to **27**. Skill directories, skill names and method names are the same word (`hackernews`, `x-judge`, `youtube-summarizer`); Codex lists each as `dig:<skill>`.
+`src/providers/modules.ts` owns the source and method identities. There are **21 catalog entries**, each a report source. X has three independent methods, giving **24 source-method skills**. The YouTube transcript helper, the `dig` and `library` guidance and the `setup` onboarding skill bring the packaged skill count to **28**. Skill directories, skill names and method names are the same word (`hackernews`, `x-judge`, `youtube-summarizer`); Codex lists each as `dig:<skill>`.
 
 ### Skill packaging and invocation
 
@@ -25,7 +25,7 @@ Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the
 
 | Source | Local provider tools | Prerequisite boundary |
 | --- | --- | --- |
-| Hacker News | `hackernews` | Public keyless Algolia search and comment-tree enrichment |
+| Hacker News | `hackernews`, `hackernews_read` | Public keyless Algolia search and comment-tree enrichment |
 | DeepWiki | `deepwiki_read_wiki_structure`, `deepwiki_read_wiki_contents`, `deepwiki_ask_question` | Public hosted MCP, no account |
 | Polymarket | `polymarket` | Public keyless Gamma API; prices are market beliefs |
 | GitHub | `github_search`, `github_inspect`, `github_read` | Public REST can run anonymously; token or `gh` login supplies higher limits and GraphQL evidence |
@@ -47,7 +47,7 @@ Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the
 | TikTok ads | `tiktok_ads_search`, `tiktok_ads_top`, `tiktok_ads_detail`, `tiktok_ad_library` | TikHub Creative Center and ScrapeCreators Ad Library are separate datasets |
 | DataForSEO | `dataforseo_docs_sections`, `dataforseo_docs_index`, `dataforseo_docs_read`, `dataforseo_request` | `DATAFORSEO_USERNAME` and `DATAFORSEO_PASSWORD` (API login and API password); paid per request |
 
-The **56 local provider tools** use the shared cancellation, raw capture and reported-cost boundary. The native boundary adds a required absolute `project` and optional `dig`, validates them before retrieval, and strips them before calling the provider implementation; the call's receipt records the `dig`. Settings are read for every call; disabled tools disappear from discovery and refuse calls. Existing saved evidence remains readable when its source is disabled.
+The **57 local provider tools** use the shared cancellation, raw capture and reported-cost boundary. The native boundary adds a required absolute `project` and optional `dig`, validates them before retrieval, and strips them before calling the provider implementation; the call's receipt records the `dig`. Settings are read for every call; disabled tools disappear from discovery and refuse calls. Existing saved evidence remains readable when its source is disabled.
 
 `papers_multi_search` reads each requested connector's health from the bridge's `source_status` (`ok`, `empty`, `partial` or `failed`); output without it, or with anything else for a requested connector (another word or a non-string such as `["empty"]`), is an error, because it cannot establish coverage or no matches. The call's status follows the DataForSEO rule below: every requested connector failed is `failed`, and its text then opens with an `ERROR:` line naming them before the bridge's output; every one empty is `empty`; any failed or partial connector makes the call `partial`; the rest is `success`.
 
@@ -244,3 +244,7 @@ These read the existing research files and persist nothing (`src/surfaces.mjs`).
 The provider code and method skills are reused from Jon Page's MIT-licensed Dig implementation. Papers uses `openags/paper-search-mcp` (MIT, P.S Zhang) pinned to `c8b642183bb725f0a7faec89e58b558df09079d1` with the maintained patch. The shared OpenAI MCP App stylesheet is Apache-2.0 licensed; its license ships as `OpenAI-MCP-Extensions-LICENSE`. Skill, card, server and entrypoint glyphs are drawn from Lucide (ISC); its license ships as `Lucide-LICENSE`. Source brand logos on the Sources page are their owners' trademarks, described above. The plugin logos and composer icon were generated for this package. Licenses travel with the native package/bridge checkout.
 
 `npm run check` builds the standalone package and runs isolated offline native/provider regressions. `npm run smoke` performs one real keyless HN comment search, saves a direct single-source report, and reads the complete report/raw response. Neither substitutes for a native worker or desktop-view acceptance.
+
+Exact Hacker News reads use one Algolia item request and page the returned descendants in provider order, preserving parent IDs and explicit continuation. GitHub REST reads pin `2026-03-10`; GraphQL calls are unchanged.
+
+DataForSEO has a second method, `dataforseo-ai-visibility`, using the same source, credentials and v3 tools. It compares mentions, citations and historical observations within explicit platform, market and time boundaries; it stores ordinary source reports.

@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · AI brand visibility"
+  short_description: "Brand mentions and citations across AI search answers"
+  icon_small: "../../assets/skills/chart-no-axes-combined.svg"
+  icon_large: "../../assets/skills/chart-no-axes-combined.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:dataforseo-ai-visibility to compare this brand’s visibility in AI answers."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:dataforseo-ai-visibility mention.
+  allow_implicit_invocation: false

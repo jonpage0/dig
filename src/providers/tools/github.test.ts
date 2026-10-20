@@ -218,6 +218,7 @@ describe("github tools", () => {
 			expect(call!.url.searchParams.get("per_page")).toBe("50");
 			expect(call!.url.searchParams.get("page")).toBe("3");
 			expect(call!.headers.get("authorization")).toBe(`Bearer ${TOKEN}`);
+			expect(call!.headers.get("X-GitHub-Api-Version")).toBe("2026-03-10");
 			expect(call!.init?.signal).toBeInstanceOf(AbortSignal);
 
 			const out = text(result);

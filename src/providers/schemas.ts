@@ -57,6 +57,11 @@ export function createSchemas(
   const schemas: Record<string, Schema> = {
     ...createFacebookSchemas(T),
     ...createFacebookAdsSchemas(T),
+    hackernews_read: T.Object({
+      item: T.String({ description: "Numeric item ID or https://news.ycombinator.com/item?id=... URL." }),
+      offset: T.Optional(T.Integer({ minimum: 0, description: "Comment offset, default 0." })),
+      limit: T.Optional(T.Integer({ minimum: 1, maximum: 500, description: "Comments to show, default 100." })),
+    }),
     hackernews: T.Object({
       query: T.String({ description: "Search query." }),
       days: T.Optional(

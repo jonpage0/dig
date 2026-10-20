@@ -21,6 +21,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 - `source_info` with `source: "hackernews"` for enablement and readiness;
 - `hackernews` for Algolia-backed story and comment search;
+- `hackernews_read` for an exact item ID or HN URL and its comment tree, with `offset`/`limit` continuation;
 - `research_save` with `source: "hackernews"` and `agent: "hackernews"` for the report.
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_read`, and `research_save`.

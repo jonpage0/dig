@@ -37,7 +37,7 @@ import type { SourceToolOutput, ToolContext, ToolSpec } from "../types.js"
 type RequestContext = Pick<ToolContext, "abort" | "keep">
 
 const API_BASE = "https://api.github.com"
-const API_VERSION = "2022-11-28"
+const API_VERSION = "2026-03-10"
 const USER_AGENT = "omp-dig-github/1.0"
 const TIMEOUT_MS = 60_000
 const ACCEPT_JSON = "application/vnd.github+json"

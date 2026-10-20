@@ -1,4 +1,5 @@
 import hackernews from "./tools/hackernews.js";
+import { read as hackernews_read } from "./tools/hackernews_read.js";
 import polymarket from "./tools/polymarket.js";
 import reddit from "./tools/reddit.js";
 import { reddit as tikhub_reddit } from "./tools/tikhub_reddit.js";
@@ -34,6 +35,7 @@ import type { ToolSpec } from "./types.js";
  */
 export const providerTools: Record<string, ToolSpec> = {
 	hackernews,
+	hackernews_read,
 	polymarket,
 	reddit,
 	tikhub_reddit,
