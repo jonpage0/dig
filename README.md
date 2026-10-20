@@ -38,7 +38,7 @@ If your terminal doesn't know `codex`, use the copy inside the ChatGPT app:
 /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex plugin add dig@dig
 ```
 
-Quit and reopen ChatGPT, then type **`$dig:setup`** in a new conversation. It walks you through choosing sources.
+Refresh the plugin connection, then type **`$dig:setup`** in a new conversation. It walks you through choosing sources. If Dig still does not appear after the refresh, quit and reopen ChatGPT.
 
 > **Try it with no keys:** Hacker News, DeepWiki and Polymarket work without any account.
 
