@@ -111,3 +111,7 @@ The direct tools and the bridge also accept `PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_A
 ## DataForSEO
 
 DataForSEO charges per request from a prepaid account. Set `DATAFORSEO_USERNAME` (the API login, usually your account email) and `DATAFORSEO_PASSWORD` (the API password from the API Access page of DataForSEO's dashboard, not your dashboard password). Dig records each request's reported cost and never retries a request on its own.
+
+## Shared video analysis
+
+Video analysis is an optional shared tool, not a report source. Enable it under Sources & tools → Shared tools and put `ELORIAN_API_KEY` in keys.env, using [Elorian’s key page](https://platform.elorian.ai/settings/keys). Direct video URLs work without local executables; local and YouTube clips need ffmpeg and ffprobe, plus yt-dlp for YouTube. The tool exposes token and media coverage; billed dollars remain unknown when the provider returns no charge. See [video analysis](video-analysis.md).

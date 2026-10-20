@@ -55,7 +55,7 @@ function config(input, state) {
   if (!isAbsolute(library)) throw new Error('library must be an absolute path or start with ~/');
   if (input.keep_raw !== undefined && typeof input.keep_raw !== 'boolean') throw new Error('keep_raw must be boolean');
   const enabled = table(input.sources, 'sources', ['enabled']).enabled ?? ['hackernews'];
-  if (!Array.isArray(enabled) || enabled.some(id => !MODULES.some(m => m.id === id)) || new Set(enabled).size !== enabled.length) throw new Error('sources.enabled must contain only supported, unique source ids');
+  if (!Array.isArray(enabled) || enabled.some(id => !MODULES.some(m => m.id === id)) || new Set(enabled).size !== enabled.length) throw new Error('sources.enabled must contain only supported, unique source or shared tool ids');
   const x = { ...X_DEFAULTS, ...table(input.x, 'x', Object.keys(X_DEFAULTS)) };
   if (typeof x.model !== 'string' || !x.model.trim()) throw new Error('x.model must be a nonempty string');
   if (!['quick', 'standard', 'max', 'ultra'].includes(x.depth)) throw new Error('x.depth must be quick, standard, max or ultra');

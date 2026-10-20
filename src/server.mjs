@@ -14,7 +14,7 @@ import { sourceInfo, settingsFields, settingsValues, settingsLayout, environment
 import { isDigDocument, mentionItems, openInDig, packageReplaced, readinessText, savedResearch } from './surfaces.mjs';
 import { monochromeSvg, svgDataUri } from './glyphs.mjs';
 import { providerTools } from './providers/index.ts';
-import { MODULES, ALL_MODULES, moduleAgents } from './providers/modules.ts';
+import { MODULES, ALL_MODULES, moduleAgents, reportSources } from './providers/modules.ts';
 import { createSchemas } from './providers/schemas.ts';
 import { executeSource } from './providers/outcome.ts';
 import { knownSecrets, redactText, redactValue, redactRecord } from './providers/secrets.ts';
@@ -38,7 +38,7 @@ const OUTPUT = {
   open: { view: z.enum(['library', 'panel']), thread: z.string().nullable(), library: z.string() },
   list: { library: z.string(), configPath: z.string(), items: z.array(z.looseObject({ id: z.string(), title: z.string(), link })), total: z.number().int(), nextOffset: z.number().int().nullable(), live: z.array(z.looseObject({ id: z.string() })), liveTotal: z.number().int() },
   read: { file: z.string(), path: z.string(), text: z.string(), offset: z.number().int(), nextOffset: z.number().int().nullable(), totalCharacters: z.number().int(), link: link.optional() },
-  info: { sources: z.array(z.looseObject({ id: z.string(), label: z.string(), enabled: z.boolean() })), library: z.string(), configPath: z.string(), keysPath: z.string(), credentialsChecked: z.string() },
+  info: { sources: z.array(z.looseObject({ id: z.string(), kind: z.enum(['source', 'tool']), label: z.string(), enabled: z.boolean(), helperSkillPath: z.string().optional() })), library: z.string(), configPath: z.string(), keysPath: z.string(), credentialsChecked: z.string() },
   start: { dig: z.string(), project: z.string(), path: z.string(), session: z.string() },
   save: { path: z.string(), file: z.string(), dig: z.string(), report: z.string(), createdDig: z.boolean(), link },
   finish: { path: z.string(), file: z.string(), dig: z.string(), link },
@@ -53,7 +53,7 @@ const localWrite = { destructiveHint: false, openWorldHint: false };
 // `version` is the server's; the view compares it with its own to notice when Codex shows an older cached view.
 // `replaced` says this server's package folder was removed by a later install (see packageReplaced).
 // `libraryFolder` lets the Settings page say when the chosen library is not a folder yet.
-const snapshot = async () => { const c = await loadConfig(); return { ...(await listLibrary(c)), version: VERSION, replaced: packageReplaced(), library: c.library, libraryFolder: await libraryFolder(c), configPath: c.path, enabledSources: c.sources.enabled, sources: MODULES.map(({ id, label }) => ({ id, label })), keepRaw: c.keep_raw }; };
+const snapshot = async () => { const c = await loadConfig(); return { ...(await listLibrary(c)), version: VERSION, replaced: packageReplaced(), library: c.library, libraryFolder: await libraryFolder(c), configPath: c.path, enabledSources: c.sources.enabled, sources: MODULES.map(({ id, kind, label }) => ({ id, kind: kind ?? 'source', label })), keepRaw: c.keep_raw }; };
 // Calling thread/call metadata is actual host identity, never inferred from an open dig.
 const threadOf = extra => { const id = extra?._meta?.threadId; return typeof id === 'string' ? safeSegment(id, '') || null : null; };
 const callIdOf = extra => typeof extra?._meta?.callId === 'string' ? extra._meta.callId : undefined;
@@ -117,18 +117,21 @@ server.registerResource('retained-research', new ResourceTemplate('dig://library
   const data = await readLibraryFile(await loadConfig(), decodeURIComponent(Array.isArray(file) ? file[0] : file), 0, Number.MAX_SAFE_INTEGER);
   return { contents: [{ uri: uri.href, mimeType: data.file.endsWith('.md') ? 'text/markdown' : 'application/json', text: data.text }] };
 });
-server.registerTool('source_info', { title: 'Source methods and setup', description: 'Read the source catalog, credential/prerequisite presence, packaged skills and worker model guidance. This does not validate credentials or call providers.', inputSchema: { source: z.enum(ALL_MODULES).optional() }, outputSchema: OUTPUT.info, annotations: readOnly }, async ({ source }) => {
+server.registerTool('source_info', { title: 'Source methods, shared tools and setup', description: 'Read the catalog, credential/prerequisite presence, packaged skills and worker model guidance. Entries with kind tool are shared utilities: they have a helperSkillPath but no research methods or independent reports. This does not validate credentials or call providers.', inputSchema: { source: z.enum(ALL_MODULES).optional() }, outputSchema: OUTPUT.info, annotations: readOnly }, async ({ source }) => {
   const info = sourceInfo(await loadConfig(), source);
-  return reply(info, `${info.sources.length} source${info.sources.length === 1 ? '' : 's'}, ${info.sources.filter(s => s.enabled).length} enabled. Readiness is credential and prerequisite presence only.`);
+  const sourceCount = info.sources.filter(s => s.kind === 'source').length;
+  const toolCount = info.sources.length - sourceCount;
+  const counts = [sourceCount ? `${sourceCount} source${sourceCount === 1 ? '' : 's'}` : null, toolCount ? `${toolCount} shared tool${toolCount === 1 ? '' : 's'}` : null].filter(Boolean).join(', ');
+  return reply(info, `${counts}, ${info.sources.filter(s => s.enabled).length} enabled. Readiness is credential and prerequisite presence only.`);
 });
-server.registerTool('source_readiness', { title: 'Check source readiness', description: 'Plain-text readiness summary for Dig’s settings page: credential names and local prerequisites per source. source_info has the full details. Does not call providers.', inputSchema: {}, annotations: readOnly }, async () => reply(undefined, readinessText(sourceInfo(await loadConfig()))));
+server.registerTool('source_readiness', { title: 'Check source and tool readiness', description: 'Plain-text readiness summary for Dig’s settings page: credential names and local prerequisites per source or shared tool. source_info has the full details. Does not call providers.', inputSchema: {}, annotations: readOnly }, async () => reply(undefined, readinessText(sourceInfo(await loadConfig()))));
 server.registerTool('dig_start', { description: 'Optional parent-thread grouping for one question. Workers can instead save a first-class single-source report without a group. Pass the returned dig when grouping is wanted.', inputSchema: { project, question: z.string().min(1).max(4000), planned: z.array(z.enum(moduleAgents(ALL_MODULES).filter(m => !m.helper).map(m => m.name))).optional(), refreshes: z.string().optional() }, outputSchema: OUTPUT.start, annotations: localWrite }, async (args, extra) => {
   args = redactRecord(args, knownSecrets());
   const started = await startDig(await loadConfig(), args.project, args.question, threadOf(extra) ?? SESSION_UNAVAILABLE, args);
   return reply(started, `Started dig ${started.dig}.`);
 });
 
-const schemas = createSchemas(Type, ALL_MODULES);
+const schemas = createSchemas(Type, reportSources(ALL_MODULES));
 const sourceTools = new Map();
 for (const module of MODULES) for (const name of module.tools) {
   const spec = providerTools[name];
@@ -159,7 +162,7 @@ for (const module of MODULES) for (const name of module.tools) {
 // Saving shows an inline card in the conversation that saved it; the card reads its own details through saved_research.
 registerAppTool(server, 'research_save', {
   description: 'Save one source-method report, write-once, with its discovery Summary and audit sections. After the source_card block, include a short descriptive H1 title (roughly 4–10 words); preserve the full original question in question or the existing dig. Pass dig for a group or question to create a single-source dig. agent names the source method (required for X). Returns the exact Primary artifact path and an Open in Dig link.',
-  inputSchema: { project, dig: dig.optional(), source: z.enum(ALL_MODULES), agent: z.string().optional(), content: z.string().min(1), question: z.string().min(1).max(4000).optional(), topic: z.string().max(50).optional(), topic_volatility: z.enum(TOPIC_VOLATILITIES).optional(), supersedes: z.string().optional() }, outputSchema: OUTPUT.save, annotations: localWrite,
+  inputSchema: { project, dig: dig.optional(), source: z.enum(reportSources(ALL_MODULES)), agent: z.string().optional(), content: z.string().min(1), question: z.string().min(1).max(4000).optional(), topic: z.string().max(50).optional(), topic_volatility: z.enum(TOPIC_VOLATILITIES).optional(), supersedes: z.string().optional() }, outputSchema: OUTPUT.save, annotations: localWrite,
   _meta: { ui: { resourceUri: CARD_URI } },
 }, async (args, extra) => {
   const c = await loadConfig();

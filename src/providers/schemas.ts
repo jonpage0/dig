@@ -2,7 +2,7 @@
 // runtime schema dependency of its own.
 import type { Type, TSchema } from "@sinclair/typebox";
 import { REPORT_STATUSES, TOPIC_VOLATILITIES } from "./library/files.js";
-import { ALL_MODULES } from "./modules.js";
+import { ALL_MODULES, reportSources } from "./modules.js";
 import { createFacebookSchemas } from "./facebook-schemas.js";
 import { createFacebookAdsSchemas } from "./facebook-ads-schemas.js";
 type Typebox = typeof Type;
@@ -52,7 +52,7 @@ function messageArraySchema(T: Typebox) {
 
 export function createSchemas(
   T: Typebox,
-  sources: readonly string[] = ALL_MODULES,
+  sources: readonly string[] = reportSources(ALL_MODULES),
 ): Record<string, TSchema> {
   const schemas: Record<string, Schema> = {
     ...createFacebookSchemas(T),
@@ -61,6 +61,15 @@ export function createSchemas(
     tiktok_comments: T.Object({ url: T.String(), cursor: T.Optional(T.Integer({minimum: 0})) }, {additionalProperties: false}),
     instagram_comments: T.Object({ url: T.String(), cursor: T.Optional(T.String()), includeReplies: T.Optional(T.Boolean()) }, {additionalProperties: false}),
     threads: T.Object({ kind: requiredEnumSchema(T, ["post", "posts"], "Read one post or account posts."), url: T.Optional(T.String()), handle: T.Optional(T.String()), cacheMaxAge: enumSchema(T, ["1d", "3d", "7d", "14d", "30d"], "Provider cache age for a post.") }, {additionalProperties: false}),
+    video_analyze: T.Object({
+      video: T.String({ minLength: 1, description: "Direct HTTPS video, public YouTube video URL, absolute local MP4/MOV/WebM inside project, or existing Elorian file://file-ID. Local/YouTube media is uploaded to Elorian." }),
+      question: T.String({ minLength: 1, maxLength: 12000, description: "What to inspect visually or temporally. Ask for concise timestamped evidence and distinguish speech from inference." }),
+      startSeconds: T.Optional(T.Number({ minimum: 0, description: "YouTube/local clip start, default 0. Direct media URLs and uploaded IDs cannot be clipped." })),
+      endSeconds: T.Optional(T.Number({ exclusiveMinimum: 0, description: "YouTube/local clip end, at most 120 seconds after start. Default start+120, capped to video duration." })),
+      effort: enumSchema(T, ["high", "xhigh", "max"], "High is the default. Xhigh uses more reasoning; max is explicit, slower and more expensive."),
+      fps: T.Optional(T.Number({ minimum: 0.25, maximum: 8, description: "Requested initial frames per second, default 2. Provider caps may reduce actual coverage; inspect returned usage." })),
+      maxTokens: T.Optional(T.Integer({ minimum: 128, maximum: 4096, description: "Final answer token limit, default 1600. This is not a cap on internal reasoning or total spend." })),
+    }, { additionalProperties: false }),
     youtube_transcript: T.Object({ video: T.String({ description: "YouTube URL or 11-character video ID." }), language: T.Optional(T.String()), originalAudio: T.Optional(T.Boolean()), cacheMaxAge: enumSchema(T, ["1d", "3d", "7d", "14d", "30d"], "Provider cache age; omitted means live retrieval.") }),
     hackernews_read: T.Object({
       item: T.String({ description: "Numeric item ID or https://news.ycombinator.com/item?id=... URL." }),

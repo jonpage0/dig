@@ -43,7 +43,7 @@ export function sourceInfo(config, source) {
     const groups = (m.keys ?? []).map(k => typeof k === 'string' ? [k] : k);
     const missing = groups.filter(names => !names.some(has));
     const unused = missing.flat().filter(name => environmentState(name) === 'unused');
-    if (missing.length) { status = missing.length < groups.length ? 'partial' : 'setup-required'; message = `Missing ${missing.map(names => names.join(' or ')).join('; ')} in Dig’s keys.env. ${unused.length ? `Codex’s environment has ${unused.join(' and ')}; Use existing key on Dig’s Sources page copies ${unused.length > 1 ? 'them' : 'it'} into keys.env.` : `The user adds ${missing.length > 1 ? 'them' : 'it'} outside chat with Edit keys.env on Dig’s Sources page; Dig reloads keys.env when it is saved.`}`; }
+    if (missing.length) { status = missing.length < groups.length ? 'partial' : 'setup-required'; message = `Missing ${missing.map(names => names.join(' or ')).join('; ')} in Dig’s keys.env. ${unused.length ? `Codex’s environment has ${unused.join(' and ')}; Use existing key on Dig’s Sources & tools page copies ${unused.length > 1 ? 'them' : 'it'} into keys.env.` : `The user adds ${missing.length > 1 ? 'them' : 'it'} outside chat with Edit keys.env on Dig’s Sources & tools page; Dig reloads keys.env when it is saved.`}`; }
     if (m.id === 'github' && missing.length) { status = 'partial'; message = executable('gh') ? 'Public REST tools work anonymously or through an existing gh login. No token in keys.env; gh authentication has not been probed. GraphQL requires a valid login.' : 'Public REST discovery/read works at anonymous limits. GraphQL collaboration evidence requires a GitHub token in keys.env or a gh login.'; }
     if (m.id === 'papers') {
       const bridge = paperSearchDirectory();
@@ -58,6 +58,10 @@ export function sourceInfo(config, source) {
       prerequisites.push({ name: 'yt-dlp', available, detail: 'Install yt-dlp explicitly for keyless search and full transcripts; no automatic installation.' });
       if (!available) { status = has('OPENCODE_RESEARCH_GOOGLE_API_KEY') ? 'partial' : 'setup-required'; message = 'yt-dlp is absent. A Google key supports metadata search only; transcripts and keyless search need yt-dlp.'; }
     }
+    if (m.id === 'video') {
+      for (const name of ['yt-dlp', 'ffmpeg', 'ffprobe']) prerequisites.push({ name, available: executable(name), detail: name === 'yt-dlp' ? 'Needed only for public YouTube video clips. No cookies, sign-in or automatic installation.' : 'Needed to inspect and prepare local or YouTube clips; direct media URLs and uploaded file IDs do not need it.' });
+      if (!missing.length && prerequisites.some(item => !item.available)) { status = 'partial'; message = 'Elorian key is present. Direct media URLs and uploaded file IDs are configured; local/YouTube clips need the missing tools listed below. Provider availability is untested.'; }
+    }
     if (m.id === 'commerce') {
       const current = has('SCRAPE_DO_API_KEY') || has('SCRAPEDO_API_TOKEN'); const history = has('NEXSCOPE_API_KEY');
       status = current && history ? 'ready' : current || history ? 'partial' : 'setup-required';
@@ -65,7 +69,8 @@ export function sourceInfo(config, source) {
     }
     if (!enabled) { message = `Disabled in Dig settings. ${message}`; status = 'disabled'; }
     return {
-      id: m.id, label: m.label, description: m.description, enabled, tools: [...m.tools],
+      id: m.id, kind: m.kind ?? 'source', label: m.label, description: m.description, enabled, tools: [...m.tools],
+      ...(m.helperSkill ? { helperSkillPath: join(packageRoot, 'skills', m.helperSkill, 'SKILL.md') } : {}),
       methods: allMethods.filter(method => method.module === m.id).map(method => ({
         name: method.name, helper: method.helper, skillPath: join(packageRoot, 'skills', method.skill, 'SKILL.md'),
         tools: method.helper ? ['library_read'] : ['source_info', 'library_list', 'library_read', 'research_save', ...m.tools],
@@ -91,7 +96,7 @@ export const environmentPresence = (env = process.env) => [
 
 const KEYS_HEADER = `# Dig provider credentials, and a few provider settings such as a contact email: one NAME=value line each.
 # Keep this file private, and keep its values out of chat and version control.
-# Dig takes credentials only from this file; Dig's Sources page can copy in a key Codex's environment already has.
+# Dig takes credentials only from this file; Dig's Sources & tools page can copy in a key Codex's environment already has.
 # Dig reloads this file whenever it is saved.
 `;
 // keys.env writes run one at a time.
@@ -100,7 +105,7 @@ const queueKeysWrite = write => { const work = keysWork.then(write); keysWork = 
 const readKeys = async path => { try { return await readFile(path, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } };
 const ensureNewline = text => (text === '' || text.endsWith('\n') ? text : `${text}\n`);
 /**
- * The Sources page's "Edit keys.env": creates the file (mode 600) if it is missing, then appends an empty `NAME=` line,
+ * The Sources & tools page's "Edit keys.env": creates the file (mode 600) if it is missing, then appends an empty `NAME=` line,
  * under a comment naming the source and its guidance, for each credential name of `source` (or of every source) that
  * the file does not already assign, commented out or not, so the file always shows everything Dig can use. A source's
  * settings (`envSettings`, such as the Unpaywall contact email) follow, each under a comment saying what it is for. An
@@ -133,7 +138,7 @@ export function prepareKeysFile(source, state = stateDirectory()) {
   });
 }
 /**
- * The Sources page's "Use existing key" / "Update key from env": copies into keys.env each credential of `source` that
+ * The Sources & tools page's "Use existing key" / "Update key from env": copies into keys.env each credential of `source` that
  * Codex's environment holds and keys.env lacks (`unused`) or holds differently (`different`). The first active
  * assignment of a name is replaced; otherwise the line is appended under the source's comment. The file is written
  * atomically at mode 600 and applied at once. Returns the names copied, never values.
@@ -181,8 +186,8 @@ const workerFields = agent => {
 export const settingsFields = {
   library: { schema: z.string().min(1), title: 'Research library', description: 'Absolute directory outside the plugin cache. Changing it selects a library; it does not move research.' },
   keep_raw: { schema: z.boolean(), title: 'Retain original provider responses' },
-  worker_model: { schema: z.string().min(1), title: 'Source worker model', description: `The Codex model Dig suggests for source workers, ${WORKER_DEFAULTS.default.model} unless you change it. The conversation chooses each worker’s model and may choose another; Dig does not check that your account offers it. Each method follows this until it has its own suggestion on the Sources page; X judge and X breadth start with their own.` },
-  worker_effort: { schema: z.enum(WORKER_EFFORTS), title: 'Source worker effort', description: `The reasoning effort Dig suggests for source workers, ${WORKER_DEFAULTS.default.effort} unless you change it. Each method follows this until it has its own suggestion on the Sources page; X judge and X breadth start with their own.` },
+  worker_model: { schema: z.string().min(1), title: 'Source worker model', description: `The Codex model Dig suggests for source workers, ${WORKER_DEFAULTS.default.model} unless you change it. The conversation chooses each worker’s model and may choose another; Dig does not check that your account offers it. Each method follows this until it has its own suggestion on the Sources & tools page; X judge and X breadth start with their own.` },
+  worker_effort: { schema: z.enum(WORKER_EFFORTS), title: 'Source worker effort', description: `The reasoning effort Dig suggests for source workers, ${WORKER_DEFAULTS.default.effort} unless you change it. Each method follows this until it has its own suggestion on the Sources & tools page; X judge and X breadth start with their own.` },
   ...Object.fromEntries(MODULES.map(m => [sourceSetting(m.id), { schema: z.boolean(), title: `Enable ${m.label}`, description: m.description }])),
   x_model: { schema: z.string().min(1), title: 'X provider model', description: 'xAI retrieval model, not the Codex source-worker model.' },
   x_depth: { schema: z.enum(['quick', 'standard', 'max', 'ultra']), title: 'Starting X search depth', description: 'X passes use this depth unless a pass needs another: X judge may run one max pass for a nuanced or disputed question, X breadth one max pass for a final sweep, and a quick existence check runs quick. A max or ultra starting depth applies to every pass.' },
@@ -198,7 +203,8 @@ const ownSettings = m => [...(m.id === 'x' ? X_SETTINGS : []), ...METHODS.filter
 export const settingsLayout = [
   { kind: 'group', title: 'Library', items: properties(['library', 'keep_raw']) },
   { kind: 'group', title: 'Source workers', items: properties(['worker_model', 'worker_effort']) },
-  { kind: 'group', title: 'Sources', items: [...properties(MODULES.flatMap(m => [sourceSetting(m.id), ...ownSettings(m)])), { kind: 'tool', tool: 'source_readiness', title: 'Check source readiness', description: 'Credential names and local prerequisites for every source. Does not call providers.' }] },
+  { kind: 'group', title: 'Sources', items: [...properties(MODULES.filter(m => m.kind !== 'tool').flatMap(m => [sourceSetting(m.id), ...ownSettings(m)])), { kind: 'tool', tool: 'source_readiness', title: 'Check source and tool readiness', description: 'Credential names and local prerequisites for every source and shared tool. Does not call providers.' }] },
+  { kind: 'group', title: 'Shared tools', items: properties(MODULES.filter(m => m.kind === 'tool').map(m => sourceSetting(m.id))) },
 ];
 /** Each worker field shows the guidance in effect: its own stored value, else what it inherits. */
 export const settingsValues = c => ({

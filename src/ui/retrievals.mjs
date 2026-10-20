@@ -85,7 +85,7 @@ export function renderRetrievals(container, item, catalog, inspect) {
     head,
     node('dl', 'metrics',
         metric('Retrievals', num(counts.total), `${num(counts.results)} with results`),
-        metric('Sources', num(rows.length), `${plural(reports.length, 'report')} saved`),
+        metric(catalog.groupLabel(rows.map(row => row.id)), num(rows.length), `${plural(reports.length, 'report')} saved`),
         metric('Failed or stopped', num(counts.failed), `${Math.round((counts.failed / counts.total) * 100)}% of retrievals`),
         costMetric(cost, counts.total, `dig:${key}`)),
     node('p', 'meta usage-scope', `${COST_SCOPE}. ${COST_CAVEAT}`),

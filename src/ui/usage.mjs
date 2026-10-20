@@ -139,6 +139,7 @@ let moreOpen = false;
  * once; the rest sit behind a disclosure.
  */
 export function sourceChart(rows, prefix, shown = SHOWN_SOURCES) {
+  const hasTools = rows.some(row => MODULES.find(m => m.id === row.id)?.kind === 'tool');
   const max = Math.max(1, ...rows.map(s => s.total));
   const width = 240; const height = 10;
   const items = rows.map(row => {
@@ -147,7 +148,7 @@ export function sourceChart(rows, prefix, shown = SHOWN_SOURCES) {
       const size = (row[o.id] / max) * width; const part = shape('rect', { x, y: 0, width: size, height, fill: o.fill, class: `fill-${o.id}` }); x += size; return part;
     });
     const module = MODULES.find(m => m.id === row.id);
-    const detail = `${plural(row.total, 'retrieval')}${row.total ? ` (${breakdown(row)})` : ''}, ${plural(row.reports, 'report')} saved`;
+    const detail = `${plural(row.total, 'retrieval')}${row.total ? ` (${breakdown(row)})` : ''}, ${module?.kind === 'tool' ? 'shared tool' : `${plural(row.reports, 'report')} saved`}`;
     return attr(node('li', 'source-row',
       node('span', 'who', module ? mark(module, true) : null, node('span', 'who-name', labelOf(row.id))),
       node('span', 'track', svg(`0 0 ${width} ${height}`, 'bar', shape('rect', { width, height, class: 'bar-ground' }), parts)),
@@ -156,10 +157,12 @@ export function sourceChart(rows, prefix, shown = SHOWN_SOURCES) {
       node('span', 'sr-only', detail)), 'title', detail);
   });
   const rest = items.slice(shown);
-  const more = rest.length ? node('details', 'more-sources', keyed(node('summary', 'meta', `${plural(rest.length, 'more source')}`), `${prefix}-more`), node('ul', 'source-rows', rest)) : null;
+  const restTools = rows.slice(shown).filter(row => MODULES.find(m => m.id === row.id)?.kind === 'tool').length;
+  const moreLabel = restTools === rest.length ? plural(rest.length, 'more tool') : restTools ? `${rest.length} more sources & tools` : plural(rest.length, 'more source');
+  const more = rest.length ? node('details', 'more-sources', keyed(node('summary', 'meta', moreLabel), `${prefix}-more`), node('ul', 'source-rows', rest)) : null;
   if (more) { more.open = moreOpen; more.addEventListener('toggle', () => { moreOpen = more.open; }); }
   return node('figure', 'chart',
-    node('div', 'chart-head', node('figcaption', 'chart-title', 'Retrievals by source'), node('span', 'meta', 'Cost under each bar')),
+    node('div', 'chart-head', node('figcaption', 'chart-title', hasTools ? 'Retrievals by source & tool' : 'Retrievals by source'), node('span', 'meta', 'Cost under each bar')),
     items.length ? [node('ul', 'source-rows', items.slice(0, shown)), more] : node('p', 'meta', 'No source was used in this window.'));
 }
 /** The outcome legend: each outcome's word beside its fill. */

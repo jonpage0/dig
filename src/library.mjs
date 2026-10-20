@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile, appendFile, readdir, realpath, stat, lstat } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, join, basename, sep } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { MODULES, moduleAgents, ALL_MODULES } from './providers/modules.ts';
+import { MODULES, moduleAgents, ALL_MODULES, reportSources } from './providers/modules.ts';
 import { receiptCost } from './providers/library/cost.ts';
 import { ANSWER_STATUSES, digWord } from './status.mjs';
 import { reportParts } from './ui/markdown.mjs';
@@ -133,7 +133,7 @@ function assertReport(parts) {
 }
 export async function saveReport(config, { project, dig, source, agent = source, content, topic, question, topic_volatility, supersedes, session = SESSION_UNAVAILABLE }) {
   session = safeSegment(session, SESSION_UNAVAILABLE);
-  if (!ALL_MODULES.includes(source)) throw new Error('source must name a report source from source_info');
+  if (!reportSources(ALL_MODULES).includes(source)) throw new Error('source must name a report source from source_info');
   if (!methods.some(m => m.module === source && m.name === agent)) throw new Error(`agent must name a ${source} source method from source_info`);
   if (supersedes && !dig) throw new Error('supersedes requires an existing dig');
   const parts = reportParts(content);

@@ -87,7 +87,7 @@ function render(value) {
   const calls = snapshot.items.reduce((sum, item) => sum + item.calls.length, 0) + snapshot.live.length;
   text($('questions'), snapshot.items.length); text($('reports'), reports); text($('retrievals'), calls);
   const enabled = Array.isArray(snapshot.enabledSources) ? snapshot.enabledSources : null;
-  text($('source-status'), enabled ? (catalog.size ? `${enabled.length} of ${plural(catalog.size, 'source')} on` : `${plural(enabled.length, 'source')} on`) : '');
+  text($('source-status'), enabled ? (catalog.size ? `${enabled.length} of ${catalog.size} ${catalog.groupLabel().toLowerCase()} on` : `${plural(enabled.length, 'source')} on`) : '');
   text($('retention'), snapshot.keepRaw ? 'Original responses retained' : 'Original responses not retained');
   text($('library-path'), snapshot.library || ''); showLibraryFolder();
   renderLibrary(); renderPanel(); showUsage();
@@ -134,7 +134,7 @@ function showPanelFigures(element, calls, reports, elsewhere) {
   rebuild(element, [
     node('dl', 'metrics',
       metric('Retrievals', num(counts.total), `${num(counts.results)} with results`),
-      metric('Sources', num(sourceRows(calls, reports).length), `${plural(reports.length, 'report')} saved`),
+      metric(catalog.groupLabel(sourceRows(calls, reports).map(row => row.id)), num(sourceRows(calls, reports).length), `${plural(reports.length, 'report')} saved`),
       metric('Failed or stopped', num(counts.failed), counts.total ? `${Math.round((counts.failed / counts.total) * 100)}% of retrievals` : 'None yet'),
       costMetric(costSummary(calls), counts.total, 'panel')),
     elsewhere ? node('p', 'meta', `Not included: ${plural(elsewhere, 'retrieval')} by workers or other conversations that no saved report has claimed yet.`) : null,
@@ -384,11 +384,11 @@ function sourcesSummary(info) {
   const on = sources.filter(s => s.enabled);
   const count = status => on.filter(s => s.readiness?.status === status).length;
   const partly = count('partial'); const setup = count('setup-required');
-  text($('sources-summary'), sources.length ? [`${on.length} of ${plural(sources.length, 'source')} on`, partly ? `${partly} partly configured` : null, setup ? `${setup} ${setup === 1 ? 'needs' : 'need'} setup` : null].filter(Boolean).join(' · ') : '');
+  text($('sources-summary'), sources.length ? [`${on.length} of ${sources.length} ${catalog.groupLabel().toLowerCase()} on`, partly ? `${partly} partly configured` : null, setup ? `${setup} ${setup === 1 ? 'needs' : 'need'} setup` : null].filter(Boolean).join(' · ') : '');
 }
 async function openSources() {
   show('sources'); const request = ++pageRequest;
-  text($('sources-status'), 'Reading sources…');
+  text($('sources-status'), 'Reading sources and tools…');
   const [read, info] = await Promise.all([call('settings.read'), readSourceInfo()]);
   if (request !== pageRequest || view !== 'sources') return;
   if (!read.schema?.properties || !read.values) throw new Error(SCHEMA_MISSING);

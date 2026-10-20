@@ -64,6 +64,10 @@ Never fabricate a post, creator, translation, metric, or platform hit. Do not fo
 
 Structure the report with `## Summary`, `## Cross-Platform Patterns`, one section for each queried platform, and `## Stats`, followed by the audit sections. `## Summary` is the report's discovery summary: what was found, its scope and limits, and what this research is useful for later. Keep it inside the report; never write a separate summary file.
 
+## Optional video inspection
+
+When the question depends on what a surfaced video shows, you may also use the shared `video_analyze` tool within the user's authorized paid-provider scope. This is the exception to the source-tool restriction above: it analyzes media from this source, without researching a different source. Read `source_info` for `video` and its `helperSkillPath` first. Use a returned direct media URL, an exact YouTube URL, or an explicitly supplied local project clip; a social post URL is not a video file. Keep the source URL, inspected interval and analysis receipt in this report. Treat the result as Glimpse's interpretation and distinguish visual observations, automatic speech transcription and inference. Missing or incomplete video analysis is a coverage limit; do not force a failed route or infer unseen visuals from captions.
+
 ## Wait for a real outcome
 
 Do not impose a timeout merely because a source call is slow or waiting for interactive permission. Some clients expose a pending approval only to the outer client, not as tool output. Wait for completion, an explicit provider failure, or an explicit cancellation. Surface a visible permission wait and never bypass the control.

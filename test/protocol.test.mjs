@@ -24,6 +24,37 @@ const eventually = async (read, expected, message) => {
   assert.equal(value, expected, message);
 };
 
+test('video utility discovery follows its switch and offers helper guidance without a research report method', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dig-native-video-catalog-'));
+  const { client, isolated } = await startServer(root);
+  try {
+    const tools = (await client.listTools()).tools;
+    assert.equal(tools.some(tool => tool.name === 'video_analyze'), false);
+    assert.ok(!tools.find(tool => tool.name === 'research_save').inputSchema.properties.source.enum.includes('video'));
+    assert.ok(!tools.find(tool => tool.name === 'dig_start').inputSchema.properties.planned.items.enum.includes('video-analyze'));
+    const info = (await client.callTool({ name: 'source_info', arguments: { source: 'video' } })).structuredContent.sources[0];
+    assert.equal(info.kind, 'tool');
+    assert.deepEqual(info.methods, []);
+    assert.equal(info.helperSkillPath, join(await realpath(isolated), 'skills/video-analyze/SKILL.md'));
+    assert.match(await readFile(info.helperSkillPath, 'utf8'), /video_analyze/);
+    const enabled = await client.callTool({ name: 'settings.update', arguments: { set: { video_enabled: true } } });
+    assert.notEqual(enabled.isError, true);
+    assert.ok((await client.listTools()).tools.some(tool => tool.name === 'video_analyze'));
+    const snapshot = (await client.callTool({ name: 'library_snapshot', arguments: {} })).structuredContent;
+    assert.equal(snapshot.sources.find(source => source.id === 'video').kind, 'tool');
+    assert.deepEqual(snapshot.enabledSources, ['hackernews', 'video']);
+    const refused = await client.callTool({ name: 'research_save', arguments: { project: root, source: 'video', question: 'A utility is not a report source', content: report } });
+    assert.equal(refused.isError, true);
+    await client.callTool({ name: 'settings.update', arguments: { set: { video_enabled: false } } });
+    assert.equal((await client.listTools()).tools.some(tool => tool.name === 'video_analyze'), false);
+    const disabled = await client.callTool({ name: 'video_analyze', arguments: { project: root, video: 'https://example.invalid/video.mp4', question: 'Describe the scene.' } });
+    assert.equal(disabled.isError, true);
+  } finally {
+    await client.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('standalone bundle starts outside the repo, exposes native metadata, retains outcomes and reloads preferences', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dig-native-protocol-'));
   const { client, isolated } = await startServer(root);

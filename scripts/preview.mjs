@@ -17,7 +17,7 @@ const server = createServer(async (req, res) => {
     if (req.method !== 'POST') { res.writeHead(404); res.end(); return; }
     let body = ''; for await (const chunk of req) { body += chunk; if (body.length > 100000) throw new Error('Request too large'); }
     const args = JSON.parse(body || '{}'); const c = await loadConfig(); let value;
-    if (url.pathname === '/api/library_snapshot') value = { ...(await listLibrary(c)), version: VERSION, replaced: packageReplaced(), library: c.library, libraryFolder: await libraryFolder(c), configPath: c.path, enabledSources: c.sources.enabled, sources: sourceInfo(c).sources.map(({ id, label }) => ({ id, label })), keepRaw: c.keep_raw };
+    if (url.pathname === '/api/library_snapshot') value = { ...(await listLibrary(c)), version: VERSION, replaced: packageReplaced(), library: c.library, libraryFolder: await libraryFolder(c), configPath: c.path, enabledSources: c.sources.enabled, sources: sourceInfo(c).sources.map(({ id, kind, label }) => ({ id, kind, label })), keepRaw: c.keep_raw };
     else if (url.pathname === '/api/library_revision') value = { revision: createHash('sha256').update(JSON.stringify([VERSION, packageReplaced(), await libraryRevision(c), c.library, await libraryFolder(c), c.keep_raw, c.sources.enabled, c.x, c.workers, environmentPresence()])).digest('hex').slice(0, 24) };
     else if (url.pathname === '/api/source_info') value = sourceInfo(c, args.source);
     else if (url.pathname === '/api/settings.read') value = settingsDocument(c);

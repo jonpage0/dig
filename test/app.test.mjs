@@ -297,6 +297,24 @@ test('reports render Markdown structure without executing or loading report HTML
   assert.match(doc.textContent, /Method Hacker News/);
 });
 
+test('video utility retrievals are labeled as tools, keep unknown cost and remain outside source reports', async () => {
+  const video = { ...rawCall, id: 'video-1', source: 'video', tool: 'video_analyze', args: { video: 'https://media.example.org/demo.mp4', question: 'What opens?' }, cost: null, claimedBy: null };
+  const snapshot = { ...snapshotOf([item('A', { calls: [rawCall, video] })]), sources: [{ id: 'hackernews', kind: 'source', label: 'Hacker News' }, { id: 'video', kind: 'tool', label: 'Video analysis' }] };
+  const host = scriptedHost([snapshot]);
+  const ui = await loadApp(host);
+  await openDig(ui, host, 'A', 'A source report using video evidence.');
+  const panel = panelOf(ui);
+  const figures = [...panel.walk()].filter(e => e.className === 'metric').map(e => e.textContent);
+  assert.ok(figures.some(text => text === 'Sources & tools21 report saved'));
+  assert.match(panel.textContent, /Retrievals by source & tool/);
+  assert.match(panel.textContent, /Video analysis/);
+  assert.match(panel.textContent, /Not in a saved report or answer/);
+  assert.match(panel.textContent, /1 call without reported pricing/);
+  const row = [...panel.walk()].find(e => e.className === 'source-row' && e.textContent.includes('Video analysis'));
+  assert.match(row.getAttribute('title'), /shared tool/);
+  assert.doesNotMatch(row.getAttribute('title'), /report/);
+});
+
 test('retained responses read as source evidence, keep their original JSON, and lead back to the report', async () => {
   const generic = { ...rawCall, id: 'call-2', tool: 'commerce_search', source: 'commerce', rawFile: 'p/sessions/t/raw/call-2.json' };
   const host = scriptedHost([snapshotOf([item('A', { calls: [rawCall, generic] })])]);
@@ -410,9 +428,9 @@ test('Sources gives each source a card holding its own settings, Settings holds 
       if (name === 'settings.read') return { structuredContent: settingsDocument(c) };
       // A copy, because the view's objects come from another realm and would fail deep equality.
       if (name === 'settings.update') { updates.push({ ...args.set }); return refusal ? { isError: true, content: [{ type: 'text', text: refusal }] } : updateResult(args.set, state); }
-      if (name === 'source_info') return { structuredContent: { sources: MODULES.map(m => ({ id: m.id, label: m.label, readiness: { status: c.sources.enabled.includes(m.id) ? 'ready' : 'disabled', message: '' } })), keysPath: join(state, 'keys.env') } };
+      if (name === 'source_info') return { structuredContent: { sources: MODULES.map(m => ({ id: m.id, kind: m.kind ?? 'source', label: m.label, readiness: { status: c.sources.enabled.includes(m.id) ? 'ready' : 'disabled', message: '' } })), keysPath: join(state, 'keys.env') } };
       if (name === 'library_revision') return { structuredContent: { revision: String(++revision) } };
-      if (name === 'library_snapshot') return { structuredContent: { items: [], live: [], library: c.library, enabledSources: c.sources.enabled, sources: MODULES.map(m => ({ id: m.id, label: m.label })) } };
+      if (name === 'library_snapshot') return { structuredContent: { items: [], live: [], library: c.library, enabledSources: c.sources.enabled, sources: MODULES.map(m => ({ id: m.id, kind: m.kind ?? 'source', label: m.label })) } };
       throw new Error(`Unexpected tool: ${name}`);
     },
   };
@@ -421,6 +439,11 @@ test('Sources gives each source a card holding its own settings, Settings holds 
   const list = ui.$('sources-list'); const toc = id => byKey(ui.$('sources-toc'), `toc:${id}`).textContent;
   const cards = [...list.walk()].filter(e => e.tagName === 'ARTICLE');
   assert.deepEqual(cards.map(card => card.getAttribute('id')).sort(), MODULES.map(m => `source-${m.id}`).sort());
+  const videoCard = cards.find(card => card.getAttribute('id') === 'source-video');
+  assert.ok(videoCard.parentNode.parentNode.textContent.includes('Shared tools'));
+  assert.equal(named(videoCard, 'video_enabled').checked, false);
+  assert.doesNotMatch(videoCard.textContent, /Research methods?|suggested worker/);
+  assert.match(videoCard.textContent, /About this tool/);
   // The longest source id owns a key.
   const home = name => cards.find(card => named(card, name))?.getAttribute('id');
   assert.deepEqual(['x_model', 'x_depth', 'x_web_search', 'x_code_execution', 'tiktok_enabled', 'tiktok_ads_enabled', 'reddit_enabled', 'tikhub_reddit_enabled'].map(home),
@@ -444,7 +467,7 @@ test('Sources gives each source a card holding its own settings, Settings holds 
   assert.deepEqual((await loadConfig(state)).sources.enabled.toSorted(), ['exa', 'hackernews']);
   assert.equal(exaWords.textContent, 'On'); assert.equal(exaState.textContent, 'Saved');
   assert.equal(toc('exa'), 'Exa', 'The index names a state only when a source is not ready');
-  assert.equal(ui.$('source-status').textContent, `2 of ${MODULES.length} sources on`);
+  assert.equal(ui.$('source-status').textContent, `2 of ${MODULES.length} sources & tools on`);
   // A quick second flip waits for the first save and wins.
   exa.checked = false; const first = exa.onchange(); exa.checked = true; await Promise.all([first, exa.onchange()]); await settle();
   assert.deepEqual(updates.slice(1), [{ exa_enabled: false }, { exa_enabled: true }]);

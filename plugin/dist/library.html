@@ -798,7 +798,7 @@ c-16 3 -1617 460 -3560 1016 -1942 556 -3535 1011 -3539 1011 -4 0 -4 3 0 7 5
     <nav class="nav" aria-label="Dig views">
       <button class="btn btn-ghost" id="nav-trail" type="button" hidden>This conversation</button>
       <button class="btn btn-ghost" id="nav-library" type="button">Library</button>
-      <button class="btn btn-ghost" id="nav-sources" type="button">Sources</button>
+      <button class="btn btn-ghost" id="nav-sources" type="button">Sources &amp; tools</button>
       <button class="btn btn-ghost" id="nav-settings" type="button">Settings</button>
     </nav>
   </header>
@@ -853,7 +853,7 @@ c-16 3 -1617 460 -3560 1016 -1942 556 -3535 1011 -3539 1011 -4 0 -4 3 0 7 5
   </section>
   <section id="sources" hidden>
     <div class="page-heading">
-      <h2>Sources</h2>
+      <h2>Sources &amp; tools</h2>
       <p class="summary-line" id="sources-summary"></p>
       <p class="meta">Configured means the local prerequisites are present. Recent activity comes from retained calls; opening this page does not test providers.</p>
     </div>
@@ -862,18 +862,18 @@ c-16 3 -1617 460 -3560 1016 -1942 556 -3535 1011 -3539 1011 -4 0 -4 3 0 7 5
         <h3 id="keys-title">Accounts and keys</h3>
         <button id="edit-keys" class="btn" type="button" disabled>Edit keys.env</button>
       </div>
-      <p class="keys-text">Provider keys live in keys.env, outside the chat, and Dig picks up changes when you save it. One key can serve several sources, so the list below goes by provider account.</p>
+      <p class="keys-text">Provider keys live in keys.env, outside the chat, and Dig picks up changes when you save it. One key can serve several sources or shared tools, so the list below goes by provider account.</p>
       <p id="keys-path" class="path"></p>
       <div class="accounts" id="accounts" hidden></div>
     </section>
     <p id="sources-status" class="meta sources-status" role="status" aria-live="polite"></p>
-    <nav id="sources-toc" class="toc" aria-label="Sources by what they research"></nav>
+    <nav id="sources-toc" class="toc" aria-label="Research sources and shared tools"></nav>
     <div id="sources-list"></div>
   </section>
   <section id="settings" hidden>
     <div class="page-heading">
       <h2>Settings</h2>
-      <p class="meta">Dig-wide settings. Changes save as you make them, to the file below; Codex’s plugin settings edit the same file. Each source’s own settings are on Sources.</p>
+      <p class="meta">Dig-wide settings. Changes save as you make them, to the file below; Codex’s plugin settings edit the same file. Each source or tool’s own settings are on Sources &amp; tools.</p>
       <p id="config-path" class="path"></p>
     </div>
     <div id="settings-fields" class="settings"></div>
@@ -19794,7 +19794,8 @@ container holding the app. Specify either width or maxWidth, and either height o
     { id: "papers", label: "Papers", sources: ["papers"] },
     { id: "video", label: "Video", sources: ["youtube"] },
     { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "facebook", "threads", "linkedin", "telegram", "china-social"] },
-    { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "facebook-ads", "dataforseo"] }
+    { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "facebook-ads", "dataforseo"] },
+    { id: "tools", label: "Shared tools", sources: ["video"] }
   ];
   var SCRAPECREATORS = { name: "ScrapeCreators", url: "https://scrapecreators.com" };
   var TIKHUB = { name: "TikHub", url: "https://tikhub.io" };
@@ -19931,6 +19932,21 @@ container holding the app. Specify either width or maxWidth, and either height o
       providers: [{ name: "yt-dlp", url: "https://github.com/yt-dlp/yt-dlp" }, { name: "YouTube Data API", url: "https://developers.google.com/youtube/v3" }],
       billing: "Local yt-dlp and YouTube Data API calls are free. The separate hosted transcript tool uses ScrapeCreators credits reported by each response.",
       logo: "youtube"
+    },
+    {
+      id: "video",
+      kind: "tool",
+      label: "Video analysis",
+      description: "Analyze a supplied video or bounded clip with Elorian; a shared utility for any source",
+      tools: ["video_analyze"],
+      skills: [],
+      helperSkill: "video-analyze",
+      env: ["ELORIAN_API_KEY"],
+      keys: ["ELORIAN_API_KEY"],
+      credential: "ELORIAN_API_KEY from Elorian's API Keys page",
+      about: "Answers a specific question about a supplied video or bounded clip through Elorian. Source research can use it when visual or spoken evidence matters. The media is sent to Elorian, and the answer is model-generated analysis to check against the original; this tool does not search or produce a separate research report.",
+      providers: [{ name: "Elorian", url: "https://platform.elorian.ai/settings/docs" }],
+      billing: "Paid from your Elorian account. Token usage is shown when returned; the API does not report a per-call charge, so Dig records cost as unknown."
     },
     {
       id: "x",
@@ -20150,13 +20166,14 @@ container holding the app. Specify either width or maxWidth, and either height o
     { id: "justone", name: "Just One API", signup: "https://dashboard.justoneapi.com/en", keys: ["JUSTONE_API_KEY"], billing: "Its own account, used only when China social\u2019s fallback is asked for. Dig shows these calls\u2019 cost as unknown." },
     { id: "scrape-do", name: "Scrape.do", signup: "https://dashboard.scrape.do/", keys: [["SCRAPE_DO_API_KEY", "SCRAPEDO_API_TOKEN"]], billing: "Scrape.do credits per request, which Dig records." },
     { id: "nexscope", name: "Nexscope", signup: "https://www.nexscope.ai/seller/api-access?tab=api-keys", keys: ["NEXSCOPE_API_KEY"], billing: `Paid from your Nexscope account. ${UNKNOWN_COST}` },
-    { id: "dataforseo", name: "DataForSEO", signup: "https://app.dataforseo.com/api-access", keys: ["DATAFORSEO_USERNAME", "DATAFORSEO_PASSWORD"], billing: "Prepaid; US dollars per request, which Dig records. Use the API login and API password from the API Access page, not your dashboard password." }
+    { id: "dataforseo", name: "DataForSEO", signup: "https://app.dataforseo.com/api-access", keys: ["DATAFORSEO_USERNAME", "DATAFORSEO_PASSWORD"], billing: "Prepaid; US dollars per request, which Dig records. Use the API login and API password from the API Access page, not your dashboard password." },
+    { id: "elorian", name: "Elorian", signup: "https://platform.elorian.ai/settings/keys", keys: ["ELORIAN_API_KEY"], billing: "Paid video analysis. Token usage is shown when returned, but no per-call charge is reported, so Dig records cost as unknown." }
   ];
   function selectedModules(ids) {
     return MODULES.filter((m2) => ids.includes(m2.id));
   }
   function sourceSkills(m2) {
-    return m2.skills ?? [m2.id];
+    return m2.kind === "tool" ? [] : m2.skills ?? [m2.id];
   }
   function moduleAgents(ids) {
     const selected = selectedModules(ids);
@@ -20180,6 +20197,8 @@ container holding the app. Specify either width or maxWidth, and either height o
   function createCatalog(sources = []) {
     const list5 = Array.isArray(sources) ? sources.filter((source) => typeof source?.id === "string") : [];
     const labels2 = new Map(list5.map((source) => [source.id, typeof source.label === "string" && source.label ? source.label : source.id]));
+    const tools = new Set(list5.filter((source) => source.kind === "tool").map((source) => source.id));
+    const groupLabel = (ids = list5.map((source) => source.id)) => ids.some((id) => tools.has(id)) ? "Sources & tools" : "Sources";
     const methodSource = /* @__PURE__ */ new Map();
     for (const source of list5) for (const method of Array.isArray(source.methods) ? source.methods : []) if (typeof method?.name === "string") methodSource.set(method.name, source.id);
     const label = (id) => labels2.get(id) ?? String(id ?? "");
@@ -20198,7 +20217,7 @@ container holding the app. Specify either width or maxWidth, and either height o
       const match = REPORT_FILE.exec(name);
       return match ? `${methodLabel2(match[1])} report${match[2] ? ` ${match[2]}` : ""}` : name;
     }
-    return { sources: list5, label, methodLabel: methodLabel2, fileLabel, size: list5.length };
+    return { sources: list5, label, methodLabel: methodLabel2, fileLabel, groupLabel, size: list5.length };
   }
   var fileKind = (file2) => {
     const name = basename(file2);
@@ -22593,10 +22612,10 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     "sliders-horizontal": [["path", { "d": "M10 5H3" }], ["path", { "d": "M12 19H3" }], ["path", { "d": "M14 3v4" }], ["path", { "d": "M16 17v4" }], ["path", { "d": "M21 12h-9" }], ["path", { "d": "M21 19h-5" }], ["path", { "d": "M21 5h-7" }], ["path", { "d": "M8 10v4" }], ["path", { "d": "M8 12H3" }]],
     "square-play": [["rect", { "x": "3", "y": "3", "width": "18", "height": "18", "rx": "2" }], ["path", { "d": "M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z" }]]
   };
-  var SOURCE_GLYPHS = { "hackernews": "newspaper", "deepwiki": "book-open-text", "polymarket": "chart-candlestick", "github": "folder-git-2", "exa": "scan-search", "perplexity": "globe", "papers": "graduation-cap", "youtube": "square-play", "x": "scale", "reddit": "messages-square", "tikhub-reddit": "list-tree", "tiktok": "clapperboard", "instagram": "camera", "linkedin": "briefcase-business", "telegram": "send", "threads": "messages-square", "china-social": "languages", "commerce": "shopping-cart", "tiktok-ads": "megaphone", "dataforseo": "chart-no-axes-combined" };
+  var SOURCE_GLYPHS = { "hackernews": "newspaper", "deepwiki": "book-open-text", "polymarket": "chart-candlestick", "github": "folder-git-2", "exa": "scan-search", "perplexity": "globe", "papers": "graduation-cap", "youtube": "square-play", "video": "clapperboard", "x": "scale", "reddit": "messages-square", "tikhub-reddit": "list-tree", "tiktok": "clapperboard", "instagram": "camera", "linkedin": "briefcase-business", "telegram": "send", "threads": "messages-square", "china-social": "languages", "commerce": "shopping-cart", "tiktok-ads": "megaphone", "dataforseo": "chart-no-axes-combined" };
   SOURCE_GLYPHS.facebook = "messages-square";
   SOURCE_GLYPHS["facebook-ads"] = "megaphone";
-  var METHOD_GLYPHS = { "x-judge": "scale", "x-breadth": "radar", "x-post": "message-square-quote", "youtube-summarizer": "captions" };
+  var METHOD_GLYPHS = { "x-judge": "scale", "x-breadth": "radar", "x-post": "message-square-quote", "youtube-summarizer": "captions", "video-analyze": "clapperboard" };
   var glyphFor = (source, method) => METHOD_GLYPHS[method] ?? SOURCE_GLYPHS[source] ?? "shovel";
 
   // src/ui/settings.mjs
@@ -22766,6 +22785,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     hackernews: { tasks: ["Search stories, Ask HN, Show HN and comments.", "Read a specific story and its comment tree with explicit page limits."], example: "Use Dig to read this Hacker News thread: [URL]. Explain the strongest arguments and what the comments do not establish." },
     papers: { tasks: ["Find papers, related work, citations and supporting passages.", "Read available full text, PDFs and sections through the configured Papers tools."], example: "Use Dig Papers to find research on [question]. Separate paper findings from your interpretation and retain the evidence." },
     youtube: { tasks: ["Find videos and inspect transcript-grounded claims.", "Use local captions first; the separately requested hosted transcript fallback is paid."], example: "Use Dig to read the transcript of [video URL] and identify the passages supporting [claim]." },
+    video: { tasks: ["Ask a focused question about a supplied video or bounded clip.", "Send the media to Elorian for model-generated analysis, then check important claims against the original. Any source method can use this shared tool."], example: "Use Dig\u2019s Video analysis tool to inspect [video or local project file] for [specific question]. State the clip coverage and distinguish observed details from interpretation." },
     x: { tasks: ["Weigh claims with X judge, discover broadly with X breadth, or inspect exact posts.", "Read threads, Communities and available media descriptions; account-only reads need the optional sign-in."], example: "Use Dig X judge to examine what practitioners are saying about [topic]. Read the original posts behind the important claims." },
     reddit: { tasks: ["Find public Reddit discussions.", "Read thread comments and separate anecdotes from corroborated claims."], example: "Use Dig Reddit to investigate firsthand experiences with [topic], including contrary experiences." },
     "tikhub-reddit": { tasks: ["Explore subreddit context and advanced Reddit discovery.", "Enrich selected posts and read available comment trees."], example: "Use Dig TikHub Reddit to investigate [topic] in [subreddit] and retain the relevant discussions." },
@@ -23021,7 +23041,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         node("div", "source-head", mark(module), node("div", "source-name", heading, providerLine(module)), toggle?.element),
         guide ?? about,
         node("p", "meta billing", node("span", "fact-label", "Cost: "), module.billing),
-        guide ? node("details", "source-about", node("summary", "", "About this source"), about) : null,
+        guide ? node("details", "source-about", node("summary", "", module.kind === "tool" ? "About this tool" : "About this source"), about) : null,
         node("div", "readiness", status, setup.element),
         lastCall,
         own.length ? node("div", "source-settings", node("p", "eyebrow", `${module.label} settings`), own) : null
@@ -23235,6 +23255,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   var SHOWN_SOURCES = 4;
   var moreOpen = false;
   function sourceChart(rows, prefix, shown = SHOWN_SOURCES) {
+    const hasTools = rows.some((row) => MODULES.find((m2) => m2.id === row.id)?.kind === "tool");
     const max = Math.max(1, ...rows.map((s) => s.total));
     const width = 240;
     const height = 10;
@@ -23247,7 +23268,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         return part;
       });
       const module = MODULES.find((m2) => m2.id === row.id);
-      const detail = `${plural(row.total, "retrieval")}${row.total ? ` (${breakdown(row)})` : ""}, ${plural(row.reports, "report")} saved`;
+      const detail = `${plural(row.total, "retrieval")}${row.total ? ` (${breakdown(row)})` : ""}, ${module?.kind === "tool" ? "shared tool" : `${plural(row.reports, "report")} saved`}`;
       return attr(node(
         "li",
         "source-row",
@@ -23259,7 +23280,9 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       ), "title", detail);
     });
     const rest = items.slice(shown);
-    const more = rest.length ? node("details", "more-sources", keyed(node("summary", "meta", `${plural(rest.length, "more source")}`), `${prefix}-more`), node("ul", "source-rows", rest)) : null;
+    const restTools = rows.slice(shown).filter((row) => MODULES.find((m2) => m2.id === row.id)?.kind === "tool").length;
+    const moreLabel = restTools === rest.length ? plural(rest.length, "more tool") : restTools ? `${rest.length} more sources & tools` : plural(rest.length, "more source");
+    const more = rest.length ? node("details", "more-sources", keyed(node("summary", "meta", moreLabel), `${prefix}-more`), node("ul", "source-rows", rest)) : null;
     if (more) {
       more.open = moreOpen;
       more.addEventListener("toggle", () => {
@@ -23269,7 +23292,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     return node(
       "figure",
       "chart",
-      node("div", "chart-head", node("figcaption", "chart-title", "Retrievals by source"), node("span", "meta", "Cost under each bar")),
+      node("div", "chart-head", node("figcaption", "chart-title", hasTools ? "Retrievals by source & tool" : "Retrievals by source"), node("span", "meta", "Cost under each bar")),
       items.length ? [node("ul", "source-rows", items.slice(0, shown)), more] : node("p", "meta", "No source was used in this window.")
     );
   }
@@ -23428,7 +23451,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         "dl",
         "metrics",
         metric("Retrievals", num(counts.total), `${num(counts.results)} with results`),
-        metric("Sources", num(rows.length), `${plural(reports.length, "report")} saved`),
+        metric(catalog2.groupLabel(rows.map((row) => row.id)), num(rows.length), `${plural(reports.length, "report")} saved`),
         metric("Failed or stopped", num(counts.failed), `${Math.round(counts.failed / counts.total * 100)}% of retrievals`),
         costMetric(cost, counts.total, `dig:${key}`)
       ),
@@ -23504,7 +23527,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
 
   // src/version.mjs
-  var VERSION = "0.4.2";
+  var VERSION = "0.4.3";
 
   // src/app.mjs
   var POLL_MS = 2e3;
@@ -23604,7 +23627,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     text($("reports"), reports);
     text($("retrievals"), calls);
     const enabled = Array.isArray(snapshot.enabledSources) ? snapshot.enabledSources : null;
-    text($("source-status"), enabled ? catalog.size ? `${enabled.length} of ${plural(catalog.size, "source")} on` : `${plural(enabled.length, "source")} on` : "");
+    text($("source-status"), enabled ? catalog.size ? `${enabled.length} of ${catalog.size} ${catalog.groupLabel().toLowerCase()} on` : `${plural(enabled.length, "source")} on` : "");
     text($("retention"), snapshot.keepRaw ? "Original responses retained" : "Original responses not retained");
     text($("library-path"), snapshot.library || "");
     showLibraryFolder();
@@ -23653,7 +23676,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         "dl",
         "metrics",
         metric("Retrievals", num(counts.total), `${num(counts.results)} with results`),
-        metric("Sources", num(sourceRows(calls, reports).length), `${plural(reports.length, "report")} saved`),
+        metric(catalog.groupLabel(sourceRows(calls, reports).map((row) => row.id)), num(sourceRows(calls, reports).length), `${plural(reports.length, "report")} saved`),
         metric("Failed or stopped", num(counts.failed), counts.total ? `${Math.round(counts.failed / counts.total * 100)}% of retrievals` : "None yet"),
         costMetric(costSummary(calls), counts.total, "panel")
       ),
@@ -23943,12 +23966,12 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const count = (status) => on.filter((s) => s.readiness?.status === status).length;
     const partly = count("partial");
     const setup = count("setup-required");
-    text($("sources-summary"), sources.length ? [`${on.length} of ${plural(sources.length, "source")} on`, partly ? `${partly} partly configured` : null, setup ? `${setup} ${setup === 1 ? "needs" : "need"} setup` : null].filter(Boolean).join(" \xB7 ") : "");
+    text($("sources-summary"), sources.length ? [`${on.length} of ${sources.length} ${catalog.groupLabel().toLowerCase()} on`, partly ? `${partly} partly configured` : null, setup ? `${setup} ${setup === 1 ? "needs" : "need"} setup` : null].filter(Boolean).join(" \xB7 ") : "");
   }
   async function openSources() {
     show("sources");
     const request = ++pageRequest;
-    text($("sources-status"), "Reading sources\u2026");
+    text($("sources-status"), "Reading sources and tools\u2026");
     const [read, info] = await Promise.all([call("settings.read"), readSourceInfo()]);
     if (request !== pageRequest || view !== "sources") return;
     if (!read.schema?.properties || !read.values) throw new Error(SCHEMA_MISSING);

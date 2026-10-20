@@ -1,10 +1,14 @@
 /** One catalog owns source names, tools, skills, prerequisites and setup presets. */
 export interface DigModule {
   id: string;
+  /** Shared utilities have tools but no report source or research worker. Omitted means a research source. */
+  kind?: "tool";
   label: string;
   description: string;
   tools: readonly string[];
   skills?: readonly string[];
+  /** Instructions for a shared utility, discoverable through source_info without creating a source method. */
+  helperSkill?: string;
   env?: readonly string[];
   /**
    * Credentials setup asks for. Each entry is one credential; an inner list names aliases of the same credential, set
@@ -35,8 +39,8 @@ export interface DigModule {
   logo?: string;
 }
 /**
- * The Sources page's sections, in order, grouped by what a source researches. Every report source appears in
- * exactly one group.
+ * The Sources & tools page's sections, in order. Research sources are grouped by subject; shared utilities have
+ * their own group. Every catalog entry appears in exactly one group.
  */
 export const SOURCE_GROUPS = [
   { id: "web", label: "Web search", sources: ["exa", "perplexity"] },
@@ -45,6 +49,7 @@ export const SOURCE_GROUPS = [
   { id: "video", label: "Video", sources: ["youtube"] },
   { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "facebook", "threads", "linkedin", "telegram", "china-social"] },
   { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "facebook-ads", "dataforseo"] },
+  { id: "tools", label: "Shared tools", sources: ["video"] },
 ] as const;
 const SCRAPECREATORS = { name: "ScrapeCreators", url: "https://scrapecreators.com" };
 const TIKHUB = { name: "TikHub", url: "https://tikhub.io" };
@@ -183,6 +188,21 @@ export const MODULES = [
     providers: [{ name: "yt-dlp", url: "https://github.com/yt-dlp/yt-dlp" }, { name: "YouTube Data API", url: "https://developers.google.com/youtube/v3" }],
     billing: "Local yt-dlp and YouTube Data API calls are free. The separate hosted transcript tool uses ScrapeCreators credits reported by each response.",
     logo: "youtube",
+  },
+  {
+    id: "video",
+    kind: "tool",
+    label: "Video analysis",
+    description: "Analyze a supplied video or bounded clip with Elorian; a shared utility for any source",
+    tools: ["video_analyze"],
+    skills: [],
+    helperSkill: "video-analyze",
+    env: ["ELORIAN_API_KEY"],
+    keys: ["ELORIAN_API_KEY"],
+    credential: "ELORIAN_API_KEY from Elorian's API Keys page",
+    about: "Answers a specific question about a supplied video or bounded clip through Elorian. Source research can use it when visual or spoken evidence matters. The media is sent to Elorian, and the answer is model-generated analysis to check against the original; this tool does not search or produce a separate research report.",
+    providers: [{ name: "Elorian", url: "https://platform.elorian.ai/settings/docs" }],
+    billing: "Paid from your Elorian account. Token usage is shown when returned; the API does not report a per-call charge, so Dig records cost as unknown.",
   },
   {
     id: "x",
@@ -419,6 +439,7 @@ export const ACCOUNTS = [
   { id: "scrape-do", name: "Scrape.do", signup: "https://dashboard.scrape.do/", keys: [["SCRAPE_DO_API_KEY", "SCRAPEDO_API_TOKEN"]], billing: "Scrape.do credits per request, which Dig records." },
   { id: "nexscope", name: "Nexscope", signup: "https://www.nexscope.ai/seller/api-access?tab=api-keys", keys: ["NEXSCOPE_API_KEY"], billing: `Paid from your Nexscope account. ${UNKNOWN_COST}` },
   { id: "dataforseo", name: "DataForSEO", signup: "https://app.dataforseo.com/api-access", keys: ["DATAFORSEO_USERNAME", "DATAFORSEO_PASSWORD"], billing: "Prepaid; US dollars per request, which Dig records. Use the API login and API password from the API Access page, not your dashboard password." },
+  { id: "elorian", name: "Elorian", signup: "https://platform.elorian.ai/settings/keys", keys: ["ELORIAN_API_KEY"], billing: "Paid video analysis. Token usage is shown when returned, but no per-call charge is reported, so Dig records cost as unknown." },
 ] as const satisfies readonly ProviderAccount[];
 export const PRESETS: Record<string, readonly ModuleId[]> = {
   starter: ["hackernews", "deepwiki", "polymarket"],
@@ -462,7 +483,7 @@ export function selectedModules(ids: readonly ModuleId[]): DigModule[] {
   return MODULES.filter((m) => ids.includes(m.id));
 }
 export function reportSources(ids: readonly ModuleId[]): ModuleId[] {
-  return ALL_MODULES.filter((id) => ids.includes(id));
+  return selectedModules(ids).filter(m => m.kind !== "tool").map(m => m.id as ModuleId);
 }
 /**
  * Library tools every installation has, whatever sources are enabled. Source
@@ -474,7 +495,7 @@ export function moduleTools(ids: readonly ModuleId[]): string[] {
 }
 /** Source skills of a module (each is also a source agent); default: the module id. */
 function sourceSkills(m: DigModule): readonly string[] {
-  return m.skills ?? [m.id];
+  return m.kind === "tool" ? [] : m.skills ?? [m.id];
 }
 export function moduleSkills(ids: readonly ModuleId[]): string[] {
   return [
@@ -484,6 +505,7 @@ export function moduleSkills(ids: readonly ModuleId[]): string[] {
     ...selectedModules(ids).flatMap((m: DigModule) => [
       ...sourceSkills(m),
       ...(m.helpers ?? []),
+      ...(m.helperSkill ? [m.helperSkill] : []),
     ]),
   ];
 }

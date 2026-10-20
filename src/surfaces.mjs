@@ -108,7 +108,7 @@ export function readinessText(info) {
   const group = (status, title) => { const list = enabled.filter(source => source.readiness.status === status); return list.length ? `${title}: ${list.map(status === 'ready' ? s => s.label : describe).join('; ')}.` : null; };
   const disabled = info.sources.filter(source => !source.enabled);
   return [
-    `${enabled.length} of ${info.sources.length} sources enabled.`,
+    `${enabled.length} of ${info.sources.length} ${info.sources.some(source => source.kind === 'tool') ? 'sources & tools' : 'sources'} enabled.`,
     group('ready', 'Ready'), group('partial', 'Partly ready'), group('setup-required', 'Setup needed'),
     disabled.length ? `Disabled: ${disabled.map(s => s.label).join(', ')}.` : null,
     'Checks credential names and local prerequisites only; no provider was called.',

@@ -231,7 +231,7 @@ export function renderSources(container, toc, read, sources, save, actions, rece
       node('div', 'source-head', mark(module), node('div', 'source-name', heading, providerLine(module)), toggle?.element),
       guide ?? about,
       node('p', 'meta billing', node('span', 'fact-label', 'Cost: '), module.billing),
-      guide ? node('details', 'source-about', node('summary', '', 'About this source'), about) : null,
+      guide ? node('details', 'source-about', node('summary', '', module.kind === 'tool' ? 'About this tool' : 'About this source'), about) : null,
       node('div', 'readiness', status, setup.element),
       lastCall,
       own.length ? node('div', 'source-settings', node('p', 'eyebrow', `${module.label} settings`), own) : null,

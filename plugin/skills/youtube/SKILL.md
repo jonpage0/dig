@@ -65,6 +65,10 @@ Never fabricate a video, channel, metric, quote, timestamp, transcript, summary,
 
 Structure the report with `## Summary`, `## Top Videos`, `## Creator Perspectives`, `## Points of Agreement`, `## Points of Disagreement`, `## Data Points & Claims`, and `## Stats`. Stats include videos found, transcript and summary counts, cached summaries, persistence recoveries and failures, full transcripts read, and the triage rationale. `## Summary` is the report's discovery summary: what was found, its scope and limits, and what this research is useful for later. Keep it inside the report; the per-video transcript summaries are helper artifacts, not a replacement for it.
 
+## Optional video inspection
+
+When the question depends on what a surfaced video shows, you may also use the shared `video_analyze` tool within the user's authorized paid-provider scope. This is the exception to the source-tool restriction above: it analyzes media from this source, without researching a different source. Read `source_info` for `video` and its `helperSkillPath` first. Use a returned direct media URL, an exact YouTube URL, or an explicitly supplied local project clip; a social post URL is not a video file. Keep the source URL, inspected interval and analysis receipt in this report. Treat the result as Glimpse's interpretation and distinguish visual observations, automatic speech transcription and inference. Missing or incomplete video analysis is a coverage limit; do not force a failed route or infer unseen visuals from captions.
+
 ## Wait for a real outcome
 
 Do not impose a timeout merely because a source call is slow or waiting for interactive permission. Some clients expose a pending approval only to the outer client, not as tool output. Wait for completion, an explicit provider failure, or an explicit cancellation. Surface a visible permission wait and never bypass the control.

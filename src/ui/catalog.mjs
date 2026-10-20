@@ -8,6 +8,9 @@ const REPORT_FILE = /^(.+?)(?:-(\d+))?\.md$/;
 export function createCatalog(sources = []) {
   const list = Array.isArray(sources) ? sources.filter(source => typeof source?.id === 'string') : [];
   const labels = new Map(list.map(source => [source.id, typeof source.label === 'string' && source.label ? source.label : source.id]));
+  const tools = new Set(list.filter(source => source.kind === 'tool').map(source => source.id));
+  /** Count both research sources and shared utilities honestly wherever retrievals include both. */
+  const groupLabel = (ids = list.map(source => source.id)) => ids.some(id => tools.has(id)) ? 'Sources & tools' : 'Sources';
   const methodSource = new Map();
   for (const source of list) for (const method of Array.isArray(source.methods) ? source.methods : []) if (typeof method?.name === 'string') methodSource.set(method.name, source.id);
   const label = id => labels.get(id) ?? String(id ?? '');
@@ -28,7 +31,7 @@ export function createCatalog(sources = []) {
     const match = REPORT_FILE.exec(name);
     return match ? `${methodLabel(match[1])} report${match[2] ? ` ${match[2]}` : ''}` : name;
   }
-  return { sources: list, label, methodLabel, fileLabel, size: list.length };
+  return { sources: list, label, methodLabel, fileLabel, groupLabel, size: list.length };
 }
 
 export const fileKind = file => {

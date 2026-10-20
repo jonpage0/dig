@@ -75,6 +75,10 @@ Never invent a title, URL, author, publication date, or passage. Report thin, br
 
 Structure the saved report around `## Summary`, `## Results`, optional `## Similar Pages`, optional `## Deep Research`, and `## Sources`, followed by the required audit sections. Exa finds documents; distinguish evidence returned by documents from your cross-document interpretation, and distinguish both from Exa's own synthesis in `## Deep Research`. `## Summary` is the report's discovery summary: what was found, its scope and limits, and what this research is useful for later. Keep it inside the report; never write a separate summary file.
 
+## Optional video inspection
+
+When the question depends on what a surfaced video shows, you may also use the shared `video_analyze` tool within the user's authorized paid-provider scope. This is the exception to the source-tool restriction above: it analyzes media from this source, without researching a different source. Read `source_info` for `video` and its `helperSkillPath` first. Use a returned direct media URL, an exact YouTube URL, or an explicitly supplied local project clip; a social post URL is not a video file. Keep the source URL, inspected interval and analysis receipt in this report. Treat the result as Glimpse's interpretation and distinguish visual observations, automatic speech transcription and inference. Missing or incomplete video analysis is a coverage limit; do not force a failed route or infer unseen visuals from captions.
+
 ## Wait for a real outcome
 
 Do not impose a timeout merely because a source call is slow or waiting for interactive permission. Some clients expose a pending approval only to the outer client, not as tool output. Wait for completion, an explicit provider failure, or an explicit cancellation. Surface a visible permission wait and never bypass the control.

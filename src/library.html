@@ -445,7 +445,7 @@ body.panel-mode .detail-heading h2 { font-size: 17px; }
     <nav class="nav" aria-label="Dig views">
       <button class="btn btn-ghost" id="nav-trail" type="button" hidden>This conversation</button>
       <button class="btn btn-ghost" id="nav-library" type="button">Library</button>
-      <button class="btn btn-ghost" id="nav-sources" type="button">Sources</button>
+      <button class="btn btn-ghost" id="nav-sources" type="button">Sources &amp; tools</button>
       <button class="btn btn-ghost" id="nav-settings" type="button">Settings</button>
     </nav>
   </header>
@@ -500,7 +500,7 @@ body.panel-mode .detail-heading h2 { font-size: 17px; }
   </section>
   <section id="sources" hidden>
     <div class="page-heading">
-      <h2>Sources</h2>
+      <h2>Sources &amp; tools</h2>
       <p class="summary-line" id="sources-summary"></p>
       <p class="meta">Configured means the local prerequisites are present. Recent activity comes from retained calls; opening this page does not test providers.</p>
     </div>
@@ -509,18 +509,18 @@ body.panel-mode .detail-heading h2 { font-size: 17px; }
         <h3 id="keys-title">Accounts and keys</h3>
         <button id="edit-keys" class="btn" type="button" disabled>Edit keys.env</button>
       </div>
-      <p class="keys-text">Provider keys live in keys.env, outside the chat, and Dig picks up changes when you save it. One key can serve several sources, so the list below goes by provider account.</p>
+      <p class="keys-text">Provider keys live in keys.env, outside the chat, and Dig picks up changes when you save it. One key can serve several sources or shared tools, so the list below goes by provider account.</p>
       <p id="keys-path" class="path"></p>
       <div class="accounts" id="accounts" hidden></div>
     </section>
     <p id="sources-status" class="meta sources-status" role="status" aria-live="polite"></p>
-    <nav id="sources-toc" class="toc" aria-label="Sources by what they research"></nav>
+    <nav id="sources-toc" class="toc" aria-label="Research sources and shared tools"></nav>
     <div id="sources-list"></div>
   </section>
   <section id="settings" hidden>
     <div class="page-heading">
       <h2>Settings</h2>
-      <p class="meta">Dig-wide settings. Changes save as you make them, to the file below; Codex’s plugin settings edit the same file. Each source’s own settings are on Sources.</p>
+      <p class="meta">Dig-wide settings. Changes save as you make them, to the file below; Codex’s plugin settings edit the same file. Each source or tool’s own settings are on Sources &amp; tools.</p>
       <p id="config-path" class="path"></p>
     </div>
     <div id="settings-fields" class="settings"></div>

@@ -8,6 +8,7 @@ import reddit from "./tools/reddit.js";
 import { reddit as tikhub_reddit } from "./tools/tikhub_reddit.js";
 import { tiktok_top, tiktok_comments, instagram_comments, threads } from "./tools/social_evidence.js";
 import youtube from "./tools/youtube.js";
+import { video_analyze } from "./tools/video_analyze.js";
 import { transcript as youtube_transcript } from "./tools/youtube_transcript.js";
 import {
 	semantic_scholar_search,
@@ -52,6 +53,7 @@ export const providerTools: Record<string, ToolSpec> = {
 	instagram_comments,
 	threads,
 	youtube,
+	video_analyze,
 	youtube_transcript,
 	papers_semantic_scholar_search: semantic_scholar_search,
 	papers_semantic_scholar_recommendations: semantic_scholar_recommendations,

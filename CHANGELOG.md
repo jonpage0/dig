@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3 — 2026-10-19
+
+- Add optional shared Video analysis with Elorian Glimpse. It complements source research without becoming a report source or a second corroborating source. Existing settings, receipts and reports keep their fields.
+- Analyze direct media, uploaded file IDs, local project clips, and bounded public YouTube intervals. Local preparation uses installed tools without cookies or sign-in; unsupported inputs fail explicitly.
+- Expose visual/audio coverage, original clip offsets, token usage and incomplete answers. Provider dollar costs remain unknown when no charge is reported. One cancellable provider run, no automatic retries or external search.
+- Add discoverable video-analysis guidance and let relevant source methods use the helper while keeping observations, speech and inference distinct. Sources & tools separates shared utilities from source methods.
+
 ## 0.4.2 — 2026-10-19
 
 - Polymarket search works again. A search whose results included an active market with a condition ID failed with "lines is not defined"; each market shown now lists its condition ID and outcome token IDs, which the price-history and resolution reads take.
