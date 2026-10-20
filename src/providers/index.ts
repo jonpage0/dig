@@ -8,6 +8,7 @@ import polymarket from "./tools/polymarket.js";
 import reddit from "./tools/reddit.js";
 import { reddit as tikhub_reddit } from "./tools/tikhub_reddit.js";
 import { tiktok_top, tiktok_comments, instagram_comments, threads } from "./tools/social_evidence.js";
+import { tiktok_read, instagram_read } from "./tools/social_read.js";
 import youtube from "./tools/youtube.js";
 import { youtube_analyze, youtube_analysis_status } from "./tools/gemini_video.js";
 import { video_analyze } from "./tools/video_analyze.js";
@@ -52,7 +53,9 @@ export const providerTools: Record<string, ToolSpec> = {
 	tikhub_reddit,
 	tiktok_top,
 	tiktok_comments,
+	tiktok_read,
 	instagram_comments,
+	instagram_read,
 	threads,
 	youtube,
 	evidence_rank,

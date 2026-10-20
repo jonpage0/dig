@@ -50,7 +50,7 @@ For a first run, enable Hacker News and ask: **“Use Dig and Hacker News to res
 
 Ask a question in Codex. Your assistant chooses useful enabled sources, reads their reports and important originals, and explains the findings. Dig presents the saved research state for you to observe and steer; full records are available when you want to inspect a particular point.
 
-**22 sources · 26 research methods · 72 tools, including two optional shared helpers**
+**22 sources · 26 research methods · 74 tools, including two optional shared helpers**
 
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
 | :---: | --- | --- |

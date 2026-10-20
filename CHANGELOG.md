@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1 — 2026-10-20
+
+- Add direct TikTok and Instagram reads for supplied posts, public creator profiles and feeds, standalone transcripts, and selected comment replies. Preserve TikTok photo posts and Instagram carousel identities.
+- Keep cursor scope, missing metrics, private/restricted profile states and partial responses explicit; use one request per operation without automatic pagination, retries or media downloads.
+- Correct short TikTok transcription price guidance and explain Instagram’s 15-credit bulk-replies option. Actual reported charges and the existing source/report/settings contracts are unchanged.
+- Update source cards and worker guidance so agents can inspect known evidence without repeating discovery searches.
+
 ## 0.9.0 — 2026-10-20
 
 - Recompose Overview, the conversation trail and question detail around saved research state: outcomes, method coverage, recorded findings and gaps, dated activity, and visible provider usage.

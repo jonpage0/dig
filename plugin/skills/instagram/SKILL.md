@@ -9,7 +9,7 @@ Use Instagram for Reels-based creator messaging, lifestyle and product recommend
 
 Run this skill inline in the thread that needs it, or as an ordinary source worker that the parent thread spawned for this one question. Either way, run it yourself: do not spawn another agent, run a second source, or edit code.
 
-Use `instagram_comments` for public post/reel comments. `includeReplies` is opt-in because it adds provider charges and may time out. Preserve comment authors and cursor; no returned page proves complete coverage.
+Use `instagram_comments` for public post/reel comments. `includeReplies` is opt-in: a nonempty bulk-replies page costs 15 credits even when it returns no replies; an empty page costs zero, and bulk reads may time out. Prefer `instagram_read` with `kind: "replies"` for a selected parent comment. Preserve comment authors and cursor; no returned page proves complete coverage.
 
 ## Your assignment
 
@@ -22,12 +22,25 @@ As a worker, you have not seen the parent's conversation or anything it read, so
 Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, CLI, configuration, keys and library are separate; never use them.
 
 - `source_info` with `source: "instagram"` for enablement and readiness;
-- `scrapecreators_instagram` with `mode: "reels" | "native" | "popular"` (default `reels`);
+- `instagram_read`, `instagram_comments`, and `scrapecreators_instagram` with `mode: "reels" | "native" | "popular"` (default `reels`);
 - `research_save` with `source: "instagram"` and `agent: "instagram"`.
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_read`, and `research_save`.
 
 Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. Instagram needs `SCRAPECREATORS_API_KEY`. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
+
+## Read supplied posts and creators
+
+Use `instagram_read` for known targets instead of searching for them again. Each call makes one request.
+
+- `kind: "post", url`: inspect the caption, creator, metrics and media references of a post, reel or carousel. `includePlayCount: false` skips the provider's play-count enrichment when it is unnecessary. It does not download or interpret images/video.
+- `kind: "profile", handle`: inspect returned public profile metadata; use the posts operation for a creator-feed page. Private/restricted status is not proof of deletion; only public data is read.
+- `kind: "posts", handle`: read one creator-posts page; use returned `next_max_id` as the next `cursor`.
+- `kind: "reels", handle`: read one creator-reels page; use returned `max_id` as the next `cursor`. Caption availability is not guaranteed here; inspect selected posts for their captions.
+- `kind: "transcript", url`: request the provider's AI speech transcript for a post/reel or carousel. Default successful short transcription up to 120 seconds costs one credit per request; no-speech/empty results and errors have no AI fee. Dig does not enable long paid transcription. Retain each returned video's identity and distinguish the model's speech transcription from visual evidence.
+- `kind: "replies", url, commentId`: read one selected comment's replies using its ID from `instagram_comments`; continue with the returned `cursor`.
+
+`cacheMaxAge` applies to post/profile/transcript reads, never creator feeds or replies. Keep each opaque cursor with the same operation and target. Counts are Instagram-only where the provider identifies them; unknown values stay unknown. A single feed page is not the account's complete history.
 
 ## Search and interpret
 
@@ -37,11 +50,11 @@ Three modes cover different questions; pick the narrowest one that answers it:
 - `mode: "native"` is Instagram's own ranked lookup of accounts, hashtags, places, and keyword suggestions for a query. It returns one page and no posts. Use it to confirm a handle, find the exact hashtag spelling, or discover adjacent hashtags before a Reels pass.
 - `mode: "popular"` reads Instagram's curated Popular topic page: Instagram's generated description with its sources, suggested terms, and the posts Instagram selects for the topic with their play counts. Pass the returned `cursor` with the same query for more posts.
 
-Start with the user's query, `limit: 20`, and `transcripts: true` in `reels` mode. Assess caption hashtags, repeated products or styles, creator authority signals, likes and comments, and returned spoken text. If results are thin, use one refined lifestyle, product, brand, or creator term, or switch to `native` to correct the term. One pass is normal, two may cover a broad category, and three is the maximum.
+When discovery is needed, start with the user's query, `limit: 20`, and `transcripts: true` in `reels` mode. Assess caption hashtags, repeated products or styles, creator authority signals, likes and comments, and returned spoken text. If results are thin, use one refined lifestyle, product, brand, or creator term, or switch to `native` to correct the term. One pass is normal, two may cover a broad category, and three is the maximum.
 
 Reels search results no longer include view counts (Instagram withdrew them from search on 2026-08-19), so the tool reports views as unavailable rather than zero. When view counts matter to the question, set `enrich_views: true`; the tool then looks each of the first `enrich_limit` reels up individually (one credit per reel, cached lookups free with `cache_max_age`) and labels every view figure with its source. Do not rank Reels by views you did not enrich, and never treat "unavailable" as low reach.
 
-Every request costs one credit, transcripts cost one credit per reel, and view lookups cost one credit per reel unless served from cache. Keep `transcript_limit` and `enrich_limit` at their defaults unless the question needs more, and say in the report how many were fetched.
+Ordinary search and post requests normally cost one credit; successful short AI transcription costs one credit per request, and view lookups normally cost one credit per reel unless served from cache. Actual returned credits are authoritative; missing/empty transcripts are not a paid successful transcription. Keep `transcript_limit` and `enrich_limit` at their defaults unless the question needs more, and say in the report how many were fetched.
 
 A visual trend requires multiple surfaced Reels or explicit returned evidence; never infer unseen imagery from a title or caption. Tie each finding to the exact creator, URL, date, caption or transcript, and the returned likes, comments, and (when looked up) views. Treat verification or niche specialization only as public standing signals, not proof that a claim is correct.
 

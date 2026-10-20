@@ -22,20 +22,32 @@ As a worker, you have not seen the parent's conversation or anything it read, so
 Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, CLI, configuration, keys and library are separate; never use them.
 
 - `source_info` with `source: "tiktok"` for enablement and readiness;
-- `scrapecreators_tiktok`;
+- `scrapecreators_tiktok`, `tiktok_top`, `tiktok_comments`, and `tiktok_read`;
 - `research_save` with `source: "tiktok"` and `agent: "tiktok"`.
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_read`, and `research_save`.
 
 Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. TikTok needs `SCRAPECREATORS_API_KEY`. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
 
+## Read supplied posts and creators
+
+For a supplied URL, use `tiktok_read` directly instead of searching for the same post. Each call makes one request with the existing project/dig context.
+
+- `kind: "post", url`: read a video or photo/slideshow post, its caption, creator, metrics and returned media references. This does not download or analyze media.
+- `kind: "profile", handle`: read public profile metadata.
+- `kind: "posts", handle`: read one creator-feed page; optionally set `sort: "latest" | "popular"`, `region`, or `includePinned`. Pass returned `max_cursor` as `cursor` with the same handle, region and sorting. The feed is not exhaustive; missing posts do not prove deletion.
+- `kind: "transcript", url`: read full returned native captions. Optional `language` chooses a two-letter language; `aiFallback: true` deliberately permits short AI transcription if needed. Preserve timestamps and distinguish returned speech from visual content.
+- `kind: "replies", url, commentId`: read one selected parent comment's replies, using an ID returned by `tiktok_comments`. Continue with the returned numeric `cursor`.
+
+`cacheMaxAge` applies only to post/profile reads. Region applies to post/feed requests and controls provider location; it is not a nationality filter. One page, an unavailable post, or a private profile never establishes complete platform coverage.
+
 ## Search and interpret
 
-Start with the user's query, `limit: 20`, and `transcripts: true`. The tool passes TikTok's own controls through instead of filtering locally: `date_posted: "yesterday" | "this-week" | "this-month" | "last-3-months" | "last-6-months" | "all-time"` narrows by publish window, `sort_by: "relevance" | "most-liked" | "date-posted"` sets the order, and the returned `cursor` fetches the next page. Results stay in TikTok's order for the chosen sort; nothing is re-ranked. `region` only places the provider's proxy in a country so region-locked videos become visible; it is not a geographic content filter, so do not describe results as "from" that country.
+When discovery is needed, start with the user's query, `limit: 20`, and `transcripts: true`. The tool passes TikTok's own controls through instead of filtering locally: `date_posted: "yesterday" | "this-week" | "this-month" | "last-3-months" | "last-6-months" | "all-time"` narrows by publish window, `sort_by: "relevance" | "most-liked" | "date-posted"` sets the order, and the returned `cursor` fetches the next page. Results stay in TikTok's order for the chosen sort; nothing is re-ranked. `region` only places the provider's proxy in a country so region-locked videos become visible; it is not a geographic content filter, so do not describe results as "from" that country.
 
 Choose the window deliberately: an emerging trend usually wants `this-week` or `this-month` with `sort_by: "date-posted"`, while a mature topic wants the default relevance with no window. Assess view velocity, hashtag clusters, repeated creator coverage, share-to-like signal, captions, and transcript content. When the first pass reveals a material hashtag, use one hashtag-focused search. One pass is normal, two can cover an emerging hashtag, and three is the maximum.
 
-Each search page costs one credit and each transcript one credit. Transcripts come from TikTok's existing captions; `transcript_ai_fallback: true` adds AI transcription for videos up to two minutes at ten extra credits per video, so enable it only when spoken content is central and captions are missing, and say so in the report. TikTok can return duplicates; the tool drops them and reports the count.
+Search pages normally cost one credit. Returned native captions and successful AI fallback up to 120 seconds cost one credit per transcript request; missing transcripts cost zero. `transcript_ai_fallback: true` permits AI only when native captions are unavailable, without an extra native-caption fee. Enable it deliberately and preserve provenance. Dig does not enable the provider's separate long-transcription mode. Actual returned credits, including cache hits and failures, remain authoritative. TikTok can return duplicates; the tool drops them and reports the count.
 
 Tie every claim to the exact video, creator, URL, date, and returned views, likes, shares, and comments. Metrics TikTok omits are reported as `n/a`, never zero; keep them that way. Quote only returned caption or transcript text. Multiple creators repeating an idea can establish a trend signal, not factual accuracy. If transcripts or metrics are missing, preserve the limitation.
 

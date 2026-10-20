@@ -7,6 +7,7 @@ import { createEvidenceSchemas } from "./evidence-schemas.js";
 import { createYouTubeAnalysisSchemas } from "./youtube-analysis-schemas.js";
 import { createFacebookSchemas } from "./facebook-schemas.js";
 import { createFacebookAdsSchemas } from "./facebook-ads-schemas.js";
+import { createSocialReadSchemas } from "./social-read-schemas.js";
 type Typebox = typeof Type;
 type Schema = TSchema;
 
@@ -61,9 +62,10 @@ export function createSchemas(
     ...createYouTubeAnalysisSchemas(T),
     ...createEvidenceSchemas(T),
     ...createFacebookAdsSchemas(T),
+    ...createSocialReadSchemas(T),
     tiktok_top: T.Object({ query: T.String(), cursor: T.Optional(T.Integer({minimum: 0})), region: T.Optional(T.String()), sort: enumSchema(T, ["relevance", "most-liked", "date-posted"], "Result ordering."), period: enumSchema(T, ["yesterday", "this-week", "this-month", "last-3-months", "last-6-months", "all-time"], "Publication window.") }, {additionalProperties: false}),
     tiktok_comments: T.Object({ url: T.String(), cursor: T.Optional(T.Integer({minimum: 0})) }, {additionalProperties: false}),
-    instagram_comments: T.Object({ url: T.String(), cursor: T.Optional(T.String()), includeReplies: T.Optional(T.Boolean()) }, {additionalProperties: false}),
+    instagram_comments: T.Object({ url: T.String(), cursor: T.Optional(T.String()), includeReplies: T.Optional(T.Boolean({ description: "Bulk replies: 15 credits per nonempty comments page even if no replies are returned; empty pages 0. Prefer instagram_read replies for a selected parent comment." })) }, {additionalProperties: false}),
     threads: T.Object({ kind: requiredEnumSchema(T, ["post", "posts"], "Read one post or account posts."), url: T.Optional(T.String()), handle: T.Optional(T.String()), cacheMaxAge: enumSchema(T, ["1d", "3d", "7d", "14d", "30d"], "Provider cache age for a post.") }, {additionalProperties: false}),
     video_analyze: T.Object({
       video: T.String({ minLength: 1, description: "Direct HTTPS video, public YouTube video URL, absolute local MP4/MOV/WebM inside project, or existing Elorian file://file-ID. Local/YouTube media is uploaded to Elorian." }),
@@ -1659,7 +1661,7 @@ export function createSchemas(
         transcript_ai_fallback: T.Optional(
           T.Boolean({
             description:
-              "AI transcription when no caption exists (default: false; videos up to 2 minutes; 10 extra credits per video).",
+              "AI transcription when no caption exists (default: false; videos up to 120 seconds; 1 credit for a successful transcript, no extra native-caption fee). Long transcription is not enabled.",
           }),
         ),
       },

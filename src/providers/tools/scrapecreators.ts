@@ -348,7 +348,7 @@ function sumAvailable(values: Array<number | null>): { total: number; counted: n
 export const tiktok = creditMetered({
   description:
     "Search TikTok for videos on any topic via ScrapeCreators (/v1/tiktok/search/keyword). " +
-    "Requires SCRAPECREATORS_API_KEY; 1 credit per search page, 1 per transcript (10 more per video when transcript_ai_fallback is on). " +
+    "Requires SCRAPECREATORS_API_KEY; 1 credit per search page; returned native captions and successful AI fallback up to 120 seconds cost 1 credit per transcript request, with no extra native-caption fee. Empty transcripts cost 0; actual reported charges are authoritative. " +
     "Uses TikTok's real date_posted, sort_by, and cursor controls and keeps the provider's ordering; metrics TikTok omits are reported as n/a, never 0. " +
     "Best for viral trends, short-form creator takes, pop culture, consumer products.",
   async execute(args: TikTokArgs, ctx: ToolContext) {
