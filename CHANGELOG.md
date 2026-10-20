@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 — 2026-10-19
+
+- Saved research becomes a compact list with clear source, project and date cues, a short usage line, and expandable details. Long questions and summary previews no longer compete for space.
+- Single-source digs use an existing concise report title or a readable saved topic as their display label. The full original question remains available in details and the reader; no saved report is rewritten.
+- Source-method instructions now ask the reporting agent for a short descriptive H1 title, using the existing title field without a separate inference request.
+
 ## 0.4.0 — 2026-10-19
 
 - A compact visual overview keeps activity, failures, provider costs and charts immediately visible, with an expanded chart view on demand. Recent research starts higher on the page; dashboard search is removed in favor of agent library tools.

@@ -158,7 +158,7 @@ for (const module of MODULES) for (const name of module.tools) {
 }
 // Saving shows an inline card in the conversation that saved it; the card reads its own details through saved_research.
 registerAppTool(server, 'research_save', {
-  description: 'Save one source-method report, write-once, with its discovery Summary and audit sections. Pass dig for a group or question to create a single-source dig. agent names the source method (required for X). Returns the exact Primary artifact path and an Open in Dig link.',
+  description: 'Save one source-method report, write-once, with its discovery Summary and audit sections. After the source_card block, include a short descriptive H1 title (roughly 4–10 words); preserve the full original question in question or the existing dig. Pass dig for a group or question to create a single-source dig. agent names the source method (required for X). Returns the exact Primary artifact path and an Open in Dig link.',
   inputSchema: { project, dig: dig.optional(), source: z.enum(ALL_MODULES), agent: z.string().optional(), content: z.string().min(1), question: z.string().min(1).max(4000).optional(), topic: z.string().max(50).optional(), topic_volatility: z.enum(TOPIC_VOLATILITIES).optional(), supersedes: z.string().optional() }, outputSchema: OUTPUT.save, annotations: localWrite,
   _meta: { ui: { resourceUri: CARD_URI } },
 }, async (args, extra) => {

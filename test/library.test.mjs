@@ -11,6 +11,25 @@ import { frontMatter, reportParts } from '../src/ui/markdown.mjs';
 
 import { report } from './report-fixture.mjs';
 
+test('compact library labels use saved titles or topics without rewriting the original question or reports', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-library-titles-'));
+  const config = await loadConfig(state);
+  const question = 'Which practical research workflow preserves original evidence while keeping saved results easy to inspect?';
+  const titled = await saveReport(config, { project: state, source: 'hackernews', question, content: report.replace('## Summary', '# Inspectable research workflows\n\n## Summary') });
+  const original = await readFile(titled.path, 'utf8');
+  const tagged = await saveReport(config, { project: state, source: 'hackernews', question: `${question} Compare methods.`, topic: 'ai-research-workflows', content: report });
+  const legacy = await saveReport(config, { project: state, source: 'hackernews', question: 'A question with no saved topic or short title', content: report });
+  const group = await startDig(config, state, 'A broader composed question');
+  await saveReport(config, { project: state, dig: group.dig, source: 'hackernews', content: report.replace('## Summary', '# One source angle\n\n## Summary') });
+  const { items } = await listLibrary(config);
+  assert.equal(items.find(i => i.id === titled.dig).displayTitle, 'Inspectable research workflows');
+  assert.equal(items.find(i => i.id === titled.dig).title, question);
+  assert.equal(items.find(i => i.id === tagged.dig).displayTitle, 'AI research workflows');
+  assert.equal(items.find(i => i.id === legacy.dig).displayTitle, 'A question with no saved topic or short title');
+  assert.equal(items.find(i => i.id === group.dig).displayTitle, 'A broader composed question');
+  assert.equal(await readFile(titled.path, 'utf8'), original);
+});
+
 test('reports and answers never overwrite, projects stay isolated, and cards group by dig', async () => {
   const state = await mkdtemp(join(tmpdir(), 'dig-native-library-'));
   const config = await loadConfig(state);

@@ -40361,6 +40361,16 @@ var time4 = (value) => {
   const at = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(at) ? at : null;
 };
+function displayTitle(question, mode, reports) {
+  if (mode !== "single" || !reports.length) return question;
+  const report = reports.at(-1);
+  const title = typeof report.title === "string" ? report.title.trim() : "";
+  if (title && title !== question && title.length <= 140 && title.length < question.length && title !== `${sourceLabels[report.source]} research`) return title;
+  const topic = typeof report.topic === "string" ? report.topic : "";
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(topic)) return question;
+  const label = topic.replaceAll("-", " ").replace(/\b(ai|api|mcp|ui|ux|seo|pdf|hn)\b/g, (word) => word.toUpperCase()).replace(/\bgithub\b/g, "GitHub");
+  return label[0].toUpperCase() + label.slice(1);
+}
 var SESSION_UNAVAILABLE = "session-unavailable";
 function safeSegment(value, fallback) {
   const cleaned = typeof value === "string" ? value.trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, 120) : "";
@@ -40601,7 +40611,7 @@ async function listLibrary(config3) {
         const head = frontMatter2(text5);
         const parts = reportParts(text5.replace(/^---\n[\s\S]*?\n---\n/, ""));
         const summary = parts.summary.trim().slice(0, 280);
-        reports.push({ name: name2, text: text5, summary, source: head.source ?? null, method: head.agent ?? null, supersedes: head.supersedes ?? null, at: head.generated_at ?? null, session: typeof head.session === "string" ? head.session : null, status: parts.card?.fields?.status });
+        reports.push({ name: name2, text: text5, summary, title: head.title, topic: head.topic, source: head.source ?? null, method: head.agent ?? null, supersedes: head.supersedes ?? null, at: head.generated_at ?? null, session: typeof head.session === "string" ? head.session : null, status: parts.card?.fields?.status });
       }
       reports.sort((a, b2) => (time4(a.at) ?? 0) - (time4(b2.at) ?? 0) || a.name.localeCompare(b2.name, void 0, { numeric: true }));
       const answer = names.includes("answer.md") ? `${prefix}/answer.md` : null;
@@ -40613,6 +40623,7 @@ async function listLibrary(config3) {
       item.sources = [...new Set(reports.map((r2) => r2.source).filter(Boolean))];
       item.methods = [...new Set(reports.map((r2) => r2.method).filter(Boolean))];
       item.mode = meta3.mode;
+      item.displayTitle = displayTitle(item.title, item.mode, reports);
       item.planned = Array.isArray(meta3.planned) ? meta3.planned : [];
       item.refreshes = meta3.refreshes ?? null;
       item.reportDetails = reports.map((r2) => ({ file: `${prefix}/${r2.name}`, source: r2.source, method: r2.method, supersedes: r2.supersedes, summary: r2.summary, at: r2.at, status: typeof r2.status === "string" ? r2.status : null }));
@@ -58084,7 +58095,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
 }
 
 // src/version.mjs
-var VERSION2 = "0.4.0";
+var VERSION2 = "0.4.1";
 
 // src/server.mjs
 loadKeys();
@@ -58260,7 +58271,7 @@ ${clean.text.split("\n", 1)[0].slice(0, 300)}` : summary), ...failed2 ? { isErro
   sourceTools.set(name2, { registered: registered2, source: module2.id });
 }
 K3(server, "research_save", {
-  description: "Save one source-method report, write-once, with its discovery Summary and audit sections. Pass dig for a group or question to create a single-source dig. agent names the source method (required for X). Returns the exact Primary artifact path and an Open in Dig link.",
+  description: "Save one source-method report, write-once, with its discovery Summary and audit sections. After the source_card block, include a short descriptive H1 title (roughly 4\u201310 words); preserve the full original question in question or the existing dig. Pass dig for a group or question to create a single-source dig. agent names the source method (required for X). Returns the exact Primary artifact path and an Open in Dig link.",
   inputSchema: { project, dig: dig.optional(), source: external_exports.enum(ALL_MODULES), agent: external_exports.string().optional(), content: external_exports.string().min(1), question: external_exports.string().min(1).max(4e3).optional(), topic: external_exports.string().max(50).optional(), topic_volatility: external_exports.enum(TOPIC_VOLATILITIES).optional(), supersedes: external_exports.string().optional() },
   outputSchema: OUTPUT.save,
   annotations: localWrite,

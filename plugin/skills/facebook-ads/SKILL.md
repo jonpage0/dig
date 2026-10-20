@@ -35,6 +35,8 @@ Transcripts support spoken content only. An image or video URL is not visual ana
 
 ## Outcomes and reporting
 
+Give the report a concise, descriptive H1 title (roughly 4–10 words) after the `source_card` block. Name the actual topic; do not repeat the full question or use a generic title such as “Research report.” The original question stays in the save argument or existing dig. This uses the existing saved title field; no separate title-generation call is needed.
+
 Wait for completion or explicit cancellation, including a host approval wait. Never bypass a permission refusal. Keep a genuine empty result distinct from an unavailable ad, malformed response, provider error, interruption or denied permission. Return partial coverage with the reason when some evidence is missing.
 
 Begin the report with this fenced YAML structure, replacing example assessments with actual values:

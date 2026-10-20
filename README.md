@@ -42,6 +42,8 @@ Refresh the plugin connection, then type **`$dig:setup`** in a new conversation.
 
 > **Try it with no keys:** Hacker News, DeepWiki and Polymarket work without any account.
 
+For a first run, ask: **“Use Dig and Hacker News to research how developers approach local-first software. Save the report and show the original discussions behind the findings.”** Open the saved report, inspect an original response, then ask Dig to find that research again later.
+
 ## What Dig does
 
 Ask a question in Codex. Dig researches it source by source, writes a report for each source, and keeps the original responses behind every claim.

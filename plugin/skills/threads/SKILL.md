@@ -25,6 +25,8 @@ Keep the returned post identity, author, date and URL with every quote. Treat pr
 
 ## Save the report
 
+Give the report a concise, descriptive H1 title (roughly 4–10 words) after the `source_card` block. Name the actual topic; do not repeat the full question or use a generic title such as “Research report.” The original question stays in the save argument or existing dig. This uses the existing saved title field; no separate title-generation call is needed.
+
 Begin with a fenced YAML block containing `source_card` with source `threads`, status `complete`, `partial` or `failed`, report_path null, evidence_grade `high`, `medium` or `low`, strongest_findings, contradictions, negative_evidence and follow_up_targets arrays, and confidence `high`, `medium` or `low`. Use values matching the evidence.
 
 Include `## Summary`, `## Evidence Highlights`, `## Needs Follow-Up`, and `## Negative Evidence (when relevant)`. Save with `research_save` and read back the report and load-bearing original responses. Return the Primary artifact path, status, scope and remaining gaps. A summary is not a substitute for the parent reading the full report.

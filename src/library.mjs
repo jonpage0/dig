@@ -17,6 +17,17 @@ const quote = value => JSON.stringify(value);
 const token = value => typeof value === 'string' && /^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,180}$/.test(value);
 const slug = value => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 65) || 'research';
 const time = value => { const at = typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(at) ? at : null; };
+// A compact view label from metadata already saved with a single-source report. The original question stays title.
+function displayTitle(question, mode, reports) {
+  if (mode !== 'single' || !reports.length) return question;
+  const report = reports.at(-1);
+  const title = typeof report.title === 'string' ? report.title.trim() : '';
+  if (title && title !== question && title.length <= 140 && title.length < question.length && title !== `${sourceLabels[report.source]} research`) return title;
+  const topic = typeof report.topic === 'string' ? report.topic : '';
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(topic)) return question;
+  const label = topic.replaceAll('-', ' ').replace(/\b(ai|api|mcp|ui|ux|seo|pdf|hn)\b/g, word => word.toUpperCase()).replace(/\bgithub\b/g, 'GitHub');
+  return label[0].toUpperCase() + label.slice(1);
+}
 export const SESSION_UNAVAILABLE = 'session-unavailable';
 // The approved Dig contract: the session is the host conversation (Codex thread) that made the call or save; its folder name is a filesystem-safe form of it.
 export function safeSegment(value, fallback) {
@@ -191,7 +202,7 @@ export async function listLibrary(config) {
         const head = frontMatter(text);
         const parts = reportParts(text.replace(/^---\n[\s\S]*?\n---\n/, ''));
         const summary = parts.summary.trim().slice(0, 280);
-        reports.push({ name, text, summary, source: head.source ?? null, method: head.agent ?? null, supersedes: head.supersedes ?? null, at: head.generated_at ?? null, session: typeof head.session === 'string' ? head.session : null, status: parts.card?.fields?.status });
+        reports.push({ name, text, summary, title: head.title, topic: head.topic, source: head.source ?? null, method: head.agent ?? null, supersedes: head.supersedes ?? null, at: head.generated_at ?? null, session: typeof head.session === 'string' ? head.session : null, status: parts.card?.fields?.status });
       }
       reports.sort((a, b) => (time(a.at) ?? 0) - (time(b.at) ?? 0) || a.name.localeCompare(b.name, undefined, { numeric: true }));
       const answer = names.includes('answer.md') ? `${prefix}/answer.md` : null;
@@ -203,6 +214,7 @@ export async function listLibrary(config) {
       item.sources = [...new Set(reports.map(r => r.source).filter(Boolean))];
       item.methods = [...new Set(reports.map(r => r.method).filter(Boolean))];
       item.mode = meta.mode;
+      item.displayTitle = displayTitle(item.title, item.mode, reports);
       item.planned = Array.isArray(meta.planned) ? meta.planned : [];
       item.refreshes = meta.refreshes ?? null;
       // `status` is the report's own source-card run status as its worker wrote it.

@@ -47,6 +47,8 @@ Keep outcomes distinct: a provider error is a provider failure; an interruption 
 
 ## Save the report
 
+Give the report a concise, descriptive H1 title (roughly 4–10 words) after the `source_card` block. Name the actual topic; do not repeat the full question or use a generic title such as “Research report.” The original question stays in the save argument or existing dig. This uses the existing saved title field; no separate title-generation call is needed.
+
 Begin the report body with the fenced `source_card` YAML block, before headings or prose.
 
 Use exactly these `source_card` keys and set every scalar to one actual allowed value. This example depicts a partial, medium-grade run; do not copy its values unless they describe the evidence:

@@ -1,7 +1,7 @@
 import { App, applyDocumentTheme, applyHostStyleVariables } from '@modelcontextprotocol/ext-apps';
 import { OpenAIExtensions } from '@openai/mcp-extensions/app';
 import { $, attr, button, externalLink, keyed, node, rebuild, tag, text } from './ui/dom.mjs';
-import { COST_CAVEAT, COST_SCOPE, absTime, basename, clock, costTotal, num, plural, shortDate } from './ui/format.mjs';
+import { COST_CAVEAT, COST_SCOPE, absTime, basename, clock, costShort, costTotal, num, plural, shortDate } from './ui/format.mjs';
 import { costSummary } from './providers/library/cost.ts';
 import { MODULES } from './providers/modules.ts';
 import { createCatalog, fileKind } from './ui/catalog.mjs';
@@ -120,6 +120,7 @@ const snippet = item => (item.snippet ? firstParagraph(item.snippet) || item.sni
 const countsLine = item => `${plural(item.reports.length, 'report')} · ${plural(item.calls.length, 'retrieval')}`;
 const costLine = calls => costTotal(costSummary(calls), calls.length);
 const cardCost = item => { const total = costLine(item.calls); return total ? node('p', 'meta', total) : null; };
+const previewOpen = new Map();
 /**
  * The figures at the top of the conversation panel, over the same calls as the conversation's cost: its digs' calls
  * (a worker's once it names the dig or its report claims it) and its own unclaimed calls, never another thread's.
@@ -142,17 +143,29 @@ function showPanelFigures(element, calls, reports, elsewhere) {
 }
 
 function card(item) {
-  const opener = keyed(button('card-open', item.title, () => showDig(item).catch(e => notify(e.message, true))), `dig:${item.project}:${item.id}`);
+  const label = item.displayTitle || item.title;
+  const opener = keyed(button('card-open', label, () => showDig(item).catch(e => notify(e.message, true))), `dig:${item.project}:${item.id}`);
   attr(opener, 'title', item.title);
-  const summary = snippet(item);
+  let summary = snippet(item);
+  if ((item.snippet?.length ?? 0) >= 280) summary = `${summary.replace(/\s+\S*$/, '')}…`;
   const marks = (item.sources ?? []).slice(0, 3).map(id => MODULES.find(source => source.id === id)).filter(Boolean).map(source => mark(source, true));
-  return node('article', 'research-card',
+  const date = item.startedAt ? `${shortDate(item.startedAt)} · ${clock(item.startedAt)}` : '';
+  const fullCost = costLine(item.calls);
+  const cost = fullCost ? attr(node('span', 'research-cost', costShort(costSummary(item.calls), item.calls.length)), 'title', fullCost) : null;
+  const key = `${item.project}:${item.id}`;
+  const details = node('details', 'research-preview',
+    keyed(node('summary', '', 'Details'), `preview:${key}`),
+    node('p', 'eyebrow', 'Original question'), node('p', 'research-question', item.title),
+    summary ? [node('p', 'eyebrow', 'Report preview'), node('p', 'summary', summary)] : null,
+    fullCost ? node('p', 'meta', fullCost) : null);
+  details.open = previewOpen.get(key) ?? false;
+  details.ontoggle = () => previewOpen.set(key, details.open);
+  return node('article', 'research-card research-row',
     node('div', 'card-head', node('p', 'eyebrow source-labels', marks, sourcesLine(item)), tag(item.status)),
     node('h2', '', opener),
-    attr(node('p', 'meta', startedLine(item)), 'title', item.project),
-    summary ? node('p', 'summary', summary) : null,
-    node('p', 'meta', countsLine(item)),
-    cardCost(item));
+    node('div', 'research-meta', attr(node('span', 'research-project', projectName(item)), 'title', item.project), attr(node('span', '', date), 'title', startedLine(item))),
+    node('div', 'research-foot', node('p', 'meta', `${plural(item.reports.length, 'report')} · ${plural(item.calls.length, 'call')}`), cost),
+    details);
 }
 function renderLibrary() {
   rebuild($('list'), snapshot.items.length ? snapshot.items.map(card) : [node('div', 'empty', 'Your library is ready. Ask the conversation to research a question with one of Dig’s sources; it appears here as soon as it starts.')]);
