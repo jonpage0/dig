@@ -139,7 +139,7 @@ function blocks(tokens) {
   return (tokens ?? []).map(token => {
     switch (token.type) {
       case 'space': case 'def': return null;
-      case 'heading': return node(`h${Math.min(token.depth + HEADING_OFFSET, MAX_HEADING)}`, '', inline(token.tokens));
+      case 'heading': return attr(node(`h${Math.min(token.depth + HEADING_OFFSET, MAX_HEADING)}`, '', inline(token.tokens)), 'data-outline', token.depth);
       case 'paragraph': return node('p', '', inline(token.tokens));
       case 'text': return token.tokens ? inline(token.tokens) : decodeEntities(token.text);
       case 'code': return node('pre', 'code', node('code', '', token.text));

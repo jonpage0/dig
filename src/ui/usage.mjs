@@ -85,6 +85,7 @@ export function usageOf(snapshot, { days = 30, now = Date.now() } = {}) {
 function svg(viewBox, className, ...children) {
   const element = document.createElementNS(SVG, 'svg');
   element.setAttribute('viewBox', viewBox); element.setAttribute('class', className);
+  if (className === 'columns') element.setAttribute('preserveAspectRatio', 'none');
   element.setAttribute('aria-hidden', 'true'); element.setAttribute('focusable', 'false');
   element.append(...children.flat().filter(Boolean));
   return element;
@@ -131,7 +132,7 @@ function columns(usage) {
 }
 
 // The busiest sources show at once and the rest wait behind a disclosure that stays as the reader left it.
-const SHOWN_SOURCES = 6;
+const SHOWN_SOURCES = 4;
 let moreOpen = false;
 /**
  * One row per source, each bar on the same scale as the busiest source's and its cost under it. `shown` rows show at
@@ -151,7 +152,7 @@ export function sourceChart(rows, prefix, shown = SHOWN_SOURCES) {
       node('span', 'who', module ? mark(module, true) : null, node('span', 'who-name', labelOf(row.id))),
       node('span', 'track', svg(`0 0 ${width} ${height}`, 'bar', shape('rect', { width, height, class: 'bar-ground' }), parts)),
       node('span', 'count', num(row.total)),
-      node('span', 'meta row-cost', costShort(row.cost, row.total)),
+      node('span', 'meta row-cost', row.cost.unknownCalls && !Object.keys(row.cost.byUnit).length ? `${plural(row.cost.unknownCalls, 'call')} without reported pricing` : costShort(row.cost, row.total)),
       node('span', 'sr-only', detail)), 'title', detail);
   });
   const rest = items.slice(shown);
@@ -167,14 +168,19 @@ export function legend(prefix) {
 }
 
 export function metric(label, value, note) {
-  return node('div', 'metric', node('dt', '', label), node('dd', '', node('span', 'metric-value', value), note ? node('span', 'metric-note', note) : null));
+  return node('div', 'metric', node('dt', '', label), node('dd', '', node('span', 'metric-value', value), note ? node('div', 'metric-note', note) : null));
 }
+const pricingOpen = new Map();
 /** The provider cost figure for `total` calls: each unit on its own line, since dollars and each provider's credits are never added together, and how much of it is known. */
-export function costMetric(cost, total) {
+export function costMetric(cost, total, scope = 'cost') {
   const amounts = costAmounts(cost);
-  const value = !total ? '—' : amounts.length ? amounts.map(amount => node('span', 'cost-unit', amount)) : cost.unknownCalls ? 'Unknown' : 'No charge recorded';
+  const value = !total ? '—' : amounts.length ? amounts.map(amount => node('span', 'cost-unit', amount)) : cost.unknownCalls ? plural(cost.unknownCalls, 'call') : 'No charge recorded';
   const note = !total ? 'No retrievals' : cost.unknownCalls ? `${num(cost.unknownCalls)} of ${plural(total, 'retrieval')} incompletely priced` : 'Every retrieval’s cost is known';
-  return metric('Provider cost', value, note);
+  const label = amounts.length && cost.unknownCalls ? 'Known provider subtotal' : cost.unknownCalls ? 'Unpriced provider usage' : 'Provider cost';
+  const details = node('details', 'pricing-details', keyed(node('summary', '', 'Pricing details'), `pricing:${scope}`), node('p', '', note));
+  details.open = pricingOpen.get(scope) ?? false;
+  details.ontoggle = () => pricingOpen.set(scope, details.open);
+  return attr(metric(label, value, total ? details : note), 'data-incomplete', String(Boolean(cost.unknownCalls)));
 }
 function metrics(usage) {
   const { totals } = usage;
@@ -184,7 +190,7 @@ function metrics(usage) {
     metric('Retrievals', num(totals.total), totals.total ? `${num(totals.results)} with results` : 'None in this window'),
     metric('Reports saved', num(totals.reports), totals.reports ? `from ${plural(reportSources, 'source')}` : 'None in this window'),
     metric('Failed or stopped', num(totals.failed), share),
-    costMetric(totals.cost, totals.total));
+    costMetric(totals.cost, totals.total, 'usage'));
 }
 
 /**
@@ -192,7 +198,9 @@ function metrics(usage) {
  * keep keyboard focus when the section is rebuilt by a later snapshot. A library with nothing dated in any window
  * says so instead of showing empty figures and a window it cannot fill.
  */
+let expanded = false;
 export function renderUsage(container, usage, choose) {
+  attr(container, 'data-expanded', String(expanded));
   const heading = attr(node('h3', '', 'Usage'), 'id', 'usage-title');
   if (!usage.recorded) {
     rebuild(container, [node('div', 'usage-head', node('div', '', heading,
@@ -203,11 +211,12 @@ export function renderUsage(container, usage, choose) {
   const scope = usage.days ? `Last ${usage.days} days` : `All time, since ${shortDate(iso(usage.start))}`;
   const picker = attr(node('div', 'segmented', WINDOWS.map(w => attr(keyed(button('btn-ghost', w.label, () => choose(w.days)), `usage-window:${w.days}`), 'aria-pressed', String(w.days === usage.days)))), 'aria-label', 'Usage window');
   attr(picker, 'role', 'group');
+  const resize = attr(keyed(button('btn-ghost', expanded ? 'Compact charts' : 'Expand charts', () => { expanded = !expanded; renderUsage(container, usage, choose); }), 'usage-size'), 'aria-pressed', String(expanded));
   rebuild(container, [
     patterns(PREFIX),
-    node('div', 'usage-head', node('div', '', heading, node('p', 'meta', `${scope} · every project in this library`)), picker),
+    node('div', 'usage-head', node('div', '', heading, node('p', 'meta', `${scope} · every project in this library`)), node('div', 'usage-actions', resize, picker)),
     metrics(usage),
-    usage.totals.total || usage.totals.reports ? node('div', 'charts', columns(usage), sourceChart(usage.sources, PREFIX)) : node('p', 'meta', 'No retrievals or reports in this window.'),
+    usage.totals.total || usage.totals.reports ? node('div', 'charts', columns(usage), sourceChart(usage.sources, PREFIX, expanded ? 6 : 4)) : node('p', 'meta', 'No retrievals or reports in this window.'),
     usage.totals.total ? legend(PREFIX) : null,
     node('p', 'meta usage-scope', `${COST_SCOPE}. ${COST_CAVEAT} `, node('span', 'usage-counts', 'Counts come from the receipts Dig keeps for each provider call.')),
   ].filter(Boolean));

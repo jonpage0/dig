@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 — 2026-10-19
+
+- A compact visual overview keeps activity, failures, provider costs and charts immediately visible, with an expanded chart view on demand. Recent research starts higher on the page; dashboard search is removed in favor of agent library tools.
+- Incomplete pricing is labeled as a known subtotal. Provider-specific credits stay separate, and calls without reported pricing remain visible as usage rather than a zero cost.
+- Source cards explain their capabilities with copyable examples, including Exa snapshots, direct Hacker News reads and AI brand visibility. Configuration status is separate from the latest retained call outcome; viewing Sources makes no provider requests.
+- Reports gain an outline and sticky file navigation. Original responses open beside the report in a wide view, or in a focused narrow view with a return action, preserving the report and reading position.
+- Late evidence reads cannot reopen a closed pane or replace another dig's evidence. Existing reports, receipts, settings and library files keep their formats.
+
 ## 0.3.1 — 2026-10-19
 
 - Updating Dig refreshes the plugin connection first. The stale-version notice and release instructions now reserve quitting and reopening the host as a fallback, instead of requiring it for every update.

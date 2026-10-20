@@ -58084,7 +58084,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
 }
 
 // src/version.mjs
-var VERSION2 = "0.3.1";
+var VERSION2 = "0.4.0";
 
 // src/server.mjs
 loadKeys();

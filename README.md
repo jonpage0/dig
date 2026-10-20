@@ -124,6 +124,8 @@ Keys never go in the chat. On Dig's **Sources** page, click **Edit keys.env**, p
 - **Ask a research question** normally, or name the sources you want.
 - **Run one method:** type `$dig:` and pick one, such as `$dig:x-post` or `$dig:facebook`.
 - **Open Dig** from the sidebar to read reports, original responses and costs.
+- **Keep the overview in sight:** activity charts and costs stay visible above recent research. Expand the charts for more detail, and inspect original responses alongside a report.
+- **Find saved research through the conversation:** ask Dig to locate earlier reports by project, source or topic. The dashboard focuses on the overview and reading.
 - **Reuse past research** by typing `@` in the composer.
 
 ## Optional: route Dig from another conversation

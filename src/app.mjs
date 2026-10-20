@@ -7,11 +7,12 @@ import { MODULES } from './providers/modules.ts';
 import { createCatalog, fileKind } from './ui/catalog.mjs';
 import { firstParagraph } from './ui/markdown.mjs';
 import { callSentence, documentView, rawView } from './ui/reader.mjs';
-import { renderRetrievals } from './ui/retrievals.mjs';
+import { renderRetrievals, revealRetrievals, setRetrievalsOpen } from './ui/retrievals.mjs';
 import { callWord } from './status.mjs';
 import { renderSettings } from './ui/settings.mjs';
 import { renderAccounts } from './ui/accounts.mjs';
-import { renderSources } from './ui/sources.mjs';
+import { mark, renderSources } from './ui/sources.mjs';
+import { latestSourceCalls } from './ui/source-guide.mjs';
 import { costMetric, metric, outcomeCounts, renderUsage, sourceRows, usageOf } from './ui/usage.mjs';
 import { VERSION } from './version.mjs';
 
@@ -25,8 +26,9 @@ const params = new URLSearchParams(location.search);
 const preview = params.has('preview');
 let snapshot = { items: [], live: [] }; let catalog = createCatalog(); let extensions; let app;
 let current = null; let open = null; let pendingFile = null; let returnFile = null; let navigation = 0;
+let evidenceNavigation = 0; let evidenceFocus = null; let evidenceScroll = 0; let evidenceReopen = false; let readerOrigin = null; let browseScroll = 0;
 let mode = 'library'; let thread = null; let view = 'browse'; let returnView = 'browse'; let aboutReturn = 'browse';
-let revision = null; let polling = false; let updatesFailed = false; let staleViewNoticed = false; let replacedNoticed = false;
+let revision = null; let pollTask = null; let refreshQueued = false; let updatesFailed = false; let staleViewNoticed = false; let replacedNoticed = false;
 // The open Sources or Settings page: its renderer's update handle, which page it is, and the request that built it.
 // About keeps it, so Back returns to a page that still refreshes.
 let page = null; let pageView = null; let pageRequest = 0;
@@ -88,7 +90,7 @@ function render(value) {
   text($('source-status'), enabled ? (catalog.size ? `${enabled.length} of ${plural(catalog.size, 'source')} on` : `${plural(enabled.length, 'source')} on`) : '');
   text($('retention'), snapshot.keepRaw ? 'Original responses retained' : 'Original responses not retained');
   text($('library-path'), snapshot.library || ''); showLibraryFolder();
-  filter(); renderPanel(); showUsage();
+  renderLibrary(); renderPanel(); showUsage();
   if (current) refreshCurrent();
   applyDeepLink();
   // A later install removed this server's files while Codex kept it running. Refresh reloads this server's own
@@ -133,7 +135,7 @@ function showPanelFigures(element, calls, reports, elsewhere) {
       metric('Retrievals', num(counts.total), `${num(counts.results)} with results`),
       metric('Sources', num(sourceRows(calls, reports).length), `${plural(reports.length, 'report')} saved`),
       metric('Failed or stopped', num(counts.failed), counts.total ? `${Math.round((counts.failed / counts.total) * 100)}% of retrievals` : 'None yet'),
-      costMetric(costSummary(calls), counts.total)),
+      costMetric(costSummary(calls), counts.total, 'panel')),
     elsewhere ? node('p', 'meta', `Not included: ${plural(elsewhere, 'retrieval')} by workers or other conversations that no saved report has claimed yet.`) : null,
     node('p', 'meta usage-scope', `${COST_SCOPE}. ${COST_CAVEAT}`),
   ].filter(Boolean));
@@ -141,19 +143,19 @@ function showPanelFigures(element, calls, reports, elsewhere) {
 
 function card(item) {
   const opener = keyed(button('card-open', item.title, () => showDig(item).catch(e => notify(e.message, true))), `dig:${item.project}:${item.id}`);
+  attr(opener, 'title', item.title);
   const summary = snippet(item);
+  const marks = (item.sources ?? []).slice(0, 3).map(id => MODULES.find(source => source.id === id)).filter(Boolean).map(source => mark(source, true));
   return node('article', 'research-card',
-    node('div', 'card-head', node('p', 'eyebrow', sourcesLine(item)), tag(item.status)),
+    node('div', 'card-head', node('p', 'eyebrow source-labels', marks, sourcesLine(item)), tag(item.status)),
     node('h2', '', opener),
     attr(node('p', 'meta', startedLine(item)), 'title', item.project),
     summary ? node('p', 'summary', summary) : null,
     node('p', 'meta', countsLine(item)),
     cardCost(item));
 }
-function filter() {
-  const query = $('search').value.trim().toLowerCase();
-  const items = snapshot.items.filter(item => `${item.title} ${item.project} ${item.snippet ?? ''} ${(item.reportDetails ?? []).map(r => r.summary).join(' ')} ${sourcesLine(item)}`.toLowerCase().includes(query));
-  rebuild($('list'), items.length ? items.map(card) : [node('div', 'empty', snapshot.items.length ? `No research matches “${$('search').value.trim()}”. Clear the search to see everything.` : 'Your library is ready. Ask the conversation to research a question with one of Dig’s sources; it appears here as soon as it starts.')]);
+function renderLibrary() {
+  rebuild($('list'), snapshot.items.length ? snapshot.items.map(card) : [node('div', 'empty', 'Your library is ready. Ask the conversation to research a question with one of Dig’s sources; it appears here as soon as it starts.')]);
 }
 
 function trailCard(item) {
@@ -192,6 +194,7 @@ function renderDigChrome(item) {
   text($('dig-title'), item.title);
   $('dig-meta').replaceChildren(tag(item.status), ` ${startedLine(item)}${item.finishedAt ? ` · Answer ${shortDate(item.finishedAt)}` : ''}`);
   renderRetrievals($('dig-retrievals'), item, catalog, rawFile => inspectRaw(rawFile).catch(e => notify(e.message, true)));
+  $('reader-evidence').disabled = !item.calls.length;
   const viewing = open?.kind === 'raw' ? [open.file] : pendingFile && fileKind(pendingFile) === 'raw' ? [pendingFile] : [];
   rebuild($('files'), [...item.files, ...viewing].map(fileTab));
 }
@@ -208,6 +211,7 @@ async function readAll(file) {
   return body;
 }
 async function showFile(file) {
+  closeEvidence(false);
   const request = ++navigation;
   open = null; pendingFile = file;
   if (current) renderDigChrome(current);
@@ -229,17 +233,57 @@ async function showFile(file) {
   const back = kind === 'raw' ? returnFile ?? (receipt?.claimedBy && current.files.includes(receipt.claimedBy) ? receipt.claimedBy : null) : null;
   if (back) { returnFile = back; text($('back-to-report'), `← Back to ${catalog.fileLabel(back)}`); $('back-to-report').hidden = false; }
   renderDigChrome(current);
+  $('files').scrollIntoView?.({ block: 'start', behavior: 'auto' });
+  return true;
 }
-function inspectRaw(rawFile) {
-  if (open && open.kind !== 'raw') returnFile = open.file;
-  return showFile(rawFile);
+function closeEvidence(restore = true) {
+  evidenceNavigation++;
+  const wasOpen = !$('evidence-pane').hidden;
+  $('evidence-pane').hidden = true; $('reader-layout').classList.toggle('has-evidence', false);
+  $('evidence-body').replaceChildren();
+  if (restore && wasOpen) {
+    setRetrievalsOpen(evidenceReopen);
+    globalThis.scrollTo?.({ top: evidenceScroll, behavior: 'instant' });
+    (evidenceFocus?.isConnected === false ? $('reader-evidence') : evidenceFocus)?.focus({ preventScroll: true });
+  }
+  readerOrigin = null;
+}
+async function inspectRaw(rawFile) {
+  if (!current || !open || open.kind === 'raw') return showFile(rawFile);
+  if ($('evidence-pane').hidden) {
+    evidenceFocus = readerOrigin?.focus ?? document.activeElement;
+    evidenceScroll = readerOrigin?.scroll ?? globalThis.scrollY ?? 0;
+    const wasOpen = setRetrievalsOpen(false);
+    evidenceReopen = readerOrigin ? false : wasOpen;
+    readerOrigin = null;
+  } else setRetrievalsOpen(false);
+  const request = ++evidenceNavigation;
+  const receipt = current.calls.find(call => call.rawFile === rawFile);
+  $('evidence-pane').hidden = false; $('reader-layout').classList.toggle('has-evidence', true);
+  text($('evidence-title'), 'Original response');
+  $('evidence-body').replaceChildren(node('p', 'meta', 'Reading retained evidence…'));
+  try {
+    const body = await readAll(rawFile);
+    if (request !== evidenceNavigation || !current) return;
+    $('evidence-body').replaceChildren(rawView(rawFile, body, receipt, catalog));
+  } catch (error) {
+    if (request !== evidenceNavigation) return;
+    $('evidence-body').replaceChildren(node('p', 'meta', `Unable to read this response: ${error.message}`));
+  }
+  if (request !== evidenceNavigation) return;
+  $('evidence-title').focus({ preventScroll: true });
+  $('reader-layout').scrollIntoView?.({ block: 'start', behavior: 'auto' });
 }
 async function showDig(item, file) {
-  if (view !== 'detail') returnView = view;
+  if (view !== 'detail') { returnView = view; browseScroll = globalThis.scrollY ?? 0; }
   current = item; open = null; returnFile = null; show('detail');
-  await showFile(file ?? item.answer ?? item.reports[0] ?? item.files.find(f => f.endsWith('dig.md')));
+  const shown = await showFile(file ?? item.answer ?? item.reports[0] ?? item.files.find(f => f.endsWith('dig.md')));
+  if (shown && current?.id === item.id && current?.project === item.project) {
+    $('dig-title').focus({ preventScroll: true });
+    globalThis.scrollTo?.({ top: 0, behavior: 'instant' });
+  }
 }
-function leaveDetail() { navigation++; current = null; open = null; pendingFile = null; returnFile = null; }
+function leaveDetail() { closeEvidence(false); navigation++; current = null; open = null; pendingFile = null; returnFile = null; }
 
 // Exact-file deep links: the host supplies the app-relative URL on connect and in host-context changes.
 function readDeepLink() {
@@ -308,8 +352,9 @@ let saving = Promise.resolve();
 function saveSetting(key, value) {
   const work = saving.then(async () => (await call('settings.update', { set: { [key]: value } })).values);
   saving = work.catch(() => {});
-  work.then(() => poll(true)).catch(e => notify(`Not saved: ${e.message}`, true));
-  return work;
+  const refreshed = work.then(async values => { await poll(true); return values; });
+  refreshed.catch(e => notify(`Not saved: ${e.message}`, true));
+  return refreshed;
 }
 // Accounts and keys shows with source_info: the keys file's path and its Edit button, then the accounts fold.
 function showKeys(info) {
@@ -326,7 +371,7 @@ function sourcesSummary(info) {
   const on = sources.filter(s => s.enabled);
   const count = status => on.filter(s => s.readiness?.status === status).length;
   const partly = count('partial'); const setup = count('setup-required');
-  text($('sources-summary'), sources.length ? [`${on.length} of ${plural(sources.length, 'source')} on`, partly ? `${partly} partly ready` : null, setup ? `${setup} ${setup === 1 ? 'needs' : 'need'} setup` : null].filter(Boolean).join(' · ') : '');
+  text($('sources-summary'), sources.length ? [`${on.length} of ${plural(sources.length, 'source')} on`, partly ? `${partly} partly configured` : null, setup ? `${setup} ${setup === 1 ? 'needs' : 'need'} setup` : null].filter(Boolean).join(' · ') : '');
 }
 async function openSources() {
   show('sources'); const request = ++pageRequest;
@@ -336,7 +381,7 @@ async function openSources() {
   if (!read.schema?.properties || !read.values) throw new Error(SCHEMA_MISSING);
   if (Array.isArray(info.sources)) catalog = createCatalog(info.sources);
   showKeys(info); sourcesSummary(info);
-  page = renderSources($('sources-list'), $('sources-toc'), read, info.sources ?? [], preview ? null : saveSetting, preview ? null : { editKeys, useEnvironment: useEnvironmentKeys }); pageView = 'sources';
+  page = renderSources($('sources-list'), $('sources-toc'), read, info.sources ?? [], preview ? null : saveSetting, preview ? null : { editKeys, useEnvironment: useEnvironmentKeys }, latestSourceCalls(snapshot)); pageView = 'sources';
   text($('sources-status'), preview ? READ_ONLY : info.error ? `Source readiness is unavailable: ${info.error}` : '');
 }
 async function openSettings() {
@@ -355,7 +400,7 @@ async function refreshPage() {
   if (!handle) return;
   const [read, info] = await Promise.all([call('settings.read').catch(() => null), onSources ? readSourceInfo() : null]);
   if (handle !== page) return;
-  handle.update(read?.values ? read : null, info && !info.error ? info.sources : null);
+  handle.update(read?.values ? read : null, info && !info.error ? info.sources : null, onSources ? latestSourceCalls(snapshot) : null);
   if (onSources && info && !info.error) { showKeys(info); sourcesSummary(info); }
 }
 
@@ -395,18 +440,29 @@ async function openAbout() {
 }
 
 // Live updates: poll a cheap fingerprint while visible; only a changed fingerprint reloads the snapshot.
-async function poll(force = false) {
-  if (polling || (!force && document.visibilityState === 'hidden')) return;
-  polling = true;
-  try {
-    const next = (await call('library_revision')).revision;
-    if (force || next !== revision) { const value = await call('library_snapshot'); revision = next; render(value); if (page) await refreshPage(); }
-    if (updatesFailed) { updatesFailed = false; $('reload').hidden = true; notify('Automatic updates resumed.'); }
-    text($('live-state'), 'Updates automatically');
-  } catch (e) {
-    if (!updatesFailed) notify(`Automatic updates paused: ${e.message}`, true);
-    updatesFailed = true; $('reload').hidden = false; text($('live-state'), 'Updates paused');
-  } finally { polling = false; }
+function poll(force = false) {
+  // A settings save during a refresh must get a fresh snapshot after that save, not lose its request to the gate.
+  if (pollTask) { if (force) refreshQueued = true; return pollTask; }
+  if (!force && document.visibilityState === 'hidden') return Promise.resolve();
+  pollTask = (async () => {
+    let refresh = force;
+    try {
+      do {
+        refreshQueued = false;
+        try {
+          const next = (await call('library_revision')).revision;
+          if (refresh || next !== revision) { const value = await call('library_snapshot'); revision = next; render(value); if (page) await refreshPage(); }
+          if (updatesFailed) { updatesFailed = false; $('reload').hidden = true; notify('Automatic updates resumed.'); }
+          text($('live-state'), 'Updates automatically');
+        } catch (e) {
+          if (!updatesFailed) notify(`Automatic updates paused: ${e.message}`, true);
+          updatesFailed = true; $('reload').hidden = false; text($('live-state'), 'Updates paused');
+        }
+        refresh = refreshQueued;
+      } while (refresh);
+    } finally { pollTask = null; }
+  })();
+  return pollTask;
 }
 
 // Outbound links open through the host when it offers that; a refusal is reported, never silently dropped.
@@ -417,8 +473,15 @@ function openExternal(event) {
   app.openLink({ url: anchor.href }).then(result => { if (result?.isError) notify(`The host did not open ${anchor.href}.`, true); }).catch(e => notify(`Unable to open ${anchor.href}: ${e.message}`, true));
 }
 
-$('search').oninput = filter;
-$('back').onclick = () => { leaveDetail(); show(returnView); };
+$('back').onclick = () => {
+  const panel = returnView === 'panel';
+  const key = current ? `${panel ? 'trail' : 'dig'}:${current.project}:${current.id}` : null;
+  leaveDetail(); show(returnView);
+  globalThis.scrollTo?.({ top: browseScroll, behavior: 'instant' });
+  if (key) for (const link of $(panel ? 'panel-digs' : 'list').querySelectorAll('[data-key]')) if (link.getAttribute('data-key') === key) link.focus({ preventScroll: true });
+};
+$('close-evidence').onclick = () => closeEvidence();
+$('reader-evidence').onclick = () => { readerOrigin = { scroll: globalThis.scrollY ?? 0, focus: $('reader-evidence') }; revealRetrievals(); };
 $('back-to-report').onclick = () => { if (returnFile) showFile(returnFile).catch(e => notify(e.message, true)); };
 $('nav-trail').onclick = () => { if (current) leaveDetail(); show('panel'); };
 $('nav-library').onclick = () => { if (current) leaveDetail(); show('browse'); };
@@ -433,6 +496,9 @@ $('dismiss').onclick = () => notify('');
 
 async function start() {
   document.addEventListener('click', openExternal);
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && view === 'detail' && !$('evidence-pane').hidden) { closeEvidence(); event.preventDefault?.(); }
+  });
   if (preview) {
     setMode(params.has('panel') ? 'panel' : 'library', params.get('panel') || null);
     await poll(true);

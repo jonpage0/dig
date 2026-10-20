@@ -34,7 +34,8 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 .notice { flex: 1 1 240px; font-size: 13px; }
 .notice.error { border-inline-start: 3px solid var(--destructive); padding-inline-start: 12px; }
 .library-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-block: 20px 16px; }
-.search { flex: 1 1 240px; max-width: 480px; min-height: 36px; padding-block: 6px; }
+.library-title { margin: 0; font-size: 17px; font-weight: var(--font-weight-medium, 500); }
+.library-hint { margin: 4px 0 0; }
 .stats { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted-foreground); font-size: 12px; }
 .stat { display: inline-flex; gap: 4px; }
 .stat strong { color: var(--foreground); font-weight: var(--font-weight-medium, 500); font-variant-numeric: tabular-nums; }
@@ -42,6 +43,7 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 .research-card, .trail-card { position: relative; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); }
 .research-card:hover, .trail-card:hover { background: var(--card); }
 .card-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.source-labels { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .research-card h2, .trail-card h3 { margin: 8px 0; font-size: 15px; font-weight: var(--font-weight-medium, 500); }
 .btn.card-open { display: inline; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: start; white-space: normal; }
 .btn.card-open:hover { background: none; }
@@ -49,6 +51,7 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 .card-open:focus-visible { outline: none; }
 .card-open:focus-visible::after { outline: 2px solid var(--ring); outline-offset: 2px; }
 .summary { margin: 10px 0 12px; font-size: 13px; color: var(--muted-foreground); }
+.research-card h2, .research-card .summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .empty { grid-column: 1 / -1; padding: 24px 0; color: var(--muted-foreground); }
 .panel-heading { margin: 20px 0 12px; }
 .panel-heading h2 { margin: 0 0 4px; font-size: 16px; }
@@ -68,7 +71,31 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 .detail-heading { margin-block: 16px; }
 .detail-heading h2 { max-width: 80ch; margin: 12px 0 8px; font-size: 20px; font-weight: var(--font-weight-medium, 500); overflow-wrap: anywhere; }
 .detail-heading > .btn { margin-inline-start: -10px; }
-.files { display: flex; gap: 4px; flex-wrap: wrap; margin-block: 0 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.files { display: flex; gap: 4px; flex-wrap: wrap; margin: 0; min-width: 0; }
+.reader-navigation { position: sticky; top: 0; z-index: 2; display: flex; align-items: start; justify-content: space-between; gap: 8px; padding-block: 8px; margin-bottom: 16px; background: var(--background); border-bottom: 1px solid var(--border); }
+.reader-navigation > .btn { flex: none; }
+.reader-layout, .reader-main { min-width: 0; }
+.reader-layout.has-evidence { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(340px, 1fr); gap: 24px; align-items: start; }
+.evidence-pane { min-width: 0; position: sticky; top: 8px; max-height: calc(100vh - 24px); overflow: auto; padding: 16px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius); }
+.evidence-head { position: sticky; top: -16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-block: 12px; margin-top: -12px; background: var(--background); z-index: 1; }
+.evidence-head h3 { margin: 0; font-size: 15px; }
+.evidence-pane .call-facts { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.evidence-pane .call-facts dd { margin-bottom: 8px; }
+.doc-outline { max-width: var(--reading-width); margin: 0 0 16px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
+.doc-outline > summary { cursor: var(--cursor-interaction, pointer); font-weight: var(--font-weight-medium, 500); }
+.doc-outline ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
+.doc-outline [data-depth="3"], .doc-outline [data-depth="4"] { margin-inline-start: 12px; }
+.btn.outline-link { min-height: 28px; padding: 4px 6px; text-align: start; white-space: normal; }
+[data-outline] { scroll-margin-top: 76px; }
+#dig-title:focus, #evidence-title:focus, [data-outline]:focus { outline: none; }
+.source-guide h5 { margin: 0 0 6px; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
+.source-guide ul { margin: 0 0 12px; padding-inline-start: 18px; font-size: 13px; line-height: 1.6; }
+.source-example .fold-body { gap: 8px; }
+.prompt-example { margin: 0; font-size: 13px; line-height: 1.6; user-select: text; }
+.source-example .btn { justify-self: start; }
+.source-about { font-size: 12px; color: var(--muted-foreground); }
+.source-about summary { cursor: var(--cursor-interaction, pointer); }
+.source-activity { border-top: 1px solid var(--border); padding-top: 10px; }
 .file-tab { border-color: transparent; border-radius: 8px; background: transparent; color: var(--muted-foreground); white-space: normal; text-align: start; }
 .file-tab[aria-current=true] { color: var(--foreground); background: var(--card); }
 .document { min-width: 0; overflow-wrap: anywhere; }
@@ -271,6 +298,17 @@ html { scroll-behavior: smooth; }
 .usage-head { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 8px 16px; }
 .usage-head h3 { margin: 0; font-size: 18px; font-weight: var(--font-weight-medium, 500); }
 .usage-head p { margin: 2px 0 0; }
+.usage-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+#usage { gap: 10px; padding: 14px; }
+#usage .metric { padding: 8px 12px; }
+#usage .metric-value { font-size: 20px; }
+#usage .metric-note { font-size: 11px; }
+#usage[data-expanded=false] .columns { height: 128px; }
+#usage[data-expanded=false] .source-rows { gap: 4px; }
+#usage[data-expanded=false] .source-row .row-cost { font-size: 11px; }
+#usage[data-expanded=false] .usage-counts { display: none; }
+.metric[data-incomplete] { background: color-mix(in srgb, var(--primary) 6%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 15%, transparent); }
+.metric[data-incomplete=true] dt { font-weight: var(--font-weight-medium, 500); }
 .segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--card); }
 .segmented .btn { min-height: 26px; padding-inline: 10px; font-size: 12px; }
 .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 0; }
@@ -281,6 +319,9 @@ html { scroll-behavior: smooth; }
 .cost-unit { display: block; }
 .cost-unit + .cost-unit { font-size: 15px; }
 .metric-note { display: block; font-size: 12px; color: var(--muted-foreground); }
+.pricing-details { margin-top: 4px; font-size: 11px; line-height: 1.5; font-weight: var(--font-weight-normal, 400); }
+.pricing-details summary { width: fit-content; cursor: var(--cursor-interaction, pointer); }
+.pricing-details p { margin: 4px 0 0; }
 .charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 32px; }
 .chart { min-width: 0; margin: 0; }
 .chart-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; }
@@ -313,6 +354,12 @@ html { scroll-behavior: smooth; }
 /* An open dig's Retrievals summary: Usage's figures and source chart, then the list of every call grouped by what
    saved it, one compact entry per call. */
 .retrievals { margin-bottom: 20px; }
+.retrievals { gap: 10px; padding: 12px 14px; }
+.retrievals .usage-head h3 { font-size: 15px; }
+.retrievals .usage-head p { display: none; }
+.retrievals .metric { padding: 8px 10px; }
+.retrievals .metric-value { font-size: 18px; }
+.retrievals-fold .chart { max-width: 640px; }
 .retrievals-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 32px; align-items: start; }
 .retrievals-body .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .retrievals-fold .fold-body { gap: 20px; }
@@ -336,13 +383,13 @@ body.panel-mode .charts, body.panel-mode .retrievals-body { grid-template-column
   .source-row .row-cost { grid-column: 1 / -1; }
   .toc-row { grid-template-columns: minmax(0, 1fr); }
 }
-/* A narrow Library, as in the conversation panel, keeps Usage's window, figures and cost scope and leaves the charts
-   to a wider view, so the dig cards start near the top. */
+/* The narrow library retains its overview, costs and charts, with compact two-column figures. */
 #browse { container-type: inline-size; }
 @container (max-width: 560px) {
   #usage { gap: 10px; padding: 12px; }
   #usage .usage-head h3 { font-size: 15px; }
-  #usage .charts, #usage .legend, #usage .usage-counts { display: none; }
+  #usage .charts { grid-template-columns: 1fr; }
+  #usage .usage-counts { display: none; }
   #usage .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   #usage .metric { padding: 8px 10px; }
   #usage .metric-value { font-size: 16px; }
@@ -354,7 +401,12 @@ body.panel-mode .charts, body.panel-mode .retrievals-body { grid-template-column
   .masthead { align-items: start; flex-wrap: wrap; }
   .brand { flex-wrap: wrap; }
   .library-list { grid-template-columns: 1fr; }
-  .search { max-width: none; }
+  .retrievals .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 999px) {
+  .reader-layout.has-evidence { display: block; }
+  .reader-layout.has-evidence .reader-main { display: none; }
+  .evidence-pane { position: static; max-height: none; }
 }
 body.panel-mode main { padding: 12px 14px 24px; }
 body.panel-mode .masthead { gap: 12px; flex-wrap: wrap; }
@@ -392,7 +444,7 @@ body.panel-mode .detail-heading h2 { font-size: 17px; }
   <section id="browse">
     <section class="usage" id="usage" aria-labelledby="usage-title"></section>
     <div class="library-toolbar">
-      <input type="search" class="form-control search" id="search" aria-label="Search saved research" placeholder="Search saved research">
+      <div><h2 class="library-title">Recent research</h2><p class="meta library-hint">Ask the conversation to find or narrow your saved research with Dig.</p></div>
       <div class="stats">
         <div class="stat"><strong id="questions">0</strong><span>questions</span></div>
         <div class="stat"><strong id="reports">0</strong><span>reports</span></div>
@@ -404,10 +456,12 @@ body.panel-mode .detail-heading h2 { font-size: 17px; }
   <section id="detail" hidden>
     <div class="detail-heading">
       <button id="back" class="btn btn-ghost" type="button">← Back</button>
-      <h2 id="dig-title"></h2><p id="dig-meta" class="meta"></p>
+      <h2 id="dig-title" tabindex="-1"></h2><p id="dig-meta" class="meta"></p>
     </div>
     <section id="dig-retrievals" class="usage retrievals" aria-labelledby="retrievals-title"></section>
-    <nav id="files" class="files" aria-label="Files in this dig"></nav>
+    <div class="reader-layout" id="reader-layout">
+    <div class="reader-main">
+    <div class="reader-navigation"><nav id="files" class="files" aria-label="Files in this dig"></nav><button id="reader-evidence" type="button" class="btn btn-ghost">Retrievals</button></div>
     <article class="document" aria-labelledby="file-title">
       <div class="document-head">
         <h3 id="file-title" class="sr-only"></h3>
@@ -416,12 +470,18 @@ body.panel-mode .detail-heading h2 { font-size: 17px; }
       </div>
       <div id="document"></div>
     </article>
+    </div>
+    <aside id="evidence-pane" class="evidence-pane" aria-labelledby="evidence-title" hidden>
+      <div class="evidence-head"><h3 id="evidence-title" tabindex="-1">Original response</h3><button id="close-evidence" class="btn" type="button">Back to report</button></div>
+      <div id="evidence-body"></div>
+    </aside>
+    </div>
   </section>
   <section id="sources" hidden>
     <div class="page-heading">
       <h2>Sources</h2>
       <p class="summary-line" id="sources-summary"></p>
-      <p class="meta">Switches save as you flip them. Codex’s plugin settings edit the same config.toml.</p>
+      <p class="meta">Configured means the local prerequisites are present. Recent activity comes from retained calls; opening this page does not test providers.</p>
     </div>
     <section class="keys-section" id="keys-section" aria-labelledby="keys-title" hidden>
       <div class="keys-head">

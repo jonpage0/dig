@@ -372,7 +372,8 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 .notice { flex: 1 1 240px; font-size: 13px; }
 .notice.error { border-inline-start: 3px solid var(--destructive); padding-inline-start: 12px; }
 .library-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-block: 20px 16px; }
-.search { flex: 1 1 240px; max-width: 480px; min-height: 36px; padding-block: 6px; }
+.library-title { margin: 0; font-size: 17px; font-weight: var(--font-weight-medium, 500); }
+.library-hint { margin: 4px 0 0; }
 .stats { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted-foreground); font-size: 12px; }
 .stat { display: inline-flex; gap: 4px; }
 .stat strong { color: var(--foreground); font-weight: var(--font-weight-medium, 500); font-variant-numeric: tabular-nums; }
@@ -380,6 +381,7 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 .research-card, .trail-card { position: relative; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); }
 .research-card:hover, .trail-card:hover { background: var(--card); }
 .card-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.source-labels { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .research-card h2, .trail-card h3 { margin: 8px 0; font-size: 15px; font-weight: var(--font-weight-medium, 500); }
 .btn.card-open { display: inline; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: start; white-space: normal; }
 .btn.card-open:hover { background: none; }
@@ -387,6 +389,7 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 .card-open:focus-visible { outline: none; }
 .card-open:focus-visible::after { outline: 2px solid var(--ring); outline-offset: 2px; }
 .summary { margin: 10px 0 12px; font-size: 13px; color: var(--muted-foreground); }
+.research-card h2, .research-card .summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .empty { grid-column: 1 / -1; padding: 24px 0; color: var(--muted-foreground); }
 .panel-heading { margin: 20px 0 12px; }
 .panel-heading h2 { margin: 0 0 4px; font-size: 16px; }
@@ -406,7 +409,31 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 .detail-heading { margin-block: 16px; }
 .detail-heading h2 { max-width: 80ch; margin: 12px 0 8px; font-size: 20px; font-weight: var(--font-weight-medium, 500); overflow-wrap: anywhere; }
 .detail-heading > .btn { margin-inline-start: -10px; }
-.files { display: flex; gap: 4px; flex-wrap: wrap; margin-block: 0 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.files { display: flex; gap: 4px; flex-wrap: wrap; margin: 0; min-width: 0; }
+.reader-navigation { position: sticky; top: 0; z-index: 2; display: flex; align-items: start; justify-content: space-between; gap: 8px; padding-block: 8px; margin-bottom: 16px; background: var(--background); border-bottom: 1px solid var(--border); }
+.reader-navigation > .btn { flex: none; }
+.reader-layout, .reader-main { min-width: 0; }
+.reader-layout.has-evidence { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(340px, 1fr); gap: 24px; align-items: start; }
+.evidence-pane { min-width: 0; position: sticky; top: 8px; max-height: calc(100vh - 24px); overflow: auto; padding: 16px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius); }
+.evidence-head { position: sticky; top: -16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-block: 12px; margin-top: -12px; background: var(--background); z-index: 1; }
+.evidence-head h3 { margin: 0; font-size: 15px; }
+.evidence-pane .call-facts { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.evidence-pane .call-facts dd { margin-bottom: 8px; }
+.doc-outline { max-width: var(--reading-width); margin: 0 0 16px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
+.doc-outline > summary { cursor: var(--cursor-interaction, pointer); font-weight: var(--font-weight-medium, 500); }
+.doc-outline ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
+.doc-outline [data-depth="3"], .doc-outline [data-depth="4"] { margin-inline-start: 12px; }
+.btn.outline-link { min-height: 28px; padding: 4px 6px; text-align: start; white-space: normal; }
+[data-outline] { scroll-margin-top: 76px; }
+#dig-title:focus, #evidence-title:focus, [data-outline]:focus { outline: none; }
+.source-guide h5 { margin: 0 0 6px; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
+.source-guide ul { margin: 0 0 12px; padding-inline-start: 18px; font-size: 13px; line-height: 1.6; }
+.source-example .fold-body { gap: 8px; }
+.prompt-example { margin: 0; font-size: 13px; line-height: 1.6; user-select: text; }
+.source-example .btn { justify-self: start; }
+.source-about { font-size: 12px; color: var(--muted-foreground); }
+.source-about summary { cursor: var(--cursor-interaction, pointer); }
+.source-activity { border-top: 1px solid var(--border); padding-top: 10px; }
 .file-tab { border-color: transparent; border-radius: 8px; background: transparent; color: var(--muted-foreground); white-space: normal; text-align: start; }
 .file-tab[aria-current=true] { color: var(--foreground); background: var(--card); }
 .document { min-width: 0; overflow-wrap: anywhere; }
@@ -609,6 +636,17 @@ html { scroll-behavior: smooth; }
 .usage-head { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 8px 16px; }
 .usage-head h3 { margin: 0; font-size: 18px; font-weight: var(--font-weight-medium, 500); }
 .usage-head p { margin: 2px 0 0; }
+.usage-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+#usage { gap: 10px; padding: 14px; }
+#usage .metric { padding: 8px 12px; }
+#usage .metric-value { font-size: 20px; }
+#usage .metric-note { font-size: 11px; }
+#usage[data-expanded=false] .columns { height: 128px; }
+#usage[data-expanded=false] .source-rows { gap: 4px; }
+#usage[data-expanded=false] .source-row .row-cost { font-size: 11px; }
+#usage[data-expanded=false] .usage-counts { display: none; }
+.metric[data-incomplete] { background: color-mix(in srgb, var(--primary) 6%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 15%, transparent); }
+.metric[data-incomplete=true] dt { font-weight: var(--font-weight-medium, 500); }
 .segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--card); }
 .segmented .btn { min-height: 26px; padding-inline: 10px; font-size: 12px; }
 .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 0; }
@@ -619,6 +657,9 @@ html { scroll-behavior: smooth; }
 .cost-unit { display: block; }
 .cost-unit + .cost-unit { font-size: 15px; }
 .metric-note { display: block; font-size: 12px; color: var(--muted-foreground); }
+.pricing-details { margin-top: 4px; font-size: 11px; line-height: 1.5; font-weight: var(--font-weight-normal, 400); }
+.pricing-details summary { width: fit-content; cursor: var(--cursor-interaction, pointer); }
+.pricing-details p { margin: 4px 0 0; }
 .charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 32px; }
 .chart { min-width: 0; margin: 0; }
 .chart-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; }
@@ -651,6 +692,12 @@ html { scroll-behavior: smooth; }
 /* An open dig's Retrievals summary: Usage's figures and source chart, then the list of every call grouped by what
    saved it, one compact entry per call. */
 .retrievals { margin-bottom: 20px; }
+.retrievals { gap: 10px; padding: 12px 14px; }
+.retrievals .usage-head h3 { font-size: 15px; }
+.retrievals .usage-head p { display: none; }
+.retrievals .metric { padding: 8px 10px; }
+.retrievals .metric-value { font-size: 18px; }
+.retrievals-fold .chart { max-width: 640px; }
 .retrievals-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 32px; align-items: start; }
 .retrievals-body .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .retrievals-fold .fold-body { gap: 20px; }
@@ -674,13 +721,13 @@ body.panel-mode .charts, body.panel-mode .retrievals-body { grid-template-column
   .source-row .row-cost { grid-column: 1 / -1; }
   .toc-row { grid-template-columns: minmax(0, 1fr); }
 }
-/* A narrow Library, as in the conversation panel, keeps Usage's window, figures and cost scope and leaves the charts
-   to a wider view, so the dig cards start near the top. */
+/* The narrow library retains its overview, costs and charts, with compact two-column figures. */
 #browse { container-type: inline-size; }
 @container (max-width: 560px) {
   #usage { gap: 10px; padding: 12px; }
   #usage .usage-head h3 { font-size: 15px; }
-  #usage .charts, #usage .legend, #usage .usage-counts { display: none; }
+  #usage .charts { grid-template-columns: 1fr; }
+  #usage .usage-counts { display: none; }
   #usage .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   #usage .metric { padding: 8px 10px; }
   #usage .metric-value { font-size: 16px; }
@@ -692,7 +739,12 @@ body.panel-mode .charts, body.panel-mode .retrievals-body { grid-template-column
   .masthead { align-items: start; flex-wrap: wrap; }
   .brand { flex-wrap: wrap; }
   .library-list { grid-template-columns: 1fr; }
-  .search { max-width: none; }
+  .retrievals .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 999px) {
+  .reader-layout.has-evidence { display: block; }
+  .reader-layout.has-evidence .reader-main { display: none; }
+  .evidence-pane { position: static; max-height: none; }
 }
 body.panel-mode main { padding: 12px 14px 24px; }
 body.panel-mode .masthead { gap: 12px; flex-wrap: wrap; }
@@ -745,7 +797,7 @@ c-16 3 -1617 460 -3560 1016 -1942 556 -3535 1011 -3539 1011 -4 0 -4 3 0 7 5
   <section id="browse">
     <section class="usage" id="usage" aria-labelledby="usage-title"></section>
     <div class="library-toolbar">
-      <input type="search" class="form-control search" id="search" aria-label="Search saved research" placeholder="Search saved research">
+      <div><h2 class="library-title">Recent research</h2><p class="meta library-hint">Ask the conversation to find or narrow your saved research with Dig.</p></div>
       <div class="stats">
         <div class="stat"><strong id="questions">0</strong><span>questions</span></div>
         <div class="stat"><strong id="reports">0</strong><span>reports</span></div>
@@ -757,10 +809,12 @@ c-16 3 -1617 460 -3560 1016 -1942 556 -3535 1011 -3539 1011 -4 0 -4 3 0 7 5
   <section id="detail" hidden>
     <div class="detail-heading">
       <button id="back" class="btn btn-ghost" type="button">← Back</button>
-      <h2 id="dig-title"></h2><p id="dig-meta" class="meta"></p>
+      <h2 id="dig-title" tabindex="-1"></h2><p id="dig-meta" class="meta"></p>
     </div>
     <section id="dig-retrievals" class="usage retrievals" aria-labelledby="retrievals-title"></section>
-    <nav id="files" class="files" aria-label="Files in this dig"></nav>
+    <div class="reader-layout" id="reader-layout">
+    <div class="reader-main">
+    <div class="reader-navigation"><nav id="files" class="files" aria-label="Files in this dig"></nav><button id="reader-evidence" type="button" class="btn btn-ghost">Retrievals</button></div>
     <article class="document" aria-labelledby="file-title">
       <div class="document-head">
         <h3 id="file-title" class="sr-only"></h3>
@@ -769,12 +823,18 @@ c-16 3 -1617 460 -3560 1016 -1942 556 -3535 1011 -3539 1011 -4 0 -4 3 0 7 5
       </div>
       <div id="document"></div>
     </article>
+    </div>
+    <aside id="evidence-pane" class="evidence-pane" aria-labelledby="evidence-title" hidden>
+      <div class="evidence-head"><h3 id="evidence-title" tabindex="-1">Original response</h3><button id="close-evidence" class="btn" type="button">Back to report</button></div>
+      <div id="evidence-body"></div>
+    </aside>
+    </div>
   </section>
   <section id="sources" hidden>
     <div class="page-heading">
       <h2>Sources</h2>
       <p class="summary-line" id="sources-summary"></p>
-      <p class="meta">Switches save as you flip them. Codex’s plugin settings edit the same config.toml.</p>
+      <p class="meta">Configured means the local prerequisites are present. Recent activity comes from retained calls; opening this page does not test providers.</p>
     </div>
     <section class="keys-section" id="keys-section" aria-labelledby="keys-title" hidden>
       <div class="keys-head">
@@ -21512,7 +21572,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         case "def":
           return null;
         case "heading":
-          return node(`h${Math.min(token.depth + HEADING_OFFSET, MAX_HEADING)}`, "", inline(token.tokens));
+          return attr(node(`h${Math.min(token.depth + HEADING_OFFSET, MAX_HEADING)}`, "", inline(token.tokens)), "data-outline", token.depth);
         case "paragraph":
           return node("p", "", inline(token.tokens));
         case "text":
@@ -22363,14 +22423,35 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       verbatim
     );
   }
+  function withOutline(prose) {
+    const headings = [...prose.querySelectorAll("[data-outline]")];
+    if (headings.length < 2) return prose;
+    const links = headings.map((heading, index) => {
+      const id = `report-section-${index}`;
+      attr(heading, "id", id);
+      attr(heading, "tabindex", "-1");
+      const go = button("btn-ghost outline-link", heading.textContent, () => {
+        heading.scrollIntoView?.({ block: "start", behavior: "auto" });
+        heading.focus({ preventScroll: true });
+      });
+      attr(go, "aria-controls", id);
+      return attr(node("li", "", go), "data-depth", heading.getAttribute("data-outline"));
+    });
+    return node(
+      "div",
+      "outlined-report",
+      node("details", "doc-outline", node("summary", "", "In this report"), attr(node("nav", "", node("ol", "", links)), "aria-label", "Report outline")),
+      prose
+    );
+  }
   function documentView(file2, text2, catalog2) {
     const { meta: meta3, body } = frontMatter(text2);
     const kind = fileKind(file2);
     if (kind === "report") {
       const { card: card2, rest } = reportParts(body);
-      return node("div", "doc", reportFacts(meta3, catalog2), card2 ? cardSummary(card2) : node("p", "meta", "This report has no readable source card."), renderMarkdown(rest));
+      return node("div", "doc", reportFacts(meta3, catalog2), card2 ? cardSummary(card2) : node("p", "meta", "This report has no readable source card."), withOutline(renderMarkdown(rest)));
     }
-    return node("div", "doc", kind === "answer" ? answerFacts(meta3, catalog2) : questionFacts(meta3, catalog2), renderMarkdown(body));
+    return node("div", "doc", kind === "answer" ? answerFacts(meta3, catalog2) : questionFacts(meta3, catalog2), withOutline(renderMarkdown(body)));
   }
   function itemRow(item2) {
     const href = httpUrl2(item2.url);
@@ -22655,11 +22736,68 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     } };
   }
 
+  // src/ui/source-guide.mjs
+  var SOURCE_GUIDES = {
+    exa: { tasks: ["Fast or cache-only web discovery; page text and similar pages.", "Snapshot reads of stored page content at a chosen date; these do not reconstruct historical rankings."], example: "Use Dig and Exa fast search to find primary sources for [question]. Keep the source text and save a report." },
+    perplexity: { tasks: ["Cited web answers and plain search results.", "Reasoned comparisons; deep research only when requested."], example: "Use Dig and Perplexity to check [claim] against current primary sources." },
+    github: { tasks: ["Find and compare repositories, releases and maintenance activity.", "Inspect a repository and read source files at an exact revision."], example: "Use Dig to compare GitHub repositories for [need]. Inspect the strongest candidates and explain the evidence and limits." },
+    deepwiki: { tasks: ["Explore a public repository\u2019s generated documentation.", "Ask codebase questions and identify source files to verify."], example: "Use Dig and DeepWiki to explain how [repository] implements [feature], then identify what needs checking in its source." },
+    hackernews: { tasks: ["Search stories, Ask HN, Show HN and comments.", "Read a specific story and its comment tree with explicit page limits."], example: "Use Dig to read this Hacker News thread: [URL]. Explain the strongest arguments and what the comments do not establish." },
+    papers: { tasks: ["Find papers, related work, citations and supporting passages.", "Read available full text, PDFs and sections through the configured Papers tools."], example: "Use Dig Papers to find research on [question]. Separate paper findings from your interpretation and retain the evidence." },
+    youtube: { tasks: ["Find videos and inspect transcript-grounded claims.", "Use local captions first; the separately requested hosted transcript fallback is paid."], example: "Use Dig to read the transcript of [video URL] and identify the passages supporting [claim]." },
+    x: { tasks: ["Weigh claims with X judge, discover broadly with X breadth, or inspect exact posts.", "Read threads, Communities and available media descriptions; account-only reads need the optional sign-in."], example: "Use Dig X judge to examine what practitioners are saying about [topic]. Read the original posts behind the important claims." },
+    reddit: { tasks: ["Find public Reddit discussions.", "Read thread comments and separate anecdotes from corroborated claims."], example: "Use Dig Reddit to investigate firsthand experiences with [topic], including contrary experiences." },
+    "tikhub-reddit": { tasks: ["Explore subreddit context and advanced Reddit discovery.", "Enrich selected posts and read available comment trees."], example: "Use Dig TikHub Reddit to investigate [topic] in [subreddit] and retain the relevant discussions." },
+    tiktok: { tasks: ["Search public videos and Top results, including photo posts.", "Read selected post details and comments."], example: "Use Dig TikTok to find public examples of [topic] and inspect comments on the strongest matches." },
+    instagram: { tasks: ["Read public Instagram accounts, posts and reels.", "Inspect available comments and caption evidence."], example: "Use Dig Instagram to inspect [public post URL], its caption and available comments." },
+    facebook: { tasks: ["Read public posts, profiles, groups and events.", "Search available videos and inspect supported transcripts and comments."], example: "Use Dig Facebook to check the latest public notices from [official page] about [topic]. Preserve timestamps and coverage limits." },
+    threads: { tasks: ["Read public Threads posts and replies.", "Inspect an account\u2019s returned posts without assuming complete history."], example: "Use Dig Threads to inspect [post or account] and report what its returned posts establish." },
+    linkedin: { tasks: ["Inspect public professional and company information.", "Read supported public posts and their context."], example: "Use Dig LinkedIn to check the public evidence for [company or professional question]." },
+    telegram: { tasks: ["Read public Telegram channel and post previews.", "Keep claims tied to their original public messages."], example: "Use Dig Telegram to inspect public posts from [channel] about [topic]." },
+    "china-social": { tasks: ["Discover public material across supported Chinese social platforms.", "Inspect original posts; provider coverage and alternative backends remain explicit."], example: "Use Dig China social to find firsthand examples of [topic] on [platform], and retain the original evidence." },
+    polymarket: { tasks: ["Discover markets and compare implied probabilities and liquidity.", "Read token price history and resolution details; prices describe market beliefs."], example: "Use Dig Polymarket to inspect [market] and its price history. Separate market pricing from factual evidence." },
+    commerce: { tasks: ["Read Amazon product information, offers and reviews.", "Inspect available price/rank history through the configured history provider."], example: "Use Dig Commerce to inspect [product] and compare its current details with available price history." },
+    "tiktok-ads": { tasks: ["Explore TikTok Creative Center analytics.", "Read the separate public Ad Library and keep the two datasets distinct."], example: "Use Dig TikTok ads to find examples for [category and market], identifying which dataset each finding comes from." },
+    "facebook-ads": { tasks: ["Find Meta Ad Library advertisers and creatives.", "Inspect ad dates and available transcripts without inferring campaign performance."], example: "Use Dig Facebook ads to examine [advertiser] and summarize the creative approaches in its available ads." },
+    dataforseo: { tasks: ["Research SERPs, keywords, rankings, backlinks and local businesses.", "Use the AI visibility method to compare brand mentions, citations and historical observations."], example: "Use Dig\u2019s DataForSEO AI visibility method to compare [brand] with [competitors] on [platform, market and time window]. Confirm the paid scope before retrieving data." }
+  };
+  function sourceGuide(id) {
+    const guide = SOURCE_GUIDES[id];
+    if (!guide) return null;
+    const prompt = node("p", "prompt-example", guide.example);
+    const status = attr(node("p", "meta"), "role", "status");
+    const copy = button("btn-ghost", "Copy example", async () => {
+      try {
+        if (!globalThis.navigator?.clipboard?.writeText) throw new Error("Clipboard unavailable");
+        await navigator.clipboard.writeText(guide.example);
+        status.textContent = "Copied. Paste it into the conversation and replace the bracketed text.";
+      } catch {
+        status.textContent = "Select the example text and copy it, then paste it into the conversation.";
+      }
+    });
+    const example = fold("source-example", `example:${id}`, node("span", "fold-title", "Example for the conversation"), prompt, copy, status);
+    return node("section", "source-guide", node("h5", "", "What you can do"), node("ul", "", guide.tasks.map((task) => node("li", "", task))), example.element);
+  }
+  function latestSourceCalls(snapshot2) {
+    const latest = /* @__PURE__ */ new Map();
+    for (const call2 of [...(snapshot2.items ?? []).flatMap((item2) => item2.calls ?? []), ...snapshot2.live ?? []]) {
+      const at = Date.parse(call2.at);
+      if (!call2.source || !Number.isFinite(at)) continue;
+      if (!latest.has(call2.source) || at > Date.parse(latest.get(call2.source).at)) latest.set(call2.source, call2);
+    }
+    return latest;
+  }
+  function activityNote(call2) {
+    if (!call2) return "No retained call to show. Configuration alone does not verify provider access.";
+    const outcome = { success: "completed", partial: "returned partial results", empty: "returned no results", failed: "failed", cancelled: "was stopped", skipped: "was skipped" }[call2.status] ?? "has an unknown outcome";
+    return `Last retained call ${outcome} \xB7 ${absTime(call2.at)} \xB7 ${call2.tool}. This describes that call, not a current connection check.`;
+  }
+
   // src/ui/sources.mjs
   var WORKER_FIELD = /_worker_(model|effort)$/;
   var workerKey = (method, field) => `${method.replaceAll("-", "_")}_worker_${field}`;
   var SVG = "http://www.w3.org/2000/svg";
-  var STATE_WORDS = { ready: "ready", partial: "partly ready", "setup-required": "needs setup", disabled: "off", unknown: "unknown" };
+  var STATE_WORDS = { ready: "configured", partial: "partly configured", "setup-required": "needs setup", disabled: "off", unknown: "unknown" };
   var KEY_WORDS = { set: "set", missing: "missing", unset: "not set" };
   var TOOL_WORDS = { set: "installed", missing: "not installed" };
   var ENVIRONMENT_NOTES = { unused: "Codex\u2019s environment has one that Dig isn\u2019t using.", different: "Codex\u2019s environment has a different one." };
@@ -22812,12 +22950,13 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const parts = providers.flatMap((p2, i2) => [i2 ? i2 === providers.length - 1 ? providers.length > 2 ? ", and " : " and " : ", " : null, p2.url ? externalLink(p2.url, p2.name) : p2.name]);
     return node("p", "meta providers", "Uses ", parts);
   }
-  function renderSources(container, toc, read, sources, save, actions) {
+  function renderSources(container, toc, read, sources, save, actions, recentCalls = /* @__PURE__ */ new Map()) {
     const properties = read.schema?.properties ?? {};
     const ids = MODULES.map((m2) => m2.id);
     const ordered = settingsGroups(read).flatMap((group) => group.keys);
     const infoOf = (list5) => new Map((Array.isArray(list5) ? list5 : []).map((source) => [source.id, source]));
     let info = infoOf(sources);
+    let activity = recentCalls;
     const controls = /* @__PURE__ */ new Map();
     const blocks2 = /* @__PURE__ */ new Map();
     function workerSection(module) {
@@ -22848,17 +22987,22 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         if (!setup.element.open && openNote && setup.element.contains(openNote.trigger)) closeNote();
       };
       const status = node("p", "meta status-line");
-      blocks2.set(module.id, { module, status, sections, methods, setup });
+      const lastCall = node("p", "meta source-activity");
+      blocks2.set(module.id, { module, status, sections, methods, setup, lastCall });
       const own = ordered.filter((key) => key !== field && !WORKER_FIELD.test(key) && ownerOf(key, ids) === module.id && properties[key]).map((key) => {
         const built = control(key, properties[key], read.values?.[key], save);
         controls.set(key, built);
         return built.element;
       });
+      const guide = sourceGuide(module.id);
+      const about = node("p", "about", module.about);
       return [
         node("div", "source-head", mark(module), node("div", "source-name", heading, providerLine(module)), toggle?.element),
-        node("p", "about", module.about),
+        guide ?? about,
         node("p", "meta billing", node("span", "fact-label", "Cost: "), module.billing),
+        guide ? node("details", "source-about", node("summary", "", "About this source"), about) : null,
         node("div", "readiness", status, setup.element),
+        lastCall,
         own.length ? node("div", "source-settings", node("p", "eyebrow", `${module.label} settings`), own) : null
       ];
     }
@@ -22868,6 +23012,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       if (!block) return;
       const message = readinessMessage(source);
       block.status.replaceChildren(stateChip(source?.readiness?.status ?? "unknown"), ...message ? [` ${message}`] : []);
+      block.lastCall.textContent = activityNote(activity.get(id));
       if (openNote && block.sections.contains(openNote.trigger)) closeNote();
       const sections = setupSections(block.module, source, actions);
       rebuild(block.sections, sections);
@@ -22906,7 +23051,8 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     }
     fillToc();
     return {
-      update(next, nextSources) {
+      update(next, nextSources, nextActivity) {
+        if (nextActivity) activity = nextActivity;
         if (next?.values) {
           for (const [key, built] of controls) if (Object.hasOwn(next.values, key)) built.set(next.values[key]);
         }
@@ -22914,7 +23060,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
           info = infoOf(nextSources);
           for (const id of ids) fillReadiness(id);
           fillToc();
-        }
+        } else if (nextActivity) for (const [id, block] of blocks2) block.lastCall.textContent = activityNote(activity.get(id));
       }
     };
   }
@@ -23000,6 +23146,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const element = document.createElementNS(SVG2, "svg");
     element.setAttribute("viewBox", viewBox);
     element.setAttribute("class", className);
+    if (className === "columns") element.setAttribute("preserveAspectRatio", "none");
     element.setAttribute("aria-hidden", "true");
     element.setAttribute("focusable", "false");
     element.append(...children.flat().filter(Boolean));
@@ -23064,7 +23211,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       node("div", "axis", node("span", "", bucketName(usage, usage.buckets[0])), node("span", "", usage.weekly ? bucketName(usage, last) : "Today"))
     );
   }
-  var SHOWN_SOURCES = 6;
+  var SHOWN_SOURCES = 4;
   var moreOpen = false;
   function sourceChart(rows, prefix, shown = SHOWN_SOURCES) {
     const max = Math.max(1, ...rows.map((s) => s.total));
@@ -23086,7 +23233,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         node("span", "who", module ? mark(module, true) : null, node("span", "who-name", labelOf(row.id))),
         node("span", "track", svg(`0 0 ${width} ${height}`, "bar", shape("rect", { width, height, class: "bar-ground" }), parts)),
         node("span", "count", num(row.total)),
-        node("span", "meta row-cost", costShort(row.cost, row.total)),
+        node("span", "meta row-cost", row.cost.unknownCalls && !Object.keys(row.cost.byUnit).length ? `${plural(row.cost.unknownCalls, "call")} without reported pricing` : costShort(row.cost, row.total)),
         node("span", "sr-only", detail)
       ), "title", detail);
     });
@@ -23109,13 +23256,18 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     return node("div", "legend", outcomes(prefix).map((o) => node("span", "legend-item", svg("0 0 10 10", "swatch", shape("rect", { width: 10, height: 10, rx: 2, fill: o.fill, class: `fill-${o.id}` })), o.label)));
   }
   function metric(label, value, note) {
-    return node("div", "metric", node("dt", "", label), node("dd", "", node("span", "metric-value", value), note ? node("span", "metric-note", note) : null));
+    return node("div", "metric", node("dt", "", label), node("dd", "", node("span", "metric-value", value), note ? node("div", "metric-note", note) : null));
   }
-  function costMetric(cost, total) {
+  var pricingOpen = /* @__PURE__ */ new Map();
+  function costMetric(cost, total, scope2 = "cost") {
     const amounts = costAmounts(cost);
-    const value = !total ? "\u2014" : amounts.length ? amounts.map((amount) => node("span", "cost-unit", amount)) : cost.unknownCalls ? "Unknown" : "No charge recorded";
+    const value = !total ? "\u2014" : amounts.length ? amounts.map((amount) => node("span", "cost-unit", amount)) : cost.unknownCalls ? plural(cost.unknownCalls, "call") : "No charge recorded";
     const note = !total ? "No retrievals" : cost.unknownCalls ? `${num(cost.unknownCalls)} of ${plural(total, "retrieval")} incompletely priced` : "Every retrieval\u2019s cost is known";
-    return metric("Provider cost", value, note);
+    const label = amounts.length && cost.unknownCalls ? "Known provider subtotal" : cost.unknownCalls ? "Unpriced provider usage" : "Provider cost";
+    const details2 = node("details", "pricing-details", keyed(node("summary", "", "Pricing details"), `pricing:${scope2}`), node("p", "", note));
+    details2.open = pricingOpen.get(scope2) ?? false;
+    details2.ontoggle = () => pricingOpen.set(scope2, details2.open);
+    return attr(metric(label, value, total ? details2 : note), "data-incomplete", String(Boolean(cost.unknownCalls)));
   }
   function metrics(usage) {
     const { totals } = usage;
@@ -23127,10 +23279,12 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       metric("Retrievals", num(totals.total), totals.total ? `${num(totals.results)} with results` : "None in this window"),
       metric("Reports saved", num(totals.reports), totals.reports ? `from ${plural(reportSources, "source")}` : "None in this window"),
       metric("Failed or stopped", num(totals.failed), share),
-      costMetric(totals.cost, totals.total)
+      costMetric(totals.cost, totals.total, "usage")
     );
   }
+  var expanded = false;
   function renderUsage(container, usage, choose) {
+    attr(container, "data-expanded", String(expanded));
     const heading = attr(node("h3", "", "Usage"), "id", "usage-title");
     if (!usage.recorded) {
       rebuild(container, [node("div", "usage-head", node(
@@ -23145,11 +23299,15 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const scope2 = usage.days ? `Last ${usage.days} days` : `All time, since ${shortDate(iso(usage.start))}`;
     const picker = attr(node("div", "segmented", WINDOWS.map((w3) => attr(keyed(button("btn-ghost", w3.label, () => choose(w3.days)), `usage-window:${w3.days}`), "aria-pressed", String(w3.days === usage.days)))), "aria-label", "Usage window");
     attr(picker, "role", "group");
+    const resize = attr(keyed(button("btn-ghost", expanded ? "Compact charts" : "Expand charts", () => {
+      expanded = !expanded;
+      renderUsage(container, usage, choose);
+    }), "usage-size"), "aria-pressed", String(expanded));
     rebuild(container, [
       patterns(PREFIX),
-      node("div", "usage-head", node("div", "", heading, node("p", "meta", `${scope2} \xB7 every project in this library`)), picker),
+      node("div", "usage-head", node("div", "", heading, node("p", "meta", `${scope2} \xB7 every project in this library`)), node("div", "usage-actions", resize, picker)),
       metrics(usage),
-      usage.totals.total || usage.totals.reports ? node("div", "charts", columns(usage), sourceChart(usage.sources, PREFIX)) : node("p", "meta", "No retrievals or reports in this window."),
+      usage.totals.total || usage.totals.reports ? node("div", "charts", columns(usage), sourceChart(usage.sources, PREFIX, expanded ? 6 : 4)) : node("p", "meta", "No retrievals or reports in this window."),
       usage.totals.total ? legend(PREFIX) : null,
       node("p", "meta usage-scope", `${COST_SCOPE}. ${COST_CAVEAT} `, node("span", "usage-counts", "Counts come from the receipts Dig keeps for each provider call."))
     ].filter(Boolean));
@@ -23207,10 +23365,23 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   var list3 = null;
   var listTitle = null;
   var listDig = null;
+  function setRetrievalsOpen(open2) {
+    const previous = Boolean(list3?.element.open);
+    if (list3) list3.element.open = open2;
+    return previous;
+  }
+  function revealRetrievals() {
+    if (!list3) return;
+    list3.element.open = true;
+    list3.element.scrollIntoView?.({ block: "start", behavior: "auto" });
+    list3.element.children[0]?.focus({ preventScroll: true });
+  }
   function renderRetrievals(container, item2, catalog2, inspect) {
     const calls = Array.isArray(item2.calls) ? item2.calls : [];
     const head = node("div", "usage-head", node("div", "", attr(node("h3", "", "Retrievals"), "id", "retrievals-title"), node("p", "meta", "Every provider call saved with this dig, from its reports and the conversations that worked on it.")));
     if (!calls.length) {
+      list3 = null;
+      listDig = null;
       rebuild(container, [head, node("p", "meta", "No provider call has been saved with this dig yet.")]);
       return;
     }
@@ -23224,29 +23395,22 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const unsaved = groups.find((group) => group.key === UNSAVED)?.calls.length ?? 0;
     listTitle.textContent = `All ${plural(calls.length, "retrieval")}`;
     list3.gist.textContent = `${unsaved ? `${num(unsaved)} not in a saved report \xB7 ` : ""}grouped by report, failed first`;
-    rebuild(list3.body, groups.map((group) => groupView(group, catalog2, inspect)));
     const counts = outcomeCounts(calls);
     const cost = costSummary(calls);
     const reports = Array.isArray(item2.reportDetails) ? item2.reportDetails : [];
     const rows = sourceRows(calls, reports);
+    rebuild(list3.body, [sourceChart(rows, PREFIX2, Infinity), legend(PREFIX2), ...groups.map((group) => groupView(group, catalog2, inspect))]);
     rebuild(container, [
       patterns(PREFIX2),
       head,
-      // The figures sit beside the chart, so its bars keep Usage's proportions instead of stretching across the page.
       node(
-        "div",
-        "retrievals-body",
-        node(
-          "dl",
-          "metrics",
-          metric("Retrievals", num(counts.total), `${num(counts.results)} with results`),
-          metric("Sources", num(rows.length), `${plural(reports.length, "report")} saved`),
-          metric("Failed or stopped", num(counts.failed), `${Math.round(counts.failed / counts.total * 100)}% of retrievals`),
-          costMetric(cost, counts.total)
-        ),
-        sourceChart(rows, PREFIX2, Infinity)
+        "dl",
+        "metrics",
+        metric("Retrievals", num(counts.total), `${num(counts.results)} with results`),
+        metric("Sources", num(rows.length), `${plural(reports.length, "report")} saved`),
+        metric("Failed or stopped", num(counts.failed), `${Math.round(counts.failed / counts.total * 100)}% of retrievals`),
+        costMetric(cost, counts.total, `dig:${key}`)
       ),
-      legend(PREFIX2),
       node("p", "meta usage-scope", `${COST_SCOPE}. ${COST_CAVEAT}`),
       list3.element
     ]);
@@ -23319,7 +23483,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
 
   // src/version.mjs
-  var VERSION = "0.3.1";
+  var VERSION = "0.4.0";
 
   // src/app.mjs
   var POLL_MS = 2e3;
@@ -23337,13 +23501,20 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   var pendingFile = null;
   var returnFile = null;
   var navigation = 0;
+  var evidenceNavigation = 0;
+  var evidenceFocus = null;
+  var evidenceScroll = 0;
+  var evidenceReopen = false;
+  var readerOrigin = null;
+  var browseScroll = 0;
   var mode = "library";
   var thread = null;
   var view = "browse";
   var returnView = "browse";
   var aboutReturn = "browse";
   var revision = null;
-  var polling = false;
+  var pollTask = null;
+  var refreshQueued = false;
   var updatesFailed = false;
   var staleViewNoticed = false;
   var replacedNoticed = false;
@@ -23416,7 +23587,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     text($("retention"), snapshot.keepRaw ? "Original responses retained" : "Original responses not retained");
     text($("library-path"), snapshot.library || "");
     showLibraryFolder();
-    filter();
+    renderLibrary();
     renderPanel();
     showUsage();
     if (current) refreshCurrent();
@@ -23462,7 +23633,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         metric("Retrievals", num(counts.total), `${num(counts.results)} with results`),
         metric("Sources", num(sourceRows(calls, reports).length), `${plural(reports.length, "report")} saved`),
         metric("Failed or stopped", num(counts.failed), counts.total ? `${Math.round(counts.failed / counts.total * 100)}% of retrievals` : "None yet"),
-        costMetric(costSummary(calls), counts.total)
+        costMetric(costSummary(calls), counts.total, "panel")
       ),
       elsewhere ? node("p", "meta", `Not included: ${plural(elsewhere, "retrieval")} by workers or other conversations that no saved report has claimed yet.`) : null,
       node("p", "meta usage-scope", `${COST_SCOPE}. ${COST_CAVEAT}`)
@@ -23470,11 +23641,13 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
   function card(item2) {
     const opener = keyed(button("card-open", item2.title, () => showDig(item2).catch((e) => notify(e.message, true))), `dig:${item2.project}:${item2.id}`);
+    attr(opener, "title", item2.title);
     const summary = snippet(item2);
+    const marks = (item2.sources ?? []).slice(0, 3).map((id) => MODULES.find((source) => source.id === id)).filter(Boolean).map((source) => mark(source, true));
     return node(
       "article",
       "research-card",
-      node("div", "card-head", node("p", "eyebrow", sourcesLine(item2)), tag(item2.status)),
+      node("div", "card-head", node("p", "eyebrow source-labels", marks, sourcesLine(item2)), tag(item2.status)),
       node("h2", "", opener),
       attr(node("p", "meta", startedLine(item2)), "title", item2.project),
       summary ? node("p", "summary", summary) : null,
@@ -23482,10 +23655,8 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       cardCost(item2)
     );
   }
-  function filter() {
-    const query2 = $("search").value.trim().toLowerCase();
-    const items = snapshot.items.filter((item2) => `${item2.title} ${item2.project} ${item2.snippet ?? ""} ${(item2.reportDetails ?? []).map((r) => r.summary).join(" ")} ${sourcesLine(item2)}`.toLowerCase().includes(query2));
-    rebuild($("list"), items.length ? items.map(card) : [node("div", "empty", snapshot.items.length ? `No research matches \u201C${$("search").value.trim()}\u201D. Clear the search to see everything.` : "Your library is ready. Ask the conversation to research a question with one of Dig\u2019s sources; it appears here as soon as it starts.")]);
+  function renderLibrary() {
+    rebuild($("list"), snapshot.items.length ? snapshot.items.map(card) : [node("div", "empty", "Your library is ready. Ask the conversation to research a question with one of Dig\u2019s sources; it appears here as soon as it starts.")]);
   }
   function trailCard(item2) {
     const latest = item2.calls.at(-1);
@@ -23524,6 +23695,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     text($("dig-title"), item2.title);
     $("dig-meta").replaceChildren(tag(item2.status), ` ${startedLine(item2)}${item2.finishedAt ? ` \xB7 Answer ${shortDate(item2.finishedAt)}` : ""}`);
     renderRetrievals($("dig-retrievals"), item2, catalog, (rawFile) => inspectRaw(rawFile).catch((e) => notify(e.message, true)));
+    $("reader-evidence").disabled = !item2.calls.length;
     const viewing = open?.kind === "raw" ? [open.file] : pendingFile && fileKind(pendingFile) === "raw" ? [pendingFile] : [];
     rebuild($("files"), [...item2.files, ...viewing].map(fileTab));
   }
@@ -23549,6 +23721,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     return body;
   }
   async function showFile(file2) {
+    closeEvidence(false);
     const request = ++navigation;
     open = null;
     pendingFile = file2;
@@ -23577,20 +23750,66 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       $("back-to-report").hidden = false;
     }
     renderDigChrome(current);
+    $("files").scrollIntoView?.({ block: "start", behavior: "auto" });
+    return true;
   }
-  function inspectRaw(rawFile) {
-    if (open && open.kind !== "raw") returnFile = open.file;
-    return showFile(rawFile);
+  function closeEvidence(restore = true) {
+    evidenceNavigation++;
+    const wasOpen = !$("evidence-pane").hidden;
+    $("evidence-pane").hidden = true;
+    $("reader-layout").classList.toggle("has-evidence", false);
+    $("evidence-body").replaceChildren();
+    if (restore && wasOpen) {
+      setRetrievalsOpen(evidenceReopen);
+      globalThis.scrollTo?.({ top: evidenceScroll, behavior: "instant" });
+      (evidenceFocus?.isConnected === false ? $("reader-evidence") : evidenceFocus)?.focus({ preventScroll: true });
+    }
+    readerOrigin = null;
+  }
+  async function inspectRaw(rawFile) {
+    if (!current || !open || open.kind === "raw") return showFile(rawFile);
+    if ($("evidence-pane").hidden) {
+      evidenceFocus = readerOrigin?.focus ?? document.activeElement;
+      evidenceScroll = readerOrigin?.scroll ?? globalThis.scrollY ?? 0;
+      const wasOpen = setRetrievalsOpen(false);
+      evidenceReopen = readerOrigin ? false : wasOpen;
+      readerOrigin = null;
+    } else setRetrievalsOpen(false);
+    const request = ++evidenceNavigation;
+    const receipt = current.calls.find((call2) => call2.rawFile === rawFile);
+    $("evidence-pane").hidden = false;
+    $("reader-layout").classList.toggle("has-evidence", true);
+    text($("evidence-title"), "Original response");
+    $("evidence-body").replaceChildren(node("p", "meta", "Reading retained evidence\u2026"));
+    try {
+      const body = await readAll(rawFile);
+      if (request !== evidenceNavigation || !current) return;
+      $("evidence-body").replaceChildren(rawView(rawFile, body, receipt, catalog));
+    } catch (error51) {
+      if (request !== evidenceNavigation) return;
+      $("evidence-body").replaceChildren(node("p", "meta", `Unable to read this response: ${error51.message}`));
+    }
+    if (request !== evidenceNavigation) return;
+    $("evidence-title").focus({ preventScroll: true });
+    $("reader-layout").scrollIntoView?.({ block: "start", behavior: "auto" });
   }
   async function showDig(item2, file2) {
-    if (view !== "detail") returnView = view;
+    if (view !== "detail") {
+      returnView = view;
+      browseScroll = globalThis.scrollY ?? 0;
+    }
     current = item2;
     open = null;
     returnFile = null;
     show("detail");
-    await showFile(file2 ?? item2.answer ?? item2.reports[0] ?? item2.files.find((f2) => f2.endsWith("dig.md")));
+    const shown = await showFile(file2 ?? item2.answer ?? item2.reports[0] ?? item2.files.find((f2) => f2.endsWith("dig.md")));
+    if (shown && current?.id === item2.id && current?.project === item2.project) {
+      $("dig-title").focus({ preventScroll: true });
+      globalThis.scrollTo?.({ top: 0, behavior: "instant" });
+    }
   }
   function leaveDetail() {
+    closeEvidence(false);
     navigation++;
     current = null;
     open = null;
@@ -23665,8 +23884,12 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const work = saving.then(async () => (await call("settings.update", { set: { [key]: value } })).values);
     saving = work.catch(() => {
     });
-    work.then(() => poll(true)).catch((e) => notify(`Not saved: ${e.message}`, true));
-    return work;
+    const refreshed = work.then(async (values) => {
+      await poll(true);
+      return values;
+    });
+    refreshed.catch((e) => notify(`Not saved: ${e.message}`, true));
+    return refreshed;
   }
   function showKeys(info) {
     const path = info?.keysPath;
@@ -23682,7 +23905,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const count = (status) => on.filter((s) => s.readiness?.status === status).length;
     const partly = count("partial");
     const setup = count("setup-required");
-    text($("sources-summary"), sources.length ? [`${on.length} of ${plural(sources.length, "source")} on`, partly ? `${partly} partly ready` : null, setup ? `${setup} ${setup === 1 ? "needs" : "need"} setup` : null].filter(Boolean).join(" \xB7 ") : "");
+    text($("sources-summary"), sources.length ? [`${on.length} of ${plural(sources.length, "source")} on`, partly ? `${partly} partly configured` : null, setup ? `${setup} ${setup === 1 ? "needs" : "need"} setup` : null].filter(Boolean).join(" \xB7 ") : "");
   }
   async function openSources() {
     show("sources");
@@ -23694,7 +23917,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     if (Array.isArray(info.sources)) catalog = createCatalog(info.sources);
     showKeys(info);
     sourcesSummary(info);
-    page = renderSources($("sources-list"), $("sources-toc"), read, info.sources ?? [], preview ? null : saveSetting, preview ? null : { editKeys, useEnvironment: useEnvironmentKeys });
+    page = renderSources($("sources-list"), $("sources-toc"), read, info.sources ?? [], preview ? null : saveSetting, preview ? null : { editKeys, useEnvironment: useEnvironmentKeys }, latestSourceCalls(snapshot));
     pageView = "sources";
     text($("sources-status"), preview ? READ_ONLY : info.error ? `Source readiness is unavailable: ${info.error}` : "");
   }
@@ -23716,7 +23939,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     if (!handle) return;
     const [read, info] = await Promise.all([call("settings.read").catch(() => null), onSources ? readSourceInfo() : null]);
     if (handle !== page) return;
-    handle.update(read?.values ? read : null, info && !info.error ? info.sources : null);
+    handle.update(read?.values ? read : null, info && !info.error ? info.sources : null, onSources ? latestSourceCalls(snapshot) : null);
     if (onSources && info && !info.error) {
       showKeys(info);
       sourcesSummary(info);
@@ -23761,31 +23984,44 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       ))
     ]);
   }
-  async function poll(force = false) {
-    if (polling || !force && document.visibilityState === "hidden") return;
-    polling = true;
-    try {
-      const next = (await call("library_revision")).revision;
-      if (force || next !== revision) {
-        const value = await call("library_snapshot");
-        revision = next;
-        render(value);
-        if (page) await refreshPage();
-      }
-      if (updatesFailed) {
-        updatesFailed = false;
-        $("reload").hidden = true;
-        notify("Automatic updates resumed.");
-      }
-      text($("live-state"), "Updates automatically");
-    } catch (e) {
-      if (!updatesFailed) notify(`Automatic updates paused: ${e.message}`, true);
-      updatesFailed = true;
-      $("reload").hidden = false;
-      text($("live-state"), "Updates paused");
-    } finally {
-      polling = false;
+  function poll(force = false) {
+    if (pollTask) {
+      if (force) refreshQueued = true;
+      return pollTask;
     }
+    if (!force && document.visibilityState === "hidden") return Promise.resolve();
+    pollTask = (async () => {
+      let refresh = force;
+      try {
+        do {
+          refreshQueued = false;
+          try {
+            const next = (await call("library_revision")).revision;
+            if (refresh || next !== revision) {
+              const value = await call("library_snapshot");
+              revision = next;
+              render(value);
+              if (page) await refreshPage();
+            }
+            if (updatesFailed) {
+              updatesFailed = false;
+              $("reload").hidden = true;
+              notify("Automatic updates resumed.");
+            }
+            text($("live-state"), "Updates automatically");
+          } catch (e) {
+            if (!updatesFailed) notify(`Automatic updates paused: ${e.message}`, true);
+            updatesFailed = true;
+            $("reload").hidden = false;
+            text($("live-state"), "Updates paused");
+          }
+          refresh = refreshQueued;
+        } while (refresh);
+      } finally {
+        pollTask = null;
+      }
+    })();
+    return pollTask;
   }
   function openExternal(event) {
     const anchor = event.target?.closest?.("a[data-external]");
@@ -23795,10 +24031,20 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       if (result?.isError) notify(`The host did not open ${anchor.href}.`, true);
     }).catch((e) => notify(`Unable to open ${anchor.href}: ${e.message}`, true));
   }
-  $("search").oninput = filter;
   $("back").onclick = () => {
+    const panel = returnView === "panel";
+    const key = current ? `${panel ? "trail" : "dig"}:${current.project}:${current.id}` : null;
     leaveDetail();
     show(returnView);
+    globalThis.scrollTo?.({ top: browseScroll, behavior: "instant" });
+    if (key) {
+      for (const link3 of $(panel ? "panel-digs" : "list").querySelectorAll("[data-key]")) if (link3.getAttribute("data-key") === key) link3.focus({ preventScroll: true });
+    }
+  };
+  $("close-evidence").onclick = () => closeEvidence();
+  $("reader-evidence").onclick = () => {
+    readerOrigin = { scroll: globalThis.scrollY ?? 0, focus: $("reader-evidence") };
+    revealRetrievals();
   };
   $("back-to-report").onclick = () => {
     if (returnFile) showFile(returnFile).catch((e) => notify(e.message, true));
@@ -23832,6 +24078,12 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   $("dismiss").onclick = () => notify("");
   async function start() {
     document.addEventListener("click", openExternal);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && view === "detail" && !$("evidence-pane").hidden) {
+        closeEvidence();
+        event.preventDefault?.();
+      }
+    });
     if (preview) {
       setMode(params.has("panel") ? "panel" : "library", params.get("panel") || null);
       await poll(true);

@@ -54,33 +54,40 @@ function groupView(group, catalog, inspect) {
 // The list fold belongs to the open dig: built once per dig, so a live update rebuilds only its title, gist and
 // contents and leaves it open or closed; another dig starts closed.
 let list = null; let listTitle = null; let listDig = null;
+export function setRetrievalsOpen(open) {
+  const previous = Boolean(list?.element.open);
+  if (list) list.element.open = open;
+  return previous;
+}
+export function revealRetrievals() {
+  if (!list) return;
+  list.element.open = true;
+  list.element.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+  list.element.children[0]?.focus({ preventScroll: true });
+}
 /** Renders `item`'s Retrievals summary into `container`; `inspect(rawFile)` opens a retained original response. */
 export function renderRetrievals(container, item, catalog, inspect) {
   const calls = Array.isArray(item.calls) ? item.calls : [];
   const head = node('div', 'usage-head', node('div', '', attr(node('h3', '', 'Retrievals'), 'id', 'retrievals-title'), node('p', 'meta', 'Every provider call saved with this dig, from its reports and the conversations that worked on it.')));
-  if (!calls.length) { rebuild(container, [head, node('p', 'meta', 'No provider call has been saved with this dig yet.')]); return; }
+  if (!calls.length) { list = null; listDig = null; rebuild(container, [head, node('p', 'meta', 'No provider call has been saved with this dig yet.')]); return; }
   const key = `${item.project}:${item.id}`;
   if (listDig !== key) { listTitle = node('span', 'fold-title'); list = fold('retrievals-fold', 'retrievals-all', listTitle); listDig = key; }
   const groups = retrievalGroups(item);
   const unsaved = groups.find(group => group.key === UNSAVED)?.calls.length ?? 0;
   listTitle.textContent = `All ${plural(calls.length, 'retrieval')}`;
   list.gist.textContent = `${unsaved ? `${num(unsaved)} not in a saved report · ` : ''}grouped by report, failed first`;
-  rebuild(list.body, groups.map(group => groupView(group, catalog, inspect)));
   const counts = outcomeCounts(calls); const cost = costSummary(calls);
   const reports = Array.isArray(item.reportDetails) ? item.reportDetails : [];
   const rows = sourceRows(calls, reports);
+  rebuild(list.body, [sourceChart(rows, PREFIX, Infinity), legend(PREFIX), ...groups.map(group => groupView(group, catalog, inspect))]);
   rebuild(container, [
     patterns(PREFIX),
     head,
-    // The figures sit beside the chart, so its bars keep Usage's proportions instead of stretching across the page.
-    node('div', 'retrievals-body',
-      node('dl', 'metrics',
+    node('dl', 'metrics',
         metric('Retrievals', num(counts.total), `${num(counts.results)} with results`),
         metric('Sources', num(rows.length), `${plural(reports.length, 'report')} saved`),
         metric('Failed or stopped', num(counts.failed), `${Math.round((counts.failed / counts.total) * 100)}% of retrievals`),
-        costMetric(cost, counts.total)),
-      sourceChart(rows, PREFIX, Infinity)),
-    legend(PREFIX),
+        costMetric(cost, counts.total, `dig:${key}`)),
     node('p', 'meta usage-scope', `${COST_SCOPE}. ${COST_CAVEAT}`),
     list.element,
   ]);

@@ -87,7 +87,7 @@ async function loadApp(host) {
   const context = vm.createContext({ host, document, location: { search: '' }, URL, URLSearchParams, console, setInterval: fn => intervals.push(fn), setTimeout, clearTimeout, fetch: () => { throw new Error('No browser fetch expected'); } });
   vm.runInContext(await appCode(), context);
   await settle();
-  return { $: id => document.getElementById(id), document, listeners, poll: async () => { intervals[0](); await settle(); } };
+  return { $: id => document.getElementById(id), document, listeners, poll: async () => { await intervals[0](); await settle(); } };
 }
 
 const report = id => `p/digs/${id}/hackernews.md`;
@@ -177,8 +177,8 @@ test('dig cards and the open dig total provider costs per unit, count incomplete
 
   await openDig(ui, host, 'A', 'Report body');
   const panel = panelOf(ui);
-  const cost = [...panel.walk()].find(e => e.className === 'metric' && /^Provider cost/.test(e.textContent));
-  assert.equal(cost.textContent, 'Provider cost$0.37502 ScrapeCreators credits1 Scrape.do credit2 of 6 retrievals incompletely priced');
+  const cost = [...panel.walk()].find(e => e.className === 'metric' && /^(Provider cost|Known provider subtotal)/.test(e.textContent));
+  assert.equal(cost.textContent, 'Known provider subtotal$0.37502 ScrapeCreators credits1 Scrape.do creditPricing details2 of 6 retrievals incompletely priced');
   assert.match(panel.textContent, /retained calls only · excludes Codex model costs.*not a reconciled invoice/);
   // Failed or stopped calls lead their group, each with its own cost.
   const rows = retrievalEntries(ui).map(row => row.textContent);
@@ -190,7 +190,6 @@ test('dig cards and the open dig total provider costs per unit, count incomplete
   assert.doesNotMatch(panel.textContent, /\bFree\b/);
 
   ui.$('back').onclick();
-  ui.$('search').value = 'question b'; ui.$('search').oninput();
   await openDig(ui, host, 'B', 'Report body');
   assert.equal(panelOf(ui).textContent, 'RetrievalsEvery provider call saved with this dig, from its reports and the conversations that worked on it.No provider call has been saved with this dig yet.', 'No calls make no cost claim');
 });
@@ -206,7 +205,7 @@ test('the conversation figures cover its digs and its own unclaimed calls, name 
   host.ontoolresult({ structuredContent: { view: 'panel', thread: 'thread-1' } });
   const figure = label => [...ui.$('panel-figures').walk()].find(e => e.className === 'metric' && e.textContent.startsWith(label))?.textContent;
   assert.equal(figure('Retrievals'), 'Retrievals22 with results');
-  assert.equal(figure('Provider cost'), 'Provider cost$0.75001 of 2 retrievals incompletely priced');
+  assert.equal(figure('Known provider subtotal'), 'Known provider subtotal$0.7500Pricing details1 of 2 retrievals incompletely priced');
   assert.match(ui.$('panel-figures').textContent, /Not included: 1 retrieval by workers or other conversations that no saved report has claimed yet\./);
   assert.match(ui.$('panel-figures').textContent, /retained calls only · excludes Codex model costs/);
   assert.equal(ui.$('live-caveat').hidden, false);
@@ -214,7 +213,7 @@ test('the conversation figures cover its digs and its own unclaimed calls, name 
   await ui.poll();
   // The worker's call joins the conversation's figures once a report of its dig claims it.
   assert.equal(figure('Retrievals'), 'Retrievals33 with results');
-  assert.equal(figure('Provider cost'), 'Provider cost$9.75001 of 3 retrievals incompletely priced');
+  assert.equal(figure('Known provider subtotal'), 'Known provider subtotal$9.7500Pricing details1 of 3 retrievals incompletely priced');
   assert.doesNotMatch(ui.$('panel-figures').textContent, /Not included/);
   assert.equal(ui.document.activeElement, byKey(ui.$('panel-digs'), 'trail:/project/A:A'));
   host.ontoolresult({ structuredContent: { view: 'panel', thread: null } });
@@ -227,12 +226,12 @@ test('a live update refreshes the open dig’s provider costs without replacing 
   const host = scriptedHost([snapshotOf([item('A', { calls: [first] })]), snapshotOf([item('A', { calls: [first, second] })])]);
   const ui = await loadApp(host);
   await openDig(ui, host, 'A', 'BODY_A');
-  const costOf = () => [...panelOf(ui).walk()].find(e => e.className === 'metric' && /^Provider cost/.test(e.textContent)).textContent;
-  assert.equal(costOf(), 'Provider cost$0.1250Every retrieval’s cost is known');
+  const costOf = () => [...panelOf(ui).walk()].find(e => e.className === 'metric' && /^(Provider cost|Known provider subtotal)/.test(e.textContent)).textContent;
+  assert.equal(costOf(), 'Provider cost$0.1250Pricing detailsEvery retrieval’s cost is known');
   const reading = ui.$('document').children[0];
   byKey(panelOf(ui), `raw:${first.rawFile}`).focus();
   await ui.poll();
-  assert.equal(costOf(), 'Provider cost$0.12501 of 2 retrievals incompletely priced');
+  assert.equal(costOf(), 'Known provider subtotal$0.1250Pricing details1 of 2 retrievals incompletely priced');
   assert.equal(ui.$('document').children[0], reading);
   assert.equal(ui.document.activeElement, byKey(panelOf(ui), `raw:${first.rawFile}`));
 });
@@ -306,18 +305,20 @@ test('retained responses read as source evidence, keep their original JSON, and 
   byKey(panelOf(ui), `raw:${rawCall.rawFile}`).onclick(); await settle();
   host.reads.get(rawCall.rawFile)(JSON.stringify({ tool: 'hackernews', at: rawCall.at, responses: [{ label: 'search', status: 200, body: { nbHits: 108, hits: [{ objectID: '38988949', title: 'SQLite: Wal2 Mode', author: 'finallyy', points: 444, num_comments: 96, created_at: '2024-01-14T09:42:18Z' }] } }] }));
   await settle();
-  const doc = ui.$('document');
+  const doc = ui.$('evidence-body');
   assert.match(doc.textContent, /Searched Hacker News for “sqlite” → 1 of 108 stories/);
   assert.ok([...doc.walk()].some(e => e.tagName === 'A' && e.href === 'https://news.ycombinator.com/item?id=38988949'));
   assert.ok([...doc.walk()].some(e => e.tagName === 'DETAILS' && /Original JSON/.test(e.textContent)));
-  assert.equal(ui.$('back-to-report').hidden, false); assert.match(ui.$('back-to-report').textContent, /Back to Hacker News report/);
+  assert.equal(ui.$('evidence-pane').hidden, false);
   byKey(panelOf(ui), `raw:${generic.rawFile}`).onclick(); await settle();
   host.reads.get(generic.rawFile)(JSON.stringify({ tool: 'commerce_search', at: generic.at, responses: [{ label: 'search', status: 200, body: { products: [] } }] })); await settle();
   assert.match(doc.textContent, /No source-specific view applies/);
   assert.equal([...doc.walk()].find(e => e.tagName === 'DETAILS' && /Original JSON/.test(e.textContent)).getAttribute('open'), '');
   host.reads.delete(report('A'));
-  ui.$('back-to-report').onclick(); await settle();
-  assert.ok(host.reads.has(report('A')));
+  ui.$('close-evidence').onclick(); await settle();
+  assert.equal(host.reads.has(report('A')), false, 'Closing evidence keeps the loaded report without another read');
+  assert.match(ui.$('document').textContent, /Report body/);
+  assert.equal(ui.$('evidence-pane').hidden, true);
 });
 
 test('a failed source preview keeps the complete retained JSON readable', async () => {
@@ -328,10 +329,10 @@ test('a failed source preview keeps the complete retained JSON readable', async 
   byKey(panelOf(ui), `raw:${receipt.rawFile}`).onclick(); await settle();
   const original = { tool: 'reddit', responses: [{ label: 'search', status: 200, body: { posts: [{ id: 'malformed-date', title: 'Retained record', created_utc: 1e20 }] } }] };
   host.reads.get(receipt.rawFile)(JSON.stringify(original)); await settle();
-  const json = [...ui.$('document').walk()].find(e => e.className === 'raw-json');
+  const json = [...ui.$('evidence-body').walk()].find(e => e.className === 'raw-json');
   assert.equal(json?.getAttribute('open'), '');
   assert.deepEqual(JSON.parse(json.children.find(e => e.tagName === 'PRE').textContent), original);
-  assert.equal(ui.$('back-to-report').hidden, false);
+  assert.equal(ui.$('evidence-pane').hidden, false);
 });
 
 test('X API responses preview as posts with author, time, text and counts, and the original JSON stays reachable', async () => {
@@ -345,7 +346,7 @@ test('X API responses preview as posts with author, time, text and counts, and t
     includes: { users: [{ id: '12', username: 'jack', name: 'jack' }] },
   } }] }));
   await settle();
-  const doc = ui.$('document');
+  const doc = ui.$('evidence-body');
   assert.match(doc.textContent, /Read X post https:\/\/x\.com\/jack\/status\/20 → 1 post/);
   const entry = [...doc.walk()].find(e => e.className === 'evidence-item');
   assert.equal(entry.textContent, 'jack @jackMar 21, 2006 · 290K likes · 120K reposts · 18K replies · 5K quotes · 0 viewsjust setting up my twttr');
@@ -716,4 +717,110 @@ test('a deep link refreshes a hidden views stale library before resolving a newl
   host.reads.get(report('B'))('Newly saved evidence'); await settle();
   assert.equal(ui.$('dig-title').textContent, 'Question B');
   assert.match(ui.$('document').textContent, /Newly saved evidence/);
+});
+
+test('evidence inspection preserves the report and ignores a response arriving after close or navigation', async () => {
+  const host = scriptedHost([snapshotOf([item('A', { calls: [rawCall] }), item('B')])]);
+  const ui = await loadApp(host);
+  await openDig(ui, host, 'A', 'Report A stays loaded');
+  const original = ui.$('document').children[0];
+  const trigger = byKey(panelOf(ui), `raw:${rawCall.rawFile}`);
+  trigger.focus(); trigger.onclick(); await settle();
+  assert.equal(ui.$('document').children[0], original);
+  ui.$('close-evidence').onclick();
+  host.reads.get(rawCall.rawFile)('{"responses":[]}'); await settle();
+  assert.equal(ui.$('evidence-pane').hidden, true);
+  assert.equal(ui.document.activeElement, trigger);
+  assert.equal(ui.$('document').children[0], original);
+  trigger.onclick(); await settle();
+  await openDig(ui, host, 'B', 'Report B');
+  host.reads.get(rawCall.rawFile)('{"responses":[]}'); await settle();
+  assert.equal(ui.$('evidence-pane').hidden, true);
+  assert.match(ui.$('document').textContent, /Report B/);
+});
+
+test('a report outline navigates real rendered headings without interpreting report text as HTML', async () => {
+  const host = scriptedHost([snapshotOf([item('A')])]);
+  const ui = await loadApp(host);
+  await openDig(ui, host, 'A', '## Summary\nA finding.\n## Evidence <script>bad()</script>\nThe source.\n### Limits\nA boundary.');
+  const doc = ui.$('document');
+  const buttons = [...doc.walk()].filter(e => e.getAttribute('aria-controls')?.startsWith('report-section-'));
+  assert.equal(buttons.length, 3);
+  buttons[2].onclick();
+  assert.equal(ui.document.activeElement.getAttribute('id'), buttons[2].getAttribute('aria-controls'));
+  assert.equal(ui.document.activeElement.textContent, 'Limits');
+  assert.ok(![...doc.walk()].some(e => e.tagName === 'SCRIPT'));
+});
+
+test('unpriced usage shows call counts, while reported provider credit units remain separate', async () => {
+  const calls = [priced('one', null), priced('two', null)];
+  const host = scriptedHost([snapshotOf([item('A', { calls }), item('B', { calls: [priced('credits', [{ amount: 2, unit: 'ScrapeCreators credits' }, { amount: 3, unit: 'Scrape.do credits' }])] })])]);
+  const ui = await loadApp(host);
+  await openDig(ui, host, 'A', 'Unpriced research');
+  assert.match(panelOf(ui).textContent, /Unpriced provider usage2 callsPricing details2 of 2 retrievals incompletely priced/);
+  assert.match(panelOf(ui).textContent, /2 calls without reported pricing/);
+  assert.doesNotMatch(panelOf(ui).textContent, /No charge recorded/);
+  await openDig(ui, host, 'B', 'Credit-priced research');
+  const units = [...panelOf(ui).walk()].filter(e => e.className === 'cost-unit').map(e => e.textContent);
+  assert.deepEqual(units, ['2 ScrapeCreators credits', '3 Scrape.do credits']);
+});
+
+test('a settings save during an older snapshot waits for a new snapshot before completing', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-refresh-save-')); await initializeConfig(state);
+  let config = await loadConfig(state); let block = false; let snapshots = 0; let release; let captured; let saved;
+  const gate = new Promise(resolve => { release = resolve; });
+  const snapshotStarted = new Promise(resolve => { captured = resolve; });
+  const settingsSaved = new Promise(resolve => { saved = resolve; });
+  const host = { provider: async ({ name, arguments: args }) => {
+    if (name === 'settings.read') return { structuredContent: settingsDocument(config) };
+    if (name === 'settings.update') { const result = await updateResult(args.set, state); config = await loadConfig(state); saved(); return result; }
+    if (name === 'library_revision') return { structuredContent: { revision: String(snapshots) } };
+    if (name === 'library_snapshot') {
+      snapshots++;
+      const value = { ...snapshotOf([]), library: config.library, libraryFolder: 'missing' };
+      if (block) { block = false; captured(); await gate; }
+      return { structuredContent: value };
+    }
+    throw new Error(`Unexpected tool: ${name}`);
+  } };
+  const ui = await loadApp(host);
+  ui.$('nav-settings').onclick(); await settle();
+  block = true;
+  const refreshing = ui.poll(); await snapshotStarted;
+  const field = named(ui.$('settings-fields'), 'library');
+  const nextPath = join(state, 'new-library');
+  field.value = nextPath; const saving = field.onchange();
+  await settingsSaved; await settle(); release();
+  await Promise.all([refreshing, saving]);
+  assert.equal(ui.$('library-path').textContent, nextPath);
+  assert.equal(field.value, nextPath);
+  assert.equal(snapshots, 3, 'Initial snapshot, the older in-flight snapshot, then the post-save snapshot');
+});
+
+test('a late initial answer read cannot steal focus from a subsequently selected report', async () => {
+  const answer = 'p/digs/A/answer.md';
+  const host = scriptedHost([snapshotOf([item('A', { answer, files: [report('A'), answer] })])]);
+  const ui = await loadApp(host);
+  await openDig(ui, host, 'A');
+  const tab = byKey(ui.$('files'), `file:${report('A')}`);
+  tab.focus(); tab.onclick(); await settle();
+  host.reads.get(report('A'))('Selected report'); await settle();
+  const selected = ui.document.activeElement;
+  host.reads.get(answer)('Late answer'); await settle();
+  assert.match(ui.$('document').textContent, /Selected report/);
+  assert.equal(ui.document.activeElement, selected);
+});
+
+test('pricing details start closed and retain their expansion and focus across updated costs', async () => {
+  const host = scriptedHost([snapshotOf([item('A', { calls: [priced('one', null)] })]), snapshotOf([item('A', { calls: [priced('one', null), priced('two', usd(1))] })])]);
+  const ui = await loadApp(host);
+  await openDig(ui, host, 'A', 'Report');
+  const key = 'pricing:dig:/project/A:A';
+  const details = byKey(panelOf(ui), key).parentNode;
+  assert.equal(details.open, false);
+  details.open = true; details.ontoggle(); byKey(panelOf(ui), key).focus();
+  await ui.poll();
+  assert.equal(byKey(panelOf(ui), key).parentNode.open, true);
+  assert.equal(ui.document.activeElement, byKey(panelOf(ui), key));
+  assert.match(panelOf(ui).textContent, /Known provider subtotal\$1.0000/);
 });

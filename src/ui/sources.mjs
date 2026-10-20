@@ -9,12 +9,13 @@ import { GLYPHS, glyphFor } from '../glyphs.mjs';
 import { MODULES, SOURCE_GROUPS, moduleAgents } from '../providers/modules.ts';
 import { attr, button, externalLink, fold, keyName, keyed, node, rebuild } from './dom.mjs';
 import { control, enabledField, ownerOf, settingsGroups } from './settings.mjs';
+import { activityNote, sourceGuide } from './source-guide.mjs';
 
 const WORKER_FIELD = /_worker_(model|effort)$/;
 const workerKey = (method, field) => `${method.replaceAll('-', '_')}_worker_${field}`;
 
 const SVG = 'http://www.w3.org/2000/svg';
-const STATE_WORDS = { ready: 'ready', partial: 'partly ready', 'setup-required': 'needs setup', disabled: 'off', unknown: 'unknown' };
+const STATE_WORDS = { ready: 'configured', partial: 'partly configured', 'setup-required': 'needs setup', disabled: 'off', unknown: 'unknown' };
 const KEY_WORDS = { set: 'set', missing: 'missing', unset: 'not set' };
 const TOOL_WORDS = { set: 'installed', missing: 'not installed' };
 const ENVIRONMENT_NOTES = { unused: 'Codex’s environment has one that Dig isn’t using.', different: 'Codex’s environment has a different one.' };
@@ -178,12 +179,13 @@ function providerLine(module) {
  * the keys.env buttons. Returns `update(read, sources)`, which refreshes switches, settings and readiness in place,
  * keeping focus and any field being typed in.
  */
-export function renderSources(container, toc, read, sources, save, actions) {
+export function renderSources(container, toc, read, sources, save, actions, recentCalls = new Map()) {
   const properties = read.schema?.properties ?? {};
   const ids = MODULES.map(m => m.id);
   const ordered = settingsGroups(read).flatMap(group => group.keys);
   const infoOf = list => new Map((Array.isArray(list) ? list : []).map(source => [source.id, source]));
   let info = infoOf(sources);
+  let activity = recentCalls;
   const controls = new Map(); const blocks = new Map();
 
   /**
@@ -217,16 +219,21 @@ export function renderSources(container, toc, read, sources, save, actions) {
     // A note inside a fold being closed would stay open out of sight.
     setup.element.ontoggle = () => { if (!setup.element.open && openNote && setup.element.contains(openNote.trigger)) closeNote(); };
     const status = node('p', 'meta status-line');
-    blocks.set(module.id, { module, status, sections, methods, setup });
+    const lastCall = node('p', 'meta source-activity');
+    blocks.set(module.id, { module, status, sections, methods, setup, lastCall });
     const own = ordered.filter(key => key !== field && !WORKER_FIELD.test(key) && ownerOf(key, ids) === module.id && properties[key]).map(key => {
       const built = control(key, properties[key], read.values?.[key], save);
       controls.set(key, built); return built.element;
     });
+    const guide = sourceGuide(module.id);
+    const about = node('p', 'about', module.about);
     return [
       node('div', 'source-head', mark(module), node('div', 'source-name', heading, providerLine(module)), toggle?.element),
-      node('p', 'about', module.about),
+      guide ?? about,
       node('p', 'meta billing', node('span', 'fact-label', 'Cost: '), module.billing),
+      guide ? node('details', 'source-about', node('summary', '', 'About this source'), about) : null,
       node('div', 'readiness', status, setup.element),
+      lastCall,
       own.length ? node('div', 'source-settings', node('p', 'eyebrow', `${module.label} settings`), own) : null,
     ];
   }
@@ -240,6 +247,7 @@ export function renderSources(container, toc, read, sources, save, actions) {
     if (!block) return;
     const message = readinessMessage(source);
     block.status.replaceChildren(stateChip(source?.readiness?.status ?? 'unknown'), ...(message ? [` ${message}`] : []));
+    block.lastCall.textContent = activityNote(activity.get(id));
     // A note open in a section about to be rebuilt goes with it.
     if (openNote && block.sections.contains(openNote.trigger)) closeNote();
     const sections = setupSections(block.module, source, actions);
@@ -284,9 +292,11 @@ export function renderSources(container, toc, read, sources, save, actions) {
   fillToc();
 
   return {
-    update(next, nextSources) {
+    update(next, nextSources, nextActivity) {
+      if (nextActivity) activity = nextActivity;
       if (next?.values) for (const [key, built] of controls) if (Object.hasOwn(next.values, key)) built.set(next.values[key]);
       if (Array.isArray(nextSources)) { info = infoOf(nextSources); for (const id of ids) fillReadiness(id); fillToc(); }
+      else if (nextActivity) for (const [id, block] of blocks) block.lastCall.textContent = activityNote(activity.get(id));
     },
   };
 }

@@ -1,7 +1,7 @@
 // Reading views for one dig's files: the question, source reports (with the source's own card), the answer,
 // and retained original responses as source-shaped evidence with the verbatim JSON always reachable.
 import { answerWord, callWord, runWord } from '../status.mjs';
-import { attr, externalLink, httpUrl, node, tag } from './dom.mjs';
+import { attr, button, externalLink, httpUrl, node, tag } from './dom.mjs';
 import { frontMatter, renderMarkdown, reportParts } from './markdown.mjs';
 import { bodies, evidence, hasSourceView, ITEM_NOUNS, sentenceText } from './evidence/index.mjs';
 import { absTime, basename, costText, duration, num, plural } from './format.mjs';
@@ -48,14 +48,31 @@ function cardSummary(card) {
   );
 }
 /** A question, report or answer file rendered for reading. */
+function withOutline(prose) {
+  const headings = [...prose.querySelectorAll('[data-outline]')];
+  if (headings.length < 2) return prose;
+  const links = headings.map((heading, index) => {
+    const id = `report-section-${index}`;
+    attr(heading, 'id', id); attr(heading, 'tabindex', '-1');
+    const go = button('btn-ghost outline-link', heading.textContent, () => {
+      heading.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+      heading.focus({ preventScroll: true });
+    });
+    attr(go, 'aria-controls', id);
+    return attr(node('li', '', go), 'data-depth', heading.getAttribute('data-outline'));
+  });
+  return node('div', 'outlined-report',
+    node('details', 'doc-outline', node('summary', '', 'In this report'), attr(node('nav', '', node('ol', '', links)), 'aria-label', 'Report outline')),
+    prose);
+}
 export function documentView(file, text, catalog) {
   const { meta, body } = frontMatter(text);
   const kind = fileKind(file);
   if (kind === 'report') {
     const { card, rest } = reportParts(body);
-    return node('div', 'doc', reportFacts(meta, catalog), card ? cardSummary(card) : node('p', 'meta', 'This report has no readable source card.'), renderMarkdown(rest));
+    return node('div', 'doc', reportFacts(meta, catalog), card ? cardSummary(card) : node('p', 'meta', 'This report has no readable source card.'), withOutline(renderMarkdown(rest)));
   }
-  return node('div', 'doc', kind === 'answer' ? answerFacts(meta, catalog) : questionFacts(meta, catalog), renderMarkdown(body));
+  return node('div', 'doc', kind === 'answer' ? answerFacts(meta, catalog) : questionFacts(meta, catalog), withOutline(renderMarkdown(body)));
 }
 
 function itemRow(item) {
