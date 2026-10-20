@@ -1,18 +1,22 @@
 # Research cards in the conversation
 
-Dig keeps the saved report and original responses as the research record. Its native cards make those findings easier to inspect beside the conversation.
+Dig's cards make the saved state of research legible beside the conversation. Your assistant remains responsible for reading full reports and important originals; you can inspect a particular finding and choose what to ask next.
 
-Every save shows a compact card with the report's concise title, original question, status and existing author assessments. Provider costs come from the associated receipts: known amounts retain their units, incompletely priced calls remain visible, and shared-tool evidence does not silently change the report's cost scope.
+A card separates three different kinds of information:
 
-For a conclusion that benefits from a richer explanation, the initiating conversation can call `show_research` after reading the saved report or answer and its load-bearing originals. It supplies a bounded set of findings with ordered detail labels, retained evidence references, limits and an optional next-step prompt. This can express an SEO opportunity's query → competing page → owned page comparison, a timestamped video observation, or supporting and conflicting accounts. The renderer uses fixed components and treats all supplied text as data.
+- **The saved event:** Report saved or Answer saved identifies a retained document and its saved time.
+- **The assessment:** a report's status, confidence and evidence grade are labeled as its author's judgment. An answer's outcome remains the saved answer's status.
+- **The recorded activity:** retained calls and provider usage are scoped to that report or dig. Known amounts keep their original units, and unpriced calls remain explicit. Shared-tool evidence does not silently change report cost ownership.
 
-The card offers:
+The first layer shows the saved title, **What came back**, any displayed recorded limitation or follow-up, and a **Possible next step**. The summary comes from the saved research, or from the initiating thread's explicit presentation. It is not a live progress indicator or an independently verified conclusion.
 
-- **Read evidence:** inspect the selected retained originals, with complete pagination and an explicit warning if reading stops or fails.
-- **Draft next step:** preview a proposed follow-up, then explicitly place it into the native composer without sending. An unavailable/refused host action offers copy/manual-text fallback.
-- **Full report:** reopen the saved research in Dig.
+**Review next step** opens an inert instruction preview. When an explicit insight supplies a proposal, that proposal is shown. Otherwise, a card with a canonical saved-file reference can offer to have the assistant review coverage, conflicting evidence and the next useful investigation. That default is a request to assess the records, not an inferred finding or an automatic research decision. Only a separate explicit action places an unsent draft in the native composer or copies the text. Host refusal offers a copy/manual fallback; it never retries by sending the message.
 
-Opening a card does not mean its report was read or its claims independently verified. Source-card confidence is the report author's assessment. Presented interpretations do not become verified facts merely because references and input shape passed validation.
+**Findings & evidence** expands the original question, reported or presented findings, ordered details and limitations. **Read evidence** opens the selected retained text; full pagination and canonical-path checks remain in force, and an incomplete or failed read says so. **Inspect research** opens the exact saved record in Dig, with an inline retained-file reader when no valid host deep link is available. Native file opening is offered within evidence inspection when supported.
+
+A failed refresh may leave previously loaded details visible only when they belong to the same canonical saved file. New results and closed or replaced dialogs invalidate late reads, draft/copy acknowledgments and focus callbacks. These guards preserve the view's identity; closing the UI does not claim to cancel a host request that was already issued.
+
+For a conclusion that benefits from a richer explanation, the initiating conversation can call `show_research` after reading the report or answer and its load-bearing originals. Its bounded findings can express a query → competing page → owned page comparison, timestamped video observations, or supporting and conflicting accounts. Fixed components render all supplied text as data. Validation of references and input shape does not establish truth, and opening a card is not evidence that the assistant read the report.
 
 ## Tool input
 
@@ -33,6 +37,6 @@ The presentation is transient tool-result data, not another saved report or a ne
 
 ## Frontend
 
-The library and cards share React 19, Tailwind 4, Base UI/shadcn-style components and open-source ReUI Frame, Icon Tile and Timeline components. The library uses TanStack Router and Query over the existing MCP reads. Each surface is built separately into self-contained versioned HTML; installation needs no extra frontend server. The existing safe Markdown and evidence renderers remain in use inside the React library while their components migrate.
+The cards and library share React 19, Tailwind 4, Base UI controls and the open-source ReUI Frame, Icon Tile and Timeline components. Overview, conversation trail, question state, Sources, Accounts, Settings, About and Start here are React surfaces. The explicit full-record reader retains the existing allowlisted Markdown and original-evidence renderers. TanStack Router and Query use the existing local MCP operations; no paid research is automatically fetched by the view.
 
-Native placement, host theme behavior and composer draft support depend on the host. Browser preview and protocol tests verify their own surfaces; they do not establish native-host acceptance.
+Each surface is packaged separately as self-contained versioned HTML, with no extra frontend server required by the installed plugin. Native placement, host theme propagation and composer-draft support depend on the host. Component and protocol checks establish their tested behavior; they do not establish native visual acceptance.

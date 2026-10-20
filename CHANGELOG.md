@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 — 2026-10-20
+
+- Recompose Overview, the conversation trail and question detail around saved research state: outcomes, method coverage, recorded findings and gaps, dated activity, and visible provider usage.
+- Keep planned methods, saved reports and receipt outcomes distinct. Show no inferred worker lifecycle or progress; preserve conversation attribution and honest cost units and unknowns.
+- Make full reports and originals an explicit Inspect records action. Load existing author assessments on demand with library/question/file guards; preserve inspected text and late-response boundaries.
+- Add Steer research directions that preview a canonical-reference instruction for an unsent native conversation draft or copy fallback. No provider request or execution control is started by the interface.
+- Unify React/ReUI presentation across research views, Sources, Accounts, Settings, About and Start here. Saved cards separate the save event, author judgment, scoped usage, What came back and Review next step, with stale draft/copy acknowledgments guarded.
+- Reframe onboarding around human observation and steering while assistants read the detailed evidence. Keep the illustrative inspection example ahead of the capability catalog. Existing durable research and settings contracts are unchanged.
+
 ## 0.8.1 — 2026-10-20
 
 - Add a ReUI Start here tab with a plain-language introduction, practical example questions, a research walkthrough, result/cost/privacy explanations and a directory derived from the installed source catalog.

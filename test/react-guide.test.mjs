@@ -49,17 +49,19 @@ test('Start here renders real ReUI components and a plain-language path without 
   assert.match(ui.element.textContent, /One use may make several provider requests/);
   assert.match(ui.element.textContent, /Unknown never means free/);
   assert.match(ui.element.textContent, /selected question, search terms, excerpts, URLs, or media/);
+  assert.match(document.querySelector('.guide-role-note').textContent, /Your assistant reads the detailed reports and original evidence/);
+  assert.match(document.querySelector('.guide-start-steps').textContent, /Ask what matters to you.*Observe what is recorded.*Steer the next step/);
   assert.deepEqual(ui.navigation, []);
   assert.deepEqual(ui.requests, []);
 });
 
 test('guide actions only request the existing local pages', async t => {
   const ui = await mount(t);
-  await click(button('Explore sources & tools'));
-  await click(button('Open your library'));
+  await click(button('Open overview'));
+  await click(button('Choose sources & tools'));
   await click(button('Library settings'));
   await click(button('About this installation'));
-  assert.deepEqual(ui.navigation, ['/sources', '/library', '/settings', '/about']);
+  assert.deepEqual(ui.navigation, ['/library', '/sources', '/settings', '/about']);
   assert.deepEqual(ui.requests, []);
 });
 
@@ -120,6 +122,8 @@ test('guide refreshes preserve disclosure state and focus; entering the tab focu
 test('the illustrative walkthrough switches evidence views locally and keeps the question and finding in view', async t => {
   const ui = await mount(t);
   const example = document.querySelector('.guide-worked');
+  const capabilities = document.querySelector('[aria-labelledby="guide-capabilities"]');
+  assert.ok(example.compareDocumentPosition(capabilities) & Node.DOCUMENT_POSITION_FOLLOWING, 'inspection example precedes the long capability catalog');
   assert.match(example.textContent, /Illustrative example/);
   assert.match(example.textContent, /Made-up product and documentation for learning; no research was run/);
   const question = example.querySelector('.guide-worked-question');

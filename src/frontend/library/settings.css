@@ -1,0 +1,36 @@
+.settings-page { container-type: inline-size; min-width: 0; }
+.settings-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 8px 0 22px; }
+.settings-page-heading h2 { margin: 4px 0 5px; font-size: 24px; line-height: 1.25; letter-spacing: -.035em; font-weight: var(--font-weight-semibold, 600); }
+.settings-page-heading > div > p:last-child { margin: 0; font-size: 13px; line-height: 1.6; color: var(--muted-foreground); }
+.settings-eyebrow { margin: 0; font-size: 10px; line-height: 1.5; font-weight: var(--font-weight-medium, 500); color: var(--muted-foreground); letter-spacing: .065em; text-transform: uppercase; }
+.settings-state { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding: 0 0 22px; margin: 0 0 24px; border-bottom: 1px solid var(--border); }
+.settings-state > div { min-width: 0; }
+.settings-state dt { margin: 0 0 7px; color: var(--muted-foreground); font-size: 11px; }
+.settings-state dd { margin: 0 0 4px; color: var(--foreground); font-size: 14px; font-weight: var(--font-weight-medium, 500); line-height: 1.45; overflow-wrap: anywhere; }
+.settings-state span { font-size: 11px; color: var(--muted-foreground); line-height: 1.55; }
+.settings-groups { display: grid; gap: 22px; }
+.settings-frame { --frame-radius: var(--radius); --frame-panel-bg: var(--background); }
+.settings-frame .settings-group-heading { padding: 15px 18px; align-items: stretch; text-align: left; }
+.settings-group-heading [data-slot=frame-panel-title] { margin-top: 4px; font-size: 15px; font-weight: var(--font-weight-semibold, 600); letter-spacing: -.015em; }
+.settings-group-heading [data-slot=frame-panel-description] { margin-top: 4px; font-size: 12px; line-height: 1.6; max-width: 75ch; }
+.settings-frame .settings-fields { padding: 4px 18px; }
+.settings-fields > .source-control { padding: 18px 0; }
+.settings-fields > .source-control + .source-control { border-top: 1px solid var(--border); }
+.settings-authority { display: flex; align-items: start; justify-content: space-between; gap: 24px; padding: 22px 4px; }
+.settings-authority > div > p { margin: 6px 0 0; font-size: 12px; line-height: 1.65; color: var(--muted-foreground); max-width: 65ch; }
+.settings-authority details { flex-shrink: 0; max-width: 45%; font-size: 11px; color: var(--muted-foreground); }
+.settings-authority summary { cursor: var(--cursor-interaction, pointer); padding-block: 2px; }
+.settings-authority details p { margin-top: 8px; font-family: var(--font-mono, monospace); font-size: 10px; line-height: 1.65; overflow-wrap: anywhere; }
+.settings-status { margin: 0; font-size: 12px; color: var(--muted-foreground); line-height: 1.6; }
+.settings-status:empty { display: none; }
+@container (max-width: 600px) {
+  .settings-state { grid-template-columns: 1fr; gap: 14px; }
+  .settings-state > div { display: grid; grid-template-columns: minmax(110px, .7fr) minmax(0, 1fr); gap: 3px 14px; }
+  .settings-state dt { margin: 0; padding-top: 3px; }
+  .settings-state dd { margin: 0; }
+  .settings-state span { grid-column: 2; }
+  .settings-page-heading { align-items: start; }
+  .settings-page-heading > .dig-badge { max-width: 95px; text-align: center; }
+  .settings-authority { flex-direction: column; gap: 12px; }
+  .settings-authority details { max-width: 100%; }
+}

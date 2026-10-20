@@ -1,6 +1,6 @@
 # Dig
 
-Research across many sources for Codex in the ChatGPT desktop app, with saved reports and evidence you can inspect.
+Research across many sources for Codex in the ChatGPT desktop app. See what has been found, what is still uncertain, what it used, and where to steer next.
 
 <p align="center">
 <img src="docs/logos/exa.svg" width="32" height="32" alt="Exa" title="Exa">
@@ -17,7 +17,7 @@ Research across many sources for Codex in the ChatGPT desktop app, with saved re
 <img src="docs/logos/polymarket.svg" width="32" height="32" alt="Polymarket" title="Polymarket">
 </p>
 
-**New to Dig?** Open **Start here** in Dig for a visual introduction, practical example questions, and a plain-language explanation of the sources, reports, evidence and costs. Or read the [getting started guide](docs/getting-started.md).
+**New to Dig?** Open **Start here** in Dig for a visual introduction to asking a question, observing the saved research, and steering the next step. It includes practical examples and plain-language explanations of sources, evidence and costs. Or read the [getting started guide](docs/getting-started.md).
 
 ## Install
 
@@ -44,11 +44,11 @@ Refresh the plugin connection, then type **`$dig:setup`** in a new conversation.
 
 > **Try it with no keys:** Hacker News, DeepWiki and Polymarket work without any account.
 
-For a first run, ask: **“Use Dig and Hacker News to research how developers approach local-first software. Save the report and show the original discussions behind the findings.”** Open the saved report, inspect an original response, then ask Dig to find that research again later.
+For a first run, enable Hacker News and ask: **“Use Dig and Hacker News to research how developers approach local-first software. Show the strongest findings, disagreements and remaining gaps. Save the supporting research and suggest a useful next question.”** Open **Overview**, choose the question, and use its saved findings and coverage to decide what to ask next.
 
 ## What Dig does
 
-Ask a question in Codex. Dig can research it through selected sources, save reports, and retain the original provider responses when that setting is enabled.
+Ask a question in Codex. Your assistant chooses useful enabled sources, reads their reports and important originals, and explains the findings. Dig presents the saved research state for you to observe and steer; full records are available when you want to inspect a particular point.
 
 **22 sources · 26 research methods · 72 tools, including two optional shared helpers**
 
@@ -77,10 +77,12 @@ Ask a question in Codex. Dig can research it through selected sources, save repo
 
 What you get back:
 
-- **A report per source**, linking every post, page or paper it relies on.
-- **Retained original responses**, when enabled, so important findings can be checked against what the provider returned.
-- **A library** in Codex's sidebar to read past research, plus a research trail beside the conversation.
-- **Costs as each provider reports them.** Unknown stays unknown; Dig never guesses.
+- **An overview of saved research**, with provider usage visible and a research trail for the current conversation.
+- **A state view for each question:** saved outcome, methods with reports, recorded findings and gaps, and dated activity.
+- **A way to steer the next step:** review a proposed instruction, place it in the conversation as an unsent draft or copy it, then send when ready.
+- **Inspect records** for full source reports, saved answers and original responses retained when enabled and saving succeeds.
+
+The interface shows retained observations. A missing report does not mean an agent is paused or still running, and a source count does not prove that a question has been fully covered. Provider costs remain in their reported units; unknown never means free.
 
 Good to know:
 
@@ -90,7 +92,7 @@ Good to know:
 
 ## Findings in the conversation
 
-Saved research opens as a compact native card with its findings, limits and provider usage. Ask Dig to present a useful comparison or recommendation with an insight card: inspect the retained evidence, open the full report, or prepare an editable follow-up draft without sending it. Questions and actions stay in the host conversation. See [research cards](docs/insight-cards.md).
+Saved research opens as a compact card that separates the save event from the report author's assessment. It shows **What came back**, scoped provider usage, recorded open questions and a possible next step. **Review next step** previews a conversation instruction without sending it. **Inspect research** and **Findings & evidence** let you look closer when useful. A card helps explain the record; it does not verify the claim merely by displaying it. See [research cards](docs/insight-cards.md).
 
 For website discovery, SEO and GEO questions, Dig's method connects customer intent and search/AI observations to the actual cited or competing page and the owned page, then proposes specific changes and verification. The initiating conversation combines DataForSEO evidence, page reads and any owner-supplied analytics; provider-native history and saved reports support comparisons without a separate tracking system.
 

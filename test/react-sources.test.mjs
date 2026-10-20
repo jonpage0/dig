@@ -159,3 +159,25 @@ test('source grouping keeps arbitrary private add-ons with their parent and incl
   assert.deepEqual(papers.addOns, [addon]);
   assert.equal(groups.find(group => group.id === 'other').members[0].module, extra);
 });
+
+test('source recorded use preserves every scoped receipt, separates reported units, and keeps unknown costs explicit', async t => {
+  const { app, host, calls } = fixture();
+  app.snapshot = { items: [{ calls: [
+    { id: 'shared-id', session: 'one', source: 'exa', tool: 'exa_search', at: '2020-01-01T12:00:00Z', status: 'success', cost: [{ amount: 0.2, unit: 'USD' }] },
+    { id: 'shared-id', session: 'two', source: 'exa', tool: 'exa_search', at: '2020-01-02T12:00:00Z', status: 'partial', cost: [{ amount: 3, unit: 'fixture credits' }] },
+  ] }], live: [{ id: 'unclaimed', source: 'exa', tool: 'exa_search', at: '2020-01-03T12:00:00Z', status: 'failed', cost: null }] };
+  await mount(t, { app, host, hidden: false });
+  const recorded = $('source-exa').querySelector('.source-page-recorded');
+  assert.match(recorded.textContent, /All-time retained usage/);
+  assert.match(recorded.textContent, /Calls3/);
+  assert.doesNotMatch(recorded.textContent, /returned results|with results/);
+  assert.match(recorded.textContent, /Reported subtotal/);
+  assert.match(recorded.textContent, /\$0\.2000/);
+  assert.match(recorded.textContent, /3 fixture credits/);
+  assert.match(recorded.textContent, /1 call incompletely priced/);
+  assert.doesNotMatch(recorded.textContent, /\$3\.20|No charge recorded/);
+  const empty = $('source-github').querySelector('.source-page-recorded');
+  assert.match(empty.textContent, /No retained calls yet/);
+  assert.doesNotMatch(empty.textContent, /Free|\$0|No charge recorded/);
+  assert.deepEqual(calls, []);
+});

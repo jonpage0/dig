@@ -93,6 +93,17 @@ export function cardDetails(value: unknown, file: string, path?: string): Resear
 const strings = (value: unknown, max = 6): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && !!item.trim()).slice(0, max) : [];
 export const cardStrings = strings;
 
+/** A proposed conversation action, never an instruction executed by the card. */
+export function savedResearchNextStep(card: ResearchCard, savedPath?: string): { label: string; prompt: string } | null {
+  const path = card.path ?? savedPath;
+  if (!absolutePath(path)) return null;
+  const kind = card.kind === 'answer' ? 'answer' : 'report';
+  return {
+    label: 'Review coverage and choose what to do next',
+    prompt: `Review the saved ${kind} for this question:\n${card.question || card.title}\n\nRetained file: ${path}\n\nRead the complete ${kind} and the retained evidence needed to assess it. Identify unresolved questions, conflicting evidence and the next useful investigation, if any. Use retained research first. Keep the author's assessments separate from what the evidence establishes.`,
+  };
+}
+
 /** Source-card fields keep their labels and authorship; they do not become inferred evidence relationships. */
 export function presentedInsights(card: ResearchCard): Insight[] {
   if (Array.isArray(card.insights) && card.insights.length) return card.insights.slice(0, 6);

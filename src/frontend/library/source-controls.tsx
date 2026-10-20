@@ -17,6 +17,7 @@ type SettingProps = {
   label?: string;
   quiet?: boolean;
   note?: React.ReactNode;
+  layout?: 'stacked' | 'row';
 };
 const format = (value: unknown) => value == null ? '' : String(value);
 
@@ -38,7 +39,7 @@ function validate(schema: any, raw: string | boolean): { value?: unknown; error?
 
 /** Base UI controls over the existing TOML settings operation. Text commits on blur/Enter; a poll or
  * completed save never replaces a newer draft. Each accepted change is queued, including rapid toggles. */
-export function SourceSetting({ settingKey, schema, value, save, switchLabel, label, quiet, note }: SettingProps) {
+export function SourceSetting({ settingKey, schema, value, save, switchLabel, label, quiet, note, layout = 'stacked' }: SettingProps) {
   const boolean = schema.type === 'boolean';
   const typing = !boolean && !Array.isArray(schema.enum);
   const display = (next: unknown) => boolean ? next === true : format(next);
@@ -126,7 +127,7 @@ export function SourceSetting({ settingKey, schema, value, save, switchLabel, la
       <Switch.Root {...common} nativeButton render={<button type="button" />} checked={draft === true} onCheckedChange={next => { edit(next); commit(next); }} className="source-switch">
         <Switch.Thumb className="source-switch-thumb" />
       </Switch.Root>
-      {switchLabel ? <span className="source-control-on" aria-hidden="true">{draft ? 'On' : 'Off'}</span> : <label htmlFor={id} className="source-control-label">{label || title}</label>}
+      {switchLabel || layout === 'row' ? <span className="source-control-on" aria-hidden="true">{draft ? 'On' : 'Off'}</span> : <label htmlFor={id} className="source-control-label">{label || title}</label>}
       {feedback}
     </div>;
   } else if (Array.isArray(schema.enum)) {
@@ -158,6 +159,11 @@ export function SourceSetting({ settingKey, schema, value, save, switchLabel, la
       onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commit(event.currentTarget.value); } }}
     />;
   }
+  if (layout === 'row') return <div className={`source-control source-control-row${boolean ? ' source-control-boolean' : ''}`}>
+    <div className="source-control-copy"><label htmlFor={id} className="source-control-label">{label || title}</label>{description && <p id={`${id}-help`} className="source-control-help">{description}</p>}</div>
+    <div className="source-control-entry">{control}{!boolean && feedback}</div>
+    {note && <div id={`${id}-note`} className="source-control-note">{note}</div>}
+  </div>;
   return <div className={`source-control${boolean ? ' source-control-boolean' : ''}`}>
     {!boolean && <div className="source-control-heading"><label htmlFor={id} className="source-control-label">{label || title}</label>{feedback}</div>}
     {control}

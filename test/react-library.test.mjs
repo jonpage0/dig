@@ -75,6 +75,7 @@ function scriptedHost(initial, extra = {}) {
           reads.set(`${file}:${args.offset}`, respond);
         });
       }
+      if (name === 'saved_research') { const file = args.file.slice((value.library + '/').length); return { file, path: args.file, kind: file.endsWith('/answer.md') ? 'answer' : 'report', title: 'Retained report', label: 'Hacker News report', findings: [], contradictions: [], followUps: [], schemaWarnings: [] }; }
       if (name === 'settings.read') return currentSettings;
       if (name === 'settings.update') { currentSettings = { ...currentSettings, values: { ...currentSettings.values, ...args.set } }; revision++; return { values: currentSettings.values }; }
       if (name === 'source_info') return { keysPath: '/state/keys.env', configPath: '/state/config.toml', sources: [{ id: 'hackernews', label: 'Hacker News', enabled: currentSettings.values.hackernews_enabled, readiness: { status: 'ready' }, credentials: [], prerequisites: [] }] };
@@ -104,6 +105,7 @@ async function mount(t, host) {
 }
 async function openDig(host, id, body) {
   await click(byKey(`dig:/project/${id}:${id}`));
+  await click($('inspect-records'));
   if (body !== undefined) { await React.act(async () => host.reads.get(`${report(id)}:0`)(body)); await settle(); }
 }
 
@@ -153,7 +155,7 @@ test('visible revision polling is read-only and preserves document, details and 
   assert.equal(document.activeElement, tab);
   assert.equal($('files').children.length, 3);
   assert.match($('notice').textContent, /Saved to this dig: Answer/);
-  assert.deepEqual([...new Set(host.calls.map(call => call.name))].sort(), ['library_read', 'library_revision', 'library_snapshot']);
+  assert.deepEqual([...new Set(host.calls.map(call => call.name))].sort(), ['library_read', 'library_revision', 'library_snapshot', 'saved_research']);
 });
 
 test('settings refresh keeps draft DOM and focus; a save overlapping a poll gets a subsequent fresh snapshot', async t => {
@@ -225,6 +227,63 @@ test('Start here is discoverable without replacing the overview or starting rese
   await click($('about-back'));
   assert.equal($('guide').hidden, false);
   assert.deepEqual([...new Set(host.calls.map(call => call.name))].sort(), ['library_revision', 'library_snapshot', 'source_info']);
+});
+
+test('opening research observes its state first; explicitly inspecting an original reopens hidden records', async t => {
+  const host = scriptedHost(snapshotOf([item('A', { planned: ['hackernews', 'exa'], calls: [rawCall] })]));
+  await mount(t, host);
+  await click(byKey('dig:/project/A:A'));
+  assert.equal(host.calls.filter(call => call.name === 'library_read').length, 0);
+  assert.equal(document.querySelector('.research-record-inspection').hidden, true);
+  assert.match($('detail').textContent, /No report saved/);
+  assert.equal(host.calls.filter(call => call.name === 'saved_research').length, 1);
+  await click($('inspect-records'));
+  await React.act(async () => host.reads.get(report('A') + ':0')('RETAINED REPORT')); await settle();
+  await click($('inspect-records'));
+  assert.equal(document.querySelector('.research-record-inspection').hidden, true);
+  await click(document.querySelector('#research-calls .dig-disclosure-trigger'));
+  await click(byKey('raw:' + rawCall.rawFile));
+  assert.equal(document.querySelector('.research-record-inspection').hidden, false);
+  await React.act(async () => host.reads.get(rawCall.rawFile + ':0')('{"responses":[{"body":"ORIGINAL EVIDENCE"}]}')); await settle();
+  assert.equal($('evidence-pane').hidden, false);
+  assert.match($('evidence-body').textContent, /ORIGINAL EVIDENCE/);
+  assert.match($('document').textContent, /RETAINED REPORT/);
+});
+
+test('late assessments cannot replace another selected question or survive a library switch', async t => {
+  const pending = new Map();
+  const host = scriptedHost(snapshotOf([item('A'), item('B')]), { call(name, args) {
+    if (name === 'saved_research') return new Promise(resolve => pending.set(args.file, resolve));
+  } });
+  const ui = await mount(t, host);
+  await click(byKey('dig:/project/A:A'));
+  await click($('back'));
+  await click(byKey('dig:/project/B:B'));
+  await React.act(async () => pending.get('/library/' + report('A'))({ file: report('A'), path: '/library/' + report('A'), kind: 'report', findings: ['LATE A FINDING'] })); await settle();
+  assert.doesNotMatch($('detail').textContent, /LATE A FINDING/);
+  host.setSnapshot({ ...snapshotOf([item('B')]), library: '/new-library' });
+  await ui.poll();
+  await React.act(async () => pending.get('/library/' + report('B'))({ file: report('B'), path: '/library/' + report('B'), kind: 'report', findings: ['OLD LIBRARY FINDING'] })); await settle();
+  assert.equal($('browse').hidden, false);
+  assert.doesNotMatch($('detail').textContent, /OLD LIBRARY FINDING/);
+});
+
+test('unsupported assessment and composed-answer defaults never claim an absence of author follow-ups', async t => {
+  let answer = false;
+  const host = scriptedHost(snapshotOf([item('A', { answer: 'p/digs/A/answer.md', files: [report('A'), 'p/digs/A/answer.md'] })]), { call(name, args) {
+    if (name !== 'saved_research') return undefined;
+    const file = args.file.slice('/library/'.length);
+    return { file, path: args.file, kind: answer ? 'answer' : 'report', label: 'Fixture', followUps: [], findings: [], contradictions: [], schemaWarnings: answer ? [] : ['Unsupported report structure; read the original wording.'] };
+  } });
+  await mount(t, host);
+  await click(byKey('dig:/project/A:A'));
+  assert.match($('detail').textContent, /could not be fully projected/);
+  assert.match($('detail').textContent, /Unsupported report structure/);
+  assert.doesNotMatch($('detail').textContent, /No follow-up targets/);
+  answer = true;
+  await click($('inspect-records'));
+  assert.match($('detail').textContent, /saved answer has no source-author assessment/);
+  assert.doesNotMatch($('detail').textContent, /No follow-up targets/);
 });
 
 test('cost overview preserves unknowns and separate credit units, and pricing disclosures survive a refresh', async t => {

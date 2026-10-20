@@ -10,7 +10,7 @@ import { SOURCE_GUIDES } from '../../ui/source-guide.mjs';
 type GuidePageProps = { hidden: boolean; onNavigate: (path: string) => unknown };
 type UseCase = { id: string; icon: string; title: string; description: string; sources: string[]; prompt: string };
 
-const STARTER = 'Use Dig and Hacker News to research how people choose a note-taking app. Find useful firsthand experiences, include disagreements, and save a report with links to the original discussions.';
+const STARTER = 'Use Dig and Hacker News to investigate how people choose a note-taking app. Show me the strongest findings, disagreements, and what is still missing. Save the supporting research, check the original discussions, and suggest a useful next question.';
 const USE_CASES: UseCase[] = [
   { id: 'web', icon: 'globe', title: 'Get to the bottom of a question', description: 'Find useful web pages, compare claims, and read the sources behind an answer.', sources: ['exa', 'perplexity'],
     prompt: 'Use Dig to research [question]. Start with primary sources, compare the strongest evidence, and explain what is still uncertain. Tell me which sources you plan to use.' },
@@ -31,10 +31,10 @@ const USE_CASES: UseCase[] = [
 ];
 
 const WORKFLOW = [
-  { title: 'You bring the question', text: 'Say what you want to learn, why it matters, and any limits on sources, dates, or spending. A link, video, brand, or website gives Dig a useful starting point.' },
-  { title: 'Your assistant chooses the sources', text: 'It can use one source or split the question among research helpers. Each source answers a particular part; Dig does not need to search everywhere.' },
-  { title: 'Research becomes a record', text: 'Source research is saved as reports. When original-response retention is on and saving succeeds, the provider responses are kept too, along with call receipts.' },
-  { title: 'Your assistant checks and explains', text: 'It reads the source reports and important originals, compares the findings, and explains the answer and its limits. You can return to the saved research later.' },
+  { title: 'You set the direction', text: 'Describe the decision or question, what matters to you, and any limits on sources, dates, or spending. The conversation is where you give that direction.' },
+  { title: 'Your assistant researches and checks', text: 'It chooses useful sources, can divide the work among focused helpers, and reads their full reports and important originals. It compares the findings and explains the remaining limits.' },
+  { title: 'Dig makes the saved state visible', text: 'Reports, saved outcomes, dated activity, and reported provider usage become inspectable. When original-response retention is on and saving succeeds, provider responses are kept too. This shows what was recorded, not whether a worker is active right now.' },
+  { title: 'You choose what matters next', text: 'Follow an uncertainty, compare an alternative, narrow the scope, or ask for fresh evidence. Steer research prepares an instruction for your conversation; you review and send it to request the next step.' },
 ];
 
 function Glyph({ name }: { name: string }) {
@@ -72,7 +72,7 @@ function SectionHeading({ label, title, children }: { label: string; title: stri
 const WORKED_PASSAGE = 'You can create and edit notes offline. Changes sync when you reconnect.';
 function WorkedExample() {
   return <section className="guide-section guide-worked" aria-labelledby="guide-worked-title">
-    <SectionHeading label="See how to check a finding" title="Follow the answer back to the words behind it" />
+    <SectionHeading label="Inspect when it helps" title="Start with the finding. Look closer when you need to.">Your assistant checks the detailed records. You can inspect a supporting passage or original response when a particular conclusion needs your attention.</SectionHeading>
     <Frame spacing="sm">
       <FrameHeader className="guide-worked-header">
         <div><span className="guide-eyebrow">Illustrative example</span><h4 id="guide-worked-title">Sample Notebook</h4></div>
@@ -96,7 +96,7 @@ function WorkedExample() {
           </TabsContent>
         </Tabs>
       </FramePanel>
-      <FrameFooter><p>One finding, three views: the interpretation, the supporting passage, and the original response.</p></FrameFooter>
+      <FrameFooter><p>A useful direction to send next: “Check how Sample Notebook handles conflicting edits after reconnection.” This made-up example starts no research.</p></FrameFooter>
     </Frame>
   </section>;
 }
@@ -148,17 +148,18 @@ export function GuidePage({ hidden, onNavigate }: GuidePageProps) {
     <div className="guide-intro">
       <div className="guide-intro-copy">
         <span className="guide-eyebrow">Start here</span>
-        <h2 id="guide-title" ref={heading} tabIndex={-1}>Research a question.<br />Keep the evidence.</h2>
-        <p className="guide-lede">Dig gives your assistant a wide range of places to research—and a library for keeping what it finds. Ask in the conversation, then use Dig to explore the reports, sources, and costs behind the answer.</p>
-        <div className="guide-intro-actions"><Button size="sm" onClick={() => { void onNavigate('/sources'); }}>Explore sources &amp; tools</Button><Button variant="ghost" size="sm" onClick={() => { void onNavigate('/library'); }}>Open your library</Button></div>
+        <h2 id="guide-title" ref={heading} tabIndex={-1}>See where your<br />research stands.</h2>
+        <p className="guide-lede">Dig shows what your assistant has recorded: the question, findings and gaps, source coverage, and provider usage. Ask in the conversation, see what has been saved, and choose where the research should go next.</p>
+        <p className="guide-role-note">You set the direction. Your assistant reads the detailed reports and original evidence. Dig keeps the saved state clear, with inspection available whenever you need it.</p>
+        <div className="guide-intro-actions"><Button size="sm" onClick={() => { void onNavigate('/library'); }}>Open overview</Button><Button variant="ghost" size="sm" onClick={() => { void onNavigate('/sources'); }}>Choose sources &amp; tools</Button></div>
       </div>
       <Frame className="guide-first-run" spacing="sm">
-        <FrameHeader><span className="guide-eyebrow">Your first dig</span><h3>Start with one useful question</h3></FrameHeader>
+        <FrameHeader><span className="guide-eyebrow">Your first dig</span><h3>Ask, observe, then steer</h3></FrameHeader>
         <FramePanel>
           <ol className="guide-start-steps">
-            <li><span>1</span><div><strong>Choose a source</strong><p>Open Sources &amp; tools, or ask <code>$dig:setup</code> in the conversation. Hacker News needs no provider account.</p></div></li>
-            <li><span>2</span><div><strong>Ask in the conversation</strong><p>Say “Use Dig…” and describe what you want to learn. You can name a source or let your assistant suggest one.</p></div></li>
-            <li><span>3</span><div><strong>Open the saved report</strong><p>Read the findings, inspect the available originals, and ask a follow-up.</p></div></li>
+            <li><span>1</span><div><strong>Ask what matters to you</strong><p>Say “Use Dig…” with your question and any limits. Choose enabled sources, or ask <code>$dig:setup</code> for help getting started.</p></div></li>
+            <li><span>2</span><div><strong>Observe what is recorded</strong><p>Overview shows saved outcomes, source coverage, and usage. Open a question to see its findings, uncertainties, and dated activity.</p></div></li>
+            <li><span>3</span><div><strong>Steer the next step</strong><p>Choose Steer research to prepare a direction. Review the unsent draft in your conversation, or copy it there, then send when ready.</p></div></li>
           </ol>
         </FramePanel>
       </Frame>
@@ -169,6 +170,8 @@ export function GuidePage({ hidden, onNavigate }: GuidePageProps) {
       <FramePanel><Prompt title="A first question" text={STARTER} featured /></FramePanel>
       <FrameFooter><p>Enable Hacker News first. You can change the topic to something you care about.</p></FrameFooter>
     </Frame>
+
+    <WorkedExample />
 
     <section className="guide-section" aria-labelledby="guide-capabilities">
       <div className="guide-section-heading"><span className="guide-eyebrow">What you can do</span><h3 id="guide-capabilities">Follow the question across different kinds of evidence</h3><p>Use a focused source for a simple question, or combine several when the answer needs more than one perspective.</p></div>
@@ -184,24 +187,22 @@ export function GuidePage({ hidden, onNavigate }: GuidePageProps) {
 
     <div className="guide-explanation-grid">
       <section className="guide-section" aria-label="How Dig works">
-        <SectionHeading label="Behind the scenes" title="From a question to an answer you can inspect" />
+        <SectionHeading label="How the work fits together" title="You steer. Your assistant researches. Dig shows the record." />
         <Timeline value={0} className="guide-workflow">{WORKFLOW.map((step, index) => <TimelineItem key={step.title} step={index + 1}>
           <TimelineHeader><TimelineSeparator /><TimelineTitle>{step.title}</TimelineTitle><TimelineIndicator>{index + 1}</TimelineIndicator></TimelineHeader>
           <TimelineContent><p>{step.text}</p></TimelineContent>
         </TimelineItem>)}</Timeline>
       </section>
-      <section className="guide-section" aria-label="Reading your results">
-        <SectionHeading label="What comes back" title="The answer, with a way to check it" />
+      <section className="guide-section" aria-label="Understanding the research state">
+        <SectionHeading label="What you can observe" title="Enough context to choose the next question" />
         <Frame className="guide-results" spacing="sm" stacked>
-          <FramePanel><h4>Reports explain the findings</h4><p>A report records what one source contributed, its useful links, and its limitations. A combined answer brings the sources together.</p></FramePanel>
-          <FramePanel><h4>Originals let you look closer</h4><p>Available retained responses sit behind the report. Check what was actually returned, especially for a claim you plan to act on.</p></FramePanel>
-          <FramePanel><h4>Cards make a finding easier to follow</h4><p>An insight card can show a comparison, supporting evidence, a limitation, or a proposed next step. A discussion draft waits for you to send it.</p></FramePanel>
-          <FramePanel><h4>The library makes research reusable</h4><p>Ask Dig to find an earlier report or revisit a question with fresh information. Saved reports are a record of what was known then, not a live feed.</p></FramePanel>
+          <FramePanel><h4>The question and saved outcome</h4><p>See what the research addresses and what answer has been saved. “No answer saved yet” describes the record; it does not say that work is running or paused.</p></FramePanel>
+          <FramePanel><h4>Coverage, findings, and gaps</h4><p>See which methods have reports, what their authors found, and what remains uncertain. More sources can add perspective without making the research exhaustive or correct.</p></FramePanel>
+          <FramePanel><h4>Usage and dated activity</h4><p>Compare saved reports and recorded tool outcomes with their associated provider usage. These are retained observations, not a live progress bar.</p></FramePanel>
+          <FramePanel><h4>A way to steer or inspect</h4><p>Choose a next direction through an unsent conversation draft. Inspect records opens full reports and available originals when you want to examine a particular finding.</p></FramePanel>
         </Frame>
       </section>
     </div>
-
-    <WorkedExample />
 
     <section className="guide-section" aria-label="Optional deeper understanding">
       <SectionHeading label="When the question needs more" title="A few specialist tools, used when they help" />
@@ -242,11 +243,12 @@ export function GuidePage({ hidden, onNavigate }: GuidePageProps) {
         <Disclosure title="Do I need every source or an account for everything?"><p>No. Enable only what you want to use. Hacker News, DeepWiki, and Polymarket need no provider account; others may need a key, local software, or a separate sign-in. “Configured” means the local prerequisites are present, not that a live request has succeeded.</p></Disclosure>
         <Disclosure title="How do I ask a good research question?"><p>Include the decision you are making, the people or market you care about, and any date range. Mention links you already have. Ask for disagreements, missing evidence, and a clear next step. For paid work, state a budget or ask to review the scope first.</p></Disclosure>
         <Disclosure title="Can I trust every finding or source?"><p>Dig makes the evidence easier to inspect; it does not make a provider or AI interpretation infallible. Coverage can be incomplete, social posts can be wrong, and model confidence is not a truth certificate. For important decisions, check the original evidence and unresolved limits.</p></Disclosure>
+        <Disclosure title="Can I return to earlier research?"><p>Yes. Ask your assistant to find saved research about a topic, or select a question in Overview. Your assistant can reuse its reports and originals before making new requests. Saved information reflects what was known then; ask for a fresh look when the date matters.</p></Disclosure>
         <Disclosure title="Will Dig keep watching a topic automatically?"><p>Opening Dig does not start research or monitoring. Ask for fresh research when you need it. If you arrange a scheduled chat task separately, that task must still have the right access and paid scope; Dig itself is not an alerting service.</p></Disclosure>
       </FramePanel>
     </Frame>
     <div className="guide-bottom">
-      <div><h3>Start small. Ask the follow-up.</h3><p>A useful first report is enough to begin. The conversation is where you steer the research.</p></div>
+      <div><h3>Keep the next question in view.</h3><p>Use the recorded findings and gaps to decide what matters next. Your assistant does the detailed reading; you steer from the conversation.</p></div>
       <div className="guide-bottom-actions"><Button variant="outline" size="sm" onClick={() => { void onNavigate('/sources'); }}>Choose sources</Button><Button variant="ghost" size="sm" onClick={() => { void onNavigate('/settings'); }}>Library settings</Button><Button variant="ghost" size="sm" onClick={() => { void onNavigate('/about'); }}>About this installation</Button></div>
     </div>
   </section>;

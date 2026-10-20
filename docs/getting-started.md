@@ -1,18 +1,36 @@
 # Start here
 
-Dig helps your assistant research a question across the web, software projects, papers, social posts, videos and other services. It saves research so you can inspect the evidence, ask follow-up questions and return to it later.
+Dig shows where your research stands: the question, saved findings and gaps, source coverage, recorded outcomes, and provider usage. Your assistant can research across the web, software projects, papers, social posts, videos and other services.
 
-You ask in your normal conversation. Dig's interface is where you explore its capabilities, choose sources, read saved research and see usage.
+You set the direction in your normal conversation. Your assistant uses the source instructions, reads the detailed reports and original evidence, and explains what it finds. Dig gives you a clear view of the saved work so you can decide what matters next. Full records remain available when you want to inspect a particular point.
 
 ## Your first research question
 
-1. **Choose a place to look.** Open **Sources & tools** to see what's available and what needs setup. You only need to configure the sources you want. Hacker News, DeepWiki and Polymarket need no account; other sources may need a provider account, key or local tool. `$dig:setup` in the conversation can explain the choices.
-2. **Ask a useful question.** Say what you want to learn, who or what matters, and any relevant place, time period or limit. You can name a source or let your assistant choose from the enabled sources.
-3. **Read the result and its evidence.** Open the saved report, inspect the original response behind an important finding, and ask a follow-up in the same conversation.
+1. **Ask what matters to you.** Say “Use Dig…” with the question or decision, who or what matters, and any relevant place, time period, or spending limit. You can name a source or let your assistant choose from the enabled sources. Open **Sources & tools** or use the setup skill in the conversation if you need help choosing sources.
+2. **Observe what is recorded.** **Overview** shows saved questions, outcomes, source coverage, and provider usage. Select a question to see its recorded findings, uncertainty, and dated activity.
+3. **Steer the next step.** **Steer research** lets you choose a direction and preview an instruction. Place it in your conversation as an unsent draft, or copy it there if drafts are unavailable. Review, adjust, and send it when ready; choosing a direction in Dig does not itself start research.
 
 For example:
 
-> Use Dig and Hacker News to research how developers approach local-first software. Explain the strongest arguments, include contrary experiences, and save the report with links to the original discussions.
+> Use Dig and Hacker News to investigate how people choose a note-taking app. Show me the strongest findings, disagreements, and what is still missing. Save the supporting research, check the original discussions, and suggest a useful next question.
+
+Hacker News needs no provider account; enable it first. DeepWiki and Polymarket are also keyless options. Other sources may need a provider account, key, or local tool. You only need to configure what you want to use.
+
+## Observe the state, then decide what matters
+
+An open research question helps you answer five practical questions:
+
+- **What is this about?** The question and its saved answer outcome provide the context.
+- **What has been reported?** Coverage shows which research methods have saved reports, with their recorded outcomes.
+- **What did the research find?** Available findings, contradictions, and follow-up targets are shown as the report author's assessment.
+- **What did it use?** Retained calls and reported provider usage give the cost and activity context.
+- **What should I ask next?** Use a gap, uncertainty, or new direction to prepare the next instruction.
+
+These are observations from saved records. “No answer saved yet” does not mean a worker is running, paused, or stopped. A count of sources is breadth of retained material, not a guarantee of complete coverage or independent agreement. Dig does not infer a live progress percentage.
+
+Your assistant does the detailed reading. Choose **Inspect records** when you want to examine a full report, saved answer, or available original response yourself.
+
+The **Start here** tab includes a made-up worked example near the top: a finding, the passage supporting it, and an illustrative original response. It shows how one passage can support offline editing while leaving sync reliability unanswered—and how that gap becomes a useful next question. The example runs no research and is not saved in your library.
 
 ## What you can explore
 
@@ -31,13 +49,13 @@ The **Start here** tab includes a directory derived from the installed source ca
 
 ## How it works
 
-**You ask a question.** Your assistant identifies what evidence would help and selects useful sources. It can work directly or divide the research among focused helpers.
+**You set the direction.** Your assistant identifies what evidence would help and selects useful enabled sources. It can work directly or divide the research among focused helpers.
 
 **The sources return information.** A source might return web pages, posts, video transcripts, search data or another kind of evidence. Dig records the retrieval and any reported provider usage. Original responses are kept when retention is enabled and capture succeeds.
 
 **Your assistant checks and explains it.** It reads the source reports and important originals, separates observations from interpretation, and describes agreements, contradictions and gaps. A saved report or a confident model answer is not proof that a claim is true.
 
-**The research stays available.** Reports live in your selected library. You can reopen them, ask Dig to find earlier work, or request a fresh look when the information is out of date.
+**You observe and steer.** Dig presents the saved question, reported coverage, findings, gaps, and provider usage. You decide what needs more attention and send the next instruction through the conversation. Reports stay in your selected library for the assistant to reuse and for you to inspect when useful.
 
 ## What the different pieces mean
 
@@ -46,12 +64,11 @@ The **Start here** tab includes a directory derived from the installed source ca
 - **Report:** saved findings from a research method, including its evidence and limitations.
 - **Answer:** a saved explanation that brings selected source reports together.
 - **Original response:** the information returned by the provider, retained when enabled. It helps you check what the provider actually returned.
-- **Insight card:** a compact presentation of a finding, comparison or next step, with links to evidence and the full report. It does not add proof to the underlying research.
-- **Library:** saved research across projects. **Research trail** shows the work associated with the current conversation.
+- **Insight card:** a compact presentation of a finding, comparison or proposed next step, with optional evidence inspection and an unsent discussion draft. It does not add proof to the underlying research.
+- **Overview:** the human view of saved research across projects, including usage and costs. The underlying **library** is the folder holding those records. **Research trail** shows recorded work associated with the current conversation.
+- **Steering draft:** a proposed instruction for the next question or direction. Preparing it does not run a research tool, send the message, or start research.
 
 Ask, “Use Dig to find what we already researched about [topic],” or invoke `$dig:library`. Reusing a saved report does not make its information current; ask for a refresh when that matters.
-
-The **Start here** tab includes a made-up worked example you can explore: a finding, the passage supporting it, and an illustrative original response. It shows why a passage can support one conclusion while leaving other questions unanswered. The example runs no research and is not saved in your library.
 
 ## Optional tools that help with the evidence
 
@@ -72,7 +89,7 @@ Some providers report dollars, some report credits, and some report no price for
 
 Provider charges are billed by those services, separately from your ChatGPT plan.
 
-The Library overview keeps usage and costs visible. A report or card's usage is limited to the receipts associated with it; its reference to another piece of evidence does not automatically include that evidence's cost.
+Overview keeps usage and costs visible. A report or card's usage is limited to the receipts associated with it; its reference to another piece of evidence does not automatically include that evidence's cost.
 
 ## Setup and privacy
 

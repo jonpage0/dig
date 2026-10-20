@@ -80,14 +80,21 @@ function money(amount, unit) {
   const bound = below ? '<' : '';
   return usd ? `${bound}$${value}` : `${bound}${value} ${unitName(unit, below ? null : shown)}`;
 }
+/** Display order is stable across receipt arrival: USD first, then alphabetically by displayed unit name.
+ * Punctuation does not change alphabetic order (ScrapeCreators precedes Scrape.do); exact unit keys break ties.
+ * Sorting never combines units, changes the underlying summary, or converts one provider's credits to another. */
+const orderedCosts = byUnit => Object.entries(byUnit).sort(([left], [right]) => {
+  if (left === 'USD' || right === 'USD') return left === right ? 0 : left === 'USD' ? -1 : 1;
+  return unitName(left, null).localeCompare(unitName(right, null), LOCALE, { ignorePunctuation: true }) || left.localeCompare(right, LOCALE);
+});
 /** Each unit's known amount from a costSummary, formatted on its own; empty when nothing was reported. */
-export const costAmounts = ({ byUnit }) => Object.entries(byUnit).map(([unit, amount]) => money(amount, unit));
+export const costAmounts = ({ byUnit }) => orderedCosts(byUnit).map(([unit, amount]) => money(amount, unit));
 /**
  * What a costSummary of retained receipts establishes, each unit kept separate: a complete provider-reported
  * total, a reported subtotal whose total is unknown, unknown, or the receipts' recorded no-charge (not an invoice).
  */
 export function costText({ byUnit, unknownCalls }) {
-  const known = Object.entries(byUnit).map(([unit, amount]) => money(amount, unit)).join(' + ');
+  const known = costAmounts({ byUnit }).join(' + ');
   if (unknownCalls === 0) return known ? `Provider-reported cost: ${known}` : 'Recorded no provider charge';
   return known ? `Provider-reported subtotal: ${known}; total unknown` : 'Provider cost unknown';
 }

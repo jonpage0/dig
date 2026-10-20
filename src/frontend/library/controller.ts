@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createCatalog, fileKind } from '../../ui/catalog.mjs';
-import { setRetrievalsOpen } from '../../ui/retrievals.mjs';
 import { VERSION } from '../../version.mjs';
 import type { DigHost } from '../shared/host';
+import { canonicalResearchFile } from './research-state';
 
 export const POLL_MS = 2000;
 export const READ_LIMIT = 60000;
@@ -18,7 +18,7 @@ export function replacedMessage(value: any) {
 const emptySnapshot = { items: [], live: [] };
 const emptyState = {
   mode: 'library', thread: null, connected: false, notice: '', failure: false, updatesFailed: false,
-  current: null, document: null, evidence: null, returnFile: null, returnView: '/library',
+  current: null, document: null, evidence: null, assessment: null, inspectionOpen: false, callsOpen: false, returnFile: null, returnView: '/library',
   aboutReturn: '/library', usageDays: 30,
 };
 
@@ -38,6 +38,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
     let alive = true;
     let navigation = 0;
     let evidenceNavigation = 0;
+    let assessmentNavigation = 0;
     let libraryGeneration = 0;
     let revision: string | null = null;
     let pollTask: Promise<void> | null = null;
@@ -79,13 +80,14 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
       const normalized = { ...value, items: value.items ?? [], live: value.live ?? [] };
       const previousLibrary = latest.current.snapshot.library;
       if (typeof previousLibrary === 'string' && previousLibrary !== normalized.library) {
-        libraryGeneration++; navigation++; evidenceNavigation++;
+        libraryGeneration++; navigation++; evidenceNavigation++; assessmentNavigation++;
         evidenceOrigin = null; readerOrigin = null; browseScroll = 0;
         update({
-          current: null, document: null, evidence: null, returnFile: null, returnView: '/library',
+          current: null, document: null, evidence: null, assessment: null, inspectionOpen: false, callsOpen: false, returnFile: null, returnView: '/library',
           ...(latest.current.state.aboutReturn === '/reader' ? { aboutReturn: '/library' } : {}),
         });
         queries.removeQueries({ queryKey: ['file'] });
+        queries.removeQueries({ queryKey: ['assessment'] });
         if (latest.current.view === '/reader') void navigate('/library');
         notify('The research library changed. Open a saved item from the selected library to read it.');
       }
@@ -181,18 +183,41 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
       const wasOpen = Boolean(latest.current.state.evidence);
       update({ evidence: null });
       if (restore && wasOpen && evidenceOrigin) {
-        setRetrievalsOpen(evidenceOrigin.reopen);
-        globalThis.scrollTo?.({ top: evidenceOrigin.scroll, behavior: 'instant' });
-        const target = evidenceOrigin.focus?.isConnected ? evidenceOrigin.focus : document.getElementById('reader-evidence');
-        (target as HTMLElement)?.focus({ preventScroll: true });
+        const origin = evidenceOrigin;
+        update({ callsOpen: origin.reopen });
+        requestAnimationFrame(() => {
+          globalThis.scrollTo?.({ top: origin.scroll, behavior: 'instant' });
+          const target = origin.focus?.isConnected ? origin.focus : document.getElementById('reader-evidence');
+          (target as HTMLElement)?.focus({ preventScroll: true });
+        });
       }
       evidenceOrigin = null; readerOrigin = null;
+    };
+    const loadAssessment = async (file: string) => {
+      const item = latest.current.state.current;
+      if (!item || (!item.reports.includes(file) && item.answer !== file)) return;
+      const request = ++assessmentNavigation;
+      const library = latest.current.snapshot.library;
+      const generation = libraryGeneration;
+      const same = () => alive && request === assessmentNavigation && generation === libraryGeneration
+        && latest.current.state.current?.id === item.id && latest.current.state.current?.project === item.project;
+      update({ assessment: { file, loading: true } });
+      try {
+        const value: any = await queries.fetchQuery({
+          queryKey: ['assessment', library, file], staleTime: 0, gcTime: 0,
+          queryFn: () => host.call('saved_research', { file: canonicalResearchFile(library, file) }),
+        });
+        if (!same()) return;
+        if (value?.file !== file || typeof value.path !== 'string' || !value.path.startsWith('/') || !value.path.endsWith('/' + file)) throw new Error('The retained assessment does not match the selected file.');
+        update({ assessment: { file, value } });
+      } catch (error: any) { if (same()) update({ assessment: { file, error: error.message } }); }
     };
     const showFile = async (file: string) => {
       closeEvidence(false);
       const request = ++navigation;
       const kind = fileKind(file);
-      update({ document: { file, kind, loading: true } });
+      update({ document: { file, kind, loading: true }, inspectionOpen: true });
+      if (kind !== 'raw') void loadAssessment(file);
       try {
         const body = await readAll(file);
         if (!alive || request !== navigation || !latest.current.state.current) return false;
@@ -211,15 +236,20 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
     const showDig = async (item: any, file?: string) => {
       closeEvidence(false);
       const request = ++navigation;
+      assessmentNavigation++;
       if (latest.current.view !== '/reader') {
         browseScroll = globalThis.scrollY ?? 0;
         update({ returnView: latest.current.view === '/about' ? latest.current.state.aboutReturn : latest.current.view });
       }
-      update({ current: item, document: null, returnFile: null });
+      update({ current: item, document: null, assessment: null, inspectionOpen: false, callsOpen: false, returnFile: null });
       await navigate('/reader');
       if (!alive || request !== navigation) return;
-      const shown = await showFile(file ?? item.answer ?? item.reports[0] ?? item.files.find((path: string) => path.endsWith('dig.md')));
-      if (shown && latest.current.state.current?.id === item.id && latest.current.state.current?.project === item.project) {
+      if (file) await showFile(file);
+      else {
+        const report = [...(item.reportDetails ?? [])].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]?.file ?? item.reports[0] ?? item.answer;
+        if (report) void loadAssessment(report);
+      }
+      if (!file && latest.current.state.current?.id === item.id && latest.current.state.current?.project === item.project) {
         const completedNavigation = navigation;
         requestAnimationFrame(() => {
           if (!alive || completedNavigation !== navigation) return;
@@ -228,18 +258,26 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
         });
       }
     };
+    const inspectRecords = async () => {
+      const item = latest.current.state.current;
+      if (!item) return;
+      if (latest.current.state.document) { update({ inspectionOpen: true }); return; }
+      const file = item.answer ?? item.reports[0] ?? item.files.find((path: string) => path.endsWith('dig.md'));
+      if (file) await showFile(file);
+    };
     const inspectRaw = async (file: string) => {
       const { current, document: opened, evidence } = latest.current.state;
+      const wasOpen = Boolean(latest.current.state.callsOpen);
+      update({ inspectionOpen: true, callsOpen: false });
       if (!current || !opened || opened.loading || opened.error || opened.kind === 'raw') return showFile(file);
       if (!evidence) {
-        const wasOpen = setRetrievalsOpen(false);
         evidenceOrigin = {
           focus: readerOrigin?.focus ?? document.activeElement,
           scroll: readerOrigin?.scroll ?? globalThis.scrollY ?? 0,
           reopen: readerOrigin ? false : wasOpen,
         };
         readerOrigin = null;
-      } else setRetrievalsOpen(false);
+      }
       const request = ++evidenceNavigation;
       update({ evidence: { file, loading: true } });
       try {
@@ -257,8 +295,8 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
       });
     };
     const leaveReader = () => {
-      closeEvidence(false); navigation++;
-      update({ current: null, document: null, returnFile: null });
+      closeEvidence(false); navigation++; assessmentNavigation++;
+      update({ current: null, document: null, assessment: null, inspectionOpen: false, callsOpen: false, returnFile: null });
     };
     const go = async (to: string) => {
       if (to === '/about') update({ aboutReturn: latest.current.view });
@@ -331,7 +369,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
       if (['/library', '/trail'].includes(latest.current.view)) void navigate(mode === 'panel' ? '/trail' : '/library');
     };
     return {
-      update, notify, poll, read, refreshPages, showFile, showDig, inspectRaw, closeEvidence, go, back, saveSetting, editKeys, useEnvironment, activate,
+      update, notify, poll, read, refreshPages, showFile, showDig, loadAssessment, inspectRecords, inspectRaw, closeEvidence, go, back, saveSetting, editKeys, useEnvironment, activate,
       readerOrigin: () => { readerOrigin = { focus: document.getElementById('reader-evidence'), scroll: globalThis.scrollY ?? 0 }; },
       backAbout: () => navigate(latest.current.state.aboutReturn === '/reader' && !latest.current.state.current ? '/library' : latest.current.state.aboutReturn),
       start: async () => {
@@ -354,7 +392,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
         } catch (error: any) { notify(error.message, true); }
         return teardown;
       },
-      stop: () => { alive = false; navigation++; evidenceNavigation++; },
+      stop: () => { alive = false; navigation++; evidenceNavigation++; assessmentNavigation++; },
     };
   }, [host, queries, router]);
 

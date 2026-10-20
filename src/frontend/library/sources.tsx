@@ -9,7 +9,8 @@ import { GLYPHS, glyphFor } from '../../glyphs.mjs';
 import { MODULES, SOURCE_GROUPS, moduleAgents } from '../../providers/modules.ts';
 import { SOURCE_GUIDES, activityNote, latestSourceCalls } from '../../ui/source-guide.mjs';
 import { enabledField, ownerOf, settingsGroups } from '../../ui/settings.mjs';
-import { clock, shortDate } from '../../ui/format.mjs';
+import { clock, shortDate, costAmounts, num, plural } from '../../ui/format.mjs';
+import { usageOf } from '../../ui/usage.mjs';
 import { READ_ONLY, SCHEMA_MISSING } from './controller';
 import type { DigHost } from '../shared/host';
 
@@ -224,7 +225,21 @@ function activityBrief(call: any) {
   return `${outcome[call.status] ?? 'Unknown outcome'} · ${shortDate(call.at)} · ${clock(call.at)}`;
 }
 
-function SourceCard({ module, addOns = [], modules, app, host, info, activity, read, addOn = false }: any) {
+function RecordedUse({ usage, recent }: { usage: any; recent: any }) {
+  const amounts = usage ? costAmounts(usage.cost) : [];
+  return <div className="source-page-recorded">
+    <div className="source-page-recorded-heading"><span>Recorded use</span><span>All-time retained usage</span></div>
+    {usage?.total ? <dl className="source-page-recorded-metrics">
+      <div><dt>Calls</dt><dd>{num(usage.total)}</dd></div>
+      <div><dt>{usage.cost.unknownCalls && amounts.length ? 'Reported subtotal' : 'Reported usage'}</dt><dd className="source-page-recorded-cost">{amounts.length ? amounts.map(amount => <span key={amount}>{amount}</span>) : usage.cost.unknownCalls ? 'Unpriced' : 'No charge recorded'}</dd>
+        {usage.cost.unknownCalls > 0 && <span>{plural(usage.cost.unknownCalls, 'call')} incompletely priced</span>}
+      </div>
+    </dl> : <p className="source-page-unused">No retained calls yet</p>}
+    <p className="source-page-activity" title={activityNote(recent)}><span>Last retained call</span>{activityBrief(recent)}</p>
+  </div>;
+}
+
+function SourceCard({ module, addOns = [], modules, app, host, info, activity, usage, read, addOn = false }: any) {
   const [setupOpen, setSetupOpen] = useState(false);
   const properties = read?.schema?.properties ?? {}; const values = read?.values ?? {};
   const ownField = enabledField(module.id);
@@ -239,6 +254,7 @@ function SourceCard({ module, addOns = [], modules, app, host, info, activity, r
   const hasKeys = source?.credentials?.length || source?.envSettings?.length || source?.credentialGuidance;
   const setupParts = [hasKeys ? 'keys' : null, prerequisites.length ? 'local tools' : null, own.length ? 'settings' : null, methods.length ? 'workers' : null].filter(Boolean);
   const recent = activity.get(module.id);
+  const tasks: string[] = guide?.tasks ?? [module.about];
   const message = readinessMessage(source);
   const headingId = `source-heading-${module.id}`;
   const body = <>
@@ -255,7 +271,8 @@ function SourceCard({ module, addOns = [], modules, app, host, info, activity, r
     <FramePanel className="source-page-card-content">
       <div className="source-page-state-row"><StateBadge state={state} />{module.kind === 'tool' && <span className="source-page-kind">Shared tool</span>}{addOn && <span className="source-page-kind">Optional add-on</span>}</div>
       <ProviderLine module={module} />
-      <ul className="source-page-capabilities">{(guide?.tasks ?? [module.about]).map((task: string) => <li key={task}>{task}</li>)}</ul>
+      <ul className="source-page-capabilities">{tasks.slice(0, 2).map((task: string) => <li key={task}>{task}</li>)}</ul>
+      {tasks.length > 2 && <details className="source-page-more-capabilities"><summary>More capabilities</summary><ul className="source-page-capabilities">{tasks.slice(2).map(task => <li key={task}>{task}</li>)}</ul></details>}
       <div className="source-page-billing"><span className="source-page-billing-label">Cost</span><p>{module.billing}</p></div>
       {message && <p className="source-page-readiness-note">{message}</p>}
       {setupParts.length > 0 && <Collapsible.Root open={setupOpen} onOpenChange={setSetupOpen} className="source-page-setup">
@@ -275,9 +292,9 @@ function SourceCard({ module, addOns = [], modules, app, host, info, activity, r
           <p className="source-page-activity-detail">{activityNote(recent)}</p>
         </Collapsible.Panel>
       </Collapsible.Root>}
-      <p className="source-page-activity" title={activityNote(recent)}><span>Last retained call</span>{activityBrief(recent)}</p>
+      <RecordedUse usage={usage.get(module.id)} recent={recent} />
     </FramePanel>
-    {addOns.length > 0 && <div className="source-page-addons">{addOns.map((entry: any) => <SourceCard key={entry.id} module={entry} modules={modules} app={app} host={host} info={info} activity={activity} read={read} addOn />)}</div>}
+    {addOns.length > 0 && <div className="source-page-addons">{addOns.map((entry: any) => <SourceCard key={entry.id} module={entry} modules={modules} app={app} host={host} info={info} activity={activity} usage={usage} read={read} addOn />)}</div>}
     <FrameFooter className="source-page-card-footer">
       <details className="source-page-tertiary"><summary>{module.kind === 'tool' ? 'About this tool' : 'About this source'}</summary><p>{module.about}</p></details>
       {guide?.example && <Example id={module.id} example={guide.example} />}
@@ -293,6 +310,7 @@ export function SourcesPage({ app, host, hidden }: { app: any; host: DigHost; hi
   const info = useMemo(() => new Map(sources.map((source: any) => [source.id, source])), [sources]);
   const groups = useMemo(() => groupSourceModules(MODULES), []);
   const activity = useMemo(() => latestSourceCalls(app.snapshot), [app.snapshot]);
+  const usage = useMemo(() => new Map(usageOf(app.snapshot, { days: 0 }).sources.map((source: any) => [source.id, source])), [app.snapshot]);
   const on = sources.filter((source: any) => source.enabled);
   const ready = on.filter((source: any) => source.readiness?.status === 'ready').length;
   const attention = on.filter((source: any) => ['partial', 'setup-required'].includes(source.readiness?.status)).length;
@@ -312,7 +330,7 @@ export function SourcesPage({ app, host, hidden }: { app: any; host: DigHost; hi
   };
   return <section id="sources" className="source-page" hidden={hidden} onClick={navigateLink}>
     <header className="source-page-header">
-      <div><h2>Sources &amp; tools</h2><p>Choose where Dig looks and what it can use.</p></div>
+      <div><p className="source-page-eyebrow">Your research toolkit</p><h2>Sources &amp; tools</h2><p>See what is configured, what has been used, and what needs setup.</p></div>
       {sources.length > 0 && <dl className="source-page-overview" aria-label="Source configuration">
         <div><dt>Enabled</dt><dd>{on.length}<span> / {sources.length}</span></dd></div>
         <div><dt>Configured</dt><dd>{ready}</dd></div>
@@ -327,8 +345,8 @@ export function SourcesPage({ app, host, hidden }: { app: any; host: DigHost; hi
     </nav>
     <div id="sources-list" className="source-page-groups">
       {groups.map(group => <section key={group.id} id={`source-group-${group.id}`} className={`source-page-group${group.members.length === 1 ? ' source-page-group-single' : ''}`} aria-labelledby={`source-group-heading-${group.id}`}>
-        <div className="source-page-group-header"><h3 id={`source-group-heading-${group.id}`} tabIndex={-1}>{group.label}</h3><p>{GROUP_DESCRIPTIONS[group.id] ?? 'Additional tools in this edition.'}</p></div>
-        <div className="source-page-grid">{group.members.map(({ module, addOns }) => <SourceCard key={module.id} module={module} addOns={addOns} modules={MODULES} app={app} host={host} info={info} activity={activity} read={read} />)}</div>
+        <div className="source-page-group-header"><div><h3 id={`source-group-heading-${group.id}`} tabIndex={-1}>{group.label}</h3><p>{GROUP_DESCRIPTIONS[group.id] ?? 'Additional tools in this edition.'}</p></div><span>{group.members.filter(({ module }) => info.get(module.id)?.enabled).length} of {group.members.length} on</span></div>
+        <div className="source-page-grid">{group.members.map(({ module, addOns }) => <SourceCard key={module.id} module={module} addOns={addOns} modules={MODULES} app={app} host={host} info={info} activity={activity} usage={usage} read={read} />)}</div>
       </section>)}
     </div>
   </section>;

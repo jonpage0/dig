@@ -19,12 +19,12 @@ export function CardFooter({ className, ...props }: React.ComponentProps<'div'>)
 export function Badge({ tone = 'neutral', className, ...props }: React.ComponentProps<'span'> & { tone?: 'neutral' | 'success' | 'partial' | 'warning' | 'muted' }) {
   return <span {...props} data-tone={tone} className={cn('dig-badge', className)} />;
 }
-export function Disclosure({ title, children, defaultOpen = false, open, onOpenChange, className }: {
-  title: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean; open?: boolean; onOpenChange?: (open: boolean) => void; className?: string;
+export function Disclosure({ title, children, defaultOpen = false, open, onOpenChange, keepMounted = false, className }: {
+  title: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean; open?: boolean; onOpenChange?: (open: boolean) => void; keepMounted?: boolean; className?: string;
 }) {
   return <Collapsible.Root defaultOpen={defaultOpen} open={open} onOpenChange={onOpenChange} className={cn('dig-disclosure', className)}>
     <Collapsible.Trigger className="dig-disclosure-trigger"><span>{title}</span><span aria-hidden="true" className="dig-chevron">⌄</span></Collapsible.Trigger>
-    <Collapsible.Panel className="dig-disclosure-panel">{children}</Collapsible.Panel>
+    <Collapsible.Panel keepMounted={keepMounted} className="dig-disclosure-panel">{children}</Collapsible.Panel>
   </Collapsible.Root>;
 }
 export function Dialog({ open, onOpenChange, title, description, children, footer }: {
