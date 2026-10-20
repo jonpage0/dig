@@ -74,6 +74,11 @@ class Element {
   }
 }
 const settle = async () => { for (let i = 0; i < 25; i++) await new Promise(resolve => setImmediate(resolve)); };
+const waitFor = async ready => {
+  const deadline = Date.now() + 2000;
+  while (!ready() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.ok(ready(), 'the asynchronous view reached its expected state');
+};
 const byKey = (root, key) => [...root.walk()].find(e => e.getAttribute('data-key') === key);
 
 async function loadApp(host) {
@@ -437,6 +442,8 @@ test('Sources gives each source a card holding its own settings, Settings holds 
   const ui = await loadApp(host);
   ui.$('nav-sources').onclick(); await settle();
   const list = ui.$('sources-list'); const toc = id => byKey(ui.$('sources-toc'), `toc:${id}`).textContent;
+  // This fixture reads settings from disk; event-loop turns alone do not await filesystem completion.
+  await waitFor(() => [...list.walk()].some(e => e.tagName === 'ARTICLE'));
   const cards = [...list.walk()].filter(e => e.tagName === 'ARTICLE');
   assert.deepEqual(cards.map(card => card.getAttribute('id')).sort(), MODULES.map(m => `source-${m.id}`).sort());
   const videoCard = cards.find(card => card.getAttribute('id') === 'source-video');

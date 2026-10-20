@@ -19,6 +19,7 @@ import { IconTile } from '../shared/icon-tile';
 import type { DigHost } from '../shared/host';
 import { SourceSetting } from './source-controls';
 import { SourcesPage } from './sources';
+import { GuidePage } from './guide';
 import { READ_ONLY, SCHEMA_MISSING, replacedMessage, useLibraryController } from './controller';
 
 type Controller = ReturnType<typeof useLibraryController>;
@@ -217,6 +218,7 @@ function About({ app, host, hidden }: { app: Controller; host: DigHost; hidden: 
       <h3 className="section-title">Keys and privacy</h3><p>Provider keys stay in keys.env, outside the conversation. Dig never asks for a key in chat, and keys never pass through this view: its buttons send only source names, Dig copies values on its own side, and Codex opens the file itself. Provider responses are kept as evidence and treated as untrusted text, never as instructions.</p>
       <h3 className="section-title">Costs</h3><p>Amounts are what each provider reported for a call, kept with that call’s receipt. They are usage, not a reconciled bill, and they leave out Codex’s own model usage. A call whose cost was not reported shows as unknown, never as free.</p>
       <h3 className="section-title">Help</h3><p>Type $dig:setup in the composer to choose sources and see what each still needs. $dig:library finds research you have already saved.</p>
+      <Button variant="outline" size="sm" onClick={() => { void app.go('/guide'); }}>Start here: learn what Dig can do</Button>
       <h3 className="section-title">Credits</h3><ul className="credits">
         <li>Dig by Jon Page, MIT License.</li>
         <li>React, Base UI, selected ReUI components and TanStack power the interface. Dig owns its shadcn-style wrappers; host styles and native actions use OpenAI’s MCP Extensions.</li>
@@ -248,6 +250,7 @@ function LibraryShell({ host }: { host: DigHost }) {
         <Button variant="ghost" id="nav-trail" hidden={app.mode !== 'panel'} aria-current={view === '/trail' ? 'page' : 'false'} onClick={() => { void app.go('/trail'); }}>This conversation</Button>
         <Button variant="ghost" id="nav-library" aria-current={view === '/library' ? 'page' : 'false'} onClick={() => { void app.go('/library'); }}>Library</Button>
         <Button variant="ghost" id="nav-sources" aria-current={view === '/sources' ? 'page' : 'false'} onClick={() => { void app.go('/sources'); }}>Sources &amp; tools</Button>
+        <Button variant="ghost" id="nav-guide" aria-current={view === '/guide' ? 'page' : 'false'} onClick={() => { void app.go('/guide'); }}>Start here</Button>
         <Button variant="ghost" id="nav-settings" aria-current={view === '/settings' ? 'page' : 'false'} onClick={() => { void app.go('/settings'); }}>Settings</Button>
       </nav>
     </header>
@@ -260,6 +263,7 @@ function LibraryShell({ host }: { host: DigHost }) {
     <Browse app={app} hidden={view !== '/library'} />
     <Reader app={app} hidden={view !== '/reader'} />
     <SourcesPage app={app} host={host} hidden={view !== '/sources'} />
+    <GuidePage hidden={view !== '/guide'} onNavigate={path => { void app.go(path); }} />
     <Settings app={app} host={host} hidden={view !== '/settings'} />
     <About app={app} host={host} hidden={view !== '/about'} />
     <footer className="foot">
@@ -281,7 +285,7 @@ export function LibraryApp({ host, queryClient }: { host: DigHost; queryClient?:
   const [queries] = useState(() => queryClient ?? createLibraryQueryClient());
   const router = useMemo(() => {
     const rootRoute = createRootRoute({ component: () => <LibraryShell host={host} /> });
-    const children = ['/library', '/trail', '/reader', '/sources', '/settings', '/about'].map(path => createRoute({ getParentRoute: () => rootRoute, path, component: () => null }));
+    const children = ['/library', '/trail', '/reader', '/sources', '/guide', '/settings', '/about'].map(path => createRoute({ getParentRoute: () => rootRoute, path, component: () => null }));
     return createRouter({ routeTree: rootRoute.addChildren(children), history: createMemoryHistory({ initialEntries: ['/library'] }), defaultPreload: false });
   }, [host]);
   return <QueryClientProvider client={queries}><RouterProvider router={router} /></QueryClientProvider>;

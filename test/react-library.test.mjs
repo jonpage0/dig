@@ -211,6 +211,22 @@ test('conversation trail scopes cost and source setup shares settings without st
   assert.deepEqual([...new Set(host.calls.map(call => call.name))].sort(), ['library_revision', 'library_snapshot', 'settings.read', 'source_info']);
 });
 
+test('Start here is discoverable without replacing the overview or starting research, and About returns to it', async t => {
+  const host = scriptedHost(snapshotOf([]));
+  await mount(t, host);
+  assert.equal($('browse').hidden, false);
+  assert.equal($('guide').hidden, true);
+  await click($('nav-guide'));
+  assert.equal($('guide').hidden, false);
+  assert.equal($('browse').hidden, true);
+  assert.equal($('nav-guide').getAttribute('aria-current'), 'page');
+  assert.equal(document.activeElement, $('guide-title'));
+  await click($('nav-about'));
+  await click($('about-back'));
+  assert.equal($('guide').hidden, false);
+  assert.deepEqual([...new Set(host.calls.map(call => call.name))].sort(), ['library_revision', 'library_snapshot', 'source_info']);
+});
+
 test('cost overview preserves unknowns and separate credit units, and pricing disclosures survive a refresh', async t => {
   const calls = [
     { ...rawCall, id: 'priced', cost: [{ amount: 0.25, unit: 'USD' }] },

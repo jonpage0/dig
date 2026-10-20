@@ -1,6 +1,6 @@
 # Dig
 
-Source-by-source research for Codex in the ChatGPT desktop app, with every report and original response saved where you can check it.
+Research across many sources for Codex in the ChatGPT desktop app, with saved reports and evidence you can inspect.
 
 <p align="center">
 <img src="docs/logos/exa.svg" width="32" height="32" alt="Exa" title="Exa">
@@ -16,6 +16,8 @@ Source-by-source research for Codex in the ChatGPT desktop app, with every repor
 <img src="docs/logos/telegram.svg" width="32" height="32" alt="Telegram" title="Telegram">
 <img src="docs/logos/polymarket.svg" width="32" height="32" alt="Polymarket" title="Polymarket">
 </p>
+
+**New to Dig?** Open **Start here** in Dig for a visual introduction, practical example questions, and a plain-language explanation of the sources, reports, evidence and costs. Or read the [getting started guide](docs/getting-started.md).
 
 ## Install
 
@@ -46,7 +48,7 @@ For a first run, ask: **“Use Dig and Hacker News to research how developers ap
 
 ## What Dig does
 
-Ask a question in Codex. Dig researches it source by source, writes a report for each source, and keeps the original responses behind every claim.
+Ask a question in Codex. Dig can research it through selected sources, save reports, and retain the original provider responses when that setting is enabled.
 
 **22 sources · 26 research methods · 72 tools, including two optional shared helpers**
 
@@ -76,7 +78,7 @@ Ask a question in Codex. Dig researches it source by source, writes a report for
 What you get back:
 
 - **A report per source**, linking every post, page or paper it relies on.
-- **The original responses**, saved so any claim can be checked.
+- **Retained original responses**, when enabled, so important findings can be checked against what the provider returned.
 - **A library** in Codex's sidebar to read past research, plus a research trail beside the conversation.
 - **Costs as each provider reports them.** Unknown stays unknown; Dig never guesses.
 

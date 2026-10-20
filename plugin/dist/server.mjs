@@ -59860,7 +59860,7 @@ function createSchemas(T3, sources = reportSources(ALL_MODULES)) {
 }
 
 // src/version.mjs
-var VERSION2 = "0.8.0";
+var VERSION2 = "0.8.1";
 
 // src/presentation.mjs
 import { basename as basename4 } from "node:path";

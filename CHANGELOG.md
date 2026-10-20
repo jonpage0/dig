@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1 — 2026-10-20
+
+- Add a ReUI Start here tab with a plain-language introduction, practical example questions, a research walkthrough, result/cost/privacy explanations and a directory derived from the installed source catalog.
+- Add a companion getting-started guide linked from the README; keep technical version and file details in About Dig.
+
 ## 0.8.0 — 2026-10-20
 
 - Rebuild Sources, accounts and Settings as React views using actual free ReUI Frame and Icon Tile components with Base UI switches, inputs, selects and disclosures. Keep local settings drafts and saves stable across refreshes.
