@@ -23319,7 +23319,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
 
   // src/version.mjs
-  var VERSION = "0.3.0";
+  var VERSION = "0.3.1";
 
   // src/app.mjs
   var POLL_MS = 2e3;
@@ -23433,7 +23433,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
   function replacedMessage(value) {
     const installed = typeof value.replaced?.version === "string" ? value.replaced.version : null;
-    return `${installed ? `Dig ${installed} was installed` : "Dig was updated or removed"} while Codex was running. Quit and reopen Codex to load ${installed ? "it" : "the change"}; until then this view keeps running Dig ${value.version}, and Refresh cannot load the new version.`;
+    return `${installed ? `Dig ${installed} was installed` : "Dig was updated or removed"} while Codex was running. Refresh Dig\u2019s plugin connection, then refresh this view. If the connection still reports Dig ${value.version}, quit and reopen Codex as a fallback. This view currently uses Dig ${value.version}.`;
   }
   var projectName = (item2) => basename(item2.project) || item2.project;
   function sourcesLine(item2) {

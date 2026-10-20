@@ -686,10 +686,10 @@ test('a newer installed Dig tells the reader once to refresh the view Codex cach
   assert.equal(ui.$('notice').textContent, '');
 });
 
-test('a server whose files a later install removed says once that only reopening Codex loads the new version', async () => {
+test('a replaced server asks for a connection refresh before an app restart', async () => {
   const host = scriptedHost([{ ...snapshotOf([]), version: '0.0.0', replaced: { version: '9.9.9' } }]);
   const ui = await loadApp(host);
-  assert.match(ui.$('notice').textContent, /^Dig 9\.9\.9 was installed while Codex was running\. Quit and reopen Codex.*keeps running Dig 0\.0\.0/);
+  assert.match(ui.$('notice').textContent, /^Dig 9\.9\.9 was installed while Codex was running\. Refresh Dig’s plugin connection.*quit and reopen Codex as a fallback.*currently uses Dig 0\.0\.0/);
   assert.doesNotMatch(ui.$('notice').textContent, /Right-click/, 'The refresh notice would not help, so it is not shown');
   ui.$('dismiss').onclick();
   await ui.poll();

@@ -92,7 +92,7 @@ function render(value) {
   if (current) refreshCurrent();
   applyDeepLink();
   // A later install removed this server's files while Codex kept it running. Refresh reloads this server's own
-  // view, so only reopening Codex loads the new version.
+  // view. Reload the plugin connection first; an app restart is only a fallback.
   if (!replacedNoticed && value.replaced && typeof value.version === 'string') {
     replacedNoticed = true; staleViewNoticed = true;
     notify(replacedMessage(value));
@@ -105,7 +105,7 @@ function render(value) {
 }
 function replacedMessage(value) {
   const installed = typeof value.replaced?.version === 'string' ? value.replaced.version : null;
-  return `${installed ? `Dig ${installed} was installed` : 'Dig was updated or removed'} while Codex was running. Quit and reopen Codex to load ${installed ? 'it' : 'the change'}; until then this view keeps running Dig ${value.version}, and Refresh cannot load the new version.`;
+  return `${installed ? `Dig ${installed} was installed` : 'Dig was updated or removed'} while Codex was running. Refresh Dig’s plugin connection, then refresh this view. If the connection still reports Dig ${value.version}, quit and reopen Codex as a fallback. This view currently uses Dig ${value.version}.`;
 }
 
 const projectName = item => basename(item.project) || item.project;

@@ -133,7 +133,7 @@ codex plugin marketplace upgrade dig
 codex plugin add dig@dig
 ```
 
-Then quit and reopen ChatGPT. Your settings, keys and research are kept.
+Refresh Dig’s plugin/MCP connection, then verify the running version in About Dig or through `source_info`. Refresh an already-open Dig view after the server updates. Quit and reopen ChatGPT only if the connection still uses the old version. Your settings, keys and research are kept.
 
 ## Privacy and costs
 

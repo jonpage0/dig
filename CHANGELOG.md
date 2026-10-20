@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 — 2026-10-19
+
+- Updating Dig refreshes the plugin connection first. The stale-version notice and release instructions now reserve quitting and reopening the host as a fallback, instead of requiring it for every update.
+
 ## 0.3.0 — 2026-10-19
 
 - Exa 3.0: Lite search, historical Snapshot retrieval and structured result entities, while retaining existing search modes.
