@@ -21,6 +21,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 - `source_info` with `source: "youtube"` — enablement, readiness, the library path, and the helper method's packaged skill;
 - `youtube` — search videos and optionally save full transcripts;
+- `youtube_transcript` — explicit paid ScrapeCreators fallback for an exact video, preserving caption timestamps and language;
 - `library_read` — read a saved transcript or summary in full; it accepts an absolute path inside the active library and returns `nextOffset` until the file is complete;
 - `research_save` with `source: "youtube"` and `agent: "youtube"` — save the source report.
 
@@ -29,6 +30,8 @@ Pass the absolute `project` on every provider and save call, and `dig` only when
 Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. `OPENCODE_RESEARCH_GOOGLE_API_KEY` is optional; `yt-dlp` is needed for transcripts and keyless search. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (Dig's Sources page can copy one Codex's environment already has), and installs `yt-dlp` themselves. A missing prerequisite is a coverage limit, not evidence that videos or transcripts do not exist. Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
 
 Use `library_read` or the host's own full-file reader and file discovery for transcript and summary artifacts, and the host's file writer for the one permitted summary recovery write. Never use shell redirection.
+
+If yt-dlp captions fail, use `youtube_transcript` only within the user’s authorized paid-provider scope. Pass `video`, optional `language`, `originalAudio` and `cacheMaxAge`. Read its exact returned path; hosted variants have provider/language suffixes and do not overwrite earlier transcripts.
 
 ## Search and reuse transcripts
 

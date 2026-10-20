@@ -14,7 +14,7 @@ Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the
 
 ## Source catalog and execution
 
-`src/providers/modules.ts` owns the source and method identities. There are **21 catalog entries**, each a report source. X has three independent methods, giving **24 source-method skills**. The YouTube transcript helper, the `dig` and `library` guidance and the `setup` onboarding skill bring the packaged skill count to **28**. Skill directories, skill names and method names are the same word (`hackernews`, `x-judge`, `youtube-summarizer`); Codex lists each as `dig:<skill>`.
+`src/providers/modules.ts` owns the source and method identities. There are **22 catalog entries**, each a report source. X has three independent methods, giving **25 source-method skills**. The YouTube transcript helper, the `dig` and `library` guidance and the `setup` onboarding skill bring the packaged skill count to **29**. Skill directories, skill names and method names are the same word (`hackernews`, `x-judge`, `youtube-summarizer`); Codex lists each as `dig:<skill>`.
 
 ### Skill packaging and invocation
 
@@ -47,7 +47,7 @@ Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the
 | TikTok ads | `tiktok_ads_search`, `tiktok_ads_top`, `tiktok_ads_detail`, `tiktok_ad_library` | TikHub Creative Center and ScrapeCreators Ad Library are separate datasets |
 | DataForSEO | `dataforseo_docs_sections`, `dataforseo_docs_index`, `dataforseo_docs_read`, `dataforseo_request` | `DATAFORSEO_USERNAME` and `DATAFORSEO_PASSWORD` (API login and API password); paid per request |
 
-The **57 local provider tools** use the shared cancellation, raw capture and reported-cost boundary. The native boundary adds a required absolute `project` and optional `dig`, validates them before retrieval, and strips them before calling the provider implementation; the call's receipt records the `dig`. Settings are read for every call; disabled tools disappear from discovery and refuse calls. Existing saved evidence remains readable when its source is disabled.
+The **67 local provider tools** use the shared cancellation, raw capture and reported-cost boundary. The native boundary adds a required absolute `project` and optional `dig`, validates them before retrieval, and strips them before calling the provider implementation; the call's receipt records the `dig`. Settings are read for every call; disabled tools disappear from discovery and refuse calls. Existing saved evidence remains readable when its source is disabled.
 
 `papers_multi_search` reads each requested connector's health from the bridge's `source_status` (`ok`, `empty`, `partial` or `failed`); output without it, or with anything else for a requested connector (another word or a non-string such as `["empty"]`), is an error, because it cannot establish coverage or no matches. The call's status follows the DataForSEO rule below: every requested connector failed is `failed`, and its text then opens with an `ERROR:` line naming them before the bridge's output; every one empty is `empty`; any failed or partial connector makes the call `partial`; the rest is `success`.
 
@@ -250,3 +250,9 @@ Exact Hacker News reads use one Algolia item request and page the returned desce
 DataForSEO has a second method, `dataforseo-ai-visibility`, using the same source, credentials and v3 tools. It compares mentions, citations and historical observations within explicit platform, market and time boundaries; it stores ordinary source reports.
 
 Exa supports `lite` for cache-only low-cost retrieval and `snapshotAsOf` for historical stored content on search and contents. Snapshot is incompatible with live freshness controls, category and the deepest modes; it pins page content, not historical ranking. Nexscope history and reviews use `/kp/productSeries` and `/amazon/reviews/list`, require outer `code: 0`, and decode the business payload inside `data`; incomplete response bodies are failures, not empty evidence.
+
+The provider update adds a Threads source through ScrapeCreators, plus separate tools for TikTok Top search (including photos), TikTok comments and Instagram comments. Each call reads one provider page, preserves continuation and types, and reports partial or malformed evidence explicitly. Threads account posts expose no invented pagination. The existing generic receipt and report records are unchanged.
+
+YouTube has a separate, paid `youtube_transcript` fallback through ScrapeCreators. It preserves segment timing and language in provider/language-specific immutable files; it does not silently turn a free yt-dlp call into a paid request. Public view counts are playback starts under YouTube's current definition, not engaged views.
+
+Direct paper tools add Semantic Scholar snippet/relationship reads and true provider-side sorting through bulk search, plus OpenAlex semantic queries and cached PDF/TEI content. Polymarket Data API v2 adds token price-history paging and resolution reads; the existing Gamma search stays. All dates, ID types and partial-page conditions remain provider-specific.

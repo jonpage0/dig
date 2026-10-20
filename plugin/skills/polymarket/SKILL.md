@@ -9,6 +9,8 @@ Use Polymarket for live market-implied probabilities, outcome-specific odds, mov
 
 Run this skill inline in the thread that needs it, or as an ordinary source worker that the parent thread spawned for this one question. Either way, run it yourself: do not spawn another agent or run a second source. This is research-only: never place a trade, purchase anything, or edit code.
 
+For change-over-time questions use `polymarket_history` with an outcome token ID and exactly one window. Follow the returned cursor to read the newest terminal point; a first page may contain only older observations. Preserve bucket width, actual returned resolution and epoch-second timestamps. Empty fine-resolution history can mean retention limits, not no trades. Use `polymarket_resolution` by condition, event or UMA question ID to distinguish proposed, disputed and resolved states. Expected settlement times are estimates; published payouts and final status are separate evidence. These tools never trade.
+
 ## Your assignment
 
 As a worker, your assignment names the research question, today's date, the absolute `project` directory and, only when the parent is grouping several sources, a `dig` id. Read this whole skill before the first call; you run on the model and effort the parent assigned. Inline, take the question from the user and the project directory from the user's workspace. Never use the plugin's install or cache directory as the project.

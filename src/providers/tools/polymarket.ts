@@ -14,6 +14,8 @@ import { free, outcome } from "../outcome.js"
 
 interface PolymarketMarket {
   id: string
+  conditionId?: string
+  clobTokenIds?: string
   question: string
   description?: string
   outcomes: string // JSON-encoded: '["Yes","No"]'
@@ -141,6 +143,8 @@ export default free({
           for (const market of markets) {
             const outcomes = safeJsonParse<string[]>(market.outcomes, [])
             const prices = safeJsonParse<string[]>(market.outcomePrices, [])
+            if (market.conditionId) lines.push(`  Condition ID: ${market.conditionId}`)
+            if (market.clobTokenIds) lines.push(`  Outcome token IDs (outcome order): ${market.clobTokenIds}`)
 
             for (let i = 0; i < outcomes.length; i++) {
               const outcome = outcomes[i]

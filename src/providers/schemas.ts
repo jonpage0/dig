@@ -57,6 +57,11 @@ export function createSchemas(
   const schemas: Record<string, Schema> = {
     ...createFacebookSchemas(T),
     ...createFacebookAdsSchemas(T),
+    tiktok_top: T.Object({ query: T.String(), cursor: T.Optional(T.Integer({minimum: 0})), region: T.Optional(T.String()), sort: enumSchema(T, ["relevance", "most-liked", "date-posted"], "Result ordering."), period: enumSchema(T, ["yesterday", "this-week", "this-month", "last-3-months", "last-6-months", "all-time"], "Publication window.") }, {additionalProperties: false}),
+    tiktok_comments: T.Object({ url: T.String(), cursor: T.Optional(T.Integer({minimum: 0})) }, {additionalProperties: false}),
+    instagram_comments: T.Object({ url: T.String(), cursor: T.Optional(T.String()), includeReplies: T.Optional(T.Boolean()) }, {additionalProperties: false}),
+    threads: T.Object({ kind: requiredEnumSchema(T, ["post", "posts"], "Read one post or account posts."), url: T.Optional(T.String()), handle: T.Optional(T.String()), cacheMaxAge: enumSchema(T, ["1d", "3d", "7d", "14d", "30d"], "Provider cache age for a post.") }, {additionalProperties: false}),
+    youtube_transcript: T.Object({ video: T.String({ description: "YouTube URL or 11-character video ID." }), language: T.Optional(T.String()), originalAudio: T.Optional(T.Boolean()), cacheMaxAge: enumSchema(T, ["1d", "3d", "7d", "14d", "30d"], "Provider cache age; omitted means live retrieval.") }),
     hackernews_read: T.Object({
       item: T.String({ description: "Numeric item ID or https://news.ycombinator.com/item?id=... URL." }),
       offset: T.Optional(T.Integer({ minimum: 0, description: "Comment offset, default 0." })),
@@ -81,6 +86,8 @@ export function createSchemas(
         "Sort by relevance or newest first.",
       ),
     }),
+    polymarket_history: T.Object({token_id: T.String(), interval: enumSchema(T, ["max", "all", "1m", "1w", "1d", "6h", "1h"], "Relative window; exclusive with start/end or as_of."), start: T.Optional(T.Integer({minimum: 0})), end: T.Optional(T.Integer({minimum: 0})), as_of: T.Optional(T.Integer({minimum: 0})), bucket_seconds: T.Optional(T.Integer({minimum: 60, maximum: 86400})), limit: T.Optional(T.Integer({minimum: 1, maximum: 1000})), cursor: T.Optional(T.String())}, {additionalProperties:false}),
+    polymarket_resolution: T.Object({condition: T.Optional(T.String()), event_id: T.Optional(T.String()), question_id: T.Optional(T.String())}, {additionalProperties:false}),
     polymarket: T.Object({
       query: T.String({
         description: "Prediction-market topic, entity, event, or question.",
@@ -303,7 +310,10 @@ export function createSchemas(
         }),
       ),
     }),
+    papers_semantic_scholar_snippets: T.Object({query: T.String(), paperIds: stringArray(T, "Optional known paper IDs, max 100."), limit: T.Optional(T.Integer({minimum: 1, maximum: 100}))}),
+    papers_semantic_scholar_relations: T.Object({paperId: T.String(), direction: requiredEnumSchema(T, ["citations", "references"], "Direction from the seed paper."), offset: T.Optional(T.Integer({minimum: 0, maximum: 9999})), limit: T.Optional(T.Integer({minimum: 1, maximum: 100}))}),
     papers_semantic_scholar_search: T.Object({
+      token: T.Optional(T.String({description: "Bulk-search continuation; repeat the same query, filters and sort."})),
       query: T.String({ description: "Paper/literature query." }),
       limit: T.Optional(
         T.Number({ description: "Max papers (default: 10, max: 20)." }),
@@ -341,7 +351,9 @@ export function createSchemas(
         }),
       ),
     }),
+    papers_openalex_content: T.Object({workId:T.String(),format:enumSchema(T,["pdf","xml"],"Cached content format; xml by default.")},{additionalProperties:false}),
     papers_openalex_search: T.Object({
+      mode: enumSchema(T, ["keyword", "semantic"], "Keyword or semantic search; semantic queries max 2000 characters, relevance ordering."),
       query: T.String({ description: "Paper/literature query." }),
       limit: T.Optional(
         T.Number({ description: "Max works (default: 10, max: 25)." }),

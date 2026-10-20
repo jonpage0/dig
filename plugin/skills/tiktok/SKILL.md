@@ -9,6 +9,8 @@ Use TikTok for short-form creator takes, grassroots sentiment, hashtags, viral m
 
 Run this skill inline in the thread that needs it, or as an ordinary source worker that the parent thread spawned for this one question. Either way, run it yourself: do not spawn another agent, run a second source, or edit code.
 
+Use `tiktok_top` for videos and photo carousels; preserve their content types and images, and never treat a photo carousel as a spoken transcript. Use `tiktok_comments` for one page of comments and retain its cursor. Top Search can return duplicates; region is the proxy location, not a filter on creator nationality.
+
 ## Your assignment
 
 As a worker, your assignment names the research question, today's date, the absolute `project` directory and, only when the parent is grouping several sources, a `dig` id. Read this whole skill before the first call; you run on the model and effort the parent assigned. Inline, take the question from the user and the project directory from the user's workspace. Never use the plugin's install or cache directory as the project.

@@ -19712,7 +19712,7 @@ container holding the app. Specify either width or maxWidth, and either height o
     { id: "code", label: "Code and developers", sources: ["github", "deepwiki", "hackernews"] },
     { id: "papers", label: "Papers", sources: ["papers"] },
     { id: "video", label: "Video", sources: ["youtube"] },
-    { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "facebook", "linkedin", "telegram", "china-social"] },
+    { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "facebook", "threads", "linkedin", "telegram", "china-social"] },
     { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "facebook-ads", "dataforseo"] }
   ];
   var SCRAPECREATORS = { name: "ScrapeCreators", url: "https://scrapecreators.com" };
@@ -19747,7 +19747,7 @@ container holding the app. Specify either width or maxWidth, and either height o
       id: "polymarket",
       label: "Polymarket",
       description: "Public prediction-market evidence",
-      tools: ["polymarket"],
+      tools: ["polymarket", "polymarket_history", "polymarket_resolution"],
       about: "Prediction-market questions with their current odds, volume and liquidity. Prices show what traders are betting, not what is true.",
       providers: [{ name: "Polymarket Gamma API", url: "https://docs.polymarket.com" }],
       billing: "Free. No account or key.",
@@ -19804,7 +19804,10 @@ container holding the app. Specify either width or maxWidth, and either height o
       tools: [
         "papers_semantic_scholar_search",
         "papers_semantic_scholar_recommendations",
+        "papers_semantic_scholar_snippets",
+        "papers_semantic_scholar_relations",
         "papers_openalex_search",
+        "papers_openalex_content",
         "papers_multi_search",
         "papers_fulltext_read",
         "papers_pdf_download"
@@ -19836,15 +19839,15 @@ container holding the app. Specify either width or maxWidth, and either height o
       id: "youtube",
       label: "YouTube",
       description: "Videos and saved transcripts",
-      tools: ["youtube"],
+      tools: ["youtube", "youtube_transcript"],
       skills: ["youtube"],
       helpers: ["youtube-summarizer"],
-      env: ["OPENCODE_RESEARCH_GOOGLE_API_KEY"],
-      credential: "Optional OPENCODE_RESEARCH_GOOGLE_API_KEY; yt-dlp for transcripts and keyless search",
+      env: ["OPENCODE_RESEARCH_GOOGLE_API_KEY", "SCRAPECREATORS_API_KEY"],
+      credential: "Optional OPENCODE_RESEARCH_GOOGLE_API_KEY; yt-dlp for keyless search; optional SCRAPECREATORS_API_KEY for hosted transcripts",
       requires: ["yt-dlp"],
       about: "Finds videos and saves their full transcripts, so a claim can be checked against what was actually said. Search and transcripts run on your computer through yt-dlp; an optional Google key adds Data API search metadata.",
       providers: [{ name: "yt-dlp", url: "https://github.com/yt-dlp/yt-dlp" }, { name: "YouTube Data API", url: "https://developers.google.com/youtube/v3" }],
-      billing: "Free. yt-dlp runs locally; the optional Google key uses your YouTube Data API quota.",
+      billing: "Local yt-dlp and YouTube Data API calls are free. The separate hosted transcript tool uses ScrapeCreators credits reported by each response.",
       logo: "youtube"
     },
     {
@@ -19891,7 +19894,7 @@ container holding the app. Specify either width or maxWidth, and either height o
       id: "tiktok",
       label: "TikTok",
       description: "Public videos and transcripts",
-      tools: ["scrapecreators_tiktok"],
+      tools: ["scrapecreators_tiktok", "tiktok_top", "tiktok_comments"],
       env: ["SCRAPECREATORS_API_KEY"],
       keys: ["SCRAPECREATORS_API_KEY"],
       credential: "SCRAPECREATORS_API_KEY",
@@ -19904,7 +19907,7 @@ container holding the app. Specify either width or maxWidth, and either height o
       id: "instagram",
       label: "Instagram",
       description: "Public reels, profiles and transcripts",
-      tools: ["scrapecreators_instagram"],
+      tools: ["scrapecreators_instagram", "instagram_comments"],
       env: ["SCRAPECREATORS_API_KEY"],
       keys: ["SCRAPECREATORS_API_KEY"],
       credential: "SCRAPECREATORS_API_KEY",
@@ -19922,6 +19925,18 @@ container holding the app. Specify either width or maxWidth, and either height o
       keys: ["SCRAPECREATORS_API_KEY"],
       credential: "SCRAPECREATORS_API_KEY",
       about: "Public Facebook profiles, posts, reels, photos, comments, groups and events through ScrapeCreators, with video search and transcripts when available. No Facebook account is used; private and gated content is not accessible.",
+      providers: [SCRAPECREATORS],
+      billing: SCRAPECREATORS_CREDITS
+    },
+    {
+      id: "threads",
+      label: "Threads",
+      description: "Public posts, replies and account posts",
+      tools: ["threads"],
+      env: ["SCRAPECREATORS_API_KEY"],
+      keys: ["SCRAPECREATORS_API_KEY"],
+      credential: "SCRAPECREATORS_API_KEY",
+      about: "Public Threads posts with comments and author continuations, and account posts through ScrapeCreators. No login; provider pages are not complete histories.",
       providers: [SCRAPECREATORS],
       billing: SCRAPECREATORS_CREDITS
     },
@@ -22475,7 +22490,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     "sliders-horizontal": [["path", { "d": "M10 5H3" }], ["path", { "d": "M12 19H3" }], ["path", { "d": "M14 3v4" }], ["path", { "d": "M16 17v4" }], ["path", { "d": "M21 12h-9" }], ["path", { "d": "M21 19h-5" }], ["path", { "d": "M21 5h-7" }], ["path", { "d": "M8 10v4" }], ["path", { "d": "M8 12H3" }]],
     "square-play": [["rect", { "x": "3", "y": "3", "width": "18", "height": "18", "rx": "2" }], ["path", { "d": "M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z" }]]
   };
-  var SOURCE_GLYPHS = { "hackernews": "newspaper", "deepwiki": "book-open-text", "polymarket": "chart-candlestick", "github": "folder-git-2", "exa": "scan-search", "perplexity": "globe", "papers": "graduation-cap", "youtube": "square-play", "x": "scale", "reddit": "messages-square", "tikhub-reddit": "list-tree", "tiktok": "clapperboard", "instagram": "camera", "linkedin": "briefcase-business", "telegram": "send", "china-social": "languages", "commerce": "shopping-cart", "tiktok-ads": "megaphone", "dataforseo": "chart-no-axes-combined" };
+  var SOURCE_GLYPHS = { "hackernews": "newspaper", "deepwiki": "book-open-text", "polymarket": "chart-candlestick", "github": "folder-git-2", "exa": "scan-search", "perplexity": "globe", "papers": "graduation-cap", "youtube": "square-play", "x": "scale", "reddit": "messages-square", "tikhub-reddit": "list-tree", "tiktok": "clapperboard", "instagram": "camera", "linkedin": "briefcase-business", "telegram": "send", "threads": "messages-square", "china-social": "languages", "commerce": "shopping-cart", "tiktok-ads": "megaphone", "dataforseo": "chart-no-axes-combined" };
   SOURCE_GLYPHS.facebook = "messages-square";
   SOURCE_GLYPHS["facebook-ads"] = "megaphone";
   var METHOD_GLYPHS = { "x-judge": "scale", "x-breadth": "radar", "x-post": "message-square-quote", "youtube-summarizer": "captions" };

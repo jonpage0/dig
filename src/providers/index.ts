@@ -1,9 +1,14 @@
+import { snippets as papers_semantic_scholar_snippets, relations as papers_semantic_scholar_relations } from "./tools/paper_evidence.js";
+import { content as papers_openalex_content } from "./tools/openalex_content.js";
 import hackernews from "./tools/hackernews.js";
 import { read as hackernews_read } from "./tools/hackernews_read.js";
+import { history as polymarket_history, resolution as polymarket_resolution } from "./tools/polymarket_data.js";
 import polymarket from "./tools/polymarket.js";
 import reddit from "./tools/reddit.js";
 import { reddit as tikhub_reddit } from "./tools/tikhub_reddit.js";
+import { tiktok_top, tiktok_comments, instagram_comments, threads } from "./tools/social_evidence.js";
 import youtube from "./tools/youtube.js";
+import { transcript as youtube_transcript } from "./tools/youtube_transcript.js";
 import {
 	semantic_scholar_search,
 	semantic_scholar_recommendations,
@@ -37,11 +42,21 @@ export const providerTools: Record<string, ToolSpec> = {
 	hackernews,
 	hackernews_read,
 	polymarket,
+	polymarket_history,
+	polymarket_resolution,
 	reddit,
 	tikhub_reddit,
+	tiktok_top,
+	tiktok_comments,
+	instagram_comments,
+	threads,
 	youtube,
+	youtube_transcript,
 	papers_semantic_scholar_search: semantic_scholar_search,
 	papers_semantic_scholar_recommendations: semantic_scholar_recommendations,
+	papers_semantic_scholar_snippets,
+	papers_semantic_scholar_relations,
+	papers_openalex_content,
 	papers_openalex_search: openalex_search,
 	papers_multi_search: papers_multi_search_impl,
 	papers_fulltext_read: papers_fulltext_read_impl,

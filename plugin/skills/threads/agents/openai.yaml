@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Threads"
+  short_description: "Public Threads channels and posts"
+  icon_small: "../../assets/skills/messages-square.svg"
+  icon_large: "../../assets/skills/messages-square.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:threads to read this public Threads channel."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:threads mention.
+  allow_implicit_invocation: false

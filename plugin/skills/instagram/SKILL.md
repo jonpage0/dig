@@ -9,6 +9,8 @@ Use Instagram for Reels-based creator messaging, lifestyle and product recommend
 
 Run this skill inline in the thread that needs it, or as an ordinary source worker that the parent thread spawned for this one question. Either way, run it yourself: do not spawn another agent, run a second source, or edit code.
 
+Use `instagram_comments` for public post/reel comments. `includeReplies` is opt-in because it adds provider charges and may time out. Preserve comment authors and cursor; no returned page proves complete coverage.
+
 ## Your assignment
 
 As a worker, your assignment names the research question, today's date, the absolute `project` directory and, only when the parent is grouping several sources, a `dig` id. Read this whole skill before the first call; you run on the model and effort the parent assigned. Inline, take the question from the user and the project directory from the user's workspace. Never use the plugin's install or cache directory as the project.

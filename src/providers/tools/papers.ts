@@ -575,11 +575,14 @@ export const semantic_scholar_search = free({
   async execute(args, context) {
     const requestedLimit = Math.min(args.limit ?? 10, 20)
     const sort = args.sort ?? "relevance"
-    const apiLimit = sort === "relevance" ? requestedLimit : Math.min(Math.max(requestedLimit * 3, 15), 50)
+    const apiLimit = requestedLimit
+    const bulk = sort !== "relevance" || args.token !== undefined
 
-    const url = new URL(`${SEMANTIC_SCHOLAR_GRAPH_BASE}/paper/search`)
+    const url = new URL(`${SEMANTIC_SCHOLAR_GRAPH_BASE}/paper/search${bulk ? "/bulk" : ""}`)
     url.searchParams.set("query", args.query)
-    url.searchParams.set("limit", String(apiLimit))
+    if (!bulk) url.searchParams.set("limit", String(apiLimit))
+    if (bulk && sort !== "relevance") url.searchParams.set("sort", `${sort}:desc`)
+    if (args.token) url.searchParams.set("token", args.token)
     url.searchParams.set("fields", SEMANTIC_SCHOLAR_FIELDS)
 
     if (args.yearFrom || args.yearTo) {
@@ -619,7 +622,8 @@ export const semantic_scholar_search = free({
 
       const header = [
         `Semantic Scholar papers for "${args.query}" (${papers.length} shown${data.total ? `, ${data.total} total matches` : ""}):`,
-        `Sorted by ${sort}.`,
+        `Sorted by ${sort}${bulk ? " by the provider across matching papers" : ""}.`,
+        ...((data as any).token ? [`Next token: ${(data as any).token}. Use the same query, filters and sort to continue.`] : []),
         semanticAccess(),
       ].join("\n")
 
@@ -693,7 +697,10 @@ export const openalex_search = metered({
     const page = Math.max(args.page ?? 1, 1)
     const url = new URL(`${OPENALEX_BASE}/works`)
 
-    url.searchParams.set("search", args.query)
+    if (args.mode !== undefined && !["keyword", "semantic"].includes(args.mode)) return "ERROR: mode must be keyword or semantic"
+    if (args.mode === "semantic" && args.query.length > 2000) return "ERROR: semantic query must be at most 2000 characters"
+    if (args.mode === "semantic" && args.sort && args.sort !== "relevance") return "ERROR: semantic search uses relevance ordering"
+    url.searchParams.set(args.mode === "semantic" ? "search.semantic" : "search", args.query)
     url.searchParams.set("per_page", String(limit))
     url.searchParams.set("page", String(page))
 

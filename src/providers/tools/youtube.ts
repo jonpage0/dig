@@ -187,6 +187,7 @@ export default free({
       const text = [
         `YouTube results for "${query}" (${videos.length} videos, search via ${search.mode}):`,
         `Total: ${total(videos, "views")} views | ${total(videos, "likes")} likes${doTranscripts ? ` | Transcripts saved: ${videos.filter((v) => v.transcriptFile).length}` : ""}`,
+        "Public views count playback starts, including autoplay, under YouTube’s August 27, 2026 definition. They are not engaged views.",
         ...warnings.map((w) => `Warning: ${w}`),
         "",
         ...videos.map((v) =>

@@ -31,7 +31,7 @@ export const GLYPHS = {
   "square-play": [["rect",{"x":"3","y":"3","width":"18","height":"18","rx":"2"}],["path",{"d":"M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"}]],
 };
 /** Report source id → glyph; a method can override its source's glyph (X judge and X breadth differ). */
-export const SOURCE_GLYPHS = {"hackernews":"newspaper","deepwiki":"book-open-text","polymarket":"chart-candlestick","github":"folder-git-2","exa":"scan-search","perplexity":"globe","papers":"graduation-cap","youtube":"square-play","x":"scale","reddit":"messages-square","tikhub-reddit":"list-tree","tiktok":"clapperboard","instagram":"camera","linkedin":"briefcase-business","telegram":"send","china-social":"languages","commerce":"shopping-cart","tiktok-ads":"megaphone","dataforseo":"chart-no-axes-combined"};
+export const SOURCE_GLYPHS = {"hackernews":"newspaper","deepwiki":"book-open-text","polymarket":"chart-candlestick","github":"folder-git-2","exa":"scan-search","perplexity":"globe","papers":"graduation-cap","youtube":"square-play","x":"scale","reddit":"messages-square","tikhub-reddit":"list-tree","tiktok":"clapperboard","instagram":"camera","linkedin":"briefcase-business","telegram":"send","threads":"messages-square","china-social":"languages","commerce":"shopping-cart","tiktok-ads":"megaphone","dataforseo":"chart-no-axes-combined"};
 SOURCE_GLYPHS.facebook = "messages-square";
 SOURCE_GLYPHS["facebook-ads"] = "megaphone";
 export const METHOD_GLYPHS = {"x-judge":"scale","x-breadth":"radar","x-post":"message-square-quote","youtube-summarizer":"captions"};

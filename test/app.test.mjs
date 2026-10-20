@@ -606,7 +606,8 @@ test('keys.env buttons in a source card prepare and open the file, copy an envir
   assert.match(ui.$('notice').textContent, /Copied EXA_API_KEY from Codex’s environment into keys\.env\./);
   assert.equal(reuse(), undefined, 'Once keys.env matches the environment there is nothing to copy');
   // A setting changed elsewhere shows at once, except in a field that is being typed in.
-  await updateConfig({ x_model: 'grok-hand-edit' }, state); revision++; await ui.poll();
+  await updateConfig({ x_model: 'grok-hand-edit' }, state); revision++;
+  for (let attempt = 0; attempt < 40 && model.value !== 'grok-hand-edit'; attempt++) { await ui.poll(); await new Promise(resolve => setTimeout(resolve, 5)); }
   assert.equal(model.value, 'grok-hand-edit');
   model.focus(); model.value = 'grok-typing';
   await updateConfig({ x_depth: 'max' }, state); revision++; await ui.poll();

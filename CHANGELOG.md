@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Exa 3.0: Lite search, historical Snapshot retrieval and structured result entities, while retaining existing search modes.
+- Direct Hacker News item reads, GitHub REST 2026-03-10, and a DataForSEO AI-brand-visibility research method.
+- Current Nexscope HTTP routes and response envelopes; unfinished responses are not reported as empty results.
+- Hosted YouTube transcripts with timestamps and language, TikTok photo search/comments, Instagram comments, and a Threads source.
+- Semantic Scholar passages, citation/reference reads and provider-side bulk sorting; OpenAlex semantic search and cached content.
+- Polymarket price-history and resolution reads through Data API v2.
+
 ## 0.2.32 — 2026-10-14
 
 - **Keys echoed in any URL encoding stay private.** A key that a provider echoed with lowercase percent escapes (`%2f` rather than `%2F`), form-encoded with them, or with ordinary letters and digits escaped too (`%52` for `R`), could reach results, receipts, original responses and the kept Scrape.do cost header. Each key is now redacted as written or with any of its characters percent-encoded, escape letters in either case, and a space as `+`, whole or mixed, and a key ending in `%` leaves nothing behind when echoed as `%25`; the key's own characters still match exactly, so ordinary text is not redacted.
