@@ -248,3 +248,5 @@ The provider code and method skills are reused from Jon Page's MIT-licensed Dig 
 Exact Hacker News reads use one Algolia item request and page the returned descendants in provider order, preserving parent IDs and explicit continuation. GitHub REST reads pin `2026-03-10`; GraphQL calls are unchanged.
 
 DataForSEO has a second method, `dataforseo-ai-visibility`, using the same source, credentials and v3 tools. It compares mentions, citations and historical observations within explicit platform, market and time boundaries; it stores ordinary source reports.
+
+Exa supports `lite` for cache-only low-cost retrieval and `snapshotAsOf` for historical stored content on search and contents. Snapshot is incompatible with live freshness controls, category and the deepest modes; it pins page content, not historical ranking. Nexscope history and reviews use `/kp/productSeries` and `/amazon/reviews/list`, require outer `code: 0`, and decode the business payload inside `data`; incomplete response bodies are failures, not empty evidence.

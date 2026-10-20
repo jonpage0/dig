@@ -132,12 +132,23 @@ describe("exa tools", () => {
 		expect(mock.calls[1]!.body.contents).toEqual({ text: { maxCharacters: 3000 }, highlights: { query: "solar costs", dynamic: true } });
 	});
 
+	test("lite and Snapshot use documented request shapes and reject live-fetch combinations", async () => {
+        const mock = installFetchMock({ "/search": { payload: { results: [page] } }, "/contents": { payload: { results: [page], statuses: [{ id: page.url, status: "success" }] } } }); restore = mock.restore;
+        expect(text(await search.execute({ query: "earlier docs", type: "lite", snapshotAsOf: "2026-09-01" }, context))).toContain("Snapshot cutoff");
+        expect(mock.calls[0].body.type).toBe("lite");
+        expect((mock.calls[0].body.contents as any).snapshotAsOf).toBe("2026-09-01");
+        await contents.execute({ urls: [page.url], snapshotAsOf: "2026-09-01" }, context);
+        expect(mock.calls[1].body.snapshotAsOf).toBe("2026-09-01");
+        for (const args of [{ type: "lite", maxAgeHours: 0 }, { type: "lite", summary: false }, { snapshotAsOf: "2026-09-01", maxAgeHours: -1 }, { snapshotAsOf: "2026-09-01", contents: false }, { snapshotAsOf: "2026-09-01", type: "deep" }, { snapshotAsOf: "2026-09-01", category: "news" }, { snapshotAsOf: "2026-02-31" }]) expect(text(await search.execute({ query: "test", ...args }, context))).toMatch(/^ERROR:/);
+        expect(mock.calls).toHaveLength(2);
+    });
+
 	test("search rejects incompatible highlight options and unknown modes before spending", async () => {
 		const mock = installFetchMock({});
 		restore = mock.restore;
 		expect((text(await search.execute({ query: "q", dynamicHighlights: true, highlightMaxCharacters: 500 }, context))).startsWith("ERROR: highlightMaxCharacters cannot be combined with dynamicHighlights")).toBe(true);
 		expect(text(await search.execute({ query: "q", type: "neural" }, context))).toBe(
-			"ERROR: type must be one of instant, fast, auto, deep-lite, deep, deep-reasoning.",
+			"ERROR: type must be one of instant, fast, lite, auto, deep-lite, deep, deep-reasoning.",
 		);
 		expect(text(await search.execute({ query: "q", maxAgeHours: 1000 }, context))).toBe("ERROR: maxAgeHours must be an integer from -1 to 720.");
 		expect(mock.calls).toHaveLength(0);

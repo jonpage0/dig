@@ -17,9 +17,9 @@ const reviews = textOnly(commerce.reviews);
 const discover = textOnly(commerce.discover);
 
 const ENDPOINT =
-	"https://api.nexscope.ai/api/skill-api/v1/skills/amazon-product-price-series/run";
+	"https://api.nexscope.ai/kp/productSeries";
 const REVIEWS_ENDPOINT =
-	"https://api.nexscope.ai/api/skill-api/v1/skills/amazon-reviews-list/run";
+	"https://api.nexscope.ai/amazon/reviews/list";
 
 type FetchCall = { url: URL; init: RequestInit | undefined };
 type MockPayload = Record<string, unknown> | ((url: URL) => Record<string, unknown>);
@@ -80,7 +80,8 @@ function installFetchMock(payload: MockPayload, status = 200) {
 			url,
 			init,
 		});
-		const body = typeof payload === "function" ? payload(url) : payload;
+		const original = typeof payload === "function" ? payload(url) : payload;
+        const body = url.hostname === "api.nexscope.ai" && original.code === undefined ? { code: 0, data: original } : original;
 		return new Response(JSON.stringify(body), {
 			status,
 			headers: { "Content-Type": "application/json" },
@@ -929,6 +930,18 @@ describe("commerce_reviews Nexscope provider", () => {
 		expect(result).not.toContain("nk_test_key");
 		expect(result).toContain('"debug": "request credential [redacted]"');
 	});
+
+	test("current Nexscope envelopes unwrap business results and never treat acceptance as empty", async () => {
+        const mock = installFetchMock({ code: 0, data: { data: [{ reviewId: "current", text: "Current result", rating: "4" }], total: 1 } });
+        restoreFetch = mock.restore;
+        expect(await reviews.execute({ asin: "B0DGHMNQ5Z" }, context)).toContain("Current result");
+        restoreFetch();
+        const pending = installFetchMock({ code: 0, data: {} }); restoreFetch = pending.restore;
+        expect(await history.execute({ asin: "B0DGHMNQ5Z" }, context)).toContain("ERROR:");
+        restoreFetch();
+        const notSuccess = installFetchMock({ code: 200, data: {} }); restoreFetch = notSuccess.restore;
+        expect(await history.execute({ asin: "B0DGHMNQ5Z" }, context)).toContain("Nexscope code 200");
+    });
 
 	test("reports the live-observed HTTP 200 gateway credit error as a provider failure", async () => {
 		// Exact envelope captured by the parent's live smoke on 2026-09-15

@@ -67,7 +67,7 @@ const RESEARCH_TIMEOUT_MS = 180_000
 const EXA_RETRY_STATUSES = [429, 503] as const
 const RESEARCH_RETRIES = 0
 
-const SEARCH_TYPES = ["instant", "fast", "auto", "deep-lite", "deep", "deep-reasoning"] as const
+const SEARCH_TYPES = ["instant", "fast", "lite", "auto", "deep-lite", "deep", "deep-reasoning"] as const
 type SearchType = (typeof SEARCH_TYPES)[number]
 const RESEARCH_TYPE: SearchType = "deep-reasoning"
 
@@ -104,6 +104,8 @@ interface ExaResult {
   text?: string
   highlights?: string[]
   summary?: string
+  entities?: Record<string, unknown>[]
+  image?: string
 }
 
 interface ExaCitation {
@@ -181,6 +183,8 @@ function parseResult(path: ExaPath, value: unknown, index: number): ExaResult {
     text: optionalString(record.text),
     highlights,
     summary: optionalString(record.summary),
+    image: optionalString(record.image),
+    entities: Array.isArray(record.entities) ? record.entities.filter((entry): entry is Record<string, unknown> => asRecord(entry) !== null) : undefined,
   }
 }
 
@@ -447,6 +451,7 @@ function formatResult(r: ExaResult, lines: string[]): void {
       (r.author ? ` | Author: ${r.author}` : ""),
   )
   if (r.summary) lines.push(`${indent}Summary: ${r.summary}`)
+  if (r.entities?.length) lines.push(`${indent}Structured entities: ${JSON.stringify(r.entities)}`)
   if (r.highlights && r.highlights.length > 0) {
     lines.push(`${indent}Highlights:`)
     for (const h of r.highlights) lines.push(`${indent}  > ${h}`)
@@ -474,6 +479,7 @@ function formatResults(header: string, notes: string[], response: ExaResponse): 
 
 interface ContentsArgs extends HighlightArgs {
   contents?: boolean
+  snapshotAsOf?: string
   summary?: boolean
   maxAgeHours?: number
 }
@@ -484,6 +490,7 @@ interface ContentsPlan {
 }
 
 function contentsPlan(args: ContentsArgs, textCharacters: number, summaryQuery?: string): ContentsPlan | Invalid {
+  if (args.snapshotAsOf !== undefined && args.contents === false) return { error: "ERROR: snapshotAsOf requires contents." }
   if (args.contents === false) return {}
   const highlights = highlightPlan(args)
   if (invalid(highlights)) return highlights
@@ -496,7 +503,22 @@ function contentsPlan(args: ContentsArgs, textCharacters: number, summaryQuery?:
   }
   if (args.summary === true) contents.summary = summaryQuery ? { query: summaryQuery } : {}
   if (age !== undefined) contents.maxAgeHours = age
+  const snapshot = snapshotTime(args.snapshotAsOf)
+  if (invalid(snapshot)) return snapshot
+  if (snapshot !== undefined) {
+    if (args.maxAgeHours !== undefined) return { error: "ERROR: snapshotAsOf cannot be combined with maxAgeHours." }
+    contents.snapshotAsOf = snapshot
+  }
   return { contents, ...(highlights.beta ? { beta: highlights.beta } : {}) }
+}
+
+function snapshotTime(value: unknown): string | undefined | Invalid {
+  if (value === undefined) return undefined
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?$/.test(value) || !Number.isFinite(Date.parse(value))) return { error: "ERROR: snapshotAsOf must be an ISO date or date-time with timezone." }
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number)
+  if (new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) !== value.slice(0, 10)) return { error: "ERROR: snapshotAsOf must name a valid calendar date." }
+  if (Date.parse(value) > Date.now()) return { error: "ERROR: snapshotAsOf must not be in the future." }
+  return value
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +531,7 @@ export const search = exaMetered({
     "Search modes: 'auto' (default), 'fast', 'instant' for latency, and the Deep modes 'deep-lite', 'deep', " +
     "'deep-reasoning' ($12–15/1k) for iterative research over the selected pages. " +
     "Filters: domains/paths (wildcards like '*.substack.com'), publication dates, category. " +
-    "Complementary to Perplexity: Exa returns raw documents for your analysis; use exa_research " +
+    "Exa returns source documents for your analysis; lite is low-cost cached retrieval. Use exa_research " +
     "when a synthesized, source-grounded answer is explicitly requested.",
   async execute(args, ctx: ToolContext) {
     const key = apiKey()
@@ -523,6 +545,8 @@ export const search = exaMetered({
       return `ERROR: type must be one of ${SEARCH_TYPES.join(", ")}.`
     }
 
+    if (type === "lite" && (args.maxAgeHours !== undefined || args.summary !== undefined)) return "ERROR: lite is cache-only and does not accept maxAgeHours or summary; use auto."
+    if (args.snapshotAsOf !== undefined && (args.category !== undefined || type === "deep" || type === "deep-reasoning")) return "ERROR: Snapshot does not support category, deep or deep-reasoning."
     const includeDomains = optionalStringArray(args.includeDomains, "includeDomains")
     if (invalid(includeDomains)) return includeDomains.error
     const excludeDomains = optionalStringArray(args.excludeDomains, "excludeDomains")
@@ -548,6 +572,8 @@ export const search = exaMetered({
     }
 
     const notes = note ? [note] : []
+    if (args.snapshotAsOf) notes.push(`Snapshot cutoff ${args.snapshotAsOf}: stored content only; current retrieval signals still rank candidate URLs. Availability depends on the Exa plan and stored coverage.`)
+    if (type === "lite") notes.push("Lite uses cached page content only; missing cached pages may be omitted.")
     const results = response.results
     if (results.length === 0) {
       return {
@@ -594,6 +620,10 @@ export const contents = exaMetered({
     const age = maxAgeHours(args.maxAgeHours)
     if (invalid(age)) return age.error
 
+    const snapshot = snapshotTime(args.snapshotAsOf)
+    if (invalid(snapshot)) return snapshot.error
+    if (snapshot !== undefined && args.maxAgeHours !== undefined) return "ERROR: snapshotAsOf cannot be combined with maxAgeHours."
+    if (snapshot !== undefined) notes.push(`Snapshot cutoff ${snapshot}: newest stored content at or before this date; coverage and plan limits apply.`)
     const focus = optionalText(args.query)
     const body: Record<string, unknown> = {
       urls: requested,
@@ -602,6 +632,7 @@ export const contents = exaMetered({
     }
     if (args.summary === true) body.summary = focus ? { query: focus } : {}
     if (age !== undefined) body.maxAgeHours = age
+    if (snapshot !== undefined) body.snapshotAsOf = snapshot
 
     let response: ExaResponse
     try {
@@ -646,6 +677,7 @@ export const contents = exaMetered({
       if (r.publishedDate) lines.push(`Published: ${r.publishedDate.split("T")[0]}`)
       if (r.author) lines.push(`Author: ${r.author}`)
       lines.push("")
+      if (r.entities?.length) lines.push(`Structured entities: ${JSON.stringify(r.entities)}`, "")
       if (r.summary) {
         lines.push(`**Summary:** ${r.summary}`)
         lines.push("")

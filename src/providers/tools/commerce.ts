@@ -321,9 +321,9 @@ const BESTSELLERS_PAGE_SIZE = 50
 const DEFAULT_TIMEOUT_MS = 60_000
 const SCRAPE_DO_AMAZON_BASE = "https://api.scrape.do/plugin/amazon/"
 const NEXSCOPE_PRICE_SERIES_ENDPOINT =
-  "https://api.nexscope.ai/api/skill-api/v1/skills/amazon-product-price-series/run"
+  "https://api.nexscope.ai/kp/productSeries"
 const NEXSCOPE_REVIEWS_ENDPOINT =
-  "https://api.nexscope.ai/api/skill-api/v1/skills/amazon-reviews-list/run"
+  "https://api.nexscope.ai/amazon/reviews/list"
 const DEFAULT_HISTORY_DAYS = 90
 const MAX_HISTORY_DAYS = 365
 const DEFAULT_HISTORY_MAX_POINTS = 60
@@ -863,22 +863,14 @@ async function nexscopeRequest(
   if (!record) {
     throw new Error("Nexscope returned a non-object JSON payload")
   }
-  // Two failure envelopes ride on HTTP 200: the documented upstream
-  // `errcode`/`errmsg` pair, and the gateway's own `code`/`msg` pair observed
-  // live on 2026-09-15 as {code:13011, msg:"Not enough credits…", data:null,
-  // cost:"-1", traceId:"…"}. Either one is a provider failure, never "no data".
-  const errcode = firstNumber(record.errcode)
-  if (errcode !== null && errcode !== 0 && errcode !== 200) {
-    throw new Error(firstString(record.errmsg, record.message, record.msg) || `Nexscope returned errcode ${errcode}`)
-  }
-  const gatewayCode = firstNumber(record.code)
-  if (gatewayCode !== null && gatewayCode !== 0 && gatewayCode !== 200) {
-    const traceId = firstString(record.traceId)
-    throw new Error(
-      `${firstString(record.msg, record.message, record.errmsg) || "Nexscope gateway rejected the request"} (Nexscope code ${gatewayCode}${traceId ? `, traceId ${traceId}` : ""})`
-    )
-  }
-  return record
+  // Current HTTP endpoints wrap their business result in data. HTTP 200 and
+  // code 0 are both necessary; an accepted but unfinished result is not empty.
+  if (record.code !== 0) throw new Error(`${firstString(record.msg, record.message) || "Nexscope rejected the request"} (Nexscope code ${String(record.code)}${firstString(record.traceId) ? `, traceId ${record.traceId}` : ""})`)
+  const business = asRecord(record.data)
+  if (!business) throw new Error("Nexscope returned no completed business result")
+  const errcode = firstNumber(business.errcode)
+  if (errcode !== null && errcode !== 0 && errcode !== 200) throw new Error(firstString(business.errmsg, business.message) || `Nexscope returned errcode ${errcode}`)
+  return business
 }
 
 async function fetchJson(url: URL, signal: AbortSignal, keep: KeepRaw, label: string): Promise<Record<string, unknown>> {
@@ -1805,6 +1797,7 @@ export const history = {
         context.abort,
         context.keep
       )
+      if (!["price", "buyboxPrice", "priceList", "priceDeal", "pricePrime", "priceFba", "priceFbm", "priceCoupon", "sellerCount", "rating", "ratingCount", "monthlySold", "bsrMain", "bsrSub"].some(key => Array.isArray(payload[key]))) throw new Error("Nexscope returned no completed history series")
       const series = collectHistorySeries({ payload, selected, days })
       const usableSeries = series.filter((entry) => entry.points.length > 0)
       const costToken = firstNumber(payload.costToken)

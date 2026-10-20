@@ -9,6 +9,12 @@ Use Exa to find documents, extract pages, and discover pages similar to a known 
 
 Run this skill inline in the thread that needs it, or as an ordinary source worker that the parent thread spawned for this one question. Either way, run it yourself: do not spawn another agent or run a second source. This is research-only: do not edit application code or recommend an implementation as if the documents decided it.
 
+## Exa 3.0
+
+Exa 3.0 is a retrieval/index release served through the existing API, not a `/v3` endpoint or an SDK major-version requirement. `auto` receives the upgraded retrieval without a migration. Use `lite` for low-cost cached discovery. Search also covers local places, products, events, sports, weather and podcast transcripts; name the geography, date and source type in the query. Preserve returned structured entities and source URLs, and check time-sensitive facts in the source before relying on them.
+
+The October 19 announcement says Dynamic Highlights is generally available; the current API reference still requires its beta header for the explicit `dynamic` option, so Dig continues sending the documented header. No result or benchmark claim is a guarantee for your particular question.
+
 ## Your assignment
 
 As a worker, your assignment names the research question, today's date, the absolute `project` directory and, only when the parent is grouping several sources, a `dig` id. Read this whole skill before the first call; you run on the model and effort the parent assigned. Inline, take the question from the user and the project directory from the user's workspace. Never use the plugin's install or cache directory as the project.
@@ -38,7 +44,7 @@ Use one corrective search only when the first pass is empty, low quality, contra
 
 ### Choose the search mode
 
-`type` selects the Exa search mode. `auto` is the default and covers most research. `fast` and `instant` trade depth for latency and are rarely right for a saved report. `deep-lite`, `deep`, and `deep-reasoning` run iterative multi-search research at $12–15 per thousand requests; never self-initiate them. Use `deep` or `deep-lite` only when the user or the parent thread explicitly asks for Exa deep search over the selected pages, and use `exa_research` when they explicitly ask for a synthesized deep-research answer. `neural` and `keyword` are no longer modes; put exact phrases in the query instead.
+`type` selects the Exa search mode. `auto` is the default and covers most research. `lite` is the current low-cost cached-retrieval mode. `fast` and `instant` are legacy modes that remain accepted. Choose `lite` for quick discovery and `auto` when fresh page extraction or broader options matter. `deep-lite`, `deep`, and `deep-reasoning` run iterative multi-search research at $12–15 per thousand requests; never self-initiate them. Use `deep` or `deep-lite` only when the user or the parent thread explicitly asks for Exa deep search over the selected pages, and use `exa_research` when they explicitly ask for a synthesized deep-research answer. `neural` and `keyword` are no longer modes; put exact phrases in the query instead.
 
 ### Use Exa's filters when they matter
 
@@ -46,6 +52,10 @@ Use one corrective search only when the first pass is empty, low quality, contra
 - `category` focuses retrieval: `company`, `publication` (scholarly work; the old `research paper` value), `news`, `personal site`, `financial report`, `people` (the old `linkedin profile` value). `pdf`, `github`, and `tweet` are deprecated upstream. `company` and `people` reject `startPublishedDate`, `endPublishedDate`, and `excludeDomains`; the tool returns Exa's 400 rather than guessing.
 - `startPublishedDate` / `endPublishedDate` filter by publication date. `maxAgeHours` does not: it controls how fresh the extracted page content must be (`0` always refetches, `-1` cache only, `N` refetches when the cached copy is older than N hours). Set it only when a stale page body would be wrong, such as prices, availability, or live status pages. The old `livecrawl` values are gone.
 - `numResults` defaults to 10 and caps at 100; results above 10 bill extra, and the tool reports any cap it applied.
+
+### Historical content
+
+`exa_search` and `exa_contents` accept `snapshotAsOf`, an ISO date or date-time. Search puts it inside contents; extraction sends it at the top level. It returns stored content at or before the cutoff, with current ranking signals. It does not recreate historical rankings. Plan access, a rolling lookback window and trial caps apply. Do not combine it with `maxAgeHours`, category, `deep` or `deep-reasoning`; `lite` is cache-only and also rejects summaries. A missing snapshot is a coverage gap, not proof a page did not exist.
 
 ### Control highlights and summaries
 

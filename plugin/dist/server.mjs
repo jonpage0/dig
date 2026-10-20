@@ -46978,8 +46978,8 @@ var MAX_BESTSELLERS_PAGE = 2;
 var BESTSELLERS_PAGE_SIZE = 50;
 var DEFAULT_TIMEOUT_MS = 6e4;
 var SCRAPE_DO_AMAZON_BASE = "https://api.scrape.do/plugin/amazon/";
-var NEXSCOPE_PRICE_SERIES_ENDPOINT = "https://api.nexscope.ai/api/skill-api/v1/skills/amazon-product-price-series/run";
-var NEXSCOPE_REVIEWS_ENDPOINT = "https://api.nexscope.ai/api/skill-api/v1/skills/amazon-reviews-list/run";
+var NEXSCOPE_PRICE_SERIES_ENDPOINT = "https://api.nexscope.ai/kp/productSeries";
+var NEXSCOPE_REVIEWS_ENDPOINT = "https://api.nexscope.ai/amazon/reviews/list";
 var DEFAULT_HISTORY_DAYS = 90;
 var MAX_HISTORY_DAYS = 365;
 var DEFAULT_HISTORY_MAX_POINTS = 60;
@@ -47403,18 +47403,12 @@ async function nexscopeRequest(url2, body, signal, keep) {
   if (!record3) {
     throw new Error("Nexscope returned a non-object JSON payload");
   }
-  const errcode = firstNumber3(record3.errcode);
-  if (errcode !== null && errcode !== 0 && errcode !== 200) {
-    throw new Error(firstString3(record3.errmsg, record3.message, record3.msg) || `Nexscope returned errcode ${errcode}`);
-  }
-  const gatewayCode = firstNumber3(record3.code);
-  if (gatewayCode !== null && gatewayCode !== 0 && gatewayCode !== 200) {
-    const traceId = firstString3(record3.traceId);
-    throw new Error(
-      `${firstString3(record3.msg, record3.message, record3.errmsg) || "Nexscope gateway rejected the request"} (Nexscope code ${gatewayCode}${traceId ? `, traceId ${traceId}` : ""})`
-    );
-  }
-  return record3;
+  if (record3.code !== 0) throw new Error(`${firstString3(record3.msg, record3.message) || "Nexscope rejected the request"} (Nexscope code ${String(record3.code)}${firstString3(record3.traceId) ? `, traceId ${record3.traceId}` : ""})`);
+  const business = asRecord4(record3.data);
+  if (!business) throw new Error("Nexscope returned no completed business result");
+  const errcode = firstNumber3(business.errcode);
+  if (errcode !== null && errcode !== 0 && errcode !== 200) throw new Error(firstString3(business.errmsg, business.message) || `Nexscope returned errcode ${errcode}`);
+  return business;
 }
 async function fetchJson(url2, signal, keep, label) {
   const response = await requestJson({
@@ -48164,6 +48158,7 @@ var history = {
         context.abort,
         context.keep
       );
+      if (!["price", "buyboxPrice", "priceList", "priceDeal", "pricePrime", "priceFba", "priceFbm", "priceCoupon", "sellerCount", "rating", "ratingCount", "monthlySold", "bsrMain", "bsrSub"].some((key) => Array.isArray(payload[key]))) throw new Error("Nexscope returned no completed history series");
       const series = collectHistorySeries({ payload, selected, days });
       const usableSeries = series.filter((entry) => entry.points.length > 0);
       const costToken = firstNumber3(payload.costToken);
@@ -48616,7 +48611,7 @@ var SEARCH_TIMEOUT_MS = 6e4;
 var RESEARCH_TIMEOUT_MS = 18e4;
 var EXA_RETRY_STATUSES = [429, 503];
 var RESEARCH_RETRIES = 0;
-var SEARCH_TYPES = ["instant", "fast", "auto", "deep-lite", "deep", "deep-reasoning"];
+var SEARCH_TYPES = ["instant", "fast", "lite", "auto", "deep-lite", "deep", "deep-reasoning"];
 var RESEARCH_TYPE = "deep-reasoning";
 function asRecord5(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -48649,7 +48644,9 @@ function parseResult(path2, value, index) {
     author: optionalString(record3.author),
     text: optionalString(record3.text),
     highlights,
-    summary: optionalString(record3.summary)
+    summary: optionalString(record3.summary),
+    image: optionalString(record3.image),
+    entities: Array.isArray(record3.entities) ? record3.entities.filter((entry) => asRecord5(entry) !== null) : void 0
   };
 }
 function parseCitation(path2, value, where) {
@@ -48843,6 +48840,7 @@ function formatResult(r2, lines) {
     `${indent}URL: ${r2.url}` + (r2.publishedDate ? ` | Published: ${r2.publishedDate.split("T")[0]}` : "") + (r2.author ? ` | Author: ${r2.author}` : "")
   );
   if (r2.summary) lines.push(`${indent}Summary: ${r2.summary}`);
+  if (r2.entities?.length) lines.push(`${indent}Structured entities: ${JSON.stringify(r2.entities)}`);
   if (r2.highlights && r2.highlights.length > 0) {
     lines.push(`${indent}Highlights:`);
     for (const h2 of r2.highlights) lines.push(`${indent}  > ${h2}`);
@@ -48863,6 +48861,7 @@ function formatResults(header, notes, response) {
   return lines.join("\n");
 }
 function contentsPlan(args, textCharacters, summaryQuery) {
+  if (args.snapshotAsOf !== void 0 && args.contents === false) return { error: "ERROR: snapshotAsOf requires contents." };
   if (args.contents === false) return {};
   const highlights = highlightPlan(args);
   if (invalid(highlights)) return highlights;
@@ -48874,10 +48873,24 @@ function contentsPlan(args, textCharacters, summaryQuery) {
   };
   if (args.summary === true) contents2.summary = summaryQuery ? { query: summaryQuery } : {};
   if (age !== void 0) contents2.maxAgeHours = age;
+  const snapshot2 = snapshotTime(args.snapshotAsOf);
+  if (invalid(snapshot2)) return snapshot2;
+  if (snapshot2 !== void 0) {
+    if (args.maxAgeHours !== void 0) return { error: "ERROR: snapshotAsOf cannot be combined with maxAgeHours." };
+    contents2.snapshotAsOf = snapshot2;
+  }
   return { contents: contents2, ...highlights.beta ? { beta: highlights.beta } : {} };
 }
+function snapshotTime(value) {
+  if (value === void 0) return void 0;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?$/.test(value) || !Number.isFinite(Date.parse(value))) return { error: "ERROR: snapshotAsOf must be an ISO date or date-time with timezone." };
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  if (new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) !== value.slice(0, 10)) return { error: "ERROR: snapshotAsOf must name a valid calendar date." };
+  if (Date.parse(value) > Date.now()) return { error: "ERROR: snapshotAsOf must not be in the future." };
+  return value;
+}
 var search3 = exaMetered({
-  description: "Search the web with Exa and get ranked documents with page text and query-relevant highlights. Search modes: 'auto' (default), 'fast', 'instant' for latency, and the Deep modes 'deep-lite', 'deep', 'deep-reasoning' ($12\u201315/1k) for iterative research over the selected pages. Filters: domains/paths (wildcards like '*.substack.com'), publication dates, category. Complementary to Perplexity: Exa returns raw documents for your analysis; use exa_research when a synthesized, source-grounded answer is explicitly requested.",
+  description: "Search the web with Exa and get ranked documents with page text and query-relevant highlights. Search modes: 'auto' (default), 'fast', 'instant' for latency, and the Deep modes 'deep-lite', 'deep', 'deep-reasoning' ($12\u201315/1k) for iterative research over the selected pages. Filters: domains/paths (wildcards like '*.substack.com'), publication dates, category. Exa returns source documents for your analysis; lite is low-cost cached retrieval. Use exa_research when a synthesized, source-grounded answer is explicitly requested.",
   async execute(args, ctx) {
     const key = apiKey();
     if (!key) return MISSING_KEY;
@@ -48887,6 +48900,8 @@ var search3 = exaMetered({
     if (!SEARCH_TYPES.includes(type)) {
       return `ERROR: type must be one of ${SEARCH_TYPES.join(", ")}.`;
     }
+    if (type === "lite" && (args.maxAgeHours !== void 0 || args.summary !== void 0)) return "ERROR: lite is cache-only and does not accept maxAgeHours or summary; use auto.";
+    if (args.snapshotAsOf !== void 0 && (args.category !== void 0 || type === "deep" || type === "deep-reasoning")) return "ERROR: Snapshot does not support category, deep or deep-reasoning.";
     const includeDomains = optionalStringArray(args.includeDomains, "includeDomains");
     if (invalid(includeDomains)) return includeDomains.error;
     const excludeDomains = optionalStringArray(args.excludeDomains, "excludeDomains");
@@ -48908,6 +48923,8 @@ var search3 = exaMetered({
       return failure("search", error51, ctx.abort);
     }
     const notes = note ? [note] : [];
+    if (args.snapshotAsOf) notes.push(`Snapshot cutoff ${args.snapshotAsOf}: stored content only; current retrieval signals still rank candidate URLs. Availability depends on the Exa plan and stored coverage.`);
+    if (type === "lite") notes.push("Lite uses cached page content only; missing cached pages may be omitted.");
     const results = response.results;
     if (results.length === 0) {
       return {
@@ -48941,6 +48958,10 @@ var contents = exaMetered({
     if (invalid(highlights)) return highlights.error;
     const age = maxAgeHours(args.maxAgeHours);
     if (invalid(age)) return age.error;
+    const snapshot2 = snapshotTime(args.snapshotAsOf);
+    if (invalid(snapshot2)) return snapshot2.error;
+    if (snapshot2 !== void 0 && args.maxAgeHours !== void 0) return "ERROR: snapshotAsOf cannot be combined with maxAgeHours.";
+    if (snapshot2 !== void 0) notes.push(`Snapshot cutoff ${snapshot2}: newest stored content at or before this date; coverage and plan limits apply.`);
     const focus = optionalText(args.query);
     const body = {
       urls: requested,
@@ -48949,6 +48970,7 @@ var contents = exaMetered({
     };
     if (args.summary === true) body.summary = focus ? { query: focus } : {};
     if (age !== void 0) body.maxAgeHours = age;
+    if (snapshot2 !== void 0) body.snapshotAsOf = snapshot2;
     let response;
     try {
       response = await exaPost("/contents", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: highlights.beta });
@@ -48988,6 +49010,7 @@ var contents = exaMetered({
       if (r2.publishedDate) lines.push(`Published: ${r2.publishedDate.split("T")[0]}`);
       if (r2.author) lines.push(`Author: ${r2.author}`);
       lines.push("");
+      if (r2.entities?.length) lines.push(`Structured entities: ${JSON.stringify(r2.entities)}`, "");
       if (r2.summary) {
         lines.push(`**Summary:** ${r2.summary}`);
         lines.push("");
@@ -56188,7 +56211,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
         ),
         type: enumSchema(
           T3,
-          ["instant", "fast", "auto", "deep-lite", "deep", "deep-reasoning"],
+          ["instant", "fast", "lite", "auto", "deep-lite", "deep", "deep-reasoning"],
           "Search mode: auto (default), fast/instant for latency, deep-lite/deep/deep-reasoning for opt-in iterative research ($12-15/1k)."
         ),
         category: T3.Optional(
@@ -56236,6 +56259,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
             description: "Opt in to Exa Dynamic Highlights (research preview, shared budget across the result set; sends the Exa-Beta header)."
           })
         ),
+        snapshotAsOf: T3.Optional(T3.String({ description: "ISO cutoff date for stored historical content. Plan and rolling lookback limits apply; incompatible with maxAgeHours and category. Does not reproduce historical ranking." })),
         maxAgeHours: T3.Optional(
           T3.Integer({
             minimum: -1,
@@ -56280,6 +56304,7 @@ function createSchemas(T3, sources = ALL_MODULES) {
             description: "Opt in to Exa Dynamic Highlights (research preview; sends the Exa-Beta header)."
           })
         ),
+        snapshotAsOf: T3.Optional(T3.String({ description: "ISO cutoff date for stored historical content. Plan and rolling lookback limits apply; incompatible with maxAgeHours and category. Does not reproduce historical ranking." })),
         maxAgeHours: T3.Optional(
           T3.Integer({
             minimum: -1,

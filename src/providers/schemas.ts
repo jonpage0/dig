@@ -787,7 +787,7 @@ export function createSchemas(
         ),
         type: enumSchema(
           T,
-          ["instant", "fast", "auto", "deep-lite", "deep", "deep-reasoning"],
+          ["instant", "fast", "lite", "auto", "deep-lite", "deep", "deep-reasoning"],
           "Search mode: auto (default), fast/instant for latency, deep-lite/deep/deep-reasoning for opt-in iterative research ($12-15/1k).",
         ),
         category: T.Optional(
@@ -840,6 +840,7 @@ export function createSchemas(
               "Opt in to Exa Dynamic Highlights (research preview, shared budget across the result set; sends the Exa-Beta header).",
           }),
         ),
+        snapshotAsOf: T.Optional(T.String({ description: "ISO cutoff date for stored historical content. Plan and rolling lookback limits apply; incompatible with maxAgeHours and category. Does not reproduce historical ranking." })),
         maxAgeHours: T.Optional(
           T.Integer({
             minimum: -1,
@@ -890,6 +891,7 @@ export function createSchemas(
               "Opt in to Exa Dynamic Highlights (research preview; sends the Exa-Beta header).",
           }),
         ),
+        snapshotAsOf: T.Optional(T.String({ description: "ISO cutoff date for stored historical content. Plan and rolling lookback limits apply; incompatible with maxAgeHours and category. Does not reproduce historical ranking." })),
         maxAgeHours: T.Optional(
           T.Integer({
             minimum: -1,
