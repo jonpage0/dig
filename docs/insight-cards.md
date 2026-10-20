@@ -33,6 +33,6 @@ The presentation is transient tool-result data, not another saved report or a ne
 
 ## Frontend
 
-The library and cards share React 19, Tailwind 4, Base UI/shadcn-style components and an open-source ReUI timeline. The library uses TanStack Router and Query over the existing MCP reads. Each surface is built separately into self-contained versioned HTML; installation needs no extra frontend server. The existing safe Markdown and evidence renderers remain in use inside the React library while their components migrate.
+The library and cards share React 19, Tailwind 4, Base UI/shadcn-style components and open-source ReUI Frame, Icon Tile and Timeline components. The library uses TanStack Router and Query over the existing MCP reads. Each surface is built separately into self-contained versioned HTML; installation needs no extra frontend server. The existing safe Markdown and evidence renderers remain in use inside the React library while their components migrate.
 
 Native placement, host theme behavior and composer draft support depend on the host. Browser preview and protocol tests verify their own surfaces; they do not establish native-host acceptance.

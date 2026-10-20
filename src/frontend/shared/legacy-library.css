@@ -100,8 +100,8 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline
 [data-outline] { scroll-margin-top: 76px; }
 #dig-title:focus, #evidence-title:focus, [data-outline]:focus { outline: none; }
 .source-guide h5 { margin: 0 0 6px; font-size: 13px; font-weight: var(--font-weight-medium, 500); }
-.source-guide ul { margin: 0 0 12px; padding-inline-start: 18px; font-size: 13px; line-height: 1.6; }
-.source-example .fold-body { gap: 8px; }
+.source-guide ul { margin: 0; padding-inline-start: 18px; font-size: 13px; line-height: 1.6; }
+.source-example-body { display: grid; gap: 8px; padding-top: 8px; color: var(--foreground); }
 .prompt-example { margin: 0; font-size: 13px; line-height: 1.6; user-select: text; }
 .source-example .btn { justify-self: start; }
 .source-about { font-size: 12px; color: var(--muted-foreground); }

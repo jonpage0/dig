@@ -1,5 +1,5 @@
 // UI guidance for the existing tools and methods. These examples never execute a provider request.
-import { attr, button, fold, node } from './dom.mjs';
+import { attr, button, keyed, node } from './dom.mjs';
 import { absTime } from './format.mjs';
 
 export const SOURCE_GUIDES = {
@@ -32,6 +32,12 @@ export const SOURCE_GUIDES = {
 export function sourceGuide(id) {
   const guide = SOURCE_GUIDES[id];
   if (!guide) return null;
+  return node('section', 'source-guide', node('h5', '', 'What you can do'), node('ul', '', guide.tasks.map(task => node('li', '', task))));
+}
+
+export function sourceExample(id) {
+  const guide = SOURCE_GUIDES[id];
+  if (!guide) return null;
   const prompt = node('p', 'prompt-example', guide.example);
   const status = attr(node('p', 'meta'), 'role', 'status');
   const copy = button('btn-ghost', 'Copy example', async () => {
@@ -43,8 +49,9 @@ export function sourceGuide(id) {
       status.textContent = 'Select the example text and copy it, then paste it into the conversation.';
     }
   });
-  const example = fold('source-example', `example:${id}`, node('span', 'fold-title', 'Example for the conversation'), prompt, copy, status);
-  return node('section', 'source-guide', node('h5', '', 'What you can do'), node('ul', '', guide.tasks.map(task => node('li', '', task))), example.element);
+  return keyed(node('details', 'source-about source-example',
+    node('summary', '', 'Example for the conversation'),
+    node('div', 'source-example-body', prompt, copy, status)), `example:${id}`);
 }
 
 /** Latest observed receipt per source, including calls not yet claimed by a report. No network probe or stored state. */

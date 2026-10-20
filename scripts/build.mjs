@@ -90,7 +90,7 @@ for (const root of [...bundled].sort()) {
   else throw new Error(`${pkg.name} is bundled but ships no license file; its notice must travel with the plugin`);
   notices.push(`## ${pkg.name} ${pkg.version}\n\nLicense: ${pkg.license ?? 'see below'}\n\n\`\`\`\`text\n${text.replace(/[ \t]+$/gm, '')}\n\`\`\`\`\n`);
 }
-await writeFile('plugin/THIRD_PARTY_NOTICES.md', `# Third-party notices\n\nDig's bundled server and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).\n\nThe selected ReUI Base UI Timeline component is MIT-licensed by Keenthemes Inc; its notice ships as ReUI-LICENSE. Its source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.\n\n${notices.join('\n')}`);
+await writeFile('plugin/THIRD_PARTY_NOTICES.md', `# Third-party notices\n\nDig's bundled server and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).\n\nThe selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.\n\n${notices.join('\n')}`);
 await writeFile('plugin/.mcp.json', `${JSON.stringify({ mcpServers: { dig: {
   command: 'node', args: ['./dist/server.mjs'], cwd: '.', startup_timeout_sec: 30, tool_timeout_sec: 600,
   env_vars: ['DIG_STATE_DIR', 'PAPER_SEARCH_MCP_ENV_FILE', ...moduleEnvironment(ALL_MODULES)],

@@ -4,6 +4,9 @@ import { createDigHost } from './shared/host';
 import { LibraryApp } from './library/app';
 import './shared/styles.css';
 import './shared/legacy-library.css';
+import './library/source-controls.css';
+import './library/sources.css';
+import './library/polish.css';
 
 export { LibraryApp } from './library/app';
 

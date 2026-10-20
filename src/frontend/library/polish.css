@@ -1,0 +1,107 @@
+/* Shared visual hierarchy for the React library and its retained-evidence reader. */
+.dig-library { --reading-width: 76ch; padding-top: 24px; }
+.dig-library .masthead { padding-bottom: 20px; gap: 20px; }
+.dig-library .brand h1 { font-size: 20px; font-weight: 650; letter-spacing: -.6px; }
+.dig-library .brand .tagline { padding-left: 10px; border-left: 1px solid var(--border); }
+.dig-library .nav { padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--muted) 45%, transparent); }
+.dig-library .nav .dig-button { min-height: 32px; padding: 5px 12px; font-size: 12px; border-radius: 7px; color: var(--muted-foreground); }
+.dig-library .nav [aria-current=page] { background: var(--background); color: var(--foreground); box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 7%, transparent); }
+.dig-library .page-heading { margin-block: 28px 22px; }
+.dig-library .page-heading h2 { font-size: 24px; letter-spacing: -.65px; font-weight: 600; margin: 4px 0 8px; }
+.dig-library .page-heading .meta { max-width: 76ch; line-height: 1.65; }
+.dig-library .usage { padding: 20px; margin-top: 24px; border-radius: 12px; }
+.dig-library .usage-frame { --frame-radius: var(--radius); margin-top: 24px; }
+.dig-library .usage-frame .usage { padding: 18px; margin: 0; border: 0; }
+.dig-library .research-icon-tile { width: 25px; height: 25px; border-radius: 7px; background: #fff; color: #1b1b1b; }
+.dig-library .research-icon-tile .mark { border: 0; background: transparent; width: 19px; height: 19px; padding: 0; }
+.dig-library .research-icon-tile .logo, .dig-library .research-icon-tile .glyph { width: 17px; height: 17px; }
+.dig-library .usage-head { margin-bottom: 18px; }
+.dig-library .usage-head h3 { font-size: 17px; font-weight: 600; letter-spacing: -.2px; }
+.dig-library .usage-head .meta { margin-top: 5px; }
+.dig-library .metrics { gap: 12px; }
+.dig-library .metric { padding: 14px 16px; border: 1px solid var(--border); border-radius: 9px; background: var(--background); }
+.dig-library .metric dt { font-size: 11px; letter-spacing: .01em; }
+.dig-library .metric-value { display: block; font-size: 25px; line-height: 1.3; letter-spacing: -.7px; font-weight: 600; margin-block: 6px 4px; }
+.dig-library .metric-note { font-size: 11px; line-height: 1.5; }
+.dig-library .metric:last-child { background: color-mix(in srgb, var(--primary) 5%, var(--background)); border-color: color-mix(in srgb, var(--primary) 18%, var(--border)); }
+.dig-library .metric .cost-unit + .cost-unit { font-size: 16px; letter-spacing: -.2px; }
+.dig-library .charts { gap: 24px; margin-block: 22px 14px; }
+.dig-library .chart-head { margin-bottom: 12px; }
+.dig-library .chart-title { font-size: 12px; font-weight: 600; }
+.dig-library .chart-frame { border-bottom: 1px solid var(--border); background: repeating-linear-gradient(to top, transparent 0 calc(25% - 1px), color-mix(in srgb, var(--border) 42%, transparent) calc(25% - 1px) 25%); }
+.dig-library .source-rows { row-gap: 14px; }
+.dig-library .source-row .who { gap: 8px; }
+.dig-library .legend { font-size: 10px; gap: 14px; }
+.dig-library .usage-scope { font-size: 10px; line-height: 1.6; padding-top: 12px; border-top: 1px solid var(--border); }
+.dig-library .pricing-details { font-size: 10px; }
+.dig-library .library-toolbar { margin-block: 30px 16px; }
+.dig-library .library-title { font-size: 19px; font-weight: 600; letter-spacing: -.35px; }
+.dig-library .library-list { border-radius: 12px; }
+.dig-library .research-card.research-row { padding: 18px 20px; row-gap: 7px; transition: background-color 120ms; }
+.dig-library .research-row h2 { font-size: 16px; line-height: 1.5; letter-spacing: -.15px; }
+.dig-library .dig-button.card-open { display: inline; min-height: 0; border: 0; padding: 0; border-radius: 3px; font: inherit; font-weight: 550; text-align: start; white-space: normal; background: transparent; color: var(--foreground); }
+.dig-library .dig-button.card-open:hover { background: transparent; }
+.dig-library .source-labels { font-size: 11px; gap: 7px; }
+.dig-library .research-meta { font-size: 11px; }
+.dig-library .research-project { font-weight: 500; }
+.dig-library .research-foot { gap: 6px; }
+.dig-library .research-foot .meta { font-size: 11px; }
+.dig-library .research-cost { color: var(--foreground); font-size: 13px; font-weight: 550; }
+.dig-library .research-preview { margin-top: 2px; font-size: 11px; }
+.dig-library .research-preview[open] { padding: 12px 14px; margin-top: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); }
+.dig-library .research-preview[open] > summary { margin-bottom: 10px; }
+.dig-library .detail-heading { margin-block: 22px; }
+.dig-library .detail-heading h2 { font-size: 24px; font-weight: 600; letter-spacing: -.55px; line-height: 1.4; max-width: 58ch; }
+.dig-library .detail-heading .meta { margin-top: 12px; }
+.dig-library .reader-navigation { gap: 16px; padding-block: 12px; margin-bottom: 24px; }
+.dig-library .reader-frame { --frame-radius: var(--radius); }
+.dig-library .reader-frame > .reader-navigation { padding: 10px; margin: 0; border-bottom: 0; border-radius: 8px; background: transparent; }
+.dig-library .reader-paper { padding: 24px; }
+.dig-library .file-tab { border-radius: 7px; font-size: 12px; }
+.dig-library .document-head { margin-bottom: 20px; }
+.dig-library .doc-facts { font-size: 11px; margin-bottom: 18px; }
+.dig-library .source-card { background: color-mix(in srgb, var(--muted) 65%, var(--background)); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+.dig-library .source-card .card-list { font-size: 13px; line-height: 1.7; }
+.dig-library .doc-outline { border-radius: 8px; font-size: 12px; padding: 10px 12px; }
+.dig-library .prose { font-size: var(--font-text-md-size, 14px); line-height: 1.8; }
+.dig-library .prose h4 { font-size: 21px; letter-spacing: -.4px; margin-top: 32px; font-weight: 600; }
+.dig-library .prose h5 { font-size: 17px; letter-spacing: -.2px; font-weight: 600; }
+.dig-library .prose p { margin-block: 12px; }
+.dig-library .prose table { line-height: 1.6; }
+.dig-library .prose th { background: var(--muted); font-size: 12px; }
+.dig-library .prose td { font-size: 13px; }
+.dig-library .table-scroll { border: 1px solid var(--border); border-radius: 8px; }
+.dig-library .table-scroll tr:last-child td { border-bottom: 0; }
+.dig-library .evidence-pane { border-radius: 12px; border-color: color-mix(in srgb, var(--primary) 18%, var(--border)); padding: 18px; }
+.dig-library .evidence-head { top: -18px; padding-block: 14px; }
+.dig-library .evidence-head h3 { font-weight: 600; }
+.dig-library .raw-json { padding-top: 12px; border-top: 1px solid var(--border); }
+.dig-library .raw-json summary { font-size: 12px; }
+.dig-library .foot { margin-top: 36px; font-size: 11px; gap: 8px 14px; }
+.dig-library .foot .dig-button { font-size: 11px; min-height: 28px; }
+.preferences-groups { display: grid; gap: 18px; }
+.preferences-frame { --frame-radius: var(--radius); }
+.preferences-frame .preferences-group-heading { padding: 16px 18px; }
+.preferences-frame .preferences-fields { padding: 20px; }
+.preferences-group-heading [data-slot=frame-panel-title] { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
+.preferences-group-heading [data-slot=frame-panel-description] { margin-top: 6px; font-size: 12px; color: var(--muted-foreground); line-height: 1.65; max-width: 68ch; }
+.preferences-fields { display: grid; gap: 22px; min-width: 0; }
+.preferences-authority { padding: 20px 4px; max-width: 76ch; }
+.preferences-authority .meta { margin-top: 6px; line-height: 1.6; }
+.dig-library .panel-figures .metric-value { font-size: 21px; }
+.dig-library .trail-card { border-radius: 10px; padding: 18px; }
+@media (max-width: 680px) {
+  .dig-library { padding: 18px 16px 48px; }
+  .dig-library .masthead { flex-direction: column; align-items: start; gap: 16px; }
+  .dig-library .nav { max-width: 100%; }
+  .dig-library .nav .dig-button { padding-inline: 9px; }
+  .dig-library .usage { padding: 14px; }
+  .dig-library .usage-frame .usage { padding: 12px; }
+  .dig-library .reader-paper { padding: 16px; }
+  .dig-library .metrics { gap: 8px; }
+  .dig-library .metric { padding: 10px 12px; }
+  .dig-library .metric-value { font-size: 22px; }
+  .dig-library .research-card.research-row { padding: 16px; }
+  .dig-library .detail-heading h2 { font-size: 21px; }
+  .dig-library .prose h4 { font-size: 19px; }
+}

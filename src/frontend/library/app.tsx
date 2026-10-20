@@ -5,18 +5,20 @@ import { MODULES } from '../../providers/modules.ts';
 import { costSummary } from '../../providers/library/cost.ts';
 import { callWord, patternOf } from '../../status.mjs';
 import { VERSION } from '../../version.mjs';
-import { attr, httpUrl, node, rebuild } from '../../ui/dom.mjs';
+import { httpUrl, node, rebuild } from '../../ui/dom.mjs';
 import { COST_CAVEAT, COST_SCOPE, absTime, basename, clock, costShort, costTotal, num, plural, shortDate } from '../../ui/format.mjs';
 import { firstParagraph } from '../../ui/markdown.mjs';
 import { callSentence, documentView, rawView } from '../../ui/reader.mjs';
 import { renderRetrievals, revealRetrievals } from '../../ui/retrievals.mjs';
-import { renderSettings } from '../../ui/settings.mjs';
-import { renderAccounts } from '../../ui/accounts.mjs';
-import { mark, renderSources } from '../../ui/sources.mjs';
-import { latestSourceCalls } from '../../ui/source-guide.mjs';
+import { ownerOf, settingsGroups } from '../../ui/settings.mjs';
+import { mark } from '../../ui/sources.mjs';
 import { costMetric, metric, outcomeCounts, renderUsage, sourceRows, usageOf } from '../../ui/usage.mjs';
 import { Button, Badge } from '../shared/components';
+import { Frame, FrameHeader, FrameTitle, FrameDescription, FramePanel } from '../shared/frame';
+import { IconTile } from '../shared/icon-tile';
 import type { DigHost } from '../shared/host';
+import { SourceSetting } from './source-controls';
+import { SourcesPage } from './sources';
 import { READ_ONLY, SCHEMA_MISSING, replacedMessage, useLibraryController } from './controller';
 
 type Controller = ReturnType<typeof useLibraryController>;
@@ -47,9 +49,9 @@ function ResearchRow({ item, app, trail = false }: { item: any; app: Controller;
   return <article className={trail ? 'trail-card' : 'research-card research-row'}>
     <div className="card-head">
       <p className="eyebrow source-labels">
-        {!trail && <Island as="span" deps={[item.sources?.join(',')]} build={(element: HTMLElement) => {
-          element.replaceChildren(...(item.sources ?? []).slice(0, 3).map((id: string) => MODULES.find(source => source.id === id)).filter(Boolean).map((source: any) => mark(source, true)));
-        }} />}
+        {!trail && item.sources?.length > 0 && <IconTile variant="outline" size="sm" className="research-icon-tile"><Island as="span" deps={[item.sources?.join(',')]} build={(element: HTMLElement) => {
+          element.replaceChildren(...(item.sources ?? []).slice(0, 1).map((id: string) => MODULES.find(source => source.id === id)).filter(Boolean).map((source: any) => mark(source, true)));
+        }} /></IconTile>}
         {sourceLine(item, catalog)}
       </p>
       <Status>{item.status}</Status>
@@ -74,8 +76,8 @@ function Browse({ app, hidden }: { app: Controller; hidden: boolean }) {
   const reports = snapshot.items.reduce((sum: number, item: any) => sum + item.reports.length, 0);
   const calls = snapshot.items.reduce((sum: number, item: any) => sum + item.calls.length, 0) + snapshot.live.length;
   return <section id="browse" hidden={hidden}>
-    <Island as="section" className="usage" id="usage" aria-labelledby="usage-title" deps={[snapshot, app.usageDays, hidden]}
-      build={(element: HTMLElement) => { if (!hidden && app.snapshotLoaded) renderUsage(element, usageOf(snapshot, { days: app.usageDays }), (days: number) => app.update({ usageDays: days })); }} />
+    <Frame className="usage-frame" spacing="sm"><FramePanel><Island as="section" className="usage" id="usage" aria-labelledby="usage-title" deps={[snapshot, app.usageDays, hidden]}
+      build={(element: HTMLElement) => { if (!hidden && app.snapshotLoaded) renderUsage(element, usageOf(snapshot, { days: app.usageDays }), (days: number) => app.update({ usageDays: days })); }} /></FramePanel></Frame>
     <div className="library-toolbar">
       <div><h2 className="library-title">Recent research</h2><p className="meta library-hint">Ask the conversation to find or narrow your saved research with Dig.</p></div>
       <div className="stats">
@@ -154,19 +156,19 @@ function Reader({ app, hidden }: { app: Controller; hidden: boolean }) {
     <Island as="section" id="dig-retrievals" className="usage retrievals" aria-labelledby="retrievals-title" deps={[current, catalog]}
       build={(element: HTMLElement) => { if (current) renderRetrievals(element, current, catalog, app.inspectRaw); else element.replaceChildren(); }} />
     <div className={`reader-layout${evidence ? ' has-evidence' : ''}`} id="reader-layout">
-      <div className="reader-main">
+      <Frame className="reader-main reader-frame" spacing="sm">
         <div className="reader-navigation">
           <nav id="files" className="files" aria-label="Files in this dig">{files.map((file: string) => <Button key={file} variant="ghost" className="file-tab" data-key={`file:${file}`} title={basename(file)} aria-current={opened?.file === file ? 'true' : 'false'} onClick={() => { void app.showFile(file); }}>{catalog.fileLabel(file)}</Button>)}</nav>
           <Button id="reader-evidence" variant="ghost" disabled={!current?.calls.length} onClick={() => { app.readerOrigin(); revealRetrievals(); }}>Retrievals</Button>
         </div>
-        <article className="document" aria-labelledby="file-title">
+        <FramePanel className="reader-paper"><article className="document" aria-labelledby="file-title">
           <div className="document-head"><h3 id="file-title" className="sr-only">{opened ? catalog.fileLabel(opened.file) : ''}</h3>
             <details className="file-details"><summary>File details</summary><p className="path" id="file-name">{opened?.file}</p></details>
             <Button id="back-to-report" variant="outline" hidden={opened?.kind !== 'raw' || !app.returnFile} onClick={() => { if (app.returnFile) void app.showFile(app.returnFile); }}>← Back to {app.returnFile ? catalog.fileLabel(app.returnFile) : 'report'}</Button>
           </div>
           <LoadedDocument value={opened} />
-        </article>
-      </div>
+        </article></FramePanel>
+      </Frame>
       <aside id="evidence-pane" className="evidence-pane" aria-labelledby="evidence-title" hidden={!evidence}>
         <div className="evidence-head"><h3 id="evidence-title" tabIndex={-1}>Original response</h3><Button id="close-evidence" variant="outline" onClick={() => app.closeEvidence()}>Back to report</Button></div>
         <LoadedDocument value={evidence} evidence />
@@ -181,59 +183,19 @@ const LIBRARY_FOLDER_NOTES: Record<string, string> = {
 };
 
 function Settings({ app, host, hidden }: { app: Controller; host: DigHost; hidden: boolean }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const handle = useRef<any>(null);
-  const note = useRef<HTMLElement | null>(null);
   const read = app.settings;
-  useLayoutEffect(() => {
-    if (!ref.current || !read?.schema?.properties || !read.values) return;
-    if (!note.current) note.current = attr(attr(node('p', ''), 'id', 'setting-library-note'), 'aria-live', 'polite');
-    if (!handle.current) handle.current = renderSettings(ref.current, read, MODULES.map(module => module.id), host.preview ? null : app.saveSetting, { library: note.current });
-    else handle.current.update(read);
-  }, [read, host.preview, app.saveSetting]);
-  useLayoutEffect(() => {
-    if (!note.current) return;
-    const message = LIBRARY_FOLDER_NOTES[app.snapshot.libraryFolder] ?? '';
-    note.current.textContent = message; note.current.hidden = !message;
-  }, [read, app.snapshot.libraryFolder]);
+  const properties = read?.schema?.properties ?? {};
+  const groups = read ? settingsGroups(read).map((group: any) => ({ ...group, keys: group.keys.filter((key: string) => !ownerOf(key, MODULES.map(module => module.id))) })).filter((group: any) => group.keys.length) : [];
   const error = app.settingsError?.message || (read && (!read.schema?.properties || !read.values) ? SCHEMA_MISSING : '');
-  return <section id="settings" hidden={hidden}>
-    <div className="page-heading"><h2>Settings</h2><p className="meta">Dig-wide settings. Changes save as you make them, to the file below; Codex’s plugin settings edit the same file. Each source or tool’s own settings are on Sources &amp; tools.</p><p id="config-path" className="path">{app.snapshot.configPath || 'config.toml'}</p></div>
-    <div id="settings-fields" className="settings" ref={ref} />
+  const libraryNote = LIBRARY_FOLDER_NOTES[app.snapshot.libraryFolder];
+  return <section id="settings" className="preferences-page" hidden={hidden}>
+    <div className="page-heading"><p className="eyebrow">Preferences</p><h2>Settings</h2><p className="meta">Your library, evidence retention, and suggested source workers. Changes save automatically.</p></div>
+    <div id="settings-fields" className="preferences-groups">{groups.map((group: any) => <Frame className="preferences-frame" spacing="sm" key={group.title}>
+      <FrameHeader className="preferences-group-heading"><FrameTitle role="heading" aria-level={3}>{group.title}</FrameTitle><FrameDescription>{group.title === 'Library' ? 'Keep research and its original evidence together.' : group.title === 'Source workers' ? 'Defaults for the conversation. Each source can have its own suggestions.' : 'Defaults shared across Dig.'}</FrameDescription></FrameHeader>
+      <FramePanel className="preferences-fields">{group.keys.map((key: string) => <SourceSetting key={key} settingKey={key} schema={properties[key]} value={read.values?.[key]} save={host.preview ? undefined : app.saveSetting} note={key === 'library' && libraryNote ? <p aria-live="polite">{libraryNote}</p> : undefined} />)}</FramePanel>
+    </Frame>)}</div>
+    <div className="preferences-authority"><span className="eyebrow">Settings file</span><p className="meta">Dig and the host’s plugin settings edit this same file. Source-specific settings are in Sources &amp; tools.</p><p id="config-path" className="path">{app.snapshot.configPath || 'config.toml'}</p></div>
     <p id="settings-status" className="meta" role="status" aria-live="polite">{error || (!read ? 'Reading settings…' : host.preview ? READ_ONLY : '')}</p>
-  </section>;
-}
-
-function Sources({ app, host, hidden }: { app: Controller; host: DigHost; hidden: boolean }) {
-  const listRef = useRef<HTMLDivElement>(null); const tocRef = useRef<HTMLElement>(null);
-  const handle = useRef<any>(null);
-  const info = app.sources; const read = app.settings;
-  const sources = info?.sources ?? [];
-  const on = sources.filter((source: any) => source.enabled);
-  const partly = on.filter((source: any) => source.readiness?.status === 'partial').length;
-  const setup = on.filter((source: any) => source.readiness?.status === 'setup-required').length;
-  const activity = useMemo(() => latestSourceCalls(app.snapshot), [app.snapshot]);
-  useLayoutEffect(() => {
-    if (!read?.schema?.properties || !read.values || !listRef.current || !tocRef.current) return;
-    if (!handle.current) handle.current = renderSources(listRef.current, tocRef.current, read, sources, host.preview ? null : app.saveSetting,
-      host.preview ? null : { editKeys: app.editKeys, useEnvironment: app.useEnvironment }, activity);
-    else handle.current.update(read, sources, activity);
-  }, [read, info, activity, host.preview, app.saveSetting, app.editKeys, app.useEnvironment]);
-  const error = app.settingsError?.message || (read && (!read.schema?.properties || !read.values) ? SCHEMA_MISSING : '');
-  return <section id="sources" hidden={hidden}>
-    <div className="page-heading"><h2>Sources &amp; tools</h2>
-      <p className="summary-line" id="sources-summary">{sources.length ? [`${on.length} of ${sources.length} ${app.catalog.groupLabel().toLowerCase()} on`, partly ? `${partly} partly configured` : null, setup ? `${setup} ${setup === 1 ? 'needs' : 'need'} setup` : null].filter(Boolean).join(' · ') : ''}</p>
-      <p className="meta">Configured means the local prerequisites are present. Recent activity comes from retained calls; opening this page does not test providers.</p>
-    </div>
-    <section className="keys-section" id="keys-section" aria-labelledby="keys-title" hidden={!info?.keysPath && !sources.length}>
-      <div className="keys-head"><h3 id="keys-title">Accounts and keys</h3><Button id="edit-keys" variant="outline" disabled={host.preview || !info?.keysPath} onClick={() => { void app.editKeys(); }}>Edit keys.env</Button></div>
-      <p className="keys-text">Provider keys live in keys.env, outside the chat, and Dig picks up changes when you save it. One key can serve several sources or shared tools, so the list below goes by provider account.</p>
-      <p id="keys-path" className="path" hidden={!info?.keysPath}>{info?.keysPath}</p>
-      <Island className="accounts" id="accounts" deps={[info]} build={(element: HTMLElement) => renderAccounts(element, info?.sources)} />
-    </section>
-    <p id="sources-status" className="meta sources-status" role="status" aria-live="polite">{error || (app.sourcesError ? `Source readiness is unavailable: ${app.sourcesError.message}` : !read || !info ? 'Reading sources and tools…' : host.preview ? READ_ONLY : '')}</p>
-    <nav id="sources-toc" className="toc" aria-label="Research sources and shared tools" ref={tocRef} />
-    <div id="sources-list" ref={listRef} />
   </section>;
 }
 
@@ -257,7 +219,7 @@ function About({ app, host, hidden }: { app: Controller; host: DigHost; hidden: 
       <h3 className="section-title">Help</h3><p>Type $dig:setup in the composer to choose sources and see what each still needs. $dig:library finds research you have already saved.</p>
       <h3 className="section-title">Credits</h3><ul className="credits">
         <li>Dig by Jon Page, MIT License.</li>
-        <li>React, Base UI, shadcn/ui, ReUI and TanStack power the interface. Host styles and native actions use OpenAI’s MCP Extensions.</li>
+        <li>React, Base UI, selected ReUI components and TanStack power the interface. Dig owns its shadcn-style wrappers; host styles and native actions use OpenAI’s MCP Extensions.</li>
         <li>Interface glyphs from <a href="https://lucide.dev" data-external="" target="_blank" rel="noopener noreferrer">Lucide</a> (ISC License).</li>
         <li>The Papers bridge uses <a href="https://github.com/openags/paper-search-mcp" data-external="" target="_blank" rel="noopener noreferrer">paper-search-mcp</a> by P.S Zhang (MIT License).</li>
         <li>Source logos are trademarks of their owners and identify each service; Dig is not affiliated with or endorsed by them. They come from <a href="https://svgl.app" data-external="" target="_blank" rel="noopener noreferrer">svgl</a>, <a href="https://simpleicons.org" data-external="" target="_blank" rel="noopener noreferrer">Simple Icons</a> (CC0) and the Polymarket and Exa websites.</li>
@@ -279,7 +241,7 @@ function LibraryShell({ host }: { host: DigHost }) {
     if (!url) { app.notify('This link is not an HTTP or HTTPS address.', true); return; }
     host.openLink(url).catch((error: any) => app.notify(`Unable to open ${url}: ${error.message}`, true));
   };
-  return <main onClick={outbound}>
+  return <main className="dig-library" onClick={outbound}>
     <header className="masthead">
       <div className="brand"><h1>Dig</h1><p className="tagline" id="tagline">{app.mode === 'panel' ? 'Research trail' : 'Saved research'}</p></div>
       <nav className="nav" aria-label="Dig views">
@@ -297,7 +259,7 @@ function LibraryShell({ host }: { host: DigHost }) {
     <Trail app={app} hidden={view !== '/trail'} />
     <Browse app={app} hidden={view !== '/library'} />
     <Reader app={app} hidden={view !== '/reader'} />
-    <Sources app={app} host={host} hidden={view !== '/sources'} />
+    <SourcesPage app={app} host={host} hidden={view !== '/sources'} />
     <Settings app={app} host={host} hidden={view !== '/settings'} />
     <About app={app} host={host} hidden={view !== '/about'} />
     <footer className="foot">

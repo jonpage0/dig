@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { DigHost } from '../shared/host';
 import { Badge, Button, Card, CardContent, CardFooter, CardHeader, Dialog, Disclosure } from '../shared/components';
 import { Timeline, TimelineContent, TimelineHeader, TimelineIndicator, TimelineItem, TimelineSeparator, TimelineTitle } from '../shared/timeline';
+import { Frame, FramePanel } from '../shared/frame';
+import { IconTile } from '../shared/icon-tile';
 import { GLYPHS } from '../../glyphs.mjs';
 import { absTime, COST_CAVEAT, COST_SCOPE, costAmounts, costTotal, plural } from '../../ui/format.mjs';
 import { cardDetails, cardStrings, digLink, presentedInsights, readRetained, savedResult, webLink } from './model';
@@ -205,9 +207,9 @@ export function CardApp({ host, initialResult }: { host: DigHost; initialResult?
   </section>;
 
   return <main className="dig-inline-card">
-    <Card aria-busy={view.status === 'loading'} aria-labelledby="insight-title" className="insight-card">
+    <Frame spacing="sm" className="insight-frame"><FramePanel fit><Card aria-busy={view.status === 'loading'} aria-labelledby="insight-title" className="insight-card">
       <CardHeader className="insight-header">
-        <div className="insight-source"><span className="insight-source-icon"><Glyph name={card?.glyph} /></span>
+        <div className="insight-source"><IconTile variant="outline" size="sm" className="insight-source-icon"><Glyph name={card?.glyph} /></IconTile>
           <div><p>Dig{card ? ` · ${card.label}` : ''}</p><span className="insight-small-label">{explicit ? 'Presented analysis' : card?.kind === 'answer' ? 'Saved answer' : card || currentFile ? 'Saved report' : 'Research result'}</span></div>
         </div>
         {card?.status && <Badge tone={assessmentTone(card.status)} title={card.kind === 'report' ? 'The report author’s assessment' : 'The saved answer’s status'}>
@@ -246,7 +248,7 @@ export function CardApp({ host, initialResult }: { host: DigHost; initialResult?
         </div>
         <Button variant="ghost" size="sm" onClick={openReport}>{card?.kind === 'answer' ? 'Full answer' : 'Full report'}</Button>
       </CardFooter>}
-    </Card>
+    </Card></FramePanel></Frame>
     {card?.savedAt && <p className="insight-saved">Saved {absTime(card.savedAt)}{card.kind === 'report' ? ' · Status and confidence are the report author’s assessment.' : ''}</p>}
     {host.preview && <p className="insight-preview-note">Browser preview · reads retained research only</p>}
     {!overlay && notice && <p className="insight-notice" role="status">{notice}</p>}

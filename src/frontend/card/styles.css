@@ -1,5 +1,6 @@
 .dig-inline-card { margin: 0 auto; max-width: 760px; padding: 10px; color: var(--foreground); }
-.insight-card { overflow: hidden; box-shadow: none; gap: 0; padding: 0; }
+.insight-frame { --frame-radius: var(--radius); }
+.insight-card { overflow: hidden; box-shadow: none; gap: 0; padding: 0; border: 0; }
 .insight-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 18px 0; }
 .insight-source { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .insight-source p { font-size: 12px; font-weight: 600; margin: 0; }
@@ -16,7 +17,7 @@
 .insight-content { padding: 16px 18px; display: grid; gap: 13px; }
 .insight-body, .insight-secondary { display: grid; gap: 13px; min-width: 0; }
 .insight-statement { font-size: 13px; line-height: 1.7; margin: 0; overflow-wrap: anywhere; }
-.insight-next { padding: 11px 13px; border: 1px solid var(--border); border-radius: 9px; background: var(--muted); }
+.insight-next { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border)); border-inline-start: 3px solid var(--primary); border-radius: 9px; background: color-mix(in srgb, var(--primary) 5%, var(--background)); }
 .insight-next p { font-size: 13px; font-weight: 550; line-height: 1.6; margin: 3px 0 0; }
 .insight-timeline { margin-top: 5px; margin-left: 5px; }
 .insight-timeline p { font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }

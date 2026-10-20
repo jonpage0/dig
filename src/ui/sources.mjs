@@ -9,7 +9,7 @@ import { GLYPHS, glyphFor } from '../glyphs.mjs';
 import { MODULES, SOURCE_GROUPS, moduleAgents } from '../providers/modules.ts';
 import { attr, button, externalLink, fold, keyName, keyed, node, rebuild } from './dom.mjs';
 import { control, enabledField, ownerOf, settingsGroups } from './settings.mjs';
-import { activityNote, sourceGuide } from './source-guide.mjs';
+import { activityNote, sourceExample, sourceGuide } from './source-guide.mjs';
 
 const WORKER_FIELD = /_worker_(model|effort)$/;
 const workerKey = (method, field) => `${method.replaceAll('-', '_')}_worker_${field}`;
@@ -232,6 +232,7 @@ export function renderSources(container, toc, read, sources, save, actions, rece
       guide ?? about,
       node('p', 'meta billing', node('span', 'fact-label', 'Cost: '), module.billing),
       guide ? node('details', 'source-about', node('summary', '', module.kind === 'tool' ? 'About this tool' : 'About this source'), about) : null,
+      sourceExample(module.id),
       node('div', 'readiness', status, setup.element),
       lastCall,
       own.length ? node('div', 'source-settings', node('p', 'eyebrow', `${module.label} settings`), own) : null,

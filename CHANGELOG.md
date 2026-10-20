@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0 — 2026-10-20
+
+- Rebuild Sources, accounts and Settings as React views using actual free ReUI Frame and Icon Tile components with Base UI switches, inputs, selects and disclosures. Keep local settings drafts and saves stable across refreshes.
+- Refresh library overview, saved-research rows, report reading and inline cards with shared frames, stronger typography and clearer cost hierarchy.
+- Make source example prompts a small disclosure beneath About this source, matching its typography and keeping capability summaries prominent.
+
 ## 0.7.0 — 2026-10-20
 
 - Adopt React 19, Tailwind 4, Base UI/shadcn conventions and an open-source ReUI timeline. The library uses TanStack Router and Query; inline cards remain a separate self-contained bundle sharing components and a native host adapter.

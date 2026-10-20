@@ -2,7 +2,7 @@
 
 Dig's bundled server and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).
 
-The selected ReUI Base UI Timeline component is MIT-licensed by Keenthemes Inc; its notice ships as ReUI-LICENSE. Its source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.
+The selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.
 
 ## @base-ui/react 1.9.0
 

@@ -28,6 +28,12 @@ const rawCall = { id: 'call-1', at: new Date().toISOString(), ms: 900, tool: 'ha
 const byKey = key => [...document.querySelectorAll('[data-key]')].find(node => node.dataset.key === key);
 const $ = id => document.getElementById(id);
 const click = async node => { assert.ok(node, 'click target exists'); await React.act(async () => node.click()); await settle(); };
+const type = async (element, value) => {
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(element, value);
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+};
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const settings = () => ({
   schema: { type: 'object', properties: { library: { type: 'string', title: 'Library', minLength: 1 }, keep_raw: { type: 'boolean', title: 'Keep original responses' }, hackernews_enabled: { type: 'boolean', title: 'Enable Hacker News' } } },
@@ -158,14 +164,14 @@ test('settings refresh keeps draft DOM and focus; a save overlapping a poll gets
   const ui = await mount(t, host);
   await click($('nav-settings'));
   const field = $('setting-library'); assert.ok(field);
-  field.focus(); field.value = '/my/unfinished/draft';
+  field.focus(); await type(field, '/my/unfinished/draft');
   host.setSnapshot({ ...snapshotOf([]), keepRaw: false });
   await ui.poll();
   assert.equal($('setting-library'), field); assert.equal(field.value, '/my/unfinished/draft'); assert.equal(document.activeElement, field);
   const toggle = $('setting-keep_raw');
   blockNext = true; host.setSnapshot(snapshotOf([]));
   await ui.poll();
-  await React.act(async () => { toggle.checked = false; toggle.dispatchEvent(new Event('change', { bubbles: true })); }); await settle();
+  await click(toggle);
   assert.ok(host.calls.some(call => call.name === 'settings.update'));
   await React.act(async () => blocked.resolve({ ...snapshotOf([]), keepRaw: true }));
   await settle();
@@ -271,7 +277,7 @@ test('the library path note and text draft survive About and external settings c
   await click($('nav-settings'));
   const field = $('setting-library');
   assert.match($('setting-library-note').textContent, /does not exist yet/);
-  field.focus(); field.value = '/still/typing';
+  field.focus(); await type(field, '/still/typing');
   await click($('nav-about')); await click($('about-back'));
   assert.equal($('setting-library'), field); assert.equal(field.value, '/still/typing');
   host.setSnapshot({ ...snapshotOf([]), libraryFolder: 'not-folder' });
