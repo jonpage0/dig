@@ -56,7 +56,10 @@ function readCard(yaml) {
       const value = entry[2].replace(/^#.*$/, '').trim();
       if (!value) { list = lists[entry[1]] = []; continue; }
       const parsed = scalar(value);
-      if (Array.isArray(parsed)) lists[entry[1]] = parsed.map(String); else fields[entry[1]] = parsed;
+      if (Array.isArray(parsed)) {
+        if (parsed.some(value => !['string', 'number'].includes(typeof value))) partial = true;
+        lists[entry[1]] = parsed.filter(value => ['string', 'number'].includes(typeof value)).map(String);
+      } else fields[entry[1]] = parsed;
     } else if (item && list) {
       const parsed = scalar(item[1]);
       if (typeof parsed === 'string' || typeof parsed === 'number') list.push(String(parsed)); else partial = true;

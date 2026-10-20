@@ -11,11 +11,20 @@ var __require = /* @__PURE__ */ ((x2) => typeof require !== "undefined" ? requir
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x2 + '" is not supported');
 });
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
 };
 var __commonJS = (cb, mod) => function __require2() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
 };
 var __export = (target, all) => {
   for (var name2 in all)
@@ -102,7 +111,7 @@ var init_core = __esm({
     NEVER = /* @__PURE__ */ Object.freeze({
       status: "aborted"
     });
-    $brand = Symbol("zod_brand");
+    $brand = /* @__PURE__ */ Symbol("zod_brand");
     $ZodAsyncError = class extends Error {
       constructor() {
         super(`Encountered Promise during synchronous parse. Use .parseAsync() instead.`);
@@ -282,8 +291,8 @@ function mergeDefs(...defs) {
   }
   return Object.defineProperties({}, mergedDescriptors);
 }
-function cloneDef(schema) {
-  return mergeDefs(schema._zod.def);
+function cloneDef(schema2) {
+  return mergeDefs(schema2._zod.def);
 }
 function getElementAtPath(obj, path2) {
   if (!path2)
@@ -424,14 +433,14 @@ function optionalKeys(shape) {
     return shape[k2]._zod.optin === "optional" && shape[k2]._zod.optout === "optional";
   });
 }
-function pick(schema, mask) {
-  const currDef = schema._zod.def;
+function pick(schema2, mask) {
+  const currDef = schema2._zod.def;
   const checks = currDef.checks;
   const hasChecks = checks && checks.length > 0;
   if (hasChecks) {
     throw new Error(".pick() cannot be used on object schemas containing refinements");
   }
-  const def = mergeDefs(schema._zod.def, {
+  const def = mergeDefs(schema2._zod.def, {
     get shape() {
       const newShape = {};
       for (const key in mask) {
@@ -447,18 +456,18 @@ function pick(schema, mask) {
     },
     checks: []
   });
-  return clone(schema, def);
+  return clone(schema2, def);
 }
-function omit(schema, mask) {
-  const currDef = schema._zod.def;
+function omit(schema2, mask) {
+  const currDef = schema2._zod.def;
   const checks = currDef.checks;
   const hasChecks = checks && checks.length > 0;
   if (hasChecks) {
     throw new Error(".omit() cannot be used on object schemas containing refinements");
   }
-  const def = mergeDefs(schema._zod.def, {
+  const def = mergeDefs(schema2._zod.def, {
     get shape() {
-      const newShape = { ...schema._zod.def.shape };
+      const newShape = { ...schema2._zod.def.shape };
       for (const key in mask) {
         if (!(key in currDef.shape)) {
           throw new Error(`Unrecognized key: "${key}"`);
@@ -472,43 +481,43 @@ function omit(schema, mask) {
     },
     checks: []
   });
-  return clone(schema, def);
+  return clone(schema2, def);
 }
-function extend(schema, shape) {
+function extend(schema2, shape) {
   if (!isPlainObject(shape)) {
     throw new Error("Invalid input to extend: expected a plain object");
   }
-  const checks = schema._zod.def.checks;
+  const checks = schema2._zod.def.checks;
   const hasChecks = checks && checks.length > 0;
   if (hasChecks) {
-    const existingShape = schema._zod.def.shape;
+    const existingShape = schema2._zod.def.shape;
     for (const key in shape) {
       if (Object.getOwnPropertyDescriptor(existingShape, key) !== void 0) {
         throw new Error("Cannot overwrite keys on object schemas containing refinements. Use `.safeExtend()` instead.");
       }
     }
   }
-  const def = mergeDefs(schema._zod.def, {
+  const def = mergeDefs(schema2._zod.def, {
     get shape() {
-      const _shape = { ...schema._zod.def.shape, ...shape };
+      const _shape = { ...schema2._zod.def.shape, ...shape };
       assignProp(this, "shape", _shape);
       return _shape;
     }
   });
-  return clone(schema, def);
+  return clone(schema2, def);
 }
-function safeExtend(schema, shape) {
+function safeExtend(schema2, shape) {
   if (!isPlainObject(shape)) {
     throw new Error("Invalid input to safeExtend: expected a plain object");
   }
-  const def = mergeDefs(schema._zod.def, {
+  const def = mergeDefs(schema2._zod.def, {
     get shape() {
-      const _shape = { ...schema._zod.def.shape, ...shape };
+      const _shape = { ...schema2._zod.def.shape, ...shape };
       assignProp(this, "shape", _shape);
       return _shape;
     }
   });
-  return clone(schema, def);
+  return clone(schema2, def);
 }
 function merge(a, b2) {
   if (a._zod.def.checks?.length) {
@@ -527,16 +536,16 @@ function merge(a, b2) {
   });
   return clone(a, def);
 }
-function partial(Class2, schema, mask) {
-  const currDef = schema._zod.def;
+function partial(Class2, schema2, mask) {
+  const currDef = schema2._zod.def;
   const checks = currDef.checks;
   const hasChecks = checks && checks.length > 0;
   if (hasChecks) {
     throw new Error(".partial() cannot be used on object schemas containing refinements");
   }
-  const def = mergeDefs(schema._zod.def, {
+  const def = mergeDefs(schema2._zod.def, {
     get shape() {
-      const oldShape = schema._zod.def.shape;
+      const oldShape = schema2._zod.def.shape;
       const shape = { ...oldShape };
       if (mask) {
         for (const key in mask) {
@@ -563,12 +572,12 @@ function partial(Class2, schema, mask) {
     },
     checks: []
   });
-  return clone(schema, def);
+  return clone(schema2, def);
 }
-function required(Class2, schema, mask) {
-  const def = mergeDefs(schema._zod.def, {
+function required(Class2, schema2, mask) {
+  const def = mergeDefs(schema2._zod.def, {
     get shape() {
-      const oldShape = schema._zod.def.shape;
+      const oldShape = schema2._zod.def.shape;
       const shape = { ...oldShape };
       if (mask) {
         for (const key in mask) {
@@ -594,7 +603,7 @@ function required(Class2, schema, mask) {
       return shape;
     }
   });
-  return clone(schema, def);
+  return clone(schema2, def);
 }
 function aborted(x2, startIndex = 0) {
   if (x2.aborted === true)
@@ -974,9 +983,9 @@ var init_parse = __esm({
     init_core();
     init_errors();
     init_util();
-    _parse = (_Err) => (schema, value, _ctx, _params) => {
+    _parse = (_Err) => (schema2, value, _ctx, _params) => {
       const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
-      const result2 = schema._zod.run({ value, issues: [] }, ctx);
+      const result2 = schema2._zod.run({ value, issues: [] }, ctx);
       if (result2 instanceof Promise) {
         throw new $ZodAsyncError();
       }
@@ -988,9 +997,9 @@ var init_parse = __esm({
       return result2.value;
     };
     parse = /* @__PURE__ */ _parse($ZodRealError);
-    _parseAsync = (_Err) => async (schema, value, _ctx, params) => {
+    _parseAsync = (_Err) => async (schema2, value, _ctx, params) => {
       const ctx = _ctx ? { ..._ctx, async: true } : { async: true };
-      let result2 = schema._zod.run({ value, issues: [] }, ctx);
+      let result2 = schema2._zod.run({ value, issues: [] }, ctx);
       if (result2 instanceof Promise)
         result2 = await result2;
       if (result2.issues.length) {
@@ -1001,9 +1010,9 @@ var init_parse = __esm({
       return result2.value;
     };
     parseAsync = /* @__PURE__ */ _parseAsync($ZodRealError);
-    _safeParse = (_Err) => (schema, value, _ctx) => {
+    _safeParse = (_Err) => (schema2, value, _ctx) => {
       const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
-      const result2 = schema._zod.run({ value, issues: [] }, ctx);
+      const result2 = schema2._zod.run({ value, issues: [] }, ctx);
       if (result2 instanceof Promise) {
         throw new $ZodAsyncError();
       }
@@ -1013,9 +1022,9 @@ var init_parse = __esm({
       } : { success: true, data: result2.value };
     };
     safeParse = /* @__PURE__ */ _safeParse($ZodRealError);
-    _safeParseAsync = (_Err) => async (schema, value, _ctx) => {
+    _safeParseAsync = (_Err) => async (schema2, value, _ctx) => {
       const ctx = _ctx ? { ..._ctx, async: true } : { async: true };
-      let result2 = schema._zod.run({ value, issues: [] }, ctx);
+      let result2 = schema2._zod.run({ value, issues: [] }, ctx);
       if (result2 instanceof Promise)
         result2 = await result2;
       return result2.issues.length ? {
@@ -1024,40 +1033,40 @@ var init_parse = __esm({
       } : { success: true, data: result2.value };
     };
     safeParseAsync = /* @__PURE__ */ _safeParseAsync($ZodRealError);
-    _encode = (_Err) => (schema, value, _ctx) => {
+    _encode = (_Err) => (schema2, value, _ctx) => {
       const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
-      return _parse(_Err)(schema, value, ctx);
+      return _parse(_Err)(schema2, value, ctx);
     };
     encode = /* @__PURE__ */ _encode($ZodRealError);
-    _decode = (_Err) => (schema, value, _ctx) => {
-      return _parse(_Err)(schema, value, _ctx);
+    _decode = (_Err) => (schema2, value, _ctx) => {
+      return _parse(_Err)(schema2, value, _ctx);
     };
     decode = /* @__PURE__ */ _decode($ZodRealError);
-    _encodeAsync = (_Err) => async (schema, value, _ctx) => {
+    _encodeAsync = (_Err) => async (schema2, value, _ctx) => {
       const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
-      return _parseAsync(_Err)(schema, value, ctx);
+      return _parseAsync(_Err)(schema2, value, ctx);
     };
     encodeAsync = /* @__PURE__ */ _encodeAsync($ZodRealError);
-    _decodeAsync = (_Err) => async (schema, value, _ctx) => {
-      return _parseAsync(_Err)(schema, value, _ctx);
+    _decodeAsync = (_Err) => async (schema2, value, _ctx) => {
+      return _parseAsync(_Err)(schema2, value, _ctx);
     };
     decodeAsync = /* @__PURE__ */ _decodeAsync($ZodRealError);
-    _safeEncode = (_Err) => (schema, value, _ctx) => {
+    _safeEncode = (_Err) => (schema2, value, _ctx) => {
       const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
-      return _safeParse(_Err)(schema, value, ctx);
+      return _safeParse(_Err)(schema2, value, ctx);
     };
     safeEncode = /* @__PURE__ */ _safeEncode($ZodRealError);
-    _safeDecode = (_Err) => (schema, value, _ctx) => {
-      return _safeParse(_Err)(schema, value, _ctx);
+    _safeDecode = (_Err) => (schema2, value, _ctx) => {
+      return _safeParse(_Err)(schema2, value, _ctx);
     };
     safeDecode = /* @__PURE__ */ _safeDecode($ZodRealError);
-    _safeEncodeAsync = (_Err) => async (schema, value, _ctx) => {
+    _safeEncodeAsync = (_Err) => async (schema2, value, _ctx) => {
       const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
-      return _safeParseAsync(_Err)(schema, value, ctx);
+      return _safeParseAsync(_Err)(schema2, value, ctx);
     };
     safeEncodeAsync = /* @__PURE__ */ _safeEncodeAsync($ZodRealError);
-    _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
-      return _safeParseAsync(_Err)(schema, value, _ctx);
+    _safeDecodeAsync = (_Err) => async (schema2, value, _ctx) => {
+      return _safeParseAsync(_Err)(schema2, value, _ctx);
     };
     safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync($ZodRealError);
   }
@@ -2946,9 +2955,9 @@ var init_schemas = __esm({
         for (const key of normalized.keys) {
           const id = ids[key];
           const k2 = esc(key);
-          const schema = shape[key];
-          const isOptionalIn = schema?._zod?.optin === "optional";
-          const isOptionalOut = schema?._zod?.optout === "optional";
+          const schema2 = shape[key];
+          const isOptionalIn = schema2?._zod?.optin === "optional";
+          const isOptionalOut = schema2?._zod?.optout === "optional";
           doc.write(`const ${id} = ${parseStr(key)};`);
           if (isOptionalIn && isOptionalOut) {
             doc.write(`
@@ -10271,18 +10280,18 @@ function registry() {
 var _a2, $output, $input, $ZodRegistry, globalRegistry;
 var init_registries = __esm({
   "node_modules/zod/v4/core/registries.js"() {
-    $output = Symbol("ZodOutput");
-    $input = Symbol("ZodInput");
+    $output = /* @__PURE__ */ Symbol("ZodOutput");
+    $input = /* @__PURE__ */ Symbol("ZodInput");
     $ZodRegistry = class {
       constructor() {
         this._map = /* @__PURE__ */ new WeakMap();
         this._idmap = /* @__PURE__ */ new Map();
       }
-      add(schema, ..._meta) {
+      add(schema2, ..._meta) {
         const meta3 = _meta[0];
-        this._map.set(schema, meta3);
+        this._map.set(schema2, meta3);
         if (meta3 && typeof meta3 === "object" && "id" in meta3) {
-          this._idmap.set(meta3.id, schema);
+          this._idmap.set(meta3.id, schema2);
         }
         return this;
       }
@@ -10291,26 +10300,26 @@ var init_registries = __esm({
         this._idmap = /* @__PURE__ */ new Map();
         return this;
       }
-      remove(schema) {
-        const meta3 = this._map.get(schema);
+      remove(schema2) {
+        const meta3 = this._map.get(schema2);
         if (meta3 && typeof meta3 === "object" && "id" in meta3) {
           this._idmap.delete(meta3.id);
         }
-        this._map.delete(schema);
+        this._map.delete(schema2);
         return this;
       }
-      get(schema) {
-        const p2 = schema._zod.parent;
+      get(schema2) {
+        const p2 = schema2._zod.parent;
         if (p2) {
           const pm = { ...this.get(p2) ?? {} };
           delete pm.id;
-          const f2 = { ...pm, ...this._map.get(schema) };
+          const f2 = { ...pm, ...this._map.get(schema2) };
           return Object.keys(f2).length ? f2 : void 0;
         }
-        return this._map.get(schema);
+        return this._map.get(schema2);
       }
-      has(schema) {
-        return this._map.has(schema);
+      has(schema2) {
+        return this._map.has(schema2);
       }
     };
     (_a2 = globalThis).__zod_globalRegistry ?? (_a2.__zod_globalRegistry = registry());
@@ -10955,11 +10964,11 @@ function _endsWith(suffix, params) {
   });
 }
 // @__NO_SIDE_EFFECTS__
-function _property(property, schema, params) {
+function _property(property, schema2, params) {
   return new $ZodCheckProperty({
     check: "property",
     property,
-    schema,
+    schema: schema2,
     ...normalizeParams(params)
   });
 }
@@ -11207,23 +11216,23 @@ function _promise(Class2, innerType) {
 function _custom2(Class2, fn, _params) {
   const norm = normalizeParams(_params);
   norm.abort ?? (norm.abort = true);
-  const schema = new Class2({
+  const schema2 = new Class2({
     type: "custom",
     check: "custom",
     fn,
     ...norm
   });
-  return schema;
+  return schema2;
 }
 // @__NO_SIDE_EFFECTS__
 function _refine(Class2, fn, _params) {
-  const schema = new Class2({
+  const schema2 = new Class2({
     type: "custom",
     check: "custom",
     fn,
     ...normalizeParams(_params)
   });
-  return schema;
+  return schema2;
 }
 // @__NO_SIDE_EFFECTS__
 function _superRefine(fn, params) {
@@ -11388,40 +11397,40 @@ function initializeContext(params) {
     external: params?.external ?? void 0
   };
 }
-function process2(schema, ctx, _params = { path: [], schemaPath: [] }) {
+function process2(schema2, ctx, _params = { path: [], schemaPath: [] }) {
   var _a3;
-  const def = schema._zod.def;
-  const seen = ctx.seen.get(schema);
+  const def = schema2._zod.def;
+  const seen = ctx.seen.get(schema2);
   if (seen) {
     seen.count++;
-    const isCycle = _params.schemaPath.includes(schema);
+    const isCycle = _params.schemaPath.includes(schema2);
     if (isCycle) {
       seen.cycle = _params.path;
     }
     return seen.schema;
   }
   const result2 = { schema: {}, count: 1, cycle: void 0, path: _params.path };
-  ctx.seen.set(schema, result2);
-  const overrideSchema = schema._zod.toJSONSchema?.();
+  ctx.seen.set(schema2, result2);
+  const overrideSchema = schema2._zod.toJSONSchema?.();
   if (overrideSchema) {
     result2.schema = overrideSchema;
   } else {
     const params = {
       ..._params,
-      schemaPath: [..._params.schemaPath, schema],
+      schemaPath: [..._params.schemaPath, schema2],
       path: _params.path
     };
-    if (schema._zod.processJSONSchema) {
-      schema._zod.processJSONSchema(ctx, result2.schema, params);
+    if (schema2._zod.processJSONSchema) {
+      schema2._zod.processJSONSchema(ctx, result2.schema, params);
     } else {
       const _json = result2.schema;
       const processor = ctx.processors[def.type];
       if (!processor) {
         throw new Error(`[toJSONSchema]: Non-representable type encountered: ${def.type}`);
       }
-      processor(schema, ctx, _json, params);
+      processor(schema2, ctx, _json, params);
     }
-    const parent = schema._zod.parent;
+    const parent = schema2._zod.parent;
     if (parent) {
       if (!result2.ref)
         result2.ref = parent;
@@ -11429,21 +11438,21 @@ function process2(schema, ctx, _params = { path: [], schemaPath: [] }) {
       ctx.seen.get(parent).isParent = true;
     }
   }
-  const meta3 = ctx.metadataRegistry.get(schema);
+  const meta3 = ctx.metadataRegistry.get(schema2);
   if (meta3)
     Object.assign(result2.schema, meta3);
-  if (ctx.io === "input" && isTransforming(schema)) {
+  if (ctx.io === "input" && isTransforming(schema2)) {
     delete result2.schema.examples;
     delete result2.schema.default;
   }
   if (ctx.io === "input" && "_prefault" in result2.schema)
     (_a3 = result2.schema).default ?? (_a3.default = result2.schema._prefault);
   delete result2.schema._prefault;
-  const _result = ctx.seen.get(schema);
+  const _result = ctx.seen.get(schema2);
   return _result.schema;
 }
-function extractDefs(ctx, schema) {
-  const root = ctx.seen.get(schema);
+function extractDefs(ctx, schema2) {
+  const root = ctx.seen.get(schema2);
   if (!root)
     throw new Error("Unprocessed schema. This is a bug in Zod.");
   const idToSchema = /* @__PURE__ */ new Map();
@@ -11486,11 +11495,11 @@ function extractDefs(ctx, schema) {
     seen.def = { ...seen.schema };
     if (defId)
       seen.defId = defId;
-    const schema2 = seen.schema;
-    for (const key in schema2) {
-      delete schema2[key];
+    const schema3 = seen.schema;
+    for (const key in schema3) {
+      delete schema3[key];
     }
-    schema2.$ref = ref;
+    schema3.$ref = ref;
   };
   if (ctx.cycles === "throw") {
     for (const entry of ctx.seen.entries()) {
@@ -11504,13 +11513,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
   for (const entry of ctx.seen.entries()) {
     const seen = entry[1];
-    if (schema === entry[0]) {
+    if (schema2 === entry[0]) {
       extractToDef(entry);
       continue;
     }
     if (ctx.external) {
       const ext = ctx.external.registry.get(entry[0])?.id;
-      if (schema !== entry[0] && ext) {
+      if (schema2 !== entry[0] && ext) {
         extractToDef(entry);
         continue;
       }
@@ -11532,16 +11541,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
   }
 }
-function finalize(ctx, schema) {
-  const root = ctx.seen.get(schema);
+function finalize(ctx, schema2) {
+  const root = ctx.seen.get(schema2);
   if (!root)
     throw new Error("Unprocessed schema. This is a bug in Zod.");
   const flattenRef = (zodSchema) => {
     const seen = ctx.seen.get(zodSchema);
     if (seen.ref === null)
       return;
-    const schema2 = seen.def ?? seen.schema;
-    const _cached = { ...schema2 };
+    const schema3 = seen.def ?? seen.schema;
+    const _cached = { ...schema3 };
     const ref = seen.ref;
     seen.ref = null;
     if (ref) {
@@ -11549,28 +11558,28 @@ function finalize(ctx, schema) {
       const refSeen = ctx.seen.get(ref);
       const refSchema = refSeen.schema;
       if (refSchema.$ref && (ctx.target === "draft-07" || ctx.target === "draft-04" || ctx.target === "openapi-3.0")) {
-        schema2.allOf = schema2.allOf ?? [];
-        schema2.allOf.push(refSchema);
+        schema3.allOf = schema3.allOf ?? [];
+        schema3.allOf.push(refSchema);
       } else {
-        Object.assign(schema2, refSchema);
+        Object.assign(schema3, refSchema);
       }
-      Object.assign(schema2, _cached);
+      Object.assign(schema3, _cached);
       const isParentRef = zodSchema._zod.parent === ref;
       if (isParentRef) {
-        for (const key in schema2) {
+        for (const key in schema3) {
           if (key === "$ref" || key === "allOf")
             continue;
           if (!(key in _cached)) {
-            delete schema2[key];
+            delete schema3[key];
           }
         }
       }
       if (refSchema.$ref && refSeen.def) {
-        for (const key in schema2) {
+        for (const key in schema3) {
           if (key === "$ref" || key === "allOf")
             continue;
-          if (key in refSeen.def && JSON.stringify(schema2[key]) === JSON.stringify(refSeen.def[key])) {
-            delete schema2[key];
+          if (key in refSeen.def && JSON.stringify(schema3[key]) === JSON.stringify(refSeen.def[key])) {
+            delete schema3[key];
           }
         }
       }
@@ -11580,13 +11589,13 @@ function finalize(ctx, schema) {
       flattenRef(parent);
       const parentSeen = ctx.seen.get(parent);
       if (parentSeen?.schema.$ref) {
-        schema2.$ref = parentSeen.schema.$ref;
+        schema3.$ref = parentSeen.schema.$ref;
         if (parentSeen.def) {
-          for (const key in schema2) {
+          for (const key in schema3) {
             if (key === "$ref" || key === "allOf")
               continue;
-            if (key in parentSeen.def && JSON.stringify(schema2[key]) === JSON.stringify(parentSeen.def[key])) {
-              delete schema2[key];
+            if (key in parentSeen.def && JSON.stringify(schema3[key]) === JSON.stringify(parentSeen.def[key])) {
+              delete schema3[key];
             }
           }
         }
@@ -11594,7 +11603,7 @@ function finalize(ctx, schema) {
     }
     ctx.override({
       zodSchema,
-      jsonSchema: schema2,
+      jsonSchema: schema3,
       path: seen.path ?? []
     });
   };
@@ -11612,13 +11621,13 @@ function finalize(ctx, schema) {
   } else {
   }
   if (ctx.external?.uri) {
-    const id = ctx.external.registry.get(schema)?.id;
+    const id = ctx.external.registry.get(schema2)?.id;
     if (!id)
       throw new Error("Schema is missing an `id` property");
     result2.$id = ctx.external.uri(id);
   }
   Object.assign(result2, root.def ?? root.schema);
-  const rootMetaId = ctx.metadataRegistry.get(schema)?.id;
+  const rootMetaId = ctx.metadataRegistry.get(schema2)?.id;
   if (rootMetaId !== void 0 && result2.id === rootMetaId)
     delete result2.id;
   const defs = ctx.external?.defs ?? {};
@@ -11644,10 +11653,10 @@ function finalize(ctx, schema) {
     const finalized = JSON.parse(JSON.stringify(result2));
     Object.defineProperty(finalized, "~standard", {
       value: {
-        ...schema["~standard"],
+        ...schema2["~standard"],
         jsonSchema: {
-          input: createStandardJSONSchemaMethod(schema, "input", ctx.processors),
-          output: createStandardJSONSchemaMethod(schema, "output", ctx.processors)
+          input: createStandardJSONSchemaMethod(schema2, "input", ctx.processors),
+          output: createStandardJSONSchemaMethod(schema2, "output", ctx.processors)
         }
       },
       enumerable: false,
@@ -11715,18 +11724,18 @@ var createToJSONSchemaMethod, createStandardJSONSchemaMethod;
 var init_to_json_schema = __esm({
   "node_modules/zod/v4/core/to-json-schema.js"() {
     init_registries();
-    createToJSONSchemaMethod = (schema, processors = {}) => (params) => {
+    createToJSONSchemaMethod = (schema2, processors = {}) => (params) => {
       const ctx = initializeContext({ ...params, processors });
-      process2(schema, ctx);
-      extractDefs(ctx, schema);
-      return finalize(ctx, schema);
+      process2(schema2, ctx);
+      extractDefs(ctx, schema2);
+      return finalize(ctx, schema2);
     };
-    createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) => {
+    createStandardJSONSchemaMethod = (schema2, io, processors = {}) => (params) => {
       const { libraryOptions, target } = params ?? {};
       const ctx = initializeContext({ ...libraryOptions ?? {}, target, io, processors });
-      process2(schema, ctx);
-      extractDefs(ctx, schema);
-      return finalize(ctx, schema);
+      process2(schema2, ctx);
+      extractDefs(ctx, schema2);
+      return finalize(ctx, schema2);
     };
   }
 });
@@ -11738,8 +11747,8 @@ function toJSONSchema(input, params) {
     const ctx2 = initializeContext({ ...params, processors: allProcessors });
     const defs = {};
     for (const entry of registry2._idmap.entries()) {
-      const [_3, schema] = entry;
-      process2(schema, ctx2);
+      const [_3, schema2] = entry;
+      process2(schema2, ctx2);
     }
     const schemas2 = {};
     const external = {
@@ -11749,9 +11758,9 @@ function toJSONSchema(input, params) {
     };
     ctx2.external = external;
     for (const entry of registry2._idmap.entries()) {
-      const [key, schema] = entry;
-      extractDefs(ctx2, schema);
-      schemas2[key] = finalize(ctx2, schema);
+      const [key, schema2] = entry;
+      extractDefs(ctx2, schema2);
+      schemas2[key] = finalize(ctx2, schema2);
     }
     if (Object.keys(defs).length > 0) {
       const defsSegment = ctx2.target === "draft-2020-12" ? "$defs" : "definitions";
@@ -11779,10 +11788,10 @@ var init_json_schema_processors = __esm({
       regex: ""
       // do not set
     };
-    stringProcessor = (schema, ctx, _json, _params) => {
+    stringProcessor = (schema2, ctx, _json, _params) => {
       const json2 = _json;
       json2.type = "string";
-      const { minimum, maximum, format: format2, patterns, contentEncoding } = schema._zod.bag;
+      const { minimum, maximum, format: format2, patterns, contentEncoding } = schema2._zod.bag;
       if (typeof minimum === "number")
         json2.minLength = minimum;
       if (typeof maximum === "number")
@@ -11811,9 +11820,9 @@ var init_json_schema_processors = __esm({
         }
       }
     };
-    numberProcessor = (schema, ctx, _json, _params) => {
+    numberProcessor = (schema2, ctx, _json, _params) => {
       const json2 = _json;
-      const { minimum, maximum, format: format2, multipleOf, exclusiveMaximum, exclusiveMinimum } = schema._zod.bag;
+      const { minimum, maximum, format: format2, multipleOf, exclusiveMaximum, exclusiveMinimum } = schema2._zod.bag;
       if (typeof format2 === "string" && format2.includes("int"))
         json2.type = "integer";
       else
@@ -11888,8 +11897,8 @@ var init_json_schema_processors = __esm({
         throw new Error("Date cannot be represented in JSON Schema");
       }
     };
-    enumProcessor = (schema, _ctx, json2, _params) => {
-      const def = schema._zod.def;
+    enumProcessor = (schema2, _ctx, json2, _params) => {
+      const def = schema2._zod.def;
       const values = getEnumValues(def.entries);
       if (values.every((v3) => typeof v3 === "number"))
         json2.type = "number";
@@ -11897,8 +11906,8 @@ var init_json_schema_processors = __esm({
         json2.type = "string";
       json2.enum = values;
     };
-    literalProcessor = (schema, ctx, json2, _params) => {
-      const def = schema._zod.def;
+    literalProcessor = (schema2, ctx, json2, _params) => {
+      const def = schema2._zod.def;
       const vals = [];
       for (const val of def.values) {
         if (val === void 0) {
@@ -11942,22 +11951,22 @@ var init_json_schema_processors = __esm({
         throw new Error("NaN cannot be represented in JSON Schema");
       }
     };
-    templateLiteralProcessor = (schema, _ctx, json2, _params) => {
+    templateLiteralProcessor = (schema2, _ctx, json2, _params) => {
       const _json = json2;
-      const pattern = schema._zod.pattern;
+      const pattern = schema2._zod.pattern;
       if (!pattern)
         throw new Error("Pattern not found in template literal");
       _json.type = "string";
       _json.pattern = pattern.source;
     };
-    fileProcessor = (schema, _ctx, json2, _params) => {
+    fileProcessor = (schema2, _ctx, json2, _params) => {
       const _json = json2;
       const file2 = {
         type: "string",
         format: "binary",
         contentEncoding: "binary"
       };
-      const { minimum, maximum, mime } = schema._zod.bag;
+      const { minimum, maximum, mime } = schema2._zod.bag;
       if (minimum !== void 0)
         file2.minLength = minimum;
       if (maximum !== void 0)
@@ -12002,10 +12011,10 @@ var init_json_schema_processors = __esm({
         throw new Error("Set cannot be represented in JSON Schema");
       }
     };
-    arrayProcessor = (schema, ctx, _json, params) => {
+    arrayProcessor = (schema2, ctx, _json, params) => {
       const json2 = _json;
-      const def = schema._zod.def;
-      const { minimum, maximum } = schema._zod.bag;
+      const def = schema2._zod.def;
+      const { minimum, maximum } = schema2._zod.bag;
       if (typeof minimum === "number")
         json2.minItems = minimum;
       if (typeof maximum === "number")
@@ -12016,9 +12025,9 @@ var init_json_schema_processors = __esm({
         path: [...params.path, "items"]
       });
     };
-    objectProcessor = (schema, ctx, _json, params) => {
+    objectProcessor = (schema2, ctx, _json, params) => {
       const json2 = _json;
-      const def = schema._zod.def;
+      const def = schema2._zod.def;
       json2.type = "object";
       json2.properties = {};
       const shape = def.shape;
@@ -12052,8 +12061,8 @@ var init_json_schema_processors = __esm({
         });
       }
     };
-    unionProcessor = (schema, ctx, json2, params) => {
-      const def = schema._zod.def;
+    unionProcessor = (schema2, ctx, json2, params) => {
+      const def = schema2._zod.def;
       const isExclusive = def.inclusive === false;
       const options = def.options.map((x2, i) => process2(x2, ctx, {
         ...params,
@@ -12065,8 +12074,8 @@ var init_json_schema_processors = __esm({
         json2.anyOf = options;
       }
     };
-    intersectionProcessor = (schema, ctx, json2, params) => {
-      const def = schema._zod.def;
+    intersectionProcessor = (schema2, ctx, json2, params) => {
+      const def = schema2._zod.def;
       const a = process2(def.left, ctx, {
         ...params,
         path: [...params.path, "allOf", 0]
@@ -12082,9 +12091,9 @@ var init_json_schema_processors = __esm({
       ];
       json2.allOf = allOf;
     };
-    tupleProcessor = (schema, ctx, _json, params) => {
+    tupleProcessor = (schema2, ctx, _json, params) => {
       const json2 = _json;
-      const def = schema._zod.def;
+      const def = schema2._zod.def;
       json2.type = "array";
       const prefixPath = ctx.target === "draft-2020-12" ? "prefixItems" : "items";
       const restPath = ctx.target === "draft-2020-12" ? "items" : ctx.target === "openapi-3.0" ? "items" : "additionalItems";
@@ -12118,15 +12127,15 @@ var init_json_schema_processors = __esm({
           json2.additionalItems = rest;
         }
       }
-      const { minimum, maximum } = schema._zod.bag;
+      const { minimum, maximum } = schema2._zod.bag;
       if (typeof minimum === "number")
         json2.minItems = minimum;
       if (typeof maximum === "number")
         json2.maxItems = maximum;
     };
-    recordProcessor = (schema, ctx, _json, params) => {
+    recordProcessor = (schema2, ctx, _json, params) => {
       const json2 = _json;
-      const def = schema._zod.def;
+      const def = schema2._zod.def;
       json2.type = "object";
       const keyType = def.keyType;
       const keyBag = keyType._zod.bag;
@@ -12160,10 +12169,10 @@ var init_json_schema_processors = __esm({
         }
       }
     };
-    nullableProcessor = (schema, ctx, json2, params) => {
-      const def = schema._zod.def;
+    nullableProcessor = (schema2, ctx, json2, params) => {
+      const def = schema2._zod.def;
       const inner = process2(def.innerType, ctx, params);
-      const seen = ctx.seen.get(schema);
+      const seen = ctx.seen.get(schema2);
       if (ctx.target === "openapi-3.0") {
         seen.ref = def.innerType;
         json2.nullable = true;
@@ -12171,31 +12180,31 @@ var init_json_schema_processors = __esm({
         json2.anyOf = [inner, { type: "null" }];
       }
     };
-    nonoptionalProcessor = (schema, ctx, _json, params) => {
-      const def = schema._zod.def;
+    nonoptionalProcessor = (schema2, ctx, _json, params) => {
+      const def = schema2._zod.def;
       process2(def.innerType, ctx, params);
-      const seen = ctx.seen.get(schema);
+      const seen = ctx.seen.get(schema2);
       seen.ref = def.innerType;
     };
-    defaultProcessor = (schema, ctx, json2, params) => {
-      const def = schema._zod.def;
+    defaultProcessor = (schema2, ctx, json2, params) => {
+      const def = schema2._zod.def;
       process2(def.innerType, ctx, params);
-      const seen = ctx.seen.get(schema);
+      const seen = ctx.seen.get(schema2);
       seen.ref = def.innerType;
       json2.default = JSON.parse(JSON.stringify(def.defaultValue));
     };
-    prefaultProcessor = (schema, ctx, json2, params) => {
-      const def = schema._zod.def;
+    prefaultProcessor = (schema2, ctx, json2, params) => {
+      const def = schema2._zod.def;
       process2(def.innerType, ctx, params);
-      const seen = ctx.seen.get(schema);
+      const seen = ctx.seen.get(schema2);
       seen.ref = def.innerType;
       if (ctx.io === "input")
         json2._prefault = JSON.parse(JSON.stringify(def.defaultValue));
     };
-    catchProcessor = (schema, ctx, json2, params) => {
-      const def = schema._zod.def;
+    catchProcessor = (schema2, ctx, json2, params) => {
+      const def = schema2._zod.def;
       process2(def.innerType, ctx, params);
-      const seen = ctx.seen.get(schema);
+      const seen = ctx.seen.get(schema2);
       seen.ref = def.innerType;
       let catchValue;
       try {
@@ -12205,37 +12214,37 @@ var init_json_schema_processors = __esm({
       }
       json2.default = catchValue;
     };
-    pipeProcessor = (schema, ctx, _json, params) => {
-      const def = schema._zod.def;
+    pipeProcessor = (schema2, ctx, _json, params) => {
+      const def = schema2._zod.def;
       const inIsTransform = def.in._zod.traits.has("$ZodTransform");
       const innerType = ctx.io === "input" ? inIsTransform ? def.out : def.in : def.out;
       process2(innerType, ctx, params);
-      const seen = ctx.seen.get(schema);
+      const seen = ctx.seen.get(schema2);
       seen.ref = innerType;
     };
-    readonlyProcessor = (schema, ctx, json2, params) => {
-      const def = schema._zod.def;
+    readonlyProcessor = (schema2, ctx, json2, params) => {
+      const def = schema2._zod.def;
       process2(def.innerType, ctx, params);
-      const seen = ctx.seen.get(schema);
+      const seen = ctx.seen.get(schema2);
       seen.ref = def.innerType;
       json2.readOnly = true;
     };
-    promiseProcessor = (schema, ctx, _json, params) => {
-      const def = schema._zod.def;
+    promiseProcessor = (schema2, ctx, _json, params) => {
+      const def = schema2._zod.def;
       process2(def.innerType, ctx, params);
-      const seen = ctx.seen.get(schema);
+      const seen = ctx.seen.get(schema2);
       seen.ref = def.innerType;
     };
-    optionalProcessor = (schema, ctx, _json, params) => {
-      const def = schema._zod.def;
+    optionalProcessor = (schema2, ctx, _json, params) => {
+      const def = schema2._zod.def;
       process2(def.innerType, ctx, params);
-      const seen = ctx.seen.get(schema);
+      const seen = ctx.seen.get(schema2);
       seen.ref = def.innerType;
     };
-    lazyProcessor = (schema, ctx, _json, params) => {
-      const innerType = schema._zod.innerType;
+    lazyProcessor = (schema2, ctx, _json, params) => {
+      const innerType = schema2._zod.innerType;
       process2(innerType, ctx, params);
-      const seen = ctx.seen.get(schema);
+      const seen = ctx.seen.get(schema2);
       seen.ref = innerType;
     };
     allProcessors = {
@@ -12339,14 +12348,14 @@ var init_json_schema_generator = __esm({
        * Process a schema to prepare it for JSON Schema generation.
        * This must be called before emit().
        */
-      process(schema, _params = { path: [], schemaPath: [] }) {
-        return process2(schema, this.ctx, _params);
+      process(schema2, _params = { path: [], schemaPath: [] }) {
+        return process2(schema2, this.ctx, _params);
       }
       /**
        * Emit the final JSON Schema after processing.
        * Must call process() first.
        */
-      emit(schema, _params) {
+      emit(schema2, _params) {
         if (_params) {
           if (_params.cycles)
             this.ctx.cycles = _params.cycles;
@@ -12355,8 +12364,8 @@ var init_json_schema_generator = __esm({
           if (_params.external)
             this.ctx.external = _params.external;
         }
-        extractDefs(this.ctx, schema);
-        const result2 = finalize(this.ctx, schema);
+        extractDefs(this.ctx, schema2);
+        const result2 = finalize(this.ctx, schema2);
         const { "~standard": _3, ...plainResult } = result2;
         return plainResult;
       }
@@ -13185,8 +13194,8 @@ function date3(params) {
 function array(element, params) {
   return _array(ZodArray2, element, params);
 }
-function keyof(schema) {
-  const shape = schema._zod.def.shape;
+function keyof(schema2) {
+  const shape = schema2._zod.def.shape;
   return _enum2(Object.keys(shape));
 }
 function object2(shape, params) {
@@ -13501,11 +13510,11 @@ function json(params) {
   });
   return jsonSchema;
 }
-function preprocess(fn, schema) {
+function preprocess(fn, schema2) {
   return new ZodPreprocess({
     type: "pipe",
     in: transform(fn),
-    out: schema
+    out: schema2
   });
 }
 var _installedGroups, ZodType2, _ZodString, ZodString2, ZodStringFormat, ZodEmail, ZodGUID, ZodUUID, ZodURL, ZodEmoji, ZodNanoID, ZodCUID, ZodCUID2, ZodULID, ZodXID, ZodKSUID, ZodIPv4, ZodMAC, ZodIPv6, ZodCIDRv4, ZodCIDRv6, ZodBase64, ZodBase64URL, ZodE164, ZodJWT, ZodCustomStringFormat, ZodNumber2, ZodNumberFormat, ZodBoolean2, ZodBigInt2, ZodBigIntFormat, ZodSymbol2, ZodUndefined2, ZodNull2, ZodAny2, ZodUnknown2, ZodNever2, ZodVoid2, ZodDate2, ZodArray2, ZodObject2, ZodUnion2, ZodXor, ZodDiscriminatedUnion2, ZodIntersection2, ZodTuple2, ZodRecord2, ZodMap2, ZodSet2, ZodEnum2, ZodLiteral2, ZodFile, ZodTransform, ZodOptional2, ZodExactOptional, ZodNullable2, ZodDefault2, ZodPrefault, ZodNonOptional, ZodSuccess, ZodCatch2, ZodNaN2, ZodPipe, ZodCodec, ZodPreprocess, ZodReadonly2, ZodTemplateLiteral, ZodLazy2, ZodPromise2, ZodFunction2, ZodCustom, describe2, meta2, stringbool;
@@ -14329,8 +14338,8 @@ var init_compat = __esm({
 });
 
 // node_modules/zod/v4/classic/from-json-schema.js
-function detectVersion(schema, defaultTarget) {
-  const $schema = schema.$schema;
+function detectVersion(schema2, defaultTarget) {
+  const $schema = schema2.$schema;
   if ($schema === "https://json-schema.org/draft/2020-12/schema") {
     return "draft-2020-12";
   }
@@ -14360,27 +14369,27 @@ function resolveRef(ref, ctx) {
   }
   throw new Error(`Reference not found: ${ref}`);
 }
-function convertBaseSchema(schema, ctx) {
-  if (schema.not !== void 0) {
-    if (typeof schema.not === "object" && Object.keys(schema.not).length === 0) {
+function convertBaseSchema(schema2, ctx) {
+  if (schema2.not !== void 0) {
+    if (typeof schema2.not === "object" && Object.keys(schema2.not).length === 0) {
       return z.never();
     }
     throw new Error("not is not supported in Zod (except { not: {} } for never)");
   }
-  if (schema.unevaluatedItems !== void 0) {
+  if (schema2.unevaluatedItems !== void 0) {
     throw new Error("unevaluatedItems is not supported");
   }
-  if (schema.unevaluatedProperties !== void 0) {
+  if (schema2.unevaluatedProperties !== void 0) {
     throw new Error("unevaluatedProperties is not supported");
   }
-  if (schema.if !== void 0 || schema.then !== void 0 || schema.else !== void 0) {
+  if (schema2.if !== void 0 || schema2.then !== void 0 || schema2.else !== void 0) {
     throw new Error("Conditional schemas (if/then/else) are not supported");
   }
-  if (schema.dependentSchemas !== void 0 || schema.dependentRequired !== void 0) {
+  if (schema2.dependentSchemas !== void 0 || schema2.dependentRequired !== void 0) {
     throw new Error("dependentSchemas and dependentRequired are not supported");
   }
-  if (schema.$ref) {
-    const refPath = schema.$ref;
+  if (schema2.$ref) {
+    const refPath = schema2.$ref;
     if (ctx.refs.has(refPath)) {
       return ctx.refs.get(refPath);
     }
@@ -14399,9 +14408,9 @@ function convertBaseSchema(schema, ctx) {
     ctx.processing.delete(refPath);
     return zodSchema2;
   }
-  if (schema.enum !== void 0) {
-    const enumValues = schema.enum;
-    if (ctx.version === "openapi-3.0" && schema.nullable === true && enumValues.length === 1 && enumValues[0] === null) {
+  if (schema2.enum !== void 0) {
+    const enumValues = schema2.enum;
+    if (ctx.version === "openapi-3.0" && schema2.nullable === true && enumValues.length === 1 && enumValues[0] === null) {
       return z.null();
     }
     if (enumValues.length === 0) {
@@ -14419,13 +14428,13 @@ function convertBaseSchema(schema, ctx) {
     }
     return z.union([literalSchemas[0], literalSchemas[1], ...literalSchemas.slice(2)]);
   }
-  if (schema.const !== void 0) {
-    return z.literal(schema.const);
+  if (schema2.const !== void 0) {
+    return z.literal(schema2.const);
   }
-  const type = schema.type;
+  const type = schema2.type;
   if (Array.isArray(type)) {
     const typeSchemas = type.map((t) => {
-      const typeSchema = { ...schema, type: t };
+      const typeSchema = { ...schema2, type: t };
       return convertBaseSchema(typeSchema, ctx);
     });
     if (typeSchemas.length === 0) {
@@ -14443,8 +14452,8 @@ function convertBaseSchema(schema, ctx) {
   switch (type) {
     case "string": {
       let stringSchema = z.string();
-      if (schema.format) {
-        const format2 = schema.format;
+      if (schema2.format) {
+        const format2 = schema2.format;
         if (format2 === "email") {
           stringSchema = stringSchema.check(z.email());
         } else if (format2 === "uri" || format2 === "uri-reference") {
@@ -14493,14 +14502,14 @@ function convertBaseSchema(schema, ctx) {
           stringSchema = stringSchema.check(z.ksuid());
         }
       }
-      if (typeof schema.minLength === "number") {
-        stringSchema = stringSchema.min(schema.minLength);
+      if (typeof schema2.minLength === "number") {
+        stringSchema = stringSchema.min(schema2.minLength);
       }
-      if (typeof schema.maxLength === "number") {
-        stringSchema = stringSchema.max(schema.maxLength);
+      if (typeof schema2.maxLength === "number") {
+        stringSchema = stringSchema.max(schema2.maxLength);
       }
-      if (schema.pattern) {
-        stringSchema = stringSchema.regex(new RegExp(schema.pattern));
+      if (schema2.pattern) {
+        stringSchema = stringSchema.regex(new RegExp(schema2.pattern));
       }
       zodSchema = stringSchema;
       break;
@@ -14508,24 +14517,24 @@ function convertBaseSchema(schema, ctx) {
     case "number":
     case "integer": {
       let numberSchema = type === "integer" ? z.number().int() : z.number();
-      if (typeof schema.minimum === "number") {
-        numberSchema = numberSchema.min(schema.minimum);
+      if (typeof schema2.minimum === "number") {
+        numberSchema = numberSchema.min(schema2.minimum);
       }
-      if (typeof schema.maximum === "number") {
-        numberSchema = numberSchema.max(schema.maximum);
+      if (typeof schema2.maximum === "number") {
+        numberSchema = numberSchema.max(schema2.maximum);
       }
-      if (typeof schema.exclusiveMinimum === "number") {
-        numberSchema = numberSchema.gt(schema.exclusiveMinimum);
-      } else if (schema.exclusiveMinimum === true && typeof schema.minimum === "number") {
-        numberSchema = numberSchema.gt(schema.minimum);
+      if (typeof schema2.exclusiveMinimum === "number") {
+        numberSchema = numberSchema.gt(schema2.exclusiveMinimum);
+      } else if (schema2.exclusiveMinimum === true && typeof schema2.minimum === "number") {
+        numberSchema = numberSchema.gt(schema2.minimum);
       }
-      if (typeof schema.exclusiveMaximum === "number") {
-        numberSchema = numberSchema.lt(schema.exclusiveMaximum);
-      } else if (schema.exclusiveMaximum === true && typeof schema.maximum === "number") {
-        numberSchema = numberSchema.lt(schema.maximum);
+      if (typeof schema2.exclusiveMaximum === "number") {
+        numberSchema = numberSchema.lt(schema2.exclusiveMaximum);
+      } else if (schema2.exclusiveMaximum === true && typeof schema2.maximum === "number") {
+        numberSchema = numberSchema.lt(schema2.maximum);
       }
-      if (typeof schema.multipleOf === "number") {
-        numberSchema = numberSchema.multipleOf(schema.multipleOf);
+      if (typeof schema2.multipleOf === "number") {
+        numberSchema = numberSchema.multipleOf(schema2.multipleOf);
       }
       zodSchema = numberSchema;
       break;
@@ -14540,15 +14549,15 @@ function convertBaseSchema(schema, ctx) {
     }
     case "object": {
       const shape = {};
-      const properties2 = schema.properties || {};
-      const requiredSet = new Set(schema.required || []);
+      const properties2 = schema2.properties || {};
+      const requiredSet = new Set(schema2.required || []);
       for (const [key, propSchema] of Object.entries(properties2)) {
         const propZodSchema = convertSchema(propSchema, ctx);
         shape[key] = requiredSet.has(key) ? propZodSchema : propZodSchema.optional();
       }
-      if (schema.propertyNames) {
-        const keySchema = convertSchema(schema.propertyNames, ctx);
-        const valueSchema = schema.additionalProperties && typeof schema.additionalProperties === "object" ? convertSchema(schema.additionalProperties, ctx) : z.any();
+      if (schema2.propertyNames) {
+        const keySchema = convertSchema(schema2.propertyNames, ctx);
+        const valueSchema = schema2.additionalProperties && typeof schema2.additionalProperties === "object" ? convertSchema(schema2.additionalProperties, ctx) : z.any();
         if (Object.keys(shape).length === 0) {
           zodSchema = z.record(keySchema, valueSchema);
           break;
@@ -14558,8 +14567,8 @@ function convertBaseSchema(schema, ctx) {
         zodSchema = z.intersection(objectSchema2, recordSchema);
         break;
       }
-      if (schema.patternProperties) {
-        const patternProps = schema.patternProperties;
+      if (schema2.patternProperties) {
+        const patternProps = schema2.patternProperties;
         const patternKeys = Object.keys(patternProps);
         const looseRecords = [];
         for (const pattern of patternKeys) {
@@ -14586,18 +14595,18 @@ function convertBaseSchema(schema, ctx) {
         break;
       }
       const objectSchema = z.object(shape);
-      if (schema.additionalProperties === false) {
+      if (schema2.additionalProperties === false) {
         zodSchema = objectSchema.strict();
-      } else if (typeof schema.additionalProperties === "object") {
-        zodSchema = objectSchema.catchall(convertSchema(schema.additionalProperties, ctx));
+      } else if (typeof schema2.additionalProperties === "object") {
+        zodSchema = objectSchema.catchall(convertSchema(schema2.additionalProperties, ctx));
       } else {
         zodSchema = objectSchema.passthrough();
       }
       break;
     }
     case "array": {
-      const prefixItems = schema.prefixItems;
-      const items = schema.items;
+      const prefixItems = schema2.prefixItems;
+      const items = schema2.items;
       if (prefixItems && Array.isArray(prefixItems)) {
         const tupleItems = prefixItems.map((item) => convertSchema(item, ctx));
         const rest = items && typeof items === "object" && !Array.isArray(items) ? convertSchema(items, ctx) : void 0;
@@ -14606,34 +14615,34 @@ function convertBaseSchema(schema, ctx) {
         } else {
           zodSchema = z.tuple(tupleItems);
         }
-        if (typeof schema.minItems === "number") {
-          zodSchema = zodSchema.check(z.minLength(schema.minItems));
+        if (typeof schema2.minItems === "number") {
+          zodSchema = zodSchema.check(z.minLength(schema2.minItems));
         }
-        if (typeof schema.maxItems === "number") {
-          zodSchema = zodSchema.check(z.maxLength(schema.maxItems));
+        if (typeof schema2.maxItems === "number") {
+          zodSchema = zodSchema.check(z.maxLength(schema2.maxItems));
         }
       } else if (Array.isArray(items)) {
         const tupleItems = items.map((item) => convertSchema(item, ctx));
-        const rest = schema.additionalItems && typeof schema.additionalItems === "object" ? convertSchema(schema.additionalItems, ctx) : void 0;
+        const rest = schema2.additionalItems && typeof schema2.additionalItems === "object" ? convertSchema(schema2.additionalItems, ctx) : void 0;
         if (rest) {
           zodSchema = z.tuple(tupleItems).rest(rest);
         } else {
           zodSchema = z.tuple(tupleItems);
         }
-        if (typeof schema.minItems === "number") {
-          zodSchema = zodSchema.check(z.minLength(schema.minItems));
+        if (typeof schema2.minItems === "number") {
+          zodSchema = zodSchema.check(z.minLength(schema2.minItems));
         }
-        if (typeof schema.maxItems === "number") {
-          zodSchema = zodSchema.check(z.maxLength(schema.maxItems));
+        if (typeof schema2.maxItems === "number") {
+          zodSchema = zodSchema.check(z.maxLength(schema2.maxItems));
         }
       } else if (items !== void 0) {
         const element = convertSchema(items, ctx);
         let arraySchema = z.array(element);
-        if (typeof schema.minItems === "number") {
-          arraySchema = arraySchema.min(schema.minItems);
+        if (typeof schema2.minItems === "number") {
+          arraySchema = arraySchema.min(schema2.minItems);
         }
-        if (typeof schema.maxItems === "number") {
-          arraySchema = arraySchema.max(schema.maxItems);
+        if (typeof schema2.maxItems === "number") {
+          arraySchema = arraySchema.max(schema2.maxItems);
         }
         zodSchema = arraySchema;
       } else {
@@ -14646,76 +14655,76 @@ function convertBaseSchema(schema, ctx) {
   }
   return zodSchema;
 }
-function convertSchema(schema, ctx) {
-  if (typeof schema === "boolean") {
-    return schema ? z.any() : z.never();
+function convertSchema(schema2, ctx) {
+  if (typeof schema2 === "boolean") {
+    return schema2 ? z.any() : z.never();
   }
-  let baseSchema = convertBaseSchema(schema, ctx);
-  const hasExplicitType = schema.type || schema.enum !== void 0 || schema.const !== void 0;
-  if (schema.anyOf && Array.isArray(schema.anyOf)) {
-    const options = schema.anyOf.map((s) => convertSchema(s, ctx));
+  let baseSchema = convertBaseSchema(schema2, ctx);
+  const hasExplicitType = schema2.type || schema2.enum !== void 0 || schema2.const !== void 0;
+  if (schema2.anyOf && Array.isArray(schema2.anyOf)) {
+    const options = schema2.anyOf.map((s) => convertSchema(s, ctx));
     const anyOfUnion = z.union(options);
     baseSchema = hasExplicitType ? z.intersection(baseSchema, anyOfUnion) : anyOfUnion;
   }
-  if (schema.oneOf && Array.isArray(schema.oneOf)) {
-    const options = schema.oneOf.map((s) => convertSchema(s, ctx));
+  if (schema2.oneOf && Array.isArray(schema2.oneOf)) {
+    const options = schema2.oneOf.map((s) => convertSchema(s, ctx));
     const oneOfUnion = z.xor(options);
     baseSchema = hasExplicitType ? z.intersection(baseSchema, oneOfUnion) : oneOfUnion;
   }
-  if (schema.allOf && Array.isArray(schema.allOf)) {
-    if (schema.allOf.length === 0) {
+  if (schema2.allOf && Array.isArray(schema2.allOf)) {
+    if (schema2.allOf.length === 0) {
       baseSchema = hasExplicitType ? baseSchema : z.any();
     } else {
-      let result2 = hasExplicitType ? baseSchema : convertSchema(schema.allOf[0], ctx);
+      let result2 = hasExplicitType ? baseSchema : convertSchema(schema2.allOf[0], ctx);
       const startIdx = hasExplicitType ? 0 : 1;
-      for (let i = startIdx; i < schema.allOf.length; i++) {
-        result2 = z.intersection(result2, convertSchema(schema.allOf[i], ctx));
+      for (let i = startIdx; i < schema2.allOf.length; i++) {
+        result2 = z.intersection(result2, convertSchema(schema2.allOf[i], ctx));
       }
       baseSchema = result2;
     }
   }
-  if (schema.nullable === true && ctx.version === "openapi-3.0") {
+  if (schema2.nullable === true && ctx.version === "openapi-3.0") {
     baseSchema = z.nullable(baseSchema);
   }
-  if (schema.readOnly === true) {
+  if (schema2.readOnly === true) {
     baseSchema = z.readonly(baseSchema);
   }
-  if (schema.default !== void 0) {
-    baseSchema = baseSchema.default(schema.default);
+  if (schema2.default !== void 0) {
+    baseSchema = baseSchema.default(schema2.default);
   }
   const extraMeta = {};
   const coreMetadataKeys = ["$id", "id", "$comment", "$anchor", "$vocabulary", "$dynamicRef", "$dynamicAnchor"];
   for (const key of coreMetadataKeys) {
-    if (key in schema) {
-      extraMeta[key] = schema[key];
+    if (key in schema2) {
+      extraMeta[key] = schema2[key];
     }
   }
   const contentMetadataKeys = ["contentEncoding", "contentMediaType", "contentSchema"];
   for (const key of contentMetadataKeys) {
-    if (key in schema) {
-      extraMeta[key] = schema[key];
+    if (key in schema2) {
+      extraMeta[key] = schema2[key];
     }
   }
-  for (const key of Object.keys(schema)) {
+  for (const key of Object.keys(schema2)) {
     if (!RECOGNIZED_KEYS.has(key)) {
-      extraMeta[key] = schema[key];
+      extraMeta[key] = schema2[key];
     }
   }
   if (Object.keys(extraMeta).length > 0) {
     ctx.registry.add(baseSchema, extraMeta);
   }
-  if (schema.description) {
-    baseSchema = baseSchema.describe(schema.description);
+  if (schema2.description) {
+    baseSchema = baseSchema.describe(schema2.description);
   }
   return baseSchema;
 }
-function fromJSONSchema(schema, params) {
-  if (typeof schema === "boolean") {
-    return schema ? z.any() : z.never();
+function fromJSONSchema(schema2, params) {
+  if (typeof schema2 === "boolean") {
+    return schema2 ? z.any() : z.never();
   }
   let normalized;
   try {
-    normalized = JSON.parse(JSON.stringify(schema));
+    normalized = JSON.parse(JSON.stringify(schema2));
   } catch {
     throw new Error("fromJSONSchema input is not valid JSON (possibly cyclic); use $defs/$ref for recursive schemas");
   }
@@ -16160,52 +16169,52 @@ var require_util = __commonJS({
       return hash2;
     }
     exports2.toHash = toHash;
-    function alwaysValidSchema(it2, schema) {
-      if (typeof schema == "boolean")
-        return schema;
-      if (Object.keys(schema).length === 0)
+    function alwaysValidSchema(it2, schema2) {
+      if (typeof schema2 == "boolean")
+        return schema2;
+      if (Object.keys(schema2).length === 0)
         return true;
-      checkUnknownRules(it2, schema);
-      return !schemaHasRules(schema, it2.self.RULES.all);
+      checkUnknownRules(it2, schema2);
+      return !schemaHasRules(schema2, it2.self.RULES.all);
     }
     exports2.alwaysValidSchema = alwaysValidSchema;
-    function checkUnknownRules(it2, schema = it2.schema) {
+    function checkUnknownRules(it2, schema2 = it2.schema) {
       const { opts, self: self2 } = it2;
       if (!opts.strictSchema)
         return;
-      if (typeof schema === "boolean")
+      if (typeof schema2 === "boolean")
         return;
       const rules = self2.RULES.keywords;
-      for (const key in schema) {
+      for (const key in schema2) {
         if (!rules[key])
           checkStrictMode(it2, `unknown keyword: "${key}"`);
       }
     }
     exports2.checkUnknownRules = checkUnknownRules;
-    function schemaHasRules(schema, rules) {
-      if (typeof schema == "boolean")
-        return !schema;
-      for (const key in schema)
+    function schemaHasRules(schema2, rules) {
+      if (typeof schema2 == "boolean")
+        return !schema2;
+      for (const key in schema2)
         if (rules[key])
           return true;
       return false;
     }
     exports2.schemaHasRules = schemaHasRules;
-    function schemaHasRulesButRef(schema, RULES) {
-      if (typeof schema == "boolean")
-        return !schema;
-      for (const key in schema)
+    function schemaHasRulesButRef(schema2, RULES) {
+      if (typeof schema2 == "boolean")
+        return !schema2;
+      for (const key in schema2)
         if (key !== "$ref" && RULES.all[key])
           return true;
       return false;
     }
     exports2.schemaHasRulesButRef = schemaHasRulesButRef;
-    function schemaRefOrVal({ topSchemaRef, schemaPath }, schema, keyword, $data) {
+    function schemaRefOrVal({ topSchemaRef, schemaPath }, schema2, keyword, $data) {
       if (!$data) {
-        if (typeof schema == "number" || typeof schema == "boolean")
-          return schema;
-        if (typeof schema == "string")
-          return (0, codegen_1._)`${schema}`;
+        if (typeof schema2 == "number" || typeof schema2 == "boolean")
+          return schema2;
+        if (typeof schema2 == "string")
+          return (0, codegen_1._)`${schema2}`;
       }
       return (0, codegen_1._)`${topSchemaRef}${schemaPath}${(0, codegen_1.getProperty)(keyword)}`;
     }
@@ -16486,10 +16495,10 @@ var require_boolSchema = __commonJS({
       message: "boolean schema is false"
     };
     function topBoolOrEmptySchema(it2) {
-      const { gen, schema, validateName } = it2;
-      if (schema === false) {
+      const { gen, schema: schema2, validateName } = it2;
+      if (schema2 === false) {
         falseSchemaError(it2, false);
-      } else if (typeof schema == "object" && schema.$async === true) {
+      } else if (typeof schema2 == "object" && schema2.$async === true) {
         gen.return(names_1.default.data);
       } else {
         gen.assign((0, codegen_1._)`${validateName}.errors`, null);
@@ -16498,8 +16507,8 @@ var require_boolSchema = __commonJS({
     }
     exports2.topBoolOrEmptySchema = topBoolOrEmptySchema;
     function boolOrEmptySchema(it2, valid) {
-      const { gen, schema } = it2;
-      if (schema === false) {
+      const { gen, schema: schema2 } = it2;
+      if (schema2 === false) {
         gen.var(valid, false);
         falseSchemaError(it2);
       } else {
@@ -16561,18 +16570,18 @@ var require_applicability = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.shouldUseRule = exports2.shouldUseGroup = exports2.schemaHasRulesForType = void 0;
-    function schemaHasRulesForType({ schema, self: self2 }, type) {
+    function schemaHasRulesForType({ schema: schema2, self: self2 }, type) {
       const group = self2.RULES.types[type];
-      return group && group !== true && shouldUseGroup(schema, group);
+      return group && group !== true && shouldUseGroup(schema2, group);
     }
     exports2.schemaHasRulesForType = schemaHasRulesForType;
-    function shouldUseGroup(schema, group) {
-      return group.rules.some((rule) => shouldUseRule(schema, rule));
+    function shouldUseGroup(schema2, group) {
+      return group.rules.some((rule) => shouldUseRule(schema2, rule));
     }
     exports2.shouldUseGroup = shouldUseGroup;
-    function shouldUseRule(schema, rule) {
+    function shouldUseRule(schema2, rule) {
       var _a3;
-      return schema[rule.keyword] !== void 0 || ((_a3 = rule.definition.implements) === null || _a3 === void 0 ? void 0 : _a3.some((kwd) => schema[kwd] !== void 0));
+      return schema2[rule.keyword] !== void 0 || ((_a3 = rule.definition.implements) === null || _a3 === void 0 ? void 0 : _a3.some((kwd) => schema2[kwd] !== void 0));
     }
     exports2.shouldUseRule = shouldUseRule;
   }
@@ -16594,17 +16603,17 @@ var require_dataType = __commonJS({
       DataType2[DataType2["Correct"] = 0] = "Correct";
       DataType2[DataType2["Wrong"] = 1] = "Wrong";
     })(DataType || (exports2.DataType = DataType = {}));
-    function getSchemaTypes(schema) {
-      const types = getJSONTypes(schema.type);
+    function getSchemaTypes(schema2) {
+      const types = getJSONTypes(schema2.type);
       const hasNull = types.includes("null");
       if (hasNull) {
-        if (schema.nullable === false)
+        if (schema2.nullable === false)
           throw new Error("type: null contradicts nullable: false");
       } else {
-        if (!types.length && schema.nullable !== void 0) {
+        if (!types.length && schema2.nullable !== void 0) {
           throw new Error('"nullable" cannot be used without "type"');
         }
-        if (schema.nullable === true)
+        if (schema2.nullable === true)
           types.push("null");
       }
       return types;
@@ -16736,8 +16745,8 @@ var require_dataType = __commonJS({
     }
     exports2.checkDataTypes = checkDataTypes;
     var typeError = {
-      message: ({ schema }) => `must be ${schema}`,
-      params: ({ schema, schemaValue }) => typeof schema == "string" ? (0, codegen_1._)`{type: ${schema}}` : (0, codegen_1._)`{type: ${schemaValue}}`
+      message: ({ schema: schema2 }) => `must be ${schema2}`,
+      params: ({ schema: schema2, schemaValue }) => typeof schema2 == "string" ? (0, codegen_1._)`{type: ${schema2}}` : (0, codegen_1._)`{type: ${schemaValue}}`
     };
     function reportTypeError(it2) {
       const cxt = getTypeErrorContext(it2);
@@ -16745,16 +16754,16 @@ var require_dataType = __commonJS({
     }
     exports2.reportTypeError = reportTypeError;
     function getTypeErrorContext(it2) {
-      const { gen, data, schema } = it2;
-      const schemaCode = (0, util_1.schemaRefOrVal)(it2, schema, "type");
+      const { gen, data, schema: schema2 } = it2;
+      const schemaCode = (0, util_1.schemaRefOrVal)(it2, schema2, "type");
       return {
         gen,
         keyword: "type",
         data,
-        schema: schema.type,
+        schema: schema2.type,
         schemaCode,
         schemaValue: schemaCode,
-        parentSchema: schema,
+        parentSchema: schema2,
         params: {},
         it: it2
       };
@@ -16907,15 +16916,15 @@ var require_code2 = __commonJS({
     }
     exports2.validateArray = validateArray;
     function validateUnion(cxt) {
-      const { gen, schema, keyword, it: it2 } = cxt;
-      if (!Array.isArray(schema))
+      const { gen, schema: schema2, keyword, it: it2 } = cxt;
+      if (!Array.isArray(schema2))
         throw new Error("ajv implementation error");
-      const alwaysValid = schema.some((sch) => (0, util_1.alwaysValidSchema)(it2, sch));
+      const alwaysValid = schema2.some((sch) => (0, util_1.alwaysValidSchema)(it2, sch));
       if (alwaysValid && !it2.opts.unevaluated)
         return;
       const valid = gen.let("valid", false);
       const schValid = gen.name("_valid");
-      gen.block(() => schema.forEach((_sch, i) => {
+      gen.block(() => schema2.forEach((_sch, i) => {
         const schCxt = cxt.subschema({
           keyword,
           schemaProp: i,
@@ -16943,8 +16952,8 @@ var require_keyword = __commonJS({
     var code_1 = require_code2();
     var errors_1 = require_errors();
     function macroKeywordCode(cxt, def) {
-      const { gen, keyword, schema, parentSchema, it: it2 } = cxt;
-      const macroSchema = def.macro.call(it2.self, schema, parentSchema, it2);
+      const { gen, keyword, schema: schema2, parentSchema, it: it2 } = cxt;
+      const macroSchema = def.macro.call(it2.self, schema2, parentSchema, it2);
       const schemaRef = useKeyword(gen, keyword, macroSchema);
       if (it2.opts.validateSchema !== false)
         it2.self.validateSchema(macroSchema, true);
@@ -16961,9 +16970,9 @@ var require_keyword = __commonJS({
     exports2.macroKeywordCode = macroKeywordCode;
     function funcKeywordCode(cxt, def) {
       var _a3;
-      const { gen, keyword, schema, parentSchema, $data, it: it2 } = cxt;
+      const { gen, keyword, schema: schema2, parentSchema, $data, it: it2 } = cxt;
       checkAsyncKeyword(it2, def);
-      const validate2 = !$data && def.compile ? def.compile.call(it2.self, schema, parentSchema, it2) : def.validate;
+      const validate2 = !$data && def.compile ? def.compile.call(it2.self, schema2, parentSchema, it2) : def.validate;
       const validateRef = useKeyword(gen, keyword, validate2);
       const valid = gen.let("valid");
       cxt.block$data(valid, validateKeyword);
@@ -17023,20 +17032,20 @@ var require_keyword = __commonJS({
         throw new Error(`keyword "${keyword}" failed to compile`);
       return gen.scopeValue("keyword", typeof result2 == "function" ? { ref: result2 } : { ref: result2, code: (0, codegen_1.stringify)(result2) });
     }
-    function validSchemaType(schema, schemaType, allowUndefined = false) {
-      return !schemaType.length || schemaType.some((st2) => st2 === "array" ? Array.isArray(schema) : st2 === "object" ? schema && typeof schema == "object" && !Array.isArray(schema) : typeof schema == st2 || allowUndefined && typeof schema == "undefined");
+    function validSchemaType(schema2, schemaType, allowUndefined = false) {
+      return !schemaType.length || schemaType.some((st2) => st2 === "array" ? Array.isArray(schema2) : st2 === "object" ? schema2 && typeof schema2 == "object" && !Array.isArray(schema2) : typeof schema2 == st2 || allowUndefined && typeof schema2 == "undefined");
     }
     exports2.validSchemaType = validSchemaType;
-    function validateKeywordUsage({ schema, opts, self: self2, errSchemaPath }, def, keyword) {
+    function validateKeywordUsage({ schema: schema2, opts, self: self2, errSchemaPath }, def, keyword) {
       if (Array.isArray(def.keyword) ? !def.keyword.includes(keyword) : def.keyword !== keyword) {
         throw new Error("ajv implementation error");
       }
       const deps = def.dependencies;
-      if (deps === null || deps === void 0 ? void 0 : deps.some((kwd) => !Object.prototype.hasOwnProperty.call(schema, kwd))) {
+      if (deps === null || deps === void 0 ? void 0 : deps.some((kwd) => !Object.prototype.hasOwnProperty.call(schema2, kwd))) {
         throw new Error(`parent schema must have dependencies of ${keyword}: ${deps.join(",")}`);
       }
       if (def.validateSchema) {
-        const valid = def.validateSchema(schema[keyword]);
+        const valid = def.validateSchema(schema2[keyword]);
         if (!valid) {
           const msg = `keyword "${keyword}" value is invalid at path "${errSchemaPath}": ` + self2.errorsText(def.validateSchema.errors);
           if (opts.validateSchema === "log")
@@ -17058,8 +17067,8 @@ var require_subschema = __commonJS({
     exports2.extendSubschemaMode = exports2.extendSubschemaData = exports2.getSubschema = void 0;
     var codegen_1 = require_codegen();
     var util_1 = require_util();
-    function getSubschema(it2, { keyword, schemaProp, schema, schemaPath, errSchemaPath, topSchemaRef }) {
-      if (keyword !== void 0 && schema !== void 0) {
+    function getSubschema(it2, { keyword, schemaProp, schema: schema2, schemaPath, errSchemaPath, topSchemaRef }) {
+      if (keyword !== void 0 && schema2 !== void 0) {
         throw new Error('both "keyword" and "schema" passed, only one allowed');
       }
       if (keyword !== void 0) {
@@ -17074,12 +17083,12 @@ var require_subschema = __commonJS({
           errSchemaPath: `${it2.errSchemaPath}/${keyword}/${(0, util_1.escapeFragment)(schemaProp)}`
         };
       }
-      if (schema !== void 0) {
+      if (schema2 !== void 0) {
         if (schemaPath === void 0 || errSchemaPath === void 0 || topSchemaRef === void 0) {
           throw new Error('"schemaPath", "errSchemaPath" and "topSchemaRef" are required with "schema"');
         }
         return {
-          schema,
+          schema: schema2,
           schemaPath,
           topSchemaRef,
           errSchemaPath
@@ -17172,7 +17181,7 @@ var require_fast_deep_equal = __commonJS({
 var require_json_schema_traverse = __commonJS({
   "node_modules/json-schema-traverse/index.js"(exports2, module2) {
     "use strict";
-    var traverse = module2.exports = function(schema, opts, cb) {
+    var traverse = module2.exports = function(schema2, opts, cb) {
       if (typeof opts == "function") {
         cb = opts;
         opts = {};
@@ -17182,7 +17191,7 @@ var require_json_schema_traverse = __commonJS({
       };
       var post2 = cb.post || function() {
       };
-      _traverse(opts, pre, post2, schema, "", schema);
+      _traverse(opts, pre, post2, schema2, "", schema2);
     };
     traverse.keywords = {
       additionalItems: true,
@@ -17228,26 +17237,26 @@ var require_json_schema_traverse = __commonJS({
       maxProperties: true,
       minProperties: true
     };
-    function _traverse(opts, pre, post2, schema, jsonPtr, rootSchema, parentJsonPtr, parentKeyword, parentSchema, keyIndex) {
-      if (schema && typeof schema == "object" && !Array.isArray(schema)) {
-        pre(schema, jsonPtr, rootSchema, parentJsonPtr, parentKeyword, parentSchema, keyIndex);
-        for (var key in schema) {
-          var sch = schema[key];
+    function _traverse(opts, pre, post2, schema2, jsonPtr, rootSchema, parentJsonPtr, parentKeyword, parentSchema, keyIndex) {
+      if (schema2 && typeof schema2 == "object" && !Array.isArray(schema2)) {
+        pre(schema2, jsonPtr, rootSchema, parentJsonPtr, parentKeyword, parentSchema, keyIndex);
+        for (var key in schema2) {
+          var sch = schema2[key];
           if (Array.isArray(sch)) {
             if (key in traverse.arrayKeywords) {
               for (var i = 0; i < sch.length; i++)
-                _traverse(opts, pre, post2, sch[i], jsonPtr + "/" + key + "/" + i, rootSchema, jsonPtr, key, schema, i);
+                _traverse(opts, pre, post2, sch[i], jsonPtr + "/" + key + "/" + i, rootSchema, jsonPtr, key, schema2, i);
             }
           } else if (key in traverse.propsKeywords) {
             if (sch && typeof sch == "object") {
               for (var prop in sch)
-                _traverse(opts, pre, post2, sch[prop], jsonPtr + "/" + key + "/" + escapeJsonPtr(prop), rootSchema, jsonPtr, key, schema, prop);
+                _traverse(opts, pre, post2, sch[prop], jsonPtr + "/" + key + "/" + escapeJsonPtr(prop), rootSchema, jsonPtr, key, schema2, prop);
             }
           } else if (key in traverse.keywords || opts.allKeys && !(key in traverse.skipKeywords)) {
-            _traverse(opts, pre, post2, sch, jsonPtr + "/" + key, rootSchema, jsonPtr, key, schema);
+            _traverse(opts, pre, post2, sch, jsonPtr + "/" + key, rootSchema, jsonPtr, key, schema2);
           }
         }
-        post2(schema, jsonPtr, rootSchema, parentJsonPtr, parentKeyword, parentSchema, keyIndex);
+        post2(schema2, jsonPtr, rootSchema, parentJsonPtr, parentKeyword, parentSchema, keyIndex);
       }
     }
     function escapeJsonPtr(str2) {
@@ -17283,14 +17292,14 @@ var require_resolve = __commonJS({
       "enum",
       "const"
     ]);
-    function inlineRef(schema, limit2 = true) {
-      if (typeof schema == "boolean")
+    function inlineRef(schema2, limit2 = true) {
+      if (typeof schema2 == "boolean")
         return true;
       if (limit2 === true)
-        return !hasRef(schema);
+        return !hasRef(schema2);
       if (!limit2)
         return false;
-      return countKeys(schema) <= limit2;
+      return countKeys(schema2) <= limit2;
     }
     exports2.inlineRef = inlineRef;
     var REF_KEYWORDS = /* @__PURE__ */ new Set([
@@ -17300,11 +17309,11 @@ var require_resolve = __commonJS({
       "$dynamicRef",
       "$dynamicAnchor"
     ]);
-    function hasRef(schema) {
-      for (const key in schema) {
+    function hasRef(schema2) {
+      for (const key in schema2) {
         if (REF_KEYWORDS.has(key))
           return true;
-        const sch = schema[key];
+        const sch = schema2[key];
         if (Array.isArray(sch) && sch.some(hasRef))
           return true;
         if (typeof sch == "object" && hasRef(sch))
@@ -17312,16 +17321,16 @@ var require_resolve = __commonJS({
       }
       return false;
     }
-    function countKeys(schema) {
+    function countKeys(schema2) {
       let count3 = 0;
-      for (const key in schema) {
+      for (const key in schema2) {
         if (key === "$ref")
           return Infinity;
         count3++;
         if (SIMPLE_INLINED.has(key))
           continue;
-        if (typeof schema[key] == "object") {
-          (0, util_1.eachItem)(schema[key], (sch) => count3 += countKeys(sch));
+        if (typeof schema2[key] == "object") {
+          (0, util_1.eachItem)(schema2[key], (sch) => count3 += countKeys(sch));
         }
         if (count3 === Infinity)
           return Infinity;
@@ -17351,16 +17360,16 @@ var require_resolve = __commonJS({
     }
     exports2.resolveUrl = resolveUrl;
     var ANCHOR = /^[a-z_][-a-z0-9._]*$/i;
-    function getSchemaRefs(schema, baseId) {
-      if (typeof schema == "boolean")
+    function getSchemaRefs(schema2, baseId) {
+      if (typeof schema2 == "boolean")
         return {};
       const { schemaId, uriResolver } = this.opts;
-      const schId = normalizeId(schema[schemaId] || baseId);
+      const schId = normalizeId(schema2[schemaId] || baseId);
       const baseIds = { "": schId };
       const pathPrefix = getFullPath(uriResolver, schId, false);
       const localRefs = {};
       const schemaRefs = /* @__PURE__ */ new Set();
-      traverse(schema, { allKeys: true }, (sch, jsonPtr, _3, parentJsonPtr) => {
+      traverse(schema2, { allKeys: true }, (sch, jsonPtr, _3, parentJsonPtr) => {
         if (parentJsonPtr === void 0)
           return;
         const fullPath = pathPrefix + jsonPtr;
@@ -17441,15 +17450,15 @@ var require_validate = __commonJS({
       validateFunction(it2, () => (0, boolSchema_1.topBoolOrEmptySchema)(it2));
     }
     exports2.validateFunctionCode = validateFunctionCode;
-    function validateFunction({ gen, validateName, schema, schemaEnv, opts }, body) {
+    function validateFunction({ gen, validateName, schema: schema2, schemaEnv, opts }, body) {
       if (opts.code.es5) {
         gen.func(validateName, (0, codegen_1._)`${names_1.default.data}, ${names_1.default.valCxt}`, schemaEnv.$async, () => {
-          gen.code((0, codegen_1._)`"use strict"; ${funcSourceUrl(schema, opts)}`);
+          gen.code((0, codegen_1._)`"use strict"; ${funcSourceUrl(schema2, opts)}`);
           destructureValCxtES5(gen, opts);
           gen.code(body);
         });
       } else {
-        gen.func(validateName, (0, codegen_1._)`${names_1.default.data}, ${destructureValCxt(opts)}`, schemaEnv.$async, () => gen.code(funcSourceUrl(schema, opts)).code(body));
+        gen.func(validateName, (0, codegen_1._)`${names_1.default.data}, ${destructureValCxt(opts)}`, schemaEnv.$async, () => gen.code(funcSourceUrl(schema2, opts)).code(body));
       }
     }
     function destructureValCxt(opts) {
@@ -17473,9 +17482,9 @@ var require_validate = __commonJS({
       });
     }
     function topSchemaObjCode(it2) {
-      const { schema, opts, gen } = it2;
+      const { schema: schema2, opts, gen } = it2;
       validateFunction(it2, () => {
-        if (opts.$comment && schema.$comment)
+        if (opts.$comment && schema2.$comment)
           commentKeyword(it2);
         checkNoDefault(it2);
         gen.let(names_1.default.vErrors, null);
@@ -17493,8 +17502,8 @@ var require_validate = __commonJS({
       gen.if((0, codegen_1._)`${it2.evaluated}.dynamicProps`, () => gen.assign((0, codegen_1._)`${it2.evaluated}.props`, (0, codegen_1._)`undefined`));
       gen.if((0, codegen_1._)`${it2.evaluated}.dynamicItems`, () => gen.assign((0, codegen_1._)`${it2.evaluated}.items`, (0, codegen_1._)`undefined`));
     }
-    function funcSourceUrl(schema, opts) {
-      const schId = typeof schema == "object" && schema[opts.schemaId];
+    function funcSourceUrl(schema2, opts) {
+      const schId = typeof schema2 == "object" && schema2[opts.schemaId];
       return schId && (opts.code.source || opts.code.process) ? (0, codegen_1._)`/*# sourceURL=${schId} */` : codegen_1.nil;
     }
     function subschemaCode(it2, valid) {
@@ -17507,10 +17516,10 @@ var require_validate = __commonJS({
       }
       (0, boolSchema_1.boolOrEmptySchema)(it2, valid);
     }
-    function schemaCxtHasRules({ schema, self: self2 }) {
-      if (typeof schema == "boolean")
-        return !schema;
-      for (const key in schema)
+    function schemaCxtHasRules({ schema: schema2, self: self2 }) {
+      if (typeof schema2 == "boolean")
+        return !schema2;
+      for (const key in schema2)
         if (self2.RULES.all[key])
           return true;
       return false;
@@ -17519,8 +17528,8 @@ var require_validate = __commonJS({
       return typeof it2.schema != "boolean";
     }
     function subSchemaObjCode(it2, valid) {
-      const { schema, gen, opts } = it2;
-      if (opts.$comment && schema.$comment)
+      const { schema: schema2, gen, opts } = it2;
+      if (opts.$comment && schema2.$comment)
         commentKeyword(it2);
       updateContext(it2);
       checkAsyncSchema(it2);
@@ -17540,14 +17549,14 @@ var require_validate = __commonJS({
       schemaKeywords(it2, types, !checkedTypes, errsCount);
     }
     function checkRefsAndKeywords(it2) {
-      const { schema, errSchemaPath, opts, self: self2 } = it2;
-      if (schema.$ref && opts.ignoreKeywordsWithRef && (0, util_1.schemaHasRulesButRef)(schema, self2.RULES)) {
+      const { schema: schema2, errSchemaPath, opts, self: self2 } = it2;
+      if (schema2.$ref && opts.ignoreKeywordsWithRef && (0, util_1.schemaHasRulesButRef)(schema2, self2.RULES)) {
         self2.logger.warn(`$ref: keywords ignored in schema at path "${errSchemaPath}"`);
       }
     }
     function checkNoDefault(it2) {
-      const { schema, opts } = it2;
-      if (schema.default !== void 0 && opts.useDefaults && opts.strictSchema) {
+      const { schema: schema2, opts } = it2;
+      if (schema2.default !== void 0 && opts.useDefaults && opts.strictSchema) {
         (0, util_1.checkStrictMode)(it2, "default is ignored in the schema root");
       }
     }
@@ -17560,8 +17569,8 @@ var require_validate = __commonJS({
       if (it2.schema.$async && !it2.schemaEnv.$async)
         throw new Error("async schema in sync schema");
     }
-    function commentKeyword({ gen, schemaEnv, schema, errSchemaPath, opts }) {
-      const msg = schema.$comment;
+    function commentKeyword({ gen, schemaEnv, schema: schema2, errSchemaPath, opts }) {
+      const msg = schema2.$comment;
       if (opts.$comment === true) {
         gen.code((0, codegen_1._)`${names_1.default.self}.logger.log(${msg})`);
       } else if (typeof opts.$comment == "function") {
@@ -17588,9 +17597,9 @@ var require_validate = __commonJS({
         gen.assign((0, codegen_1._)`${evaluated}.items`, items);
     }
     function schemaKeywords(it2, types, typeErrors, errsCount) {
-      const { gen, schema, data, allErrors, opts, self: self2 } = it2;
+      const { gen, schema: schema2, data, allErrors, opts, self: self2 } = it2;
       const { RULES } = self2;
-      if (schema.$ref && (opts.ignoreKeywordsWithRef || !(0, util_1.schemaHasRulesButRef)(schema, RULES))) {
+      if (schema2.$ref && (opts.ignoreKeywordsWithRef || !(0, util_1.schemaHasRulesButRef)(schema2, RULES))) {
         gen.block(() => keywordCode(it2, "$ref", RULES.all.$ref.definition));
         return;
       }
@@ -17602,7 +17611,7 @@ var require_validate = __commonJS({
         groupKeywords(RULES.post);
       });
       function groupKeywords(group) {
-        if (!(0, applicability_1.shouldUseGroup)(schema, group))
+        if (!(0, applicability_1.shouldUseGroup)(schema2, group))
           return;
         if (group.type) {
           gen.if((0, dataType_2.checkDataType)(group.type, data, opts.strictNumbers));
@@ -17620,12 +17629,12 @@ var require_validate = __commonJS({
       }
     }
     function iterateKeywords(it2, group) {
-      const { gen, schema, opts: { useDefaults } } = it2;
+      const { gen, schema: schema2, opts: { useDefaults } } = it2;
       if (useDefaults)
         (0, defaults_1.assignDefaults)(it2, group.type);
       gen.block(() => {
         for (const rule of group.rules) {
-          if ((0, applicability_1.shouldUseRule)(schema, rule)) {
+          if ((0, applicability_1.shouldUseRule)(schema2, rule)) {
             keywordCode(it2, rule.keyword, rule.definition, group.type);
           }
         }
@@ -17970,17 +17979,17 @@ var require_compile = __commonJS({
         var _a3;
         this.refs = {};
         this.dynamicAnchors = {};
-        let schema;
+        let schema2;
         if (typeof env.schema == "object")
-          schema = env.schema;
+          schema2 = env.schema;
         this.schema = env.schema;
         this.schemaId = env.schemaId;
         this.root = env.root || this;
-        this.baseId = (_a3 = env.baseId) !== null && _a3 !== void 0 ? _a3 : (0, resolve_1.normalizeId)(schema === null || schema === void 0 ? void 0 : schema[env.schemaId || "$id"]);
+        this.baseId = (_a3 = env.baseId) !== null && _a3 !== void 0 ? _a3 : (0, resolve_1.normalizeId)(schema2 === null || schema2 === void 0 ? void 0 : schema2[env.schemaId || "$id"]);
         this.schemaPath = env.schemaPath;
         this.localRefs = env.localRefs;
         this.meta = env.meta;
-        this.$async = schema === null || schema === void 0 ? void 0 : schema.$async;
+        this.$async = schema2 === null || schema2 === void 0 ? void 0 : schema2.$async;
         this.refs = {};
       }
     };
@@ -18079,10 +18088,10 @@ var require_compile = __commonJS({
         return schOrFunc;
       let _sch = resolve6.call(this, root, ref);
       if (_sch === void 0) {
-        const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
+        const schema2 = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
-        if (schema)
-          _sch = new SchemaEnv({ schema, schemaId, root, baseId });
+        if (schema2)
+          _sch = new SchemaEnv({ schema: schema2, schemaId, root, baseId });
       }
       if (_sch === void 0)
         return;
@@ -18130,12 +18139,12 @@ var require_compile = __commonJS({
       if (!schOrRef.validate)
         compileSchema.call(this, schOrRef);
       if (id === (0, resolve_1.normalizeId)(ref)) {
-        const { schema } = schOrRef;
+        const { schema: schema2 } = schOrRef;
         const { schemaId } = this.opts;
-        const schId = schema[schemaId];
+        const schId = schema2[schemaId];
         if (schId)
           baseId = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schId);
-        return new SchemaEnv({ schema, schemaId, root, baseId });
+        return new SchemaEnv({ schema: schema2, schemaId, root, baseId });
       }
       return getJsonPointer.call(this, p2, schOrRef);
     }
@@ -18147,29 +18156,29 @@ var require_compile = __commonJS({
       "dependencies",
       "definitions"
     ]);
-    function getJsonPointer(parsedRef, { baseId, schema, root }) {
+    function getJsonPointer(parsedRef, { baseId, schema: schema2, root }) {
       var _a3;
       if (((_a3 = parsedRef.fragment) === null || _a3 === void 0 ? void 0 : _a3[0]) !== "/")
         return;
       for (const part of parsedRef.fragment.slice(1).split("/")) {
-        if (typeof schema === "boolean")
+        if (typeof schema2 === "boolean")
           return;
-        const partSchema = schema[(0, util_1.unescapeFragment)(part)];
+        const partSchema = schema2[(0, util_1.unescapeFragment)(part)];
         if (partSchema === void 0)
           return;
-        schema = partSchema;
-        const schId = typeof schema === "object" && schema[this.opts.schemaId];
+        schema2 = partSchema;
+        const schId = typeof schema2 === "object" && schema2[this.opts.schemaId];
         if (!PREVENT_SCOPE_CHANGE.has(part) && schId) {
           baseId = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schId);
         }
       }
       let env;
-      if (typeof schema != "boolean" && schema.$ref && !(0, util_1.schemaHasRulesButRef)(schema, this.RULES)) {
-        const $ref = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schema.$ref);
+      if (typeof schema2 != "boolean" && schema2.$ref && !(0, util_1.schemaHasRulesButRef)(schema2, this.RULES)) {
+        const $ref = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schema2.$ref);
         env = resolveSchema.call(this, root, $ref);
       }
       const { schemaId } = this.opts;
-      env = env || new SchemaEnv({ schema, schemaId, root, baseId });
+      env = env || new SchemaEnv({ schema: schema2, schemaId, root, baseId });
       if (env.schema !== env.root.schema)
         return env;
       return void 0;
@@ -18825,7 +18834,7 @@ var require_schemes = __commonJS({
       urnComponent.nss = (uuidComponent.uuid || "").toLowerCase();
       return urnComponent;
     }
-    var http = (
+    var http2 = (
       /** @type {SchemeHandler} */
       {
         scheme: "http",
@@ -18838,7 +18847,7 @@ var require_schemes = __commonJS({
       /** @type {SchemeHandler} */
       {
         scheme: "https",
-        domainHost: http.domainHost,
+        domainHost: http2.domainHost,
         parse: httpParse,
         serialize: httpSerialize
       }
@@ -18882,7 +18891,7 @@ var require_schemes = __commonJS({
     var SCHEMES = (
       /** @type {Record<SchemeName, SchemeHandler>} */
       {
-        http,
+        http: http2,
         https,
         ws,
         wss,
@@ -19495,16 +19504,16 @@ var require_core = __commonJS({
           this.errors = v3.errors;
         return valid;
       }
-      compile(schema, _meta) {
-        const sch = this._addSchema(schema, _meta);
+      compile(schema2, _meta) {
+        const sch = this._addSchema(schema2, _meta);
         return sch.validate || this._compileSchemaEnv(sch);
       }
-      compileAsync(schema, meta3) {
+      compileAsync(schema2, meta3) {
         if (typeof this.opts.loadSchema != "function") {
           throw new Error("options.loadSchema should be a function");
         }
         const { loadSchema } = this.opts;
-        return runCompileAsync.call(this, schema, meta3);
+        return runCompileAsync.call(this, schema2, meta3);
         async function runCompileAsync(_schema, _meta) {
           await loadMetaSchema.call(this, _schema.$schema);
           const sch = this._addSchema(_schema, _meta);
@@ -19550,37 +19559,37 @@ var require_core = __commonJS({
         }
       }
       // Adds schema to the instance
-      addSchema(schema, key, _meta, _validateSchema = this.opts.validateSchema) {
-        if (Array.isArray(schema)) {
-          for (const sch of schema)
+      addSchema(schema2, key, _meta, _validateSchema = this.opts.validateSchema) {
+        if (Array.isArray(schema2)) {
+          for (const sch of schema2)
             this.addSchema(sch, void 0, _meta, _validateSchema);
           return this;
         }
         let id;
-        if (typeof schema === "object") {
+        if (typeof schema2 === "object") {
           const { schemaId } = this.opts;
-          id = schema[schemaId];
+          id = schema2[schemaId];
           if (id !== void 0 && typeof id != "string") {
             throw new Error(`schema ${schemaId} must be string`);
           }
         }
         key = (0, resolve_1.normalizeId)(key || id);
         this._checkUnique(key);
-        this.schemas[key] = this._addSchema(schema, _meta, key, _validateSchema, true);
+        this.schemas[key] = this._addSchema(schema2, _meta, key, _validateSchema, true);
         return this;
       }
       // Add schema that will be used to validate other schemas
       // options in META_IGNORE_OPTIONS are alway set to false
-      addMetaSchema(schema, key, _validateSchema = this.opts.validateSchema) {
-        this.addSchema(schema, key, true, _validateSchema);
+      addMetaSchema(schema2, key, _validateSchema = this.opts.validateSchema) {
+        this.addSchema(schema2, key, true, _validateSchema);
         return this;
       }
       //  Validate schema against its meta-schema
-      validateSchema(schema, throwOrLogError) {
-        if (typeof schema == "boolean")
+      validateSchema(schema2, throwOrLogError) {
+        if (typeof schema2 == "boolean")
           return true;
         let $schema;
-        $schema = schema.$schema;
+        $schema = schema2.$schema;
         if ($schema !== void 0 && typeof $schema != "string") {
           throw new Error("$schema must be a string");
         }
@@ -19590,7 +19599,7 @@ var require_core = __commonJS({
           this.errors = null;
           return true;
         }
-        const valid = this.validate($schema, schema);
+        const valid = this.validate($schema, schema2);
         if (!valid && throwOrLogError) {
           const message3 = "schema is invalid: " + this.errorsText();
           if (this.opts.validateSchema === "log")
@@ -19733,9 +19742,9 @@ var require_core = __commonJS({
             if (typeof rule != "object")
               continue;
             const { $data } = rule.definition;
-            const schema = keywords[key];
-            if ($data && schema)
-              keywords[key] = schemaOrData(schema);
+            const schema2 = keywords[key];
+            if ($data && schema2)
+              keywords[key] = schemaOrData(schema2);
           }
         }
         return metaSchema;
@@ -19753,23 +19762,23 @@ var require_core = __commonJS({
           }
         }
       }
-      _addSchema(schema, meta3, baseId, validateSchema = this.opts.validateSchema, addSchema = this.opts.addUsedSchema) {
+      _addSchema(schema2, meta3, baseId, validateSchema = this.opts.validateSchema, addSchema = this.opts.addUsedSchema) {
         let id;
         const { schemaId } = this.opts;
-        if (typeof schema == "object") {
-          id = schema[schemaId];
+        if (typeof schema2 == "object") {
+          id = schema2[schemaId];
         } else {
           if (this.opts.jtd)
             throw new Error("schema must be object");
-          else if (typeof schema != "boolean")
+          else if (typeof schema2 != "boolean")
             throw new Error("schema must be object or boolean");
         }
-        let sch = this._cache.get(schema);
+        let sch = this._cache.get(schema2);
         if (sch !== void 0)
           return sch;
         baseId = (0, resolve_1.normalizeId)(id || baseId);
-        const localRefs = resolve_1.getSchemaRefs.call(this, schema, baseId);
-        sch = new compile_1.SchemaEnv({ schema, schemaId, meta: meta3, baseId, localRefs });
+        const localRefs = resolve_1.getSchemaRefs.call(this, schema2, baseId);
+        sch = new compile_1.SchemaEnv({ schema: schema2, schemaId, meta: meta3, baseId, localRefs });
         this._cache.set(sch.schema, sch);
         if (addSchema && !baseId.startsWith("#")) {
           if (baseId)
@@ -19777,7 +19786,7 @@ var require_core = __commonJS({
           this.refs[baseId] = sch;
         }
         if (validateSchema)
-          this.validateSchema(schema, true);
+          this.validateSchema(schema2, true);
         return sch;
       }
       _checkUnique(id) {
@@ -19931,8 +19940,8 @@ var require_core = __commonJS({
     var $dataRef = {
       $ref: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#"
     };
-    function schemaOrData(schema) {
-      return { anyOf: [schema, $dataRef] };
+    function schemaOrData(schema2) {
+      return { anyOf: [schema2, $dataRef] };
     }
   }
 });
@@ -20232,7 +20241,7 @@ var require_pattern = __commonJS({
       $data: true,
       error: error51,
       code(cxt) {
-        const { gen, data, $data, schema, schemaCode, it: it2 } = cxt;
+        const { gen, data, $data, schema: schema2, schemaCode, it: it2 } = cxt;
         const u2 = it2.opts.unicodeRegExp ? "u" : "";
         if ($data) {
           const { regExp } = it2.opts.code;
@@ -20241,7 +20250,7 @@ var require_pattern = __commonJS({
           gen.try(() => gen.assign(valid, (0, codegen_1._)`${regExpCode}(${schemaCode}, ${u2}).test(${data})`), () => gen.assign(valid, false));
           cxt.fail$data((0, codegen_1._)`!${valid}`);
         } else {
-          const regExp = (0, code_1.usePattern)(cxt, schema);
+          const regExp = (0, code_1.usePattern)(cxt, schema2);
           cxt.fail$data((0, codegen_1._)`!${regExp}.test(${data})`);
         }
       }
@@ -20298,11 +20307,11 @@ var require_required = __commonJS({
       $data: true,
       error: error51,
       code(cxt) {
-        const { gen, schema, schemaCode, data, $data, it: it2 } = cxt;
+        const { gen, schema: schema2, schemaCode, data, $data, it: it2 } = cxt;
         const { opts } = it2;
-        if (!$data && schema.length === 0)
+        if (!$data && schema2.length === 0)
           return;
-        const useLoop = schema.length >= opts.loopRequired;
+        const useLoop = schema2.length >= opts.loopRequired;
         if (it2.allErrors)
           allErrorsMode();
         else
@@ -20310,7 +20319,7 @@ var require_required = __commonJS({
         if (opts.strictRequired) {
           const props = cxt.parentSchema.properties;
           const { definedProperties } = cxt.it;
-          for (const requiredKey of schema) {
+          for (const requiredKey of schema2) {
             if ((props === null || props === void 0 ? void 0 : props[requiredKey]) === void 0 && !definedProperties.has(requiredKey)) {
               const schemaPath = it2.schemaEnv.baseId + it2.errSchemaPath;
               const msg = `required property "${requiredKey}" is not defined at "${schemaPath}" (strictRequired)`;
@@ -20322,7 +20331,7 @@ var require_required = __commonJS({
           if (useLoop || $data) {
             cxt.block$data(codegen_1.nil, loopAllRequired);
           } else {
-            for (const prop of schema) {
+            for (const prop of schema2) {
               (0, code_1.checkReportMissingProp)(cxt, prop);
             }
           }
@@ -20334,7 +20343,7 @@ var require_required = __commonJS({
             cxt.block$data(valid, () => loopUntilMissing(missing, valid));
             cxt.ok(valid);
           } else {
-            gen.if((0, code_1.checkMissingProp)(cxt, schema, missing));
+            gen.if((0, code_1.checkMissingProp)(cxt, schema2, missing));
             (0, code_1.reportMissingProp)(cxt, missing);
             gen.else();
           }
@@ -20421,8 +20430,8 @@ var require_uniqueItems = __commonJS({
       $data: true,
       error: error51,
       code(cxt) {
-        const { gen, data, $data, schema, parentSchema, schemaCode, it: it2 } = cxt;
-        if (!$data && !schema)
+        const { gen, data, $data, schema: schema2, parentSchema, schemaCode, it: it2 } = cxt;
+        if (!$data && !schema2)
           return;
         const valid = gen.let("valid");
         const itemTypes = parentSchema.items ? (0, dataType_1.getSchemaTypes)(parentSchema.items) : [];
@@ -20485,11 +20494,11 @@ var require_const = __commonJS({
       $data: true,
       error: error51,
       code(cxt) {
-        const { gen, data, $data, schemaCode, schema } = cxt;
-        if ($data || schema && typeof schema == "object") {
+        const { gen, data, $data, schemaCode, schema: schema2 } = cxt;
+        if ($data || schema2 && typeof schema2 == "object") {
           cxt.fail$data((0, codegen_1._)`!${(0, util_1.useFunc)(gen, equal_1.default)}(${data}, ${schemaCode})`);
         } else {
-          cxt.fail((0, codegen_1._)`${schema} !== ${data}`);
+          cxt.fail((0, codegen_1._)`${schema2} !== ${data}`);
         }
       }
     };
@@ -20515,10 +20524,10 @@ var require_enum = __commonJS({
       $data: true,
       error: error51,
       code(cxt) {
-        const { gen, data, $data, schema, schemaCode, it: it2 } = cxt;
-        if (!$data && schema.length === 0)
+        const { gen, data, $data, schema: schema2, schemaCode, it: it2 } = cxt;
+        if (!$data && schema2.length === 0)
           throw new Error("enum must have non-empty array");
-        const useLoop = schema.length >= it2.opts.loopEnum;
+        const useLoop = schema2.length >= it2.opts.loopEnum;
         let eql;
         const getEql = () => eql !== null && eql !== void 0 ? eql : eql = (0, util_1.useFunc)(gen, equal_1.default);
         let valid;
@@ -20526,10 +20535,10 @@ var require_enum = __commonJS({
           valid = gen.let("valid");
           cxt.block$data(valid, loopEnum);
         } else {
-          if (!Array.isArray(schema))
+          if (!Array.isArray(schema2))
             throw new Error("ajv implementation error");
           const vSchema = gen.const("vSchema", schemaCode);
-          valid = (0, codegen_1.or)(...schema.map((_x, i) => equalCode(vSchema, i)));
+          valid = (0, codegen_1.or)(...schema2.map((_x, i) => equalCode(vSchema, i)));
         }
         cxt.pass(valid);
         function loopEnum() {
@@ -20537,7 +20546,7 @@ var require_enum = __commonJS({
           gen.forOf("v", schemaCode, (v3) => gen.if((0, codegen_1._)`${getEql()}(${data}, ${v3})`, () => gen.assign(valid, true).break()));
         }
         function equalCode(vSchema, i) {
-          const sch = schema[i];
+          const sch = schema2[i];
           return typeof sch === "object" && sch !== null ? (0, codegen_1._)`${getEql()}(${data}, ${vSchema}[${i}])` : (0, codegen_1._)`${data} === ${sch}`;
         }
       }
@@ -20613,13 +20622,13 @@ var require_additionalItems = __commonJS({
       }
     };
     function validateAdditionalItems(cxt, items) {
-      const { gen, schema, data, keyword, it: it2 } = cxt;
+      const { gen, schema: schema2, data, keyword, it: it2 } = cxt;
       it2.items = true;
       const len = gen.const("len", (0, codegen_1._)`${data}.length`);
-      if (schema === false) {
+      if (schema2 === false) {
         cxt.setParams({ len: items.length });
         cxt.pass((0, codegen_1._)`${len} <= ${items.length}`);
-      } else if (typeof schema == "object" && !(0, util_1.alwaysValidSchema)(it2, schema)) {
+      } else if (typeof schema2 == "object" && !(0, util_1.alwaysValidSchema)(it2, schema2)) {
         const valid = gen.var("valid", (0, codegen_1._)`${len} <= ${items.length}`);
         gen.if((0, codegen_1.not)(valid), () => validateItems(valid));
         cxt.ok(valid);
@@ -20652,11 +20661,11 @@ var require_items = __commonJS({
       schemaType: ["object", "array", "boolean"],
       before: "uniqueItems",
       code(cxt) {
-        const { schema, it: it2 } = cxt;
-        if (Array.isArray(schema))
-          return validateTuple(cxt, "additionalItems", schema);
+        const { schema: schema2, it: it2 } = cxt;
+        if (Array.isArray(schema2))
+          return validateTuple(cxt, "additionalItems", schema2);
         it2.items = true;
-        if ((0, util_1.alwaysValidSchema)(it2, schema))
+        if ((0, util_1.alwaysValidSchema)(it2, schema2))
           return;
         cxt.ok((0, code_1.validateArray)(cxt));
       }
@@ -20731,10 +20740,10 @@ var require_items2020 = __commonJS({
       before: "uniqueItems",
       error: error51,
       code(cxt) {
-        const { schema, parentSchema, it: it2 } = cxt;
+        const { schema: schema2, parentSchema, it: it2 } = cxt;
         const { prefixItems } = parentSchema;
         it2.items = true;
-        if ((0, util_1.alwaysValidSchema)(it2, schema))
+        if ((0, util_1.alwaysValidSchema)(it2, schema2))
           return;
         if (prefixItems)
           (0, additionalItems_1.validateAdditionalItems)(cxt, prefixItems);
@@ -20765,7 +20774,7 @@ var require_contains = __commonJS({
       trackErrors: true,
       error: error51,
       code(cxt) {
-        const { gen, schema, parentSchema, data, it: it2 } = cxt;
+        const { gen, schema: schema2, parentSchema, data, it: it2 } = cxt;
         let min;
         let max;
         const { minContains, maxContains } = parentSchema;
@@ -20786,7 +20795,7 @@ var require_contains = __commonJS({
           cxt.fail();
           return;
         }
-        if ((0, util_1.alwaysValidSchema)(it2, schema)) {
+        if ((0, util_1.alwaysValidSchema)(it2, schema2)) {
           let cond = (0, codegen_1._)`${len} >= ${min}`;
           if (max !== void 0)
             cond = (0, codegen_1._)`${cond} && ${len} <= ${max}`;
@@ -20871,14 +20880,14 @@ var require_dependencies = __commonJS({
         validateSchemaDeps(cxt, schDeps);
       }
     };
-    function splitDependencies({ schema }) {
+    function splitDependencies({ schema: schema2 }) {
       const propertyDeps = {};
       const schemaDeps = {};
-      for (const key in schema) {
+      for (const key in schema2) {
         if (key === "__proto__")
           continue;
-        const deps = Array.isArray(schema[key]) ? propertyDeps : schemaDeps;
-        deps[key] = schema[key];
+        const deps = Array.isArray(schema2[key]) ? propertyDeps : schemaDeps;
+        deps[key] = schema2[key];
       }
       return [propertyDeps, schemaDeps];
     }
@@ -20951,8 +20960,8 @@ var require_propertyNames = __commonJS({
       schemaType: ["object", "boolean"],
       error: error51,
       code(cxt) {
-        const { gen, schema, data, it: it2 } = cxt;
-        if ((0, util_1.alwaysValidSchema)(it2, schema))
+        const { gen, schema: schema2, data, it: it2 } = cxt;
+        if ((0, util_1.alwaysValidSchema)(it2, schema2))
           return;
         const valid = gen.name("valid");
         gen.forIn("key", data, (key) => {
@@ -20998,12 +21007,12 @@ var require_additionalProperties = __commonJS({
       trackErrors: true,
       error: error51,
       code(cxt) {
-        const { gen, schema, parentSchema, data, errsCount, it: it2 } = cxt;
+        const { gen, schema: schema2, parentSchema, data, errsCount, it: it2 } = cxt;
         if (!errsCount)
           throw new Error("ajv implementation error");
         const { allErrors, opts } = it2;
         it2.props = true;
-        if (opts.removeAdditional !== "all" && (0, util_1.alwaysValidSchema)(it2, schema))
+        if (opts.removeAdditional !== "all" && (0, util_1.alwaysValidSchema)(it2, schema2))
           return;
         const props = (0, code_1.allSchemaProperties)(parentSchema.properties);
         const patProps = (0, code_1.allSchemaProperties)(parentSchema.patternProperties);
@@ -21036,18 +21045,18 @@ var require_additionalProperties = __commonJS({
           gen.code((0, codegen_1._)`delete ${data}[${key}]`);
         }
         function additionalPropertyCode(key) {
-          if (opts.removeAdditional === "all" || opts.removeAdditional && schema === false) {
+          if (opts.removeAdditional === "all" || opts.removeAdditional && schema2 === false) {
             deleteAdditional(key);
             return;
           }
-          if (schema === false) {
+          if (schema2 === false) {
             cxt.setParams({ additionalProperty: key });
             cxt.error();
             if (!allErrors)
               gen.break();
             return;
           }
-          if (typeof schema == "object" && !(0, util_1.alwaysValidSchema)(it2, schema)) {
+          if (typeof schema2 == "object" && !(0, util_1.alwaysValidSchema)(it2, schema2)) {
             const valid = gen.name("valid");
             if (opts.removeAdditional === "failing") {
               applyAdditionalSchema(key, valid, false);
@@ -21097,18 +21106,18 @@ var require_properties = __commonJS({
       type: "object",
       schemaType: "object",
       code(cxt) {
-        const { gen, schema, parentSchema, data, it: it2 } = cxt;
+        const { gen, schema: schema2, parentSchema, data, it: it2 } = cxt;
         if (it2.opts.removeAdditional === "all" && parentSchema.additionalProperties === void 0) {
           additionalProperties_1.default.code(new validate_1.KeywordCxt(it2, additionalProperties_1.default, "additionalProperties"));
         }
-        const allProps = (0, code_1.allSchemaProperties)(schema);
+        const allProps = (0, code_1.allSchemaProperties)(schema2);
         for (const prop of allProps) {
           it2.definedProperties.add(prop);
         }
         if (it2.opts.unevaluated && allProps.length && it2.props !== true) {
           it2.props = util_1.mergeEvaluated.props(gen, (0, util_1.toHash)(allProps), it2.props);
         }
-        const properties2 = allProps.filter((p2) => !(0, util_1.alwaysValidSchema)(it2, schema[p2]));
+        const properties2 = allProps.filter((p2) => !(0, util_1.alwaysValidSchema)(it2, schema2[p2]));
         if (properties2.length === 0)
           return;
         const valid = gen.name("valid");
@@ -21126,7 +21135,7 @@ var require_properties = __commonJS({
           cxt.ok(valid);
         }
         function hasDefault(prop) {
-          return it2.opts.useDefaults && !it2.compositeRule && schema[prop].default !== void 0;
+          return it2.opts.useDefaults && !it2.compositeRule && schema2[prop].default !== void 0;
         }
         function applyPropertySchema(prop) {
           cxt.subschema({
@@ -21155,10 +21164,10 @@ var require_patternProperties = __commonJS({
       type: "object",
       schemaType: "object",
       code(cxt) {
-        const { gen, schema, data, parentSchema, it: it2 } = cxt;
+        const { gen, schema: schema2, data, parentSchema, it: it2 } = cxt;
         const { opts } = it2;
-        const patterns = (0, code_1.allSchemaProperties)(schema);
-        const alwaysValidPatterns = patterns.filter((p2) => (0, util_1.alwaysValidSchema)(it2, schema[p2]));
+        const patterns = (0, code_1.allSchemaProperties)(schema2);
+        const alwaysValidPatterns = patterns.filter((p2) => (0, util_1.alwaysValidSchema)(it2, schema2[p2]));
         if (patterns.length === 0 || alwaysValidPatterns.length === patterns.length && (!it2.opts.unevaluated || it2.props === true)) {
           return;
         }
@@ -21226,8 +21235,8 @@ var require_not = __commonJS({
       schemaType: ["object", "boolean"],
       trackErrors: true,
       code(cxt) {
-        const { gen, schema, it: it2 } = cxt;
-        if ((0, util_1.alwaysValidSchema)(it2, schema)) {
+        const { gen, schema: schema2, it: it2 } = cxt;
+        if ((0, util_1.alwaysValidSchema)(it2, schema2)) {
           cxt.fail();
           return;
         }
@@ -21280,12 +21289,12 @@ var require_oneOf = __commonJS({
       trackErrors: true,
       error: error51,
       code(cxt) {
-        const { gen, schema, parentSchema, it: it2 } = cxt;
-        if (!Array.isArray(schema))
+        const { gen, schema: schema2, parentSchema, it: it2 } = cxt;
+        if (!Array.isArray(schema2))
           throw new Error("ajv implementation error");
         if (it2.opts.discriminator && parentSchema.discriminator)
           return;
-        const schArr = schema;
+        const schArr = schema2;
         const valid = gen.let("valid", false);
         const passing = gen.let("passing", null);
         const schValid = gen.name("_valid");
@@ -21331,11 +21340,11 @@ var require_allOf = __commonJS({
       keyword: "allOf",
       schemaType: "array",
       code(cxt) {
-        const { gen, schema, it: it2 } = cxt;
-        if (!Array.isArray(schema))
+        const { gen, schema: schema2, it: it2 } = cxt;
+        if (!Array.isArray(schema2))
           throw new Error("ajv implementation error");
         const valid = gen.name("valid");
-        schema.forEach((sch, i) => {
+        schema2.forEach((sch, i) => {
           if ((0, util_1.alwaysValidSchema)(it2, sch))
             return;
           const schCxt = cxt.subschema({ keyword: "allOf", schemaProp: i }, valid);
@@ -21410,8 +21419,8 @@ var require_if = __commonJS({
       }
     };
     function hasSchema(it2, keyword) {
-      const schema = it2.schema[keyword];
-      return schema !== void 0 && !(0, util_1.alwaysValidSchema)(it2, schema);
+      const schema2 = it2.schema[keyword];
+      return schema2 !== void 0 && !(0, util_1.alwaysValidSchema)(it2, schema2);
     }
     exports2.default = def;
   }
@@ -21500,7 +21509,7 @@ var require_format = __commonJS({
       $data: true,
       error: error51,
       code(cxt, ruleType) {
-        const { gen, data, $data, schema, schemaCode, it: it2 } = cxt;
+        const { gen, data, $data, schema: schema2, schemaCode, it: it2 } = cxt;
         const { opts, errSchemaPath, schemaEnv, self: self2 } = it2;
         if (!opts.validateFormats)
           return;
@@ -21530,7 +21539,7 @@ var require_format = __commonJS({
           }
         }
         function validateFormat() {
-          const formatDef = self2.formats[schema];
+          const formatDef = self2.formats[schema2];
           if (!formatDef) {
             unknownFormat();
             return;
@@ -21547,12 +21556,12 @@ var require_format = __commonJS({
             }
             throw new Error(unknownMsg());
             function unknownMsg() {
-              return `unknown format "${schema}" ignored in schema at path "${errSchemaPath}"`;
+              return `unknown format "${schema2}" ignored in schema at path "${errSchemaPath}"`;
             }
           }
           function getFormat(fmtDef) {
-            const code = fmtDef instanceof RegExp ? (0, codegen_1.regexpCode)(fmtDef) : opts.code.formats ? (0, codegen_1._)`${opts.code.formats}${(0, codegen_1.getProperty)(schema)}` : void 0;
-            const fmt = gen.scopeValue("formats", { key: schema, ref: fmtDef, code });
+            const code = fmtDef instanceof RegExp ? (0, codegen_1.regexpCode)(fmtDef) : opts.code.formats ? (0, codegen_1._)`${opts.code.formats}${(0, codegen_1.getProperty)(schema2)}` : void 0;
+            const fmt = gen.scopeValue("formats", { key: schema2, ref: fmtDef, code });
             if (typeof fmtDef == "object" && !(fmtDef instanceof RegExp)) {
               return [fmtDef.type || "string", fmtDef.validate, (0, codegen_1._)`${fmt}.validate`];
             }
@@ -21663,15 +21672,15 @@ var require_discriminator = __commonJS({
       schemaType: "object",
       error: error51,
       code(cxt) {
-        const { gen, data, schema, parentSchema, it: it2 } = cxt;
+        const { gen, data, schema: schema2, parentSchema, it: it2 } = cxt;
         const { oneOf: oneOf2 } = parentSchema;
         if (!it2.opts.discriminator) {
           throw new Error("discriminator: requires discriminator option");
         }
-        const tagName = schema.propertyName;
+        const tagName = schema2.propertyName;
         if (typeof tagName != "string")
           throw new Error("discriminator: requires propertyName");
-        if (schema.mapping)
+        if (schema2.mapping)
           throw new Error("discriminator: mapping is not supported");
         if (!oneOf2)
           throw new Error("discriminator: requires oneOf keyword");
@@ -22622,8 +22631,8 @@ var require_toml_parser = __commonJS({
     function isAlphaNumHyphen(cp) {
       return cp >= CHAR_A && cp <= CHAR_Z || cp >= CHAR_a && cp <= CHAR_z || cp >= CHAR_0 && cp <= CHAR_9 || cp === CHAR_LOWBAR || cp === CHAR_HYPHEN;
     }
-    var _type = Symbol("type");
-    var _declared = Symbol("declared");
+    var _type = /* @__PURE__ */ Symbol("type");
+    var _declared = /* @__PURE__ */ Symbol("declared");
     var hasOwnProperty = Object.prototype.hasOwnProperty;
     var defineProperty = Object.defineProperty;
     var descriptor = { configurable: true, enumerable: true, writable: true, value: void 0 };
@@ -22632,7 +22641,7 @@ var require_toml_parser = __commonJS({
       if (key === "__proto__") defineProperty(obj, "__proto__", descriptor);
       return false;
     }
-    var INLINE_TABLE = Symbol("inline-table");
+    var INLINE_TABLE = /* @__PURE__ */ Symbol("inline-table");
     function InlineTable() {
       return Object.defineProperties({}, {
         [_type]: { value: INLINE_TABLE }
@@ -22642,7 +22651,7 @@ var require_toml_parser = __commonJS({
       if (obj === null || typeof obj !== "object") return false;
       return obj[_type] === INLINE_TABLE;
     }
-    var TABLE = Symbol("table");
+    var TABLE = /* @__PURE__ */ Symbol("table");
     function Table() {
       return Object.defineProperties({}, {
         [_type]: { value: TABLE },
@@ -22653,8 +22662,8 @@ var require_toml_parser = __commonJS({
       if (obj === null || typeof obj !== "object") return false;
       return obj[_type] === TABLE;
     }
-    var _contentType = Symbol("content-type");
-    var INLINE_LIST = Symbol("inline-list");
+    var _contentType = /* @__PURE__ */ Symbol("content-type");
+    var INLINE_LIST = /* @__PURE__ */ Symbol("inline-list");
     function InlineList(type) {
       return Object.defineProperties([], {
         [_type]: { value: INLINE_LIST },
@@ -22665,7 +22674,7 @@ var require_toml_parser = __commonJS({
       if (obj === null || typeof obj !== "object") return false;
       return obj[_type] === INLINE_LIST;
     }
-    var LIST = Symbol("list");
+    var LIST = /* @__PURE__ */ Symbol("list");
     function List() {
       return Object.defineProperties([], {
         [_type]: { value: LIST }
@@ -22706,7 +22715,7 @@ var require_toml_parser = __commonJS({
         return this.value;
       }
     };
-    var INTEGER = Symbol("integer");
+    var INTEGER = /* @__PURE__ */ Symbol("integer");
     function Integer(value) {
       let num2 = Number(value);
       if (Object.is(num2, -0)) num2 = 0;
@@ -22726,7 +22735,7 @@ var require_toml_parser = __commonJS({
       if (obj === null || typeof obj !== "object") return false;
       return obj[_type] === INTEGER;
     }
-    var FLOAT = Symbol("float");
+    var FLOAT = /* @__PURE__ */ Symbol("float");
     function Float(value) {
       return Object.defineProperties(new Number(value), {
         [_type]: { value: FLOAT },
@@ -26499,9 +26508,9 @@ var ZodArray = class _ZodArray extends ZodType {
     return this.min(1, message3);
   }
 };
-ZodArray.create = (schema, params) => {
+ZodArray.create = (schema2, params) => {
   return new ZodArray({
-    type: schema,
+    type: schema2,
     minLength: null,
     maxLength: null,
     exactLength: null,
@@ -26509,30 +26518,30 @@ ZodArray.create = (schema, params) => {
     ...processCreateParams(params)
   });
 };
-function deepPartialify(schema) {
-  if (schema instanceof ZodObject) {
+function deepPartialify(schema2) {
+  if (schema2 instanceof ZodObject) {
     const newShape = {};
-    for (const key in schema.shape) {
-      const fieldSchema = schema.shape[key];
+    for (const key in schema2.shape) {
+      const fieldSchema = schema2.shape[key];
       newShape[key] = ZodOptional.create(deepPartialify(fieldSchema));
     }
     return new ZodObject({
-      ...schema._def,
+      ...schema2._def,
       shape: () => newShape
     });
-  } else if (schema instanceof ZodArray) {
+  } else if (schema2 instanceof ZodArray) {
     return new ZodArray({
-      ...schema._def,
-      type: deepPartialify(schema.element)
+      ...schema2._def,
+      type: deepPartialify(schema2.element)
     });
-  } else if (schema instanceof ZodOptional) {
-    return ZodOptional.create(deepPartialify(schema.unwrap()));
-  } else if (schema instanceof ZodNullable) {
-    return ZodNullable.create(deepPartialify(schema.unwrap()));
-  } else if (schema instanceof ZodTuple) {
-    return ZodTuple.create(schema.items.map((item) => deepPartialify(item)));
+  } else if (schema2 instanceof ZodOptional) {
+    return ZodOptional.create(deepPartialify(schema2.unwrap()));
+  } else if (schema2 instanceof ZodNullable) {
+    return ZodNullable.create(deepPartialify(schema2.unwrap()));
+  } else if (schema2 instanceof ZodTuple) {
+    return ZodTuple.create(schema2.items.map((item) => deepPartialify(item)));
   } else {
-    return schema;
+    return schema2;
   }
 }
 var ZodObject = class _ZodObject extends ZodType {
@@ -26748,8 +26757,8 @@ var ZodObject = class _ZodObject extends ZodType {
   //   }) as any;
   //   return merged;
   // }
-  setKey(key, schema) {
-    return this.augment({ [key]: schema });
+  setKey(key, schema2) {
+    return this.augment({ [key]: schema2 });
   }
   // merge<Incoming extends AnyZodObject>(
   //   merging: Incoming
@@ -27195,10 +27204,10 @@ var ZodTuple = class _ZodTuple extends ZodType {
       status.dirty();
     }
     const items = [...ctx.data].map((item, itemIndex) => {
-      const schema = this._def.items[itemIndex] || this._def.rest;
-      if (!schema)
+      const schema2 = this._def.items[itemIndex] || this._def.rest;
+      if (!schema2)
         return null;
-      return schema._parse(new ParseInputLazyPath(ctx, item, ctx.path, itemIndex));
+      return schema2._parse(new ParseInputLazyPath(ctx, item, ctx.path, itemIndex));
     }).filter((x2) => !!x2);
     if (ctx.common.async) {
       return Promise.all(items).then((results) => {
@@ -27712,9 +27721,9 @@ var ZodPromise = class extends ZodType {
     }));
   }
 };
-ZodPromise.create = (schema, params) => {
+ZodPromise.create = (schema2, params) => {
   return new ZodPromise({
-    type: schema,
+    type: schema2,
     typeName: ZodFirstPartyTypeKind.ZodPromise,
     ...processCreateParams(params)
   });
@@ -27842,17 +27851,17 @@ var ZodEffects = class extends ZodType {
     util.assertNever(effect);
   }
 };
-ZodEffects.create = (schema, effect, params) => {
+ZodEffects.create = (schema2, effect, params) => {
   return new ZodEffects({
-    schema,
+    schema: schema2,
     typeName: ZodFirstPartyTypeKind.ZodEffects,
     effect,
     ...processCreateParams(params)
   });
 };
-ZodEffects.createWithPreprocess = (preprocess2, schema, params) => {
+ZodEffects.createWithPreprocess = (preprocess2, schema2, params) => {
   return new ZodEffects({
-    schema,
+    schema: schema2,
     effect: { type: "preprocess", transform: preprocess2 },
     typeName: ZodFirstPartyTypeKind.ZodEffects,
     ...processCreateParams(params)
@@ -27995,7 +28004,6 @@ ZodNaN.create = (params) => {
     ...processCreateParams(params)
   });
 };
-var BRAND = Symbol("zod_brand");
 var ZodBranded = class extends ZodType {
   _parse(input) {
     const { ctx } = this._processInputParams(input);
@@ -28224,8 +28232,8 @@ init_locales();
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
 function isZ4Schema(s) {
-  const schema = s;
-  return !!schema._zod;
+  const schema2 = s;
+  return !!schema2._zod;
 }
 function objectFromShape(shape) {
   const values = Object.values(shape);
@@ -28239,33 +28247,33 @@ function objectFromShape(shape) {
     return objectType(shape);
   throw new Error("Mixed Zod versions detected in object shape.");
 }
-function safeParse2(schema, data) {
-  if (isZ4Schema(schema)) {
-    const result3 = safeParse(schema, data);
+function safeParse2(schema2, data) {
+  if (isZ4Schema(schema2)) {
+    const result3 = safeParse(schema2, data);
     return result3;
   }
-  const v3Schema = schema;
+  const v3Schema = schema2;
   const result2 = v3Schema.safeParse(data);
   return result2;
 }
-async function safeParseAsync2(schema, data) {
-  if (isZ4Schema(schema)) {
-    const result3 = await safeParseAsync(schema, data);
+async function safeParseAsync2(schema2, data) {
+  if (isZ4Schema(schema2)) {
+    const result3 = await safeParseAsync(schema2, data);
     return result3;
   }
-  const v3Schema = schema;
+  const v3Schema = schema2;
   const result2 = await v3Schema.safeParseAsync(data);
   return result2;
 }
-function getObjectShape(schema) {
-  if (!schema)
+function getObjectShape(schema2) {
+  if (!schema2)
     return void 0;
   let rawShape;
-  if (isZ4Schema(schema)) {
-    const v4Schema = schema;
+  if (isZ4Schema(schema2)) {
+    const v4Schema = schema2;
     rawShape = v4Schema._zod?.def?.shape;
   } else {
-    const v3Schema = schema;
+    const v3Schema = schema2;
     rawShape = v3Schema.shape;
   }
   if (!rawShape)
@@ -28279,29 +28287,29 @@ function getObjectShape(schema) {
   }
   return rawShape;
 }
-function normalizeObjectSchema(schema) {
-  if (!schema)
+function normalizeObjectSchema(schema2) {
+  if (!schema2)
     return void 0;
-  if (typeof schema === "object") {
-    const asV3 = schema;
-    const asV4 = schema;
+  if (typeof schema2 === "object") {
+    const asV3 = schema2;
+    const asV4 = schema2;
     if (!asV3._def && !asV4._zod) {
-      const values = Object.values(schema);
+      const values = Object.values(schema2);
       if (values.length > 0 && values.every((v3) => typeof v3 === "object" && v3 !== null && (v3._def !== void 0 || v3._zod !== void 0 || typeof v3.parse === "function"))) {
-        return objectFromShape(schema);
+        return objectFromShape(schema2);
       }
     }
   }
-  if (isZ4Schema(schema)) {
-    const v4Schema = schema;
+  if (isZ4Schema(schema2)) {
+    const v4Schema = schema2;
     const def = v4Schema._zod?.def;
     if (def && (def.type === "object" || def.shape !== void 0)) {
-      return schema;
+      return schema2;
     }
   } else {
-    const v3Schema = schema;
+    const v3Schema = schema2;
     if (v3Schema.shape !== void 0) {
-      return schema;
+      return schema2;
     }
   }
   return void 0;
@@ -28341,23 +28349,23 @@ function getParseErrorMessage(error51) {
   }
   return String(error51);
 }
-function getSchemaDescription(schema) {
-  return schema.description;
+function getSchemaDescription(schema2) {
+  return schema2.description;
 }
-function isSchemaOptional(schema) {
-  if (isZ4Schema(schema)) {
-    const v4Schema = schema;
+function isSchemaOptional(schema2) {
+  if (isZ4Schema(schema2)) {
+    const v4Schema = schema2;
     return v4Schema._zod?.def?.type === "optional";
   }
-  const v3Schema = schema;
-  if (typeof schema.isOptional === "function") {
-    return schema.isOptional();
+  const v3Schema = schema2;
+  if (typeof schema2.isOptional === "function") {
+    return schema2.isOptional();
   }
   return v3Schema._def?.typeName === "ZodOptional";
 }
-function getLiteralValue(schema) {
-  if (isZ4Schema(schema)) {
-    const v4Schema = schema;
+function getLiteralValue(schema2) {
+  if (isZ4Schema(schema2)) {
+    const v4Schema = schema2;
     const def2 = v4Schema._zod?.def;
     if (def2) {
       if (def2.value !== void 0)
@@ -28367,7 +28375,7 @@ function getLiteralValue(schema) {
       }
     }
   }
-  const v3Schema = schema;
+  const v3Schema = schema2;
   const def = v3Schema._def;
   if (def) {
     if (def.value !== void 0)
@@ -28376,7 +28384,7 @@ function getLiteralValue(schema) {
       return def.values[0];
     }
   }
-  const directValue = schema.value;
+  const directValue = schema2.value;
   if (directValue !== void 0)
     return directValue;
   return void 0;
@@ -29920,7 +29928,7 @@ function isTerminal(status) {
 }
 
 // node_modules/zod-to-json-schema/dist/esm/Options.js
-var ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
+var ignoreOverride = /* @__PURE__ */ Symbol("Let zodToJsonSchema decide on which parser to use");
 var defaultOptions = {
   name: void 0,
   $refStrategy: "root",
@@ -30202,16 +30210,16 @@ function parseIntersectionDef(def, refs) {
   ].filter((x2) => !!x2);
   let unevaluatedProperties = refs.target === "jsonSchema2019-09" ? { unevaluatedProperties: false } : void 0;
   const mergedAllOf = [];
-  allOf.forEach((schema) => {
-    if (isJsonSchema7AllOfType(schema)) {
-      mergedAllOf.push(...schema.allOf);
-      if (schema.unevaluatedProperties === void 0) {
+  allOf.forEach((schema2) => {
+    if (isJsonSchema7AllOfType(schema2)) {
+      mergedAllOf.push(...schema2.allOf);
+      if (schema2.unevaluatedProperties === void 0) {
         unevaluatedProperties = void 0;
       }
     } else {
-      let nestedSchema = schema;
-      if ("additionalProperties" in schema && schema.additionalProperties === false) {
-        const { additionalProperties, ...rest } = schema;
+      let nestedSchema = schema2;
+      if ("additionalProperties" in schema2 && schema2.additionalProperties === false) {
+        const { additionalProperties, ...rest } = schema2;
         nestedSchema = rest;
       } else {
         unevaluatedProperties = void 0;
@@ -30438,60 +30446,60 @@ function escapeNonAlphaNumeric(source) {
   }
   return result2;
 }
-function addFormat(schema, value, message3, refs) {
-  if (schema.format || schema.anyOf?.some((x2) => x2.format)) {
-    if (!schema.anyOf) {
-      schema.anyOf = [];
+function addFormat(schema2, value, message3, refs) {
+  if (schema2.format || schema2.anyOf?.some((x2) => x2.format)) {
+    if (!schema2.anyOf) {
+      schema2.anyOf = [];
     }
-    if (schema.format) {
-      schema.anyOf.push({
-        format: schema.format,
-        ...schema.errorMessage && refs.errorMessages && {
-          errorMessage: { format: schema.errorMessage.format }
+    if (schema2.format) {
+      schema2.anyOf.push({
+        format: schema2.format,
+        ...schema2.errorMessage && refs.errorMessages && {
+          errorMessage: { format: schema2.errorMessage.format }
         }
       });
-      delete schema.format;
-      if (schema.errorMessage) {
-        delete schema.errorMessage.format;
-        if (Object.keys(schema.errorMessage).length === 0) {
-          delete schema.errorMessage;
+      delete schema2.format;
+      if (schema2.errorMessage) {
+        delete schema2.errorMessage.format;
+        if (Object.keys(schema2.errorMessage).length === 0) {
+          delete schema2.errorMessage;
         }
       }
     }
-    schema.anyOf.push({
+    schema2.anyOf.push({
       format: value,
       ...message3 && refs.errorMessages && { errorMessage: { format: message3 } }
     });
   } else {
-    setResponseValueAndErrors(schema, "format", value, message3, refs);
+    setResponseValueAndErrors(schema2, "format", value, message3, refs);
   }
 }
-function addPattern(schema, regex2, message3, refs) {
-  if (schema.pattern || schema.allOf?.some((x2) => x2.pattern)) {
-    if (!schema.allOf) {
-      schema.allOf = [];
+function addPattern(schema2, regex2, message3, refs) {
+  if (schema2.pattern || schema2.allOf?.some((x2) => x2.pattern)) {
+    if (!schema2.allOf) {
+      schema2.allOf = [];
     }
-    if (schema.pattern) {
-      schema.allOf.push({
-        pattern: schema.pattern,
-        ...schema.errorMessage && refs.errorMessages && {
-          errorMessage: { pattern: schema.errorMessage.pattern }
+    if (schema2.pattern) {
+      schema2.allOf.push({
+        pattern: schema2.pattern,
+        ...schema2.errorMessage && refs.errorMessages && {
+          errorMessage: { pattern: schema2.errorMessage.pattern }
         }
       });
-      delete schema.pattern;
-      if (schema.errorMessage) {
-        delete schema.errorMessage.pattern;
-        if (Object.keys(schema.errorMessage).length === 0) {
-          delete schema.errorMessage;
+      delete schema2.pattern;
+      if (schema2.errorMessage) {
+        delete schema2.errorMessage.pattern;
+        if (Object.keys(schema2.errorMessage).length === 0) {
+          delete schema2.errorMessage;
         }
       }
     }
-    schema.allOf.push({
+    schema2.allOf.push({
       pattern: stringifyRegExpWithFlags(regex2, refs),
       ...message3 && refs.errorMessages && { errorMessage: { pattern: message3 } }
     });
   } else {
-    setResponseValueAndErrors(schema, "pattern", stringifyRegExpWithFlags(regex2, refs), message3, refs);
+    setResponseValueAndErrors(schema2, "pattern", stringifyRegExpWithFlags(regex2, refs), message3, refs);
   }
 }
 function stringifyRegExpWithFlags(regex2, refs) {
@@ -30589,7 +30597,7 @@ function parseRecordDef(def, refs) {
       additionalProperties: refs.rejectedAdditionalProperties
     };
   }
-  const schema = {
+  const schema2 = {
     type: "object",
     additionalProperties: parseDef(def.valueType._def, {
       ...refs,
@@ -30597,17 +30605,17 @@ function parseRecordDef(def, refs) {
     }) ?? refs.allowedAdditionalProperties
   };
   if (refs.target === "openApi3") {
-    return schema;
+    return schema2;
   }
   if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodString && def.keyType._def.checks?.length) {
     const { type, ...keyType } = parseStringDef(def.keyType._def, refs);
     return {
-      ...schema,
+      ...schema2,
       propertyNames: keyType
     };
   } else if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodEnum) {
     return {
-      ...schema,
+      ...schema2,
       propertyNames: {
         enum: def.keyType._def.values
       }
@@ -30615,11 +30623,11 @@ function parseRecordDef(def, refs) {
   } else if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodBranded && def.keyType._def.type._def.typeName === ZodFirstPartyTypeKind.ZodString && def.keyType._def.type._def.checks?.length) {
     const { type, ...keyType } = parseBrandedDef(def.keyType._def, refs);
     return {
-      ...schema,
+      ...schema2,
       propertyNames: keyType
     };
   }
-  return schema;
+  return schema2;
 }
 
 // node_modules/zod-to-json-schema/dist/esm/parsers/map.js
@@ -30892,9 +30900,9 @@ function decideAdditionalProperties(def, refs) {
       return refs.removeAdditionalStrategy === "strict" ? refs.allowedAdditionalProperties : refs.rejectedAdditionalProperties;
   }
 }
-function safeIsOptional(schema) {
+function safeIsOptional(schema2) {
   try {
-    return schema.isOptional();
+    return schema2.isOptional();
   } catch {
     return true;
   }
@@ -30950,18 +30958,18 @@ function parseSetDef(def, refs) {
     ...refs,
     currentPath: [...refs.currentPath, "items"]
   });
-  const schema = {
+  const schema2 = {
     type: "array",
     uniqueItems: true,
     items
   };
   if (def.minSize) {
-    setResponseValueAndErrors(schema, "minItems", def.minSize.value, def.minSize.message, refs);
+    setResponseValueAndErrors(schema2, "minItems", def.minSize.value, def.minSize.message, refs);
   }
   if (def.maxSize) {
-    setResponseValueAndErrors(schema, "maxItems", def.maxSize.value, def.maxSize.message, refs);
+    setResponseValueAndErrors(schema2, "maxItems", def.maxSize.value, def.maxSize.message, refs);
   }
-  return schema;
+  return schema2;
 }
 
 // node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
@@ -31142,17 +31150,17 @@ var addMeta = (def, refs, jsonSchema) => {
 };
 
 // node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
-var zodToJsonSchema = (schema, options) => {
+var zodToJsonSchema = (schema2, options) => {
   const refs = getRefs(options);
-  let definitions = typeof options === "object" && options.definitions ? Object.entries(options.definitions).reduce((acc, [name3, schema2]) => ({
+  let definitions = typeof options === "object" && options.definitions ? Object.entries(options.definitions).reduce((acc, [name3, schema3]) => ({
     ...acc,
-    [name3]: parseDef(schema2._def, {
+    [name3]: parseDef(schema3._def, {
       ...refs,
       currentPath: [...refs.basePath, refs.definitionPath, name3]
     }, true) ?? parseAnyDef(refs)
   }), {}) : void 0;
   const name2 = typeof options === "string" ? options : options?.nameStrategy === "title" ? void 0 : options?.name;
-  const main = parseDef(schema._def, name2 === void 0 ? refs : {
+  const main = parseDef(schema2._def, name2 === void 0 ? refs : {
     ...refs,
     currentPath: [...refs.basePath, refs.definitionPath, name2]
   }, false) ?? parseAnyDef(refs);
@@ -31213,20 +31221,20 @@ function mapMiniTarget(t) {
     return "draft-2020-12";
   return "draft-7";
 }
-function toJsonSchemaCompat(schema, opts) {
-  if (isZ4Schema(schema)) {
-    return toJSONSchema(schema, {
+function toJsonSchemaCompat(schema2, opts) {
+  if (isZ4Schema(schema2)) {
+    return toJSONSchema(schema2, {
       target: mapMiniTarget(opts?.target),
       io: opts?.pipeStrategy ?? "input"
     });
   }
-  return zodToJsonSchema(schema, {
+  return zodToJsonSchema(schema2, {
     strictUnions: opts?.strictUnions ?? true,
     pipeStrategy: opts?.pipeStrategy ?? "input"
   });
 }
-function getMethodLiteral(schema) {
-  const shape = getObjectShape(schema);
+function getMethodLiteral(schema2) {
+  const shape = getObjectShape(schema2);
   const methodSchema = shape?.method;
   if (!methodSchema) {
     throw new Error("Schema is missing a method literal");
@@ -31237,8 +31245,8 @@ function getMethodLiteral(schema) {
   }
   return value;
 }
-function parseWithCompat(schema, data) {
-  const result2 = safeParse2(schema, data);
+function parseWithCompat(schema2, data) {
+  const result2 = safeParse2(schema2, data);
   if (!result2.success) {
     throw result2.error;
   }
@@ -31286,6 +31294,9 @@ var Protocol = class {
       this.setRequestHandler(GetTaskPayloadRequestSchema, async (request3, extra) => {
         const handleTaskResult = async () => {
           const taskId = request3.params.taskId;
+          if (!await this._taskStore.getTask(taskId, extra.sessionId)) {
+            throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
+          }
           if (this._taskMessageQueue) {
             let queuedMessage;
             while (queuedMessage = await this._taskMessageQueue.dequeue(taskId, extra.sessionId)) {
@@ -31316,12 +31327,12 @@ var Protocol = class {
             throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
           }
           if (!isTerminal(task.status)) {
-            await this._waitForTaskUpdate(taskId, extra.signal);
+            await this._waitForTaskUpdate(taskId, extra.signal, extra.sessionId);
             return await handleTaskResult();
           }
           if (isTerminal(task.status)) {
             const result2 = await this._taskStore.getTaskResult(taskId, extra.sessionId);
-            this._clearTaskQueue(taskId);
+            this._clearTaskQueue(taskId, extra.sessionId);
             return {
               ...result2,
               _meta: {
@@ -31358,7 +31369,7 @@ var Protocol = class {
             throw new McpError(ErrorCode.InvalidParams, `Cannot cancel task in terminal status: ${task.status}`);
           }
           await this._taskStore.updateTaskStatus(request3.params.taskId, "cancelled", "Client cancelled task execution.", extra.sessionId);
-          this._clearTaskQueue(request3.params.taskId);
+          this._clearTaskQueue(request3.params.taskId, extra.sessionId);
           const cancelledTask = await this._taskStore.getTask(request3.params.taskId, extra.sessionId);
           if (!cancelledTask) {
             throw new McpError(ErrorCode.InvalidParams, `Task not found after cancellation: ${request3.params.taskId}`);
@@ -31486,6 +31497,19 @@ var Protocol = class {
     const handler = this._requestHandlers.get(request3.method) ?? this.fallbackRequestHandler;
     const capturedTransport = this._transport;
     const relatedTaskId = request3.params?._meta?.[RELATED_TASK_META_KEY]?.taskId;
+    const sessionId = capturedTransport?.sessionId;
+    const store = this._taskStore;
+    let relatedTaskFound = true;
+    let relatedTaskLookup;
+    if (relatedTaskId && store && this._taskMessageQueue && sessionId !== void 0) {
+      relatedTaskFound = false;
+      relatedTaskLookup = (async () => {
+        if (!await store.getTask(relatedTaskId, sessionId)) {
+          throw new McpError(ErrorCode.InvalidParams, `Task not found: ${relatedTaskId}`);
+        }
+        relatedTaskFound = true;
+      })();
+    }
     if (handler === void 0) {
       const errorResponse = {
         jsonrpc: "2.0",
@@ -31495,7 +31519,10 @@ var Protocol = class {
           message: "Method not found"
         }
       };
-      if (relatedTaskId && this._taskMessageQueue) {
+      if (relatedTaskId && relatedTaskLookup) {
+        const queuedError = { type: "error", message: errorResponse, timestamp: Date.now() };
+        relatedTaskLookup.then(() => this._enqueueTaskMessage(relatedTaskId, queuedError, sessionId), () => capturedTransport?.send(errorResponse)).catch((error51) => this._onerror(new Error(`Failed to send an error response: ${error51}`)));
+      } else if (relatedTaskId && this._taskMessageQueue) {
         this._enqueueTaskMessage(relatedTaskId, {
           type: "error",
           message: errorResponse,
@@ -31546,7 +31573,10 @@ var Protocol = class {
       closeSSEStream: extra?.closeSSEStream,
       closeStandaloneSSEStream: extra?.closeStandaloneSSEStream
     };
-    Promise.resolve().then(() => {
+    (relatedTaskLookup ?? Promise.resolve()).then(() => {
+      if (relatedTaskLookup && abortController.signal.aborted) {
+        throw new McpError(ErrorCode.ConnectionClosed, "Request was cancelled");
+      }
       if (taskCreationParams) {
         this.assertTaskHandlerCapability(request3.method);
       }
@@ -31581,7 +31611,7 @@ var Protocol = class {
           ...error51["data"] !== void 0 && { data: error51["data"] }
         }
       };
-      if (relatedTaskId && this._taskMessageQueue) {
+      if (relatedTaskId && this._taskMessageQueue && relatedTaskFound) {
         await this._enqueueTaskMessage(relatedTaskId, {
           type: "error",
           message: errorResponse,
@@ -32061,7 +32091,7 @@ var Protocol = class {
       throw new Error("Cannot enqueue task message: taskStore and taskMessageQueue are not configured");
     }
     const maxQueueSize = this._options?.maxTaskQueueSize;
-    await this._taskMessageQueue.enqueue(taskId, message3, sessionId, maxQueueSize);
+    await this._taskMessageQueue.enqueue(taskId, message3, sessionId ?? this._transport?.sessionId, maxQueueSize);
   }
   /**
    * Clears the message queue for a task and rejects any pending request resolvers.
@@ -32090,12 +32120,13 @@ var Protocol = class {
    * Uses polling to check for updates at the task's configured poll interval.
    * @param taskId The task ID to wait for
    * @param signal Abort signal to cancel the wait
+   * @param sessionId Session of the request that waits, passed to the task store
    * @returns Promise that resolves when an update occurs or rejects if aborted
    */
-  async _waitForTaskUpdate(taskId, signal) {
+  async _waitForTaskUpdate(taskId, signal, sessionId) {
     let interval = this._options?.defaultTaskPollInterval ?? 1e3;
     try {
-      const task = await this._taskStore?.getTask(taskId);
+      const task = await this._taskStore?.getTask(taskId, sessionId);
       if (task?.pollInterval) {
         interval = task.pollInterval;
       }
@@ -32246,8 +32277,8 @@ var AjvJsonSchemaValidator = class {
    * @param schema - Standard JSON Schema object
    * @returns A validator function that validates input data
    */
-  getValidator(schema) {
-    const ajvValidator = "$id" in schema && typeof schema.$id === "string" ? this._ajv.getSchema(schema.$id) ?? this._ajv.compile(schema) : this._ajv.compile(schema);
+  getValidator(schema2) {
+    const ajvValidator = "$id" in schema2 && typeof schema2.$id === "string" ? this._ajv.getSchema(schema2.$id) ?? this._ajv.compile(schema2) : this._ajv.compile(schema2);
     return (input) => {
       const valid = ajvValidator(input);
       if (valid) {
@@ -32887,12 +32918,12 @@ var Server = class extends Protocol {
 };
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
-var COMPLETABLE_SYMBOL = Symbol.for("mcp.completable");
-function isCompletable(schema) {
-  return !!schema && typeof schema === "object" && COMPLETABLE_SYMBOL in schema;
+var COMPLETABLE_SYMBOL = /* @__PURE__ */ Symbol.for("mcp.completable");
+function isCompletable(schema2) {
+  return !!schema2 && typeof schema2 === "object" && COMPLETABLE_SYMBOL in schema2;
 }
-function getCompleter(schema) {
-  const meta3 = schema[COMPLETABLE_SYMBOL];
+function getCompleter(schema2) {
+  const meta3 = schema2[COMPLETABLE_SYMBOL];
   return meta3?.complete;
 }
 var McpZodTypeKind;
@@ -33200,6 +33231,42 @@ init_external();
 init_external();
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
+function toolInputElementCount(value, max) {
+  let count3 = 0;
+  const stack = [value];
+  while (stack.length > 0) {
+    const node2 = stack.pop();
+    if (node2 === null || typeof node2 !== "object")
+      continue;
+    if (Array.isArray(node2)) {
+      for (const child of node2) {
+        if (++count3 > max)
+          return count3;
+        if (child !== null && typeof child === "object")
+          stack.push(child);
+      }
+    } else {
+      for (const key in node2) {
+        if (!Object.prototype.hasOwnProperty.call(node2, key))
+          continue;
+        if (++count3 > max)
+          return count3;
+        const child = node2[key];
+        if (child !== null && typeof child === "object")
+          stack.push(child);
+      }
+    }
+  }
+  return count3;
+}
+function resolveMaxToolInputElements(value) {
+  if (value === void 0 || value === Infinity)
+    return void 0;
+  if (typeof value !== "number" || Number.isNaN(value) || value < 1) {
+    throw new RangeError(`maxToolInputElements must be a number of at least 1, or Infinity, got ${String(value)}`);
+  }
+  return value;
+}
 var McpServer = class {
   constructor(serverInfo, options) {
     this._registeredResources = {};
@@ -33211,6 +33278,7 @@ var McpServer = class {
     this._resourceHandlersInitialized = false;
     this._promptHandlersInitialized = false;
     this.server = new Server(serverInfo, options);
+    this._maxToolInputElements = resolveMaxToolInputElements(options?.maxToolInputElements);
   }
   /**
    * Access experimental features.
@@ -33341,12 +33409,15 @@ var McpServer = class {
    * Validates tool input arguments against the tool's input schema.
    */
   async validateToolInput(tool4, args, toolName) {
+    if (this._maxToolInputElements !== void 0 && toolInputElementCount(args, this._maxToolInputElements) > this._maxToolInputElements) {
+      throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for tool ${toolName}: arguments contain more than the maximum of ${this._maxToolInputElements} elements`);
+    }
     if (!tool4.inputSchema) {
       return void 0;
     }
     const inputObj = normalizeObjectSchema(tool4.inputSchema);
     const schemaToParse = inputObj ?? tool4.inputSchema;
-    const parseResult2 = await safeParseAsync2(schemaToParse, args);
+    const parseResult2 = await safeParseAsync2(schemaToParse, args ?? {});
     if (!parseResult2.success) {
       const error51 = "error" in parseResult2 ? parseResult2.error : "Unknown error";
       const errorMessage3 = getParseErrorMessage(error51);
@@ -33584,7 +33655,7 @@ var McpServer = class {
       }
       if (prompt.argsSchema) {
         const argsObj = normalizeObjectSchema(prompt.argsSchema);
-        const parseResult2 = await safeParseAsync2(argsObj, request3.params.arguments);
+        const parseResult2 = await safeParseAsync2(argsObj, request3.params.arguments ?? {});
         if (!parseResult2.success) {
           const error51 = "error" in parseResult2 ? parseResult2.error : "Unknown error";
           const errorMessage3 = getParseErrorMessage(error51);
@@ -33961,20 +34032,20 @@ function isZodRawShapeCompat(obj) {
   }
   return Object.values(obj).some(isZodTypeLike);
 }
-function getZodSchemaObject(schema) {
-  if (!schema) {
+function getZodSchemaObject(schema2) {
+  if (!schema2) {
     return void 0;
   }
-  if (isZodRawShapeCompat(schema)) {
-    return objectFromShape(schema);
+  if (isZodRawShapeCompat(schema2)) {
+    return objectFromShape(schema2);
   }
-  if (!isZodSchemaInstance(schema)) {
+  if (!isZodSchemaInstance(schema2)) {
     throw new Error("inputSchema must be a Zod schema or raw shape, received an unrecognized object");
   }
-  return schema;
+  return schema2;
 }
-function promptArgumentsFromSchema(schema) {
-  const shape = getObjectShape(schema);
+function promptArgumentsFromSchema(schema2) {
+  const shape = getObjectShape(schema2);
   if (!shape)
     return [];
   return Object.entries(shape).map(([name2, field2]) => {
@@ -33987,8 +34058,8 @@ function promptArgumentsFromSchema(schema) {
     };
   });
 }
-function getMethodValue(schema) {
-  const shape = getObjectShape(schema);
+function getMethodValue(schema2) {
+  const shape = getObjectShape(schema2);
   const methodSchema = shape?.method;
   if (!methodSchema) {
     throw new Error("Schema is missing a method literal");
@@ -34217,6 +34288,1122 @@ function N3(Z2, $2, J2, X2, V2) {
   return Z2.registerResource($2, J2, { mimeType: p, ...X2 }, V2);
 }
 
+// node_modules/@modelcontextprotocol/core/dist/auth-BNDyLTqp.mjs
+init_v4();
+var RELATED_TASK_META_KEY2 = "io.modelcontextprotocol/related-task";
+var SERVER_INFO_META_KEY = "io.modelcontextprotocol/serverInfo";
+var SUBSCRIPTION_ID_META_KEY = "io.modelcontextprotocol/subscriptionId";
+var JSONRPC_VERSION2 = "2.0";
+var JSONValueSchema = lazy(() => union([
+  string2(),
+  number2(),
+  boolean2(),
+  _null3(),
+  record(string2(), JSONValueSchema),
+  array(JSONValueSchema)
+]));
+var JSONObjectSchema = record(string2(), JSONValueSchema);
+var JSONArraySchema = array(JSONValueSchema);
+var ProgressTokenSchema2 = union([string2(), number2().int()]);
+var CursorSchema2 = string2();
+var TaskMetadataSchema2 = object2({ ttl: number2().optional() });
+var RelatedTaskMetadataSchema2 = object2({ taskId: string2() });
+var RequestMetaSchema2 = looseObject({
+  progressToken: ProgressTokenSchema2.optional(),
+  [RELATED_TASK_META_KEY2]: RelatedTaskMetadataSchema2.optional()
+});
+var BaseRequestParamsSchema2 = object2({ _meta: RequestMetaSchema2.optional() });
+var TaskAugmentedRequestParamsSchema2 = BaseRequestParamsSchema2.extend({ task: TaskMetadataSchema2.optional() });
+var RequestSchema2 = object2({
+  method: string2(),
+  params: BaseRequestParamsSchema2.loose().optional()
+});
+var NotificationsParamsSchema2 = object2({ _meta: RequestMetaSchema2.optional() });
+var NotificationSchema2 = object2({
+  method: string2(),
+  params: NotificationsParamsSchema2.loose().optional()
+});
+var ResultMetaObjectSchema = looseObject({ get [SERVER_INFO_META_KEY]() {
+  return ImplementationSchema2.optional().catch(void 0);
+} });
+var ResultSchema2 = looseObject({ _meta: ResultMetaObjectSchema.optional() });
+var RequestIdSchema2 = union([string2(), number2().int()]);
+var JSONRPCRequestSchema2 = object2({
+  jsonrpc: literal(JSONRPC_VERSION2),
+  id: RequestIdSchema2,
+  ...RequestSchema2.shape
+}).strict();
+var JSONRPCNotificationSchema2 = object2({
+  jsonrpc: literal(JSONRPC_VERSION2),
+  ...NotificationSchema2.shape
+}).strict();
+var JSONRPCResultResponseSchema2 = object2({
+  jsonrpc: literal(JSONRPC_VERSION2),
+  id: RequestIdSchema2,
+  result: ResultSchema2
+}).strict();
+var JSONRPCErrorResponseSchema2 = object2({
+  jsonrpc: literal(JSONRPC_VERSION2),
+  id: RequestIdSchema2.optional(),
+  error: object2({
+    code: number2().int(),
+    message: string2(),
+    data: unknown().optional()
+  })
+}).strict();
+var JSONRPCMessageSchema2 = union([
+  JSONRPCRequestSchema2,
+  JSONRPCNotificationSchema2,
+  JSONRPCResultResponseSchema2,
+  JSONRPCErrorResponseSchema2
+]);
+var JSONRPCResponseSchema2 = union([JSONRPCResultResponseSchema2, JSONRPCErrorResponseSchema2]);
+var EmptyResultSchema2 = ResultSchema2.strict();
+var CancelledNotificationParamsSchema2 = NotificationsParamsSchema2.extend({
+  requestId: RequestIdSchema2.optional(),
+  reason: string2().optional()
+});
+var CancelledNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/cancelled"),
+  params: CancelledNotificationParamsSchema2
+});
+var IconSchema2 = object2({
+  src: string2(),
+  mimeType: string2().optional(),
+  sizes: array(string2()).optional(),
+  theme: _enum2(["light", "dark"]).optional()
+});
+var IconsSchema2 = object2({ icons: array(IconSchema2).optional() });
+var BaseMetadataSchema2 = object2({
+  name: string2(),
+  title: string2().optional()
+});
+var ImplementationSchema2 = BaseMetadataSchema2.extend({
+  ...BaseMetadataSchema2.shape,
+  ...IconsSchema2.shape,
+  version: string2(),
+  websiteUrl: string2().optional(),
+  description: string2().optional()
+});
+var FormElicitationCapabilitySchema2 = intersection(object2({ applyDefaults: boolean2().optional() }), JSONObjectSchema);
+var ElicitationCapabilitySchema2 = preprocess((value) => {
+  if (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) return { form: {} };
+  return value;
+}, intersection(object2({
+  form: FormElicitationCapabilitySchema2.optional(),
+  url: JSONObjectSchema.optional()
+}), JSONObjectSchema.optional()));
+var ClientTasksCapabilitySchema2 = looseObject({
+  list: JSONObjectSchema.optional(),
+  cancel: JSONObjectSchema.optional(),
+  requests: looseObject({
+    sampling: looseObject({ createMessage: JSONObjectSchema.optional() }).optional(),
+    elicitation: looseObject({ create: JSONObjectSchema.optional() }).optional()
+  }).optional()
+});
+var ServerTasksCapabilitySchema2 = looseObject({
+  list: JSONObjectSchema.optional(),
+  cancel: JSONObjectSchema.optional(),
+  requests: looseObject({ tools: looseObject({ call: JSONObjectSchema.optional() }).optional() }).optional()
+});
+var ClientCapabilitiesSchema2 = object2({
+  experimental: record(string2(), JSONObjectSchema).optional(),
+  sampling: object2({
+    context: JSONObjectSchema.optional(),
+    tools: JSONObjectSchema.optional()
+  }).optional(),
+  elicitation: ElicitationCapabilitySchema2.optional(),
+  roots: object2({ listChanged: boolean2().optional() }).optional(),
+  tasks: ClientTasksCapabilitySchema2.optional(),
+  extensions: record(string2(), JSONObjectSchema).optional()
+});
+var InitializeRequestParamsSchema2 = BaseRequestParamsSchema2.extend({
+  protocolVersion: string2(),
+  capabilities: ClientCapabilitiesSchema2,
+  clientInfo: ImplementationSchema2
+});
+var InitializeRequestSchema2 = RequestSchema2.extend({
+  method: literal("initialize"),
+  params: InitializeRequestParamsSchema2
+});
+var ServerCapabilitiesSchema2 = object2({
+  experimental: record(string2(), JSONObjectSchema).optional(),
+  logging: JSONObjectSchema.optional(),
+  completions: JSONObjectSchema.optional(),
+  prompts: object2({ listChanged: boolean2().optional() }).optional(),
+  resources: object2({
+    subscribe: boolean2().optional(),
+    listChanged: boolean2().optional()
+  }).optional(),
+  tools: object2({ listChanged: boolean2().optional() }).optional(),
+  tasks: ServerTasksCapabilitySchema2.optional(),
+  extensions: record(string2(), JSONObjectSchema).optional()
+});
+var InitializeResultSchema2 = ResultSchema2.extend({
+  protocolVersion: string2(),
+  capabilities: ServerCapabilitiesSchema2,
+  serverInfo: ImplementationSchema2,
+  instructions: string2().optional()
+});
+var InitializedNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/initialized"),
+  params: NotificationsParamsSchema2.optional()
+});
+var DiscoverRequestSchema = RequestSchema2.extend({
+  method: literal("server/discover"),
+  params: BaseRequestParamsSchema2.optional()
+});
+var DiscoverResultSchema = ResultSchema2.extend({
+  supportedVersions: array(string2()),
+  capabilities: ServerCapabilitiesSchema2,
+  instructions: string2().optional()
+});
+var PingRequestSchema2 = RequestSchema2.extend({
+  method: literal("ping"),
+  params: BaseRequestParamsSchema2.optional()
+});
+var ProgressSchema2 = object2({
+  progress: number2(),
+  total: optional(number2()),
+  message: optional(string2())
+});
+var ProgressNotificationParamsSchema2 = object2({
+  ...NotificationsParamsSchema2.shape,
+  ...ProgressSchema2.shape,
+  progressToken: ProgressTokenSchema2
+});
+var ProgressNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/progress"),
+  params: ProgressNotificationParamsSchema2
+});
+var PaginatedRequestParamsSchema2 = BaseRequestParamsSchema2.extend({ cursor: CursorSchema2.optional() });
+var PaginatedRequestSchema2 = RequestSchema2.extend({ params: PaginatedRequestParamsSchema2.optional() });
+var PaginatedResultSchema2 = ResultSchema2.extend({ nextCursor: CursorSchema2.optional() });
+var ResourceContentsSchema2 = object2({
+  uri: string2(),
+  mimeType: optional(string2()),
+  _meta: record(string2(), unknown()).optional()
+});
+var TextResourceContentsSchema2 = ResourceContentsSchema2.extend({ text: string2() });
+var Base64Schema2 = string2().refine((val) => {
+  try {
+    atob(val);
+    return true;
+  } catch {
+    return false;
+  }
+}, { message: "Invalid Base64 string" });
+var BlobResourceContentsSchema2 = ResourceContentsSchema2.extend({ blob: Base64Schema2 });
+var RoleSchema2 = _enum2(["user", "assistant"]);
+var AnnotationsSchema2 = object2({
+  audience: array(RoleSchema2).optional(),
+  priority: number2().min(0).max(1).optional(),
+  lastModified: iso_exports2.datetime({ offset: true }).optional()
+});
+var ResourceSchema2 = object2({
+  ...BaseMetadataSchema2.shape,
+  ...IconsSchema2.shape,
+  uri: string2(),
+  description: optional(string2()),
+  mimeType: optional(string2()),
+  size: optional(number2()),
+  annotations: AnnotationsSchema2.optional(),
+  _meta: optional(looseObject({}))
+});
+var ResourceTemplateSchema2 = object2({
+  ...BaseMetadataSchema2.shape,
+  ...IconsSchema2.shape,
+  uriTemplate: string2(),
+  description: optional(string2()),
+  mimeType: optional(string2()),
+  annotations: AnnotationsSchema2.optional(),
+  _meta: optional(looseObject({}))
+});
+var ListResourcesRequestSchema2 = PaginatedRequestSchema2.extend({ method: literal("resources/list") });
+var ListResourcesResultSchema2 = PaginatedResultSchema2.extend({ resources: array(ResourceSchema2) });
+var ListResourceTemplatesRequestSchema2 = PaginatedRequestSchema2.extend({ method: literal("resources/templates/list") });
+var ListResourceTemplatesResultSchema2 = PaginatedResultSchema2.extend({ resourceTemplates: array(ResourceTemplateSchema2) });
+var ResourceRequestParamsSchema2 = BaseRequestParamsSchema2.extend({ uri: string2() });
+var ReadResourceRequestParamsSchema2 = ResourceRequestParamsSchema2;
+var ReadResourceRequestSchema2 = RequestSchema2.extend({
+  method: literal("resources/read"),
+  params: ReadResourceRequestParamsSchema2
+});
+var ReadResourceResultSchema2 = ResultSchema2.extend({ contents: array(union([TextResourceContentsSchema2, BlobResourceContentsSchema2])) });
+var ResourceListChangedNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/resources/list_changed"),
+  params: NotificationsParamsSchema2.optional()
+});
+var SubscribeRequestParamsSchema2 = ResourceRequestParamsSchema2;
+var SubscribeRequestSchema2 = RequestSchema2.extend({
+  method: literal("resources/subscribe"),
+  params: SubscribeRequestParamsSchema2
+});
+var UnsubscribeRequestParamsSchema2 = ResourceRequestParamsSchema2;
+var UnsubscribeRequestSchema2 = RequestSchema2.extend({
+  method: literal("resources/unsubscribe"),
+  params: UnsubscribeRequestParamsSchema2
+});
+var SubscriptionFilterSchema = object2({
+  toolsListChanged: boolean2().optional(),
+  promptsListChanged: boolean2().optional(),
+  resourcesListChanged: boolean2().optional(),
+  resourceSubscriptions: array(string2()).optional()
+});
+var SubscriptionsListenRequestParamsSchema = BaseRequestParamsSchema2.extend({ notifications: SubscriptionFilterSchema });
+var SubscriptionsListenRequestSchema = RequestSchema2.extend({
+  method: literal("subscriptions/listen"),
+  params: SubscriptionsListenRequestParamsSchema
+});
+var SubscriptionsAcknowledgedNotificationParamsSchema = NotificationsParamsSchema2.extend({ notifications: SubscriptionFilterSchema });
+var SubscriptionsAcknowledgedNotificationSchema = NotificationSchema2.extend({
+  method: literal("notifications/subscriptions/acknowledged"),
+  params: SubscriptionsAcknowledgedNotificationParamsSchema
+});
+var SubscriptionsListenResultMetaSchema = ResultMetaObjectSchema.extend({ [SUBSCRIPTION_ID_META_KEY]: RequestIdSchema2 });
+var SubscriptionsListenResultSchema = ResultSchema2.extend({ _meta: SubscriptionsListenResultMetaSchema });
+var ResourceUpdatedNotificationParamsSchema2 = NotificationsParamsSchema2.extend({ uri: string2() });
+var ResourceUpdatedNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/resources/updated"),
+  params: ResourceUpdatedNotificationParamsSchema2
+});
+var PromptArgumentSchema2 = object2({
+  name: string2(),
+  description: optional(string2()),
+  required: optional(boolean2())
+});
+var PromptSchema2 = object2({
+  ...BaseMetadataSchema2.shape,
+  ...IconsSchema2.shape,
+  description: optional(string2()),
+  arguments: optional(array(PromptArgumentSchema2)),
+  _meta: optional(looseObject({}))
+});
+var ListPromptsRequestSchema2 = PaginatedRequestSchema2.extend({ method: literal("prompts/list") });
+var ListPromptsResultSchema2 = PaginatedResultSchema2.extend({ prompts: array(PromptSchema2) });
+var GetPromptRequestParamsSchema2 = BaseRequestParamsSchema2.extend({
+  name: string2(),
+  arguments: record(string2(), string2()).optional()
+});
+var GetPromptRequestSchema2 = RequestSchema2.extend({
+  method: literal("prompts/get"),
+  params: GetPromptRequestParamsSchema2
+});
+var TextContentSchema2 = object2({
+  type: literal("text"),
+  text: string2(),
+  annotations: AnnotationsSchema2.optional(),
+  _meta: record(string2(), unknown()).optional()
+});
+var ImageContentSchema2 = object2({
+  type: literal("image"),
+  data: Base64Schema2,
+  mimeType: string2(),
+  annotations: AnnotationsSchema2.optional(),
+  _meta: record(string2(), unknown()).optional()
+});
+var AudioContentSchema2 = object2({
+  type: literal("audio"),
+  data: Base64Schema2,
+  mimeType: string2(),
+  annotations: AnnotationsSchema2.optional(),
+  _meta: record(string2(), unknown()).optional()
+});
+var ToolUseContentSchema2 = object2({
+  type: literal("tool_use"),
+  name: string2(),
+  id: string2(),
+  input: record(string2(), unknown()),
+  _meta: record(string2(), unknown()).optional()
+});
+var EmbeddedResourceSchema2 = object2({
+  type: literal("resource"),
+  resource: union([TextResourceContentsSchema2, BlobResourceContentsSchema2]),
+  annotations: AnnotationsSchema2.optional(),
+  _meta: record(string2(), unknown()).optional()
+});
+var ResourceLinkSchema2 = ResourceSchema2.extend({ type: literal("resource_link") });
+var ContentBlockSchema2 = union([
+  TextContentSchema2,
+  ImageContentSchema2,
+  AudioContentSchema2,
+  ResourceLinkSchema2,
+  EmbeddedResourceSchema2
+]);
+var PromptMessageSchema2 = object2({
+  role: RoleSchema2,
+  content: ContentBlockSchema2
+});
+var GetPromptResultSchema2 = ResultSchema2.extend({
+  description: string2().optional(),
+  messages: array(PromptMessageSchema2)
+});
+var PromptListChangedNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/prompts/list_changed"),
+  params: NotificationsParamsSchema2.optional()
+});
+var ToolAnnotationsSchema2 = object2({
+  title: string2().optional(),
+  readOnlyHint: boolean2().optional(),
+  destructiveHint: boolean2().optional(),
+  idempotentHint: boolean2().optional(),
+  openWorldHint: boolean2().optional()
+});
+var ToolExecutionSchema2 = object2({ taskSupport: _enum2([
+  "required",
+  "optional",
+  "forbidden"
+]).optional() });
+var ToolSchema2 = object2({
+  ...BaseMetadataSchema2.shape,
+  ...IconsSchema2.shape,
+  description: string2().optional(),
+  inputSchema: object2({
+    type: literal("object"),
+    properties: record(string2(), JSONValueSchema).optional(),
+    required: array(string2()).optional()
+  }).catchall(unknown()),
+  outputSchema: looseObject({ $schema: string2().optional() }).optional(),
+  annotations: ToolAnnotationsSchema2.optional(),
+  execution: ToolExecutionSchema2.optional(),
+  _meta: record(string2(), unknown()).optional()
+});
+var ListToolsRequestSchema2 = PaginatedRequestSchema2.extend({ method: literal("tools/list") });
+var ListToolsResultSchema2 = PaginatedResultSchema2.extend({ tools: array(ToolSchema2) });
+var CallToolResultSchema2 = ResultSchema2.extend({
+  content: array(ContentBlockSchema2).default([]),
+  structuredContent: unknown().optional(),
+  isError: boolean2().optional()
+});
+var CompatibilityCallToolResultSchema2 = CallToolResultSchema2.or(ResultSchema2.extend({ toolResult: unknown() }));
+var CallToolRequestParamsSchema2 = TaskAugmentedRequestParamsSchema2.extend({
+  name: string2(),
+  arguments: record(string2(), unknown()).optional()
+});
+var CallToolRequestSchema2 = RequestSchema2.extend({
+  method: literal("tools/call"),
+  params: CallToolRequestParamsSchema2
+});
+var ToolListChangedNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/tools/list_changed"),
+  params: NotificationsParamsSchema2.optional()
+});
+var ListChangedOptionsBaseSchema2 = object2({
+  autoRefresh: boolean2().default(true),
+  debounceMs: number2().int().nonnegative().default(300)
+});
+var LoggingLevelSchema2 = _enum2([
+  "debug",
+  "info",
+  "notice",
+  "warning",
+  "error",
+  "critical",
+  "alert",
+  "emergency"
+]);
+var SetLevelRequestParamsSchema2 = BaseRequestParamsSchema2.extend({ level: LoggingLevelSchema2 });
+var SetLevelRequestSchema2 = RequestSchema2.extend({
+  method: literal("logging/setLevel"),
+  params: SetLevelRequestParamsSchema2
+});
+var LoggingMessageNotificationParamsSchema2 = NotificationsParamsSchema2.extend({
+  level: LoggingLevelSchema2,
+  logger: string2().optional(),
+  data: unknown()
+});
+var LoggingMessageNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/message"),
+  params: LoggingMessageNotificationParamsSchema2
+});
+var ModelHintSchema2 = object2({ name: string2().optional() });
+var ModelPreferencesSchema2 = object2({
+  hints: array(ModelHintSchema2).optional(),
+  costPriority: number2().min(0).max(1).optional(),
+  speedPriority: number2().min(0).max(1).optional(),
+  intelligencePriority: number2().min(0).max(1).optional()
+});
+var ToolChoiceSchema2 = object2({ mode: _enum2([
+  "auto",
+  "required",
+  "none"
+]).optional() });
+var ToolResultContentSchema2 = object2({
+  type: literal("tool_result"),
+  toolUseId: string2().describe("The unique identifier for the corresponding tool call."),
+  content: array(ContentBlockSchema2),
+  structuredContent: unknown().optional(),
+  isError: boolean2().optional(),
+  _meta: record(string2(), unknown()).optional()
+});
+var SamplingContentSchema2 = discriminatedUnion("type", [
+  TextContentSchema2,
+  ImageContentSchema2,
+  AudioContentSchema2
+]);
+var SamplingMessageContentBlockSchema2 = discriminatedUnion("type", [
+  TextContentSchema2,
+  ImageContentSchema2,
+  AudioContentSchema2,
+  ToolUseContentSchema2,
+  ToolResultContentSchema2
+]);
+var SamplingMessageSchema2 = object2({
+  role: RoleSchema2,
+  content: union([SamplingMessageContentBlockSchema2, array(SamplingMessageContentBlockSchema2)]),
+  _meta: record(string2(), unknown()).optional()
+});
+var CreateMessageRequestParamsSchema2 = TaskAugmentedRequestParamsSchema2.extend({
+  messages: array(SamplingMessageSchema2),
+  modelPreferences: ModelPreferencesSchema2.optional(),
+  systemPrompt: string2().optional(),
+  includeContext: _enum2([
+    "none",
+    "thisServer",
+    "allServers"
+  ]).optional(),
+  temperature: number2().optional(),
+  maxTokens: number2().int(),
+  stopSequences: array(string2()).optional(),
+  metadata: JSONObjectSchema.optional(),
+  tools: array(ToolSchema2).optional(),
+  toolChoice: ToolChoiceSchema2.optional()
+});
+var CreateMessageRequestSchema2 = RequestSchema2.extend({
+  method: literal("sampling/createMessage"),
+  params: CreateMessageRequestParamsSchema2
+});
+var CreateMessageResultSchema2 = ResultSchema2.extend({
+  model: string2(),
+  stopReason: optional(_enum2([
+    "endTurn",
+    "stopSequence",
+    "maxTokens"
+  ]).or(string2())),
+  role: RoleSchema2,
+  content: SamplingContentSchema2
+});
+var CreateMessageResultWithToolsSchema2 = ResultSchema2.extend({
+  model: string2(),
+  stopReason: optional(_enum2([
+    "endTurn",
+    "stopSequence",
+    "maxTokens",
+    "toolUse"
+  ]).or(string2())),
+  role: RoleSchema2,
+  content: union([SamplingMessageContentBlockSchema2, array(SamplingMessageContentBlockSchema2)])
+});
+var BooleanSchemaSchema2 = object2({
+  type: literal("boolean"),
+  title: string2().optional(),
+  description: string2().optional(),
+  default: boolean2().optional()
+});
+var StringSchemaSchema2 = object2({
+  type: literal("string"),
+  title: string2().optional(),
+  description: string2().optional(),
+  minLength: number2().optional(),
+  maxLength: number2().optional(),
+  format: _enum2([
+    "email",
+    "uri",
+    "date",
+    "date-time"
+  ]).optional(),
+  default: string2().optional()
+});
+var NumberSchemaSchema2 = object2({
+  type: _enum2(["number", "integer"]),
+  title: string2().optional(),
+  description: string2().optional(),
+  minimum: number2().optional(),
+  maximum: number2().optional(),
+  default: number2().optional()
+});
+var UntitledSingleSelectEnumSchemaSchema2 = object2({
+  type: literal("string"),
+  title: string2().optional(),
+  description: string2().optional(),
+  enum: array(string2()),
+  default: string2().optional()
+});
+var TitledSingleSelectEnumSchemaSchema2 = object2({
+  type: literal("string"),
+  title: string2().optional(),
+  description: string2().optional(),
+  oneOf: array(object2({
+    const: string2(),
+    title: string2()
+  })),
+  default: string2().optional()
+});
+var LegacyTitledEnumSchemaSchema2 = object2({
+  type: literal("string"),
+  title: string2().optional(),
+  description: string2().optional(),
+  enum: array(string2()),
+  enumNames: array(string2()).optional(),
+  default: string2().optional()
+});
+var SingleSelectEnumSchemaSchema2 = union([UntitledSingleSelectEnumSchemaSchema2, TitledSingleSelectEnumSchemaSchema2]);
+var UntitledMultiSelectEnumSchemaSchema2 = object2({
+  type: literal("array"),
+  title: string2().optional(),
+  description: string2().optional(),
+  minItems: number2().optional(),
+  maxItems: number2().optional(),
+  items: object2({
+    type: literal("string"),
+    enum: array(string2())
+  }),
+  default: array(string2()).optional()
+});
+var TitledMultiSelectEnumSchemaSchema2 = object2({
+  type: literal("array"),
+  title: string2().optional(),
+  description: string2().optional(),
+  minItems: number2().optional(),
+  maxItems: number2().optional(),
+  items: object2({ anyOf: array(object2({
+    const: string2(),
+    title: string2()
+  })) }),
+  default: array(string2()).optional()
+});
+var MultiSelectEnumSchemaSchema2 = union([UntitledMultiSelectEnumSchemaSchema2, TitledMultiSelectEnumSchemaSchema2]);
+var EnumSchemaSchema2 = union([
+  LegacyTitledEnumSchemaSchema2,
+  SingleSelectEnumSchemaSchema2,
+  MultiSelectEnumSchemaSchema2
+]);
+var PrimitiveSchemaDefinitionSchema2 = union([
+  EnumSchemaSchema2,
+  BooleanSchemaSchema2,
+  StringSchemaSchema2,
+  NumberSchemaSchema2
+]);
+var ElicitRequestFormParamsSchema2 = TaskAugmentedRequestParamsSchema2.extend({
+  mode: literal("form").optional(),
+  message: string2(),
+  requestedSchema: object2({
+    type: literal("object"),
+    properties: record(string2(), PrimitiveSchemaDefinitionSchema2),
+    required: array(string2()).optional()
+  }).catchall(unknown())
+});
+var ElicitRequestURLParamsSchema2 = TaskAugmentedRequestParamsSchema2.extend({
+  mode: literal("url"),
+  message: string2(),
+  elicitationId: string2(),
+  url: string2().url()
+});
+var ElicitRequestParamsSchema2 = union([ElicitRequestFormParamsSchema2, ElicitRequestURLParamsSchema2]);
+var ElicitRequestSchema2 = RequestSchema2.extend({
+  method: literal("elicitation/create"),
+  params: ElicitRequestParamsSchema2
+});
+var ElicitationCompleteNotificationParamsSchema2 = NotificationsParamsSchema2.extend({ elicitationId: string2() });
+var ElicitationCompleteNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/elicitation/complete"),
+  params: ElicitationCompleteNotificationParamsSchema2
+});
+var ElicitResultSchema2 = ResultSchema2.extend({
+  action: _enum2([
+    "accept",
+    "decline",
+    "cancel"
+  ]),
+  content: preprocess((val) => val === null ? void 0 : val, record(string2(), union([
+    string2(),
+    number2(),
+    boolean2(),
+    array(string2())
+  ])).optional())
+});
+var ResourceTemplateReferenceSchema2 = object2({
+  type: literal("ref/resource"),
+  uri: string2()
+});
+var PromptReferenceSchema2 = object2({
+  type: literal("ref/prompt"),
+  name: string2()
+});
+var CompleteRequestParamsSchema2 = BaseRequestParamsSchema2.extend({
+  ref: union([PromptReferenceSchema2, ResourceTemplateReferenceSchema2]),
+  argument: object2({
+    name: string2(),
+    value: string2()
+  }),
+  context: object2({ arguments: record(string2(), string2()).optional() }).optional()
+});
+var CompleteRequestSchema2 = RequestSchema2.extend({
+  method: literal("completion/complete"),
+  params: CompleteRequestParamsSchema2
+});
+var CompleteResultSchema2 = ResultSchema2.extend({ completion: looseObject({
+  values: array(string2()).max(100),
+  total: optional(number2().int()),
+  hasMore: optional(boolean2())
+}) });
+var RootSchema2 = object2({
+  uri: string2().startsWith("file://"),
+  name: string2().optional(),
+  _meta: record(string2(), unknown()).optional()
+});
+var ListRootsRequestSchema2 = RequestSchema2.extend({
+  method: literal("roots/list"),
+  params: BaseRequestParamsSchema2.optional()
+});
+var ListRootsResultSchema2 = ResultSchema2.extend({ roots: array(RootSchema2) });
+var RootsListChangedNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/roots/list_changed"),
+  params: NotificationsParamsSchema2.optional()
+});
+var TaskCreationParamsSchema2 = looseObject({
+  ttl: number2().optional(),
+  pollInterval: number2().optional()
+});
+var TaskStatusSchema2 = _enum2([
+  "working",
+  "input_required",
+  "completed",
+  "failed",
+  "cancelled"
+]);
+var TaskSchema2 = object2({
+  taskId: string2(),
+  status: TaskStatusSchema2,
+  ttl: union([number2(), _null3()]),
+  createdAt: string2(),
+  lastUpdatedAt: string2(),
+  pollInterval: optional(number2()),
+  statusMessage: optional(string2())
+});
+var CreateTaskResultSchema2 = ResultSchema2.extend({ task: TaskSchema2 });
+var TaskStatusNotificationParamsSchema2 = NotificationsParamsSchema2.merge(TaskSchema2);
+var TaskStatusNotificationSchema2 = NotificationSchema2.extend({
+  method: literal("notifications/tasks/status"),
+  params: TaskStatusNotificationParamsSchema2
+});
+var GetTaskRequestSchema2 = RequestSchema2.extend({
+  method: literal("tasks/get"),
+  params: BaseRequestParamsSchema2.extend({ taskId: string2() })
+});
+var GetTaskResultSchema2 = ResultSchema2.merge(TaskSchema2);
+var GetTaskPayloadRequestSchema2 = RequestSchema2.extend({
+  method: literal("tasks/result"),
+  params: BaseRequestParamsSchema2.extend({ taskId: string2() })
+});
+var GetTaskPayloadResultSchema2 = ResultSchema2.loose();
+var ListTasksRequestSchema2 = PaginatedRequestSchema2.extend({ method: literal("tasks/list") });
+var ListTasksResultSchema2 = PaginatedResultSchema2.extend({ tasks: array(TaskSchema2) });
+var CancelTaskRequestSchema2 = RequestSchema2.extend({
+  method: literal("tasks/cancel"),
+  params: BaseRequestParamsSchema2.extend({ taskId: string2() })
+});
+var CancelTaskResultSchema2 = ResultSchema2.merge(TaskSchema2);
+var ClientRequestSchema2 = union([
+  PingRequestSchema2,
+  InitializeRequestSchema2,
+  DiscoverRequestSchema,
+  CompleteRequestSchema2,
+  SetLevelRequestSchema2,
+  GetPromptRequestSchema2,
+  ListPromptsRequestSchema2,
+  ListResourcesRequestSchema2,
+  ListResourceTemplatesRequestSchema2,
+  ReadResourceRequestSchema2,
+  SubscribeRequestSchema2,
+  UnsubscribeRequestSchema2,
+  SubscriptionsListenRequestSchema,
+  CallToolRequestSchema2,
+  ListToolsRequestSchema2
+]);
+var ClientNotificationSchema2 = union([
+  CancelledNotificationSchema2,
+  ProgressNotificationSchema2,
+  InitializedNotificationSchema2,
+  RootsListChangedNotificationSchema2
+]);
+var ClientResultSchema2 = union([
+  EmptyResultSchema2,
+  CreateMessageResultSchema2,
+  CreateMessageResultWithToolsSchema2,
+  ElicitResultSchema2,
+  ListRootsResultSchema2
+]);
+var ServerRequestSchema2 = union([
+  PingRequestSchema2,
+  CreateMessageRequestSchema2,
+  ElicitRequestSchema2,
+  ListRootsRequestSchema2
+]);
+var ServerNotificationSchema2 = union([
+  CancelledNotificationSchema2,
+  ProgressNotificationSchema2,
+  LoggingMessageNotificationSchema2,
+  ResourceUpdatedNotificationSchema2,
+  ResourceListChangedNotificationSchema2,
+  ToolListChangedNotificationSchema2,
+  PromptListChangedNotificationSchema2,
+  SubscriptionsAcknowledgedNotificationSchema,
+  ElicitationCompleteNotificationSchema2
+]);
+var ServerResultSchema2 = union([
+  EmptyResultSchema2,
+  InitializeResultSchema2,
+  DiscoverResultSchema,
+  CompleteResultSchema2,
+  GetPromptResultSchema2,
+  ListPromptsResultSchema2,
+  ListResourcesResultSchema2,
+  ListResourceTemplatesResultSchema2,
+  ReadResourceResultSchema2,
+  CallToolResultSchema2,
+  ListToolsResultSchema2,
+  SubscriptionsListenResultSchema
+]);
+var SafeUrlSchema = url().superRefine((val, ctx) => {
+  if (!URL.canParse(val)) {
+    ctx.addIssue({
+      code: ZodIssueCode2.custom,
+      message: "URL must be parseable",
+      fatal: true
+    });
+    return NEVER;
+  }
+}).refine((url2) => {
+  const u2 = new URL(url2);
+  return u2.protocol !== "javascript:" && u2.protocol !== "data:" && u2.protocol !== "vbscript:";
+}, { message: "URL cannot use javascript:, data:, or vbscript: scheme" });
+var OAuthProtectedResourceMetadataSchema = looseObject({
+  resource: string2().url(),
+  authorization_servers: array(SafeUrlSchema).optional(),
+  jwks_uri: string2().url().optional(),
+  scopes_supported: array(string2()).optional(),
+  bearer_methods_supported: array(string2()).optional(),
+  resource_signing_alg_values_supported: array(string2()).optional(),
+  resource_name: string2().optional(),
+  resource_documentation: string2().optional(),
+  resource_policy_uri: string2().url().optional(),
+  resource_tos_uri: string2().url().optional(),
+  tls_client_certificate_bound_access_tokens: boolean2().optional(),
+  authorization_details_types_supported: array(string2()).optional(),
+  dpop_signing_alg_values_supported: array(string2()).optional(),
+  dpop_bound_access_tokens_required: boolean2().optional()
+});
+var OAuthMetadataSchema = looseObject({
+  issuer: string2(),
+  authorization_endpoint: SafeUrlSchema,
+  token_endpoint: SafeUrlSchema,
+  registration_endpoint: SafeUrlSchema.optional(),
+  scopes_supported: array(string2()).optional(),
+  response_types_supported: array(string2()),
+  response_modes_supported: array(string2()).optional(),
+  grant_types_supported: array(string2()).optional(),
+  token_endpoint_auth_methods_supported: array(string2()).optional(),
+  token_endpoint_auth_signing_alg_values_supported: array(string2()).optional(),
+  service_documentation: SafeUrlSchema.optional(),
+  revocation_endpoint: SafeUrlSchema.optional(),
+  revocation_endpoint_auth_methods_supported: array(string2()).optional(),
+  revocation_endpoint_auth_signing_alg_values_supported: array(string2()).optional(),
+  introspection_endpoint: string2().optional(),
+  introspection_endpoint_auth_methods_supported: array(string2()).optional(),
+  introspection_endpoint_auth_signing_alg_values_supported: array(string2()).optional(),
+  code_challenge_methods_supported: array(string2()).optional(),
+  client_id_metadata_document_supported: boolean2().optional(),
+  authorization_response_iss_parameter_supported: boolean2().optional().catch(void 0),
+  dpop_signing_alg_values_supported: array(string2()).optional()
+});
+var OpenIdProviderMetadataSchema = looseObject({
+  issuer: string2(),
+  authorization_endpoint: SafeUrlSchema,
+  token_endpoint: SafeUrlSchema,
+  userinfo_endpoint: SafeUrlSchema.optional(),
+  jwks_uri: SafeUrlSchema,
+  registration_endpoint: SafeUrlSchema.optional(),
+  scopes_supported: array(string2()).optional(),
+  response_types_supported: array(string2()),
+  response_modes_supported: array(string2()).optional(),
+  grant_types_supported: array(string2()).optional(),
+  acr_values_supported: array(string2()).optional(),
+  subject_types_supported: array(string2()),
+  id_token_signing_alg_values_supported: array(string2()),
+  id_token_encryption_alg_values_supported: array(string2()).optional(),
+  id_token_encryption_enc_values_supported: array(string2()).optional(),
+  userinfo_signing_alg_values_supported: array(string2()).optional(),
+  userinfo_encryption_alg_values_supported: array(string2()).optional(),
+  userinfo_encryption_enc_values_supported: array(string2()).optional(),
+  request_object_signing_alg_values_supported: array(string2()).optional(),
+  request_object_encryption_alg_values_supported: array(string2()).optional(),
+  request_object_encryption_enc_values_supported: array(string2()).optional(),
+  token_endpoint_auth_methods_supported: array(string2()).optional(),
+  token_endpoint_auth_signing_alg_values_supported: array(string2()).optional(),
+  display_values_supported: array(string2()).optional(),
+  claim_types_supported: array(string2()).optional(),
+  claims_supported: array(string2()).optional(),
+  service_documentation: string2().optional(),
+  claims_locales_supported: array(string2()).optional(),
+  ui_locales_supported: array(string2()).optional(),
+  claims_parameter_supported: boolean2().optional(),
+  request_parameter_supported: boolean2().optional(),
+  request_uri_parameter_supported: boolean2().optional(),
+  require_request_uri_registration: boolean2().optional(),
+  op_policy_uri: SafeUrlSchema.optional(),
+  op_tos_uri: SafeUrlSchema.optional(),
+  client_id_metadata_document_supported: boolean2().optional(),
+  authorization_response_iss_parameter_supported: boolean2().optional().catch(void 0)
+});
+var OpenIdProviderDiscoveryMetadataSchema = object2({
+  ...OpenIdProviderMetadataSchema.shape,
+  ...OAuthMetadataSchema.pick({ code_challenge_methods_supported: true }).shape
+});
+var OAuthTokensSchema = object2({
+  access_token: string2(),
+  id_token: string2().optional(),
+  token_type: string2(),
+  expires_in: coerce_exports2.number().optional(),
+  scope: string2().optional(),
+  refresh_token: string2().optional(),
+  issuer: string2().optional().catch(void 0)
+}).strip();
+var IdJagTokenExchangeResponseSchema = object2({
+  issued_token_type: literal("urn:ietf:params:oauth:token-type:id-jag"),
+  access_token: string2(),
+  token_type: string2().optional(),
+  expires_in: number2().optional(),
+  scope: string2().optional()
+}).strip();
+var OAuthErrorResponseSchema = object2({
+  error: string2(),
+  error_description: string2().optional(),
+  error_uri: string2().optional()
+});
+var OptionalSafeUrlSchema = SafeUrlSchema.optional().or(literal("").transform(() => void 0));
+var OAuthClientMetadataSchema = object2({
+  redirect_uris: array(SafeUrlSchema),
+  token_endpoint_auth_method: string2().optional(),
+  grant_types: array(string2()).optional(),
+  response_types: array(string2()).optional(),
+  application_type: string2().optional(),
+  client_name: string2().optional(),
+  client_uri: SafeUrlSchema.optional(),
+  logo_uri: OptionalSafeUrlSchema,
+  scope: string2().optional(),
+  contacts: array(string2()).optional(),
+  tos_uri: OptionalSafeUrlSchema,
+  policy_uri: string2().optional(),
+  jwks_uri: SafeUrlSchema.optional(),
+  jwks: any().optional(),
+  software_id: string2().optional(),
+  software_version: string2().optional(),
+  software_statement: string2().optional()
+}).strip();
+var OAuthClientInformationSchema = object2({
+  client_id: string2(),
+  client_secret: string2().optional(),
+  client_id_issued_at: number2().optional(),
+  client_secret_expires_at: number2().optional(),
+  issuer: string2().optional().catch(void 0)
+}).strip();
+var OAuthClientInformationFullSchema = OAuthClientMetadataSchema.merge(OAuthClientInformationSchema);
+var OAuthClientRegistrationErrorSchema = object2({
+  error: string2(),
+  error_description: string2().optional()
+}).strip();
+var OAuthTokenRevocationRequestSchema = object2({
+  token: string2(),
+  token_type_hint: string2().optional()
+}).strip();
+
+// node_modules/@openai/mcp-extensions/dist/shared/strings.js
+var NonBlankStringSchema = external_exports.string().regex(/\S/);
+
+// node_modules/@openai/mcp-extensions/dist/shared/settings.js
+var OPENAI_SETTINGS_CAPABILITY_KEY = "openai/settings";
+var OpenAISettingsCapabilitySchema = external_exports.object({
+  readTool: NonBlankStringSchema,
+  /** Name of the settings update tool on the same MCP server. */
+  updateTool: NonBlankStringSchema
+});
+var OpenAISettingsPropertySchema = external_exports.strictObject({
+  kind: external_exports.literal("property"),
+  property: external_exports.string()
+});
+var OpenAISettingsToolSchema = external_exports.strictObject({
+  kind: external_exports.literal("tool"),
+  tool: NonBlankStringSchema,
+  /** @deprecated Set the title on the referenced MCP tool. Hosts ignore this field. */
+  title: NonBlankStringSchema.optional(),
+  description: external_exports.string().optional()
+});
+var settingsLayoutLeafSchema = external_exports.discriminatedUnion("kind", [
+  OpenAISettingsPropertySchema,
+  OpenAISettingsToolSchema
+]);
+var OpenAISettingsGroupSchema = external_exports.strictObject({
+  kind: external_exports.literal("group"),
+  title: NonBlankStringSchema,
+  items: external_exports.array(settingsLayoutLeafSchema)
+});
+var OpenAISettingsLayoutItemSchema = OpenAISettingsGroupSchema;
+var OpenAISettingsFieldPresentationSchema = external_exports.object({
+  title: NonBlankStringSchema,
+  description: external_exports.string().optional()
+});
+var OpenAISettingsReadResultSchema = external_exports.object({
+  schema: external_exports.looseObject({
+    type: external_exports.literal("object"),
+    properties: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
+    required: external_exports.array(external_exports.string()).optional()
+  }),
+  layout: external_exports.array(OpenAISettingsLayoutItemSchema).optional(),
+  values: external_exports.record(external_exports.string(), external_exports.unknown())
+}).superRefine(({ schema: schema2, layout }, context) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of layout ?? []) {
+    for (const entry of item.items) {
+      if (entry.kind !== "property")
+        continue;
+      if (!Object.hasOwn(schema2.properties ?? {}, entry.property) || seen.has(entry.property)) {
+        context.addIssue({
+          code: "custom",
+          path: ["layout"],
+          message: `Unknown or duplicate settings key: ${entry.property}`
+        });
+      }
+      seen.add(entry.property);
+    }
+  }
+});
+var OpenAISettingsUpdateArgumentsSchema = external_exports.strictObject({
+  set: external_exports.record(external_exports.string(), external_exports.unknown()).refine((set2) => Object.keys(set2).length > 0, "Set at least one setting.").meta({ minProperties: 1 })
+});
+var OpenAISettingsUpdateResultSchema = external_exports.object({
+  values: external_exports.record(external_exports.string(), external_exports.unknown())
+});
+
+// node_modules/@openai/mcp-extensions/dist/shared/forms/fields.js
+var optionSchema = TitledSingleSelectEnumSchemaSchema2.shape.oneOf.element.extend({
+  "x-openai-thumbnail": IconSchema2.optional(),
+  /** @deprecated Use x-openai-thumbnail. */
+  "x-openai-preview": IconSchema2.optional(),
+  description: external_exports.string().optional()
+});
+var arrayFieldShape = TitledMultiSelectEnumSchemaSchema2.omit({
+  items: true
+}).shape;
+var stringFieldSchema = StringSchemaSchema2.extend({
+  pattern: external_exports.string().optional(),
+  "x-openai-suggestions": external_exports.array(optionSchema).optional()
+});
+var noCustomInput = { "x-openai-input": external_exports.never().optional() };
+var singleSelectSchema = TitledSingleSelectEnumSchemaSchema2.extend({
+  ...noCustomInput,
+  oneOf: external_exports.array(optionSchema),
+  anyOf: external_exports.never().optional()
+});
+var stringArraySchema = external_exports.object({
+  ...arrayFieldShape,
+  ...noCustomInput,
+  uniqueItems: external_exports.boolean().optional(),
+  items: stringFieldSchema.extend({
+    enum: external_exports.never().optional(),
+    oneOf: external_exports.never().optional(),
+    anyOf: external_exports.never().optional()
+  })
+});
+var multiSelectSchema = TitledMultiSelectEnumSchemaSchema2.extend({
+  ...noCustomInput,
+  items: external_exports.object({
+    enum: external_exports.never().optional(),
+    anyOf: external_exports.array(optionSchema)
+  })
+});
+var untitledMultiSelectSchema = UntitledMultiSelectEnumSchemaSchema2.extend({
+  ...noCustomInput,
+  items: UntitledMultiSelectEnumSchemaSchema2.shape.items.extend({
+    anyOf: external_exports.never().optional()
+  })
+});
+var primitiveSchemas = [
+  LegacyTitledEnumSchemaSchema2.extend({
+    ...noCustomInput,
+    oneOf: external_exports.never().optional(),
+    anyOf: external_exports.never().optional()
+  }),
+  stringFieldSchema.extend({
+    ...noCustomInput,
+    enum: external_exports.never().optional(),
+    oneOf: external_exports.never().optional(),
+    anyOf: external_exports.never().optional()
+  }),
+  NumberSchemaSchema2.extend(noCustomInput),
+  BooleanSchemaSchema2.extend(noCustomInput)
+];
+var standardFieldSchemas = [
+  singleSelectSchema,
+  multiSelectSchema,
+  untitledMultiSelectSchema,
+  ...primitiveSchemas,
+  stringArraySchema
+];
+
+// node_modules/@openai/mcp-extensions/dist/shared/forms/file-picker.js
+var userOptionsSchema = external_exports.object({
+  kind: external_exports.enum(["file", "directory"]).optional(),
+  accept: external_exports.array(external_exports.string()).optional()
+});
+var fileInputSchema = external_exports.object({
+  type: external_exports.enum(["resource", "file"]),
+  options: external_exports.array(ResourceSchema2),
+  userOptions: userOptionsSchema.optional(),
+  selection: external_exports.enum(["explicit", "implicit"]).optional()
+});
+var uriSchema = stringFieldSchema.extend({
+  format: external_exports.literal("uri"),
+  enum: external_exports.never().optional(),
+  oneOf: external_exports.never().optional(),
+  anyOf: external_exports.never().optional()
+});
+var OpenAIFileFormFieldSchema = external_exports.discriminatedUnion("type", [
+  uriSchema.extend({
+    "x-openai-input": fileInputSchema.extend({
+      selection: external_exports.never().optional()
+    })
+  }),
+  external_exports.object({
+    ...arrayFieldShape,
+    items: uriSchema,
+    "x-openai-input": fileInputSchema
+  })
+]).superRefine((field2, context) => {
+  const input = field2["x-openai-input"];
+  if (field2.default != null) {
+    if (input.selection === "implicit") {
+      context.addIssue({
+        code: "custom",
+        path: ["default"],
+        message: "Implicit selection cannot specify a default"
+      });
+    }
+    const defaults = Array.isArray(field2.default) ? field2.default : [field2.default];
+    if (defaults.some((uri2) => !input.options.some((option) => option.uri === uri2))) {
+      context.addIssue({
+        code: "custom",
+        path: ["default"],
+        message: "Defaults must name supplied resources"
+      });
+    }
+  }
+});
+function isValidFileSelection(input, value) {
+  const selected = Array.isArray(value) ? value : [value];
+  return input.selection === "implicit" || input.userOptions != null || selected.every((uri2) => input.options.some((option) => option.uri === uri2));
+}
+
 // node_modules/@cfworker/json-schema/dist/esm/deep-compare-strict.js
 function deepCompareStrict(a, b2) {
   const typeofa = typeof a;
@@ -34310,65 +35497,65 @@ var ignoredKeyword = {
   minProperties: true
 };
 var initialBaseURI = typeof self !== "undefined" && self.location && self.location.origin !== "null" ? new URL(self.location.origin + self.location.pathname + location.search) : new URL("https://github.com/cfworker");
-function dereference(schema, lookup = /* @__PURE__ */ Object.create(null), baseURI = initialBaseURI, basePointer = "") {
-  if (schema && typeof schema === "object" && !Array.isArray(schema)) {
-    const id = schema.$id || schema.id;
+function dereference(schema2, lookup = /* @__PURE__ */ Object.create(null), baseURI = initialBaseURI, basePointer = "") {
+  if (schema2 && typeof schema2 === "object" && !Array.isArray(schema2)) {
+    const id = schema2.$id || schema2.id;
     if (id) {
       const url2 = new URL(id, baseURI.href);
       if (url2.hash.length > 1) {
-        lookup[url2.href] = schema;
+        lookup[url2.href] = schema2;
       } else {
         url2.hash = "";
         if (basePointer === "") {
           baseURI = url2;
         } else {
-          dereference(schema, lookup, baseURI);
+          dereference(schema2, lookup, baseURI);
         }
       }
     }
-  } else if (schema !== true && schema !== false) {
+  } else if (schema2 !== true && schema2 !== false) {
     return lookup;
   }
   const schemaURI = baseURI.href + (basePointer ? "#" + basePointer : "");
   if (lookup[schemaURI] !== void 0) {
     throw new Error(`Duplicate schema URI "${schemaURI}".`);
   }
-  lookup[schemaURI] = schema;
-  if (schema === true || schema === false) {
+  lookup[schemaURI] = schema2;
+  if (schema2 === true || schema2 === false) {
     return lookup;
   }
-  if (schema.__absolute_uri__ === void 0) {
-    Object.defineProperty(schema, "__absolute_uri__", {
+  if (schema2.__absolute_uri__ === void 0) {
+    Object.defineProperty(schema2, "__absolute_uri__", {
       enumerable: false,
       value: schemaURI
     });
   }
-  if (schema.$ref && schema.__absolute_ref__ === void 0) {
-    const url2 = new URL(schema.$ref, baseURI.href);
+  if (schema2.$ref && schema2.__absolute_ref__ === void 0) {
+    const url2 = new URL(schema2.$ref, baseURI.href);
     url2.hash = url2.hash;
-    Object.defineProperty(schema, "__absolute_ref__", {
+    Object.defineProperty(schema2, "__absolute_ref__", {
       enumerable: false,
       value: url2.href
     });
   }
-  if (schema.$recursiveRef && schema.__absolute_recursive_ref__ === void 0) {
-    const url2 = new URL(schema.$recursiveRef, baseURI.href);
+  if (schema2.$recursiveRef && schema2.__absolute_recursive_ref__ === void 0) {
+    const url2 = new URL(schema2.$recursiveRef, baseURI.href);
     url2.hash = url2.hash;
-    Object.defineProperty(schema, "__absolute_recursive_ref__", {
+    Object.defineProperty(schema2, "__absolute_recursive_ref__", {
       enumerable: false,
       value: url2.href
     });
   }
-  if (schema.$anchor) {
-    const url2 = new URL("#" + schema.$anchor, baseURI.href);
-    lookup[url2.href] = schema;
+  if (schema2.$anchor) {
+    const url2 = new URL("#" + schema2.$anchor, baseURI.href);
+    lookup[url2.href] = schema2;
   }
-  for (let key in schema) {
+  for (let key in schema2) {
     if (ignoredKeyword[key]) {
       continue;
     }
     const keyBase = `${basePointer}/${encodePointer(key)}`;
-    const subSchema = schema[key];
+    const subSchema = schema2[key];
     if (Array.isArray(subSchema)) {
       if (schemaArrayKeyword[key]) {
         const length = subSchema.length;
@@ -34508,11 +35695,11 @@ function ucs2length(s) {
 }
 
 // node_modules/@cfworker/json-schema/dist/esm/validate.js
-function validate(instance, schema, draft = "2019-09", lookup = dereference(schema), shortCircuit = true, recursiveAnchor = null, instanceLocation = "#", schemaLocation = "#", evaluated = /* @__PURE__ */ Object.create(null)) {
-  if (schema === true) {
+function validate(instance, schema2, draft = "2019-09", lookup = dereference(schema2), shortCircuit = true, recursiveAnchor = null, instanceLocation = "#", schemaLocation = "#", evaluated = /* @__PURE__ */ Object.create(null)) {
+  if (schema2 === true) {
     return { valid: true, errors: [] };
   }
-  if (schema === false) {
+  if (schema2 === false) {
     return {
       valid: false,
       errors: [
@@ -34545,15 +35732,15 @@ function validate(instance, schema, draft = "2019-09", lookup = dereference(sche
     default:
       throw new Error(`Instances of "${rawInstanceType}" type are not supported.`);
   }
-  const { $ref, $recursiveRef, $recursiveAnchor, type: $type, const: $const, enum: $enum, required: $required, not: $not, anyOf: $anyOf, allOf: $allOf, oneOf: $oneOf, if: $if, then: $then, else: $else, format: $format, properties: $properties, patternProperties: $patternProperties, additionalProperties: $additionalProperties, unevaluatedProperties: $unevaluatedProperties, minProperties: $minProperties, maxProperties: $maxProperties, propertyNames: $propertyNames, dependentRequired: $dependentRequired, dependentSchemas: $dependentSchemas, dependencies: $dependencies, prefixItems: $prefixItems, items: $items, additionalItems: $additionalItems, unevaluatedItems: $unevaluatedItems, contains: $contains, minContains: $minContains, maxContains: $maxContains, minItems: $minItems, maxItems: $maxItems, uniqueItems: $uniqueItems, minimum: $minimum, maximum: $maximum, exclusiveMinimum: $exclusiveMinimum, exclusiveMaximum: $exclusiveMaximum, multipleOf: $multipleOf, minLength: $minLength, maxLength: $maxLength, pattern: $pattern, __absolute_ref__, __absolute_recursive_ref__ } = schema;
+  const { $ref, $recursiveRef, $recursiveAnchor, type: $type, const: $const, enum: $enum, required: $required, not: $not, anyOf: $anyOf, allOf: $allOf, oneOf: $oneOf, if: $if, then: $then, else: $else, format: $format, properties: $properties, patternProperties: $patternProperties, additionalProperties: $additionalProperties, unevaluatedProperties: $unevaluatedProperties, minProperties: $minProperties, maxProperties: $maxProperties, propertyNames: $propertyNames, dependentRequired: $dependentRequired, dependentSchemas: $dependentSchemas, dependencies: $dependencies, prefixItems: $prefixItems, items: $items, additionalItems: $additionalItems, unevaluatedItems: $unevaluatedItems, contains: $contains, minContains: $minContains, maxContains: $maxContains, minItems: $minItems, maxItems: $maxItems, uniqueItems: $uniqueItems, minimum: $minimum, maximum: $maximum, exclusiveMinimum: $exclusiveMinimum, exclusiveMaximum: $exclusiveMaximum, multipleOf: $multipleOf, minLength: $minLength, maxLength: $maxLength, pattern: $pattern, __absolute_ref__, __absolute_recursive_ref__ } = schema2;
   const errors = [];
   if ($recursiveAnchor === true && recursiveAnchor === null) {
-    recursiveAnchor = schema;
+    recursiveAnchor = schema2;
   }
   if ($recursiveRef === "#") {
     const refSchema = recursiveAnchor === null ? lookup[__absolute_recursive_ref__] : recursiveAnchor;
     const keywordLocation = `${schemaLocation}/$recursiveRef`;
-    const result2 = validate(instance, recursiveAnchor === null ? schema : recursiveAnchor, draft, lookup, shortCircuit, refSchema, instanceLocation, keywordLocation, evaluated);
+    const result2 = validate(instance, recursiveAnchor === null ? schema2 : recursiveAnchor, draft, lookup, shortCircuit, refSchema, instanceLocation, keywordLocation, evaluated);
     if (!result2.valid) {
       errors.push({
         instanceLocation,
@@ -35271,143 +36458,24 @@ var Validator = class {
   draft;
   shortCircuit;
   lookup;
-  constructor(schema, draft = "2019-09", shortCircuit = true) {
-    this.schema = schema;
+  constructor(schema2, draft = "2019-09", shortCircuit = true) {
+    this.schema = schema2;
     this.draft = draft;
     this.shortCircuit = shortCircuit;
-    this.lookup = dereference(schema);
+    this.lookup = dereference(schema2);
   }
   validate(instance) {
     return validate(instance, this.schema, this.draft, this.lookup, this.shortCircuit);
   }
-  addSchema(schema, id) {
+  addSchema(schema2, id) {
     if (id) {
-      schema = { ...schema, $id: id };
+      schema2 = { ...schema2, $id: id };
     }
-    dereference(schema, this.lookup);
+    dereference(schema2, this.lookup);
   }
 };
 
-// node_modules/@openai/mcp-extensions/dist/server/forms/fields.js
-var optionSchema = TitledSingleSelectEnumSchemaSchema.shape.oneOf.element.extend({
-  "x-openai-thumbnail": IconSchema.optional(),
-  /** @deprecated Use x-openai-thumbnail. */
-  "x-openai-preview": IconSchema.optional(),
-  description: external_exports.string().optional()
-});
-var arrayFieldShape = TitledMultiSelectEnumSchemaSchema.omit({
-  items: true
-}).shape;
-var stringFieldSchema = StringSchemaSchema.extend({
-  pattern: external_exports.string().optional(),
-  "x-openai-suggestions": external_exports.array(optionSchema).optional()
-});
-var noCustomInput = { "x-openai-input": external_exports.never().optional() };
-var singleSelectSchema = TitledSingleSelectEnumSchemaSchema.extend({
-  ...noCustomInput,
-  oneOf: external_exports.array(optionSchema),
-  anyOf: external_exports.never().optional()
-});
-var stringArraySchema = external_exports.object({
-  ...arrayFieldShape,
-  ...noCustomInput,
-  uniqueItems: external_exports.boolean().optional(),
-  items: stringFieldSchema.extend({
-    enum: external_exports.never().optional(),
-    oneOf: external_exports.never().optional(),
-    anyOf: external_exports.never().optional()
-  })
-});
-var multiSelectSchema = TitledMultiSelectEnumSchemaSchema.extend({
-  ...noCustomInput,
-  items: external_exports.object({
-    enum: external_exports.never().optional(),
-    anyOf: external_exports.array(optionSchema)
-  })
-});
-var untitledMultiSelectSchema = UntitledMultiSelectEnumSchemaSchema.extend({
-  ...noCustomInput,
-  items: UntitledMultiSelectEnumSchemaSchema.shape.items.extend({
-    anyOf: external_exports.never().optional()
-  })
-});
-var primitiveSchemas = [
-  LegacyTitledEnumSchemaSchema.extend({
-    ...noCustomInput,
-    oneOf: external_exports.never().optional(),
-    anyOf: external_exports.never().optional()
-  }),
-  stringFieldSchema.extend({
-    ...noCustomInput,
-    enum: external_exports.never().optional(),
-    oneOf: external_exports.never().optional(),
-    anyOf: external_exports.never().optional()
-  }),
-  NumberSchemaSchema.extend(noCustomInput),
-  BooleanSchemaSchema.extend(noCustomInput)
-];
-var standardFieldSchemas = [
-  singleSelectSchema,
-  multiSelectSchema,
-  untitledMultiSelectSchema,
-  ...primitiveSchemas,
-  stringArraySchema
-];
-
-// node_modules/@openai/mcp-extensions/dist/server/forms/file-picker.js
-var userOptionsSchema = external_exports.object({
-  kind: external_exports.enum(["file", "directory"]).optional(),
-  accept: external_exports.array(external_exports.string()).optional()
-});
-var fileInputSchema = external_exports.object({
-  type: external_exports.enum(["resource", "file"]),
-  options: external_exports.array(ResourceSchema),
-  userOptions: userOptionsSchema.optional(),
-  selection: external_exports.enum(["explicit", "implicit"]).optional()
-});
-var uriSchema = stringFieldSchema.extend({
-  format: external_exports.literal("uri"),
-  enum: external_exports.never().optional(),
-  oneOf: external_exports.never().optional(),
-  anyOf: external_exports.never().optional()
-});
-var OpenAIFileFormFieldSchema = external_exports.discriminatedUnion("type", [
-  uriSchema.extend({
-    "x-openai-input": fileInputSchema.extend({
-      selection: external_exports.never().optional()
-    })
-  }),
-  external_exports.object({
-    ...arrayFieldShape,
-    items: uriSchema,
-    "x-openai-input": fileInputSchema
-  })
-]).superRefine((field2, context) => {
-  const input = field2["x-openai-input"];
-  if (field2.default != null) {
-    if (input.selection === "implicit") {
-      context.addIssue({
-        code: "custom",
-        path: ["default"],
-        message: "Implicit selection cannot specify a default"
-      });
-    }
-    const defaults = Array.isArray(field2.default) ? field2.default : [field2.default];
-    if (defaults.some((uri2) => !input.options.some((option) => option.uri === uri2))) {
-      context.addIssue({
-        code: "custom",
-        path: ["default"],
-        message: "Defaults must name supplied resources"
-      });
-    }
-  }
-});
-function isValidFileSelection(input, value) {
-  const selected = Array.isArray(value) ? value : [value];
-  return input.selection === "implicit" || input.userOptions != null || selected.every((uri2) => input.options.some((option) => option.uri === uri2));
-}
-
-// node_modules/@openai/mcp-extensions/dist/server/forms/schema.js
+// node_modules/@openai/mcp-extensions/dist/shared/forms/schema.js
 var OpenAIFormFieldSchema = external_exports.union([
   OpenAIFileFormFieldSchema,
   ...standardFieldSchemas
@@ -35464,22 +36532,54 @@ function createFormRecordSchema(valueSchema) {
   return external_exports.custom((value) => external_exports.record(external_exports.string(), external_exports.unknown()).safeParse(value).success).transform((value) => Object.entries(value)).pipe(external_exports.array(external_exports.tuple([external_exports.string(), valueSchema.nonoptional()]))).transform((entries2) => Object.fromEntries(entries2));
 }
 
+// node_modules/@openai/mcp-extensions/dist/shared/mentions.js
+var OPENAI_MENTIONS_CAPABILITY_KEY = "openai/mentions";
+var OpenAIMentionsCapabilitySchema = external_exports.object({
+  searchTool: NonBlankStringSchema
+});
+var OpenAIMentionResourceSchema = external_exports.strictObject({
+  icons: external_exports.array(IconSchema2).optional(),
+  resourceUri: NonBlankStringSchema,
+  subtitle: NonBlankStringSchema.optional(),
+  title: NonBlankStringSchema,
+  type: external_exports.literal("resource")
+});
+var OpenAIMentionItemSchema = external_exports.discriminatedUnion("type", [
+  ResourceLinkSchema2,
+  OpenAIMentionResourceSchema
+]);
+var OpenAIMentionSearchParamsSchema = external_exports.object({
+  query: external_exports.string()
+});
+var OpenAIMentionSearchResultSchema = external_exports.strictObject({
+  items: external_exports.array(OpenAIMentionItemSchema)
+});
+
 // node_modules/@openai/mcp-extensions/dist/server/forms/elicitation.js
 var OPENAI_ELICITATION_EXTENSION_ID = "openai/elicitation";
 var OPENAI_ELICITATION_METHOD = "openai/elicitation/create";
+var RequestEnvelopeSchema = external_exports.object({
+  "io.modelcontextprotocol/protocolVersion": external_exports.string().optional(),
+  "io.modelcontextprotocol/clientCapabilities": external_exports.unknown().optional()
+});
 var OpenAIFormClientCapabilitiesSchema = external_exports.object({
   extensions: external_exports.object({
     [OPENAI_ELICITATION_EXTENSION_ID]: external_exports.object({ form: external_exports.object({}) })
   })
 });
 function createElicitInput(server2) {
-  return async (params, options) => {
-    const capabilities = OpenAIFormClientCapabilitiesSchema.safeParse(server2.server.getClientCapabilities());
+  return async (context, params, options) => {
+    const envelope = RequestEnvelopeSchema.parse(context.mcpReq.envelope ?? {});
+    const protocolVersion = envelope["io.modelcontextprotocol/protocolVersion"] ?? server2.server.getNegotiatedProtocolVersion();
+    if (protocolVersion !== void 0 && protocolVersion >= "2026-07-28") {
+      throw new Error("Use requestFormInput for MCP 2026-07-28 or newer");
+    }
+    const capabilities = OpenAIFormClientCapabilitiesSchema.safeParse(envelope["io.modelcontextprotocol/clientCapabilities"] ?? server2.server.getClientCapabilities());
     if (!capabilities.success) {
       throw new Error(`The MCP client does not support ${OPENAI_ELICITATION_EXTENSION_ID} form requests`);
     }
     const requestedSchema = OpenAIFormSchema.parse(params.requestedSchema);
-    const result2 = await server2.server.request({
+    const result2 = await context.mcpReq.send({
       method: OPENAI_ELICITATION_METHOD,
       params: { ...params, requestedSchema }
     }, OpenAIFormResultSchema, options);
@@ -35493,33 +36593,16 @@ function createElicitInput(server2) {
   };
 }
 
-// node_modules/@openai/mcp-extensions/dist/shared/strings.js
-var NonBlankStringSchema = external_exports.string().regex(/\S/);
-
 // node_modules/@openai/mcp-extensions/dist/server/mentions.js
-var OpenAIMentionResourceSchema = external_exports.strictObject({
-  icons: external_exports.array(IconSchema).optional(),
-  resourceUri: NonBlankStringSchema,
-  subtitle: NonBlankStringSchema.optional(),
-  title: NonBlankStringSchema,
-  type: external_exports.literal("resource")
-});
-var OpenAIMentionItemSchema = external_exports.discriminatedUnion("type", [
-  ResourceLinkSchema,
-  OpenAIMentionResourceSchema
-]);
-var OpenAIMentionSearchParamsSchema = external_exports.object({
-  query: external_exports.string()
-});
-var OpenAIMentionSearchResultSchema = external_exports.strictObject({
-  items: external_exports.array(OpenAIMentionItemSchema)
-});
 function createMentions(server2) {
   let mentionSearchHandler = null;
   let mentionsRegistered = false;
   return {
     setHandler: (handler) => {
       if (!mentionsRegistered) {
+        if (server2.server.transport) {
+          throw new Error("Register mention search before connecting the server.");
+        }
         server2.registerTool("search_mentions", {
           annotations: { readOnlyHint: true },
           inputSchema: OpenAIMentionSearchParamsSchema,
@@ -35528,10 +36611,15 @@ function createMentions(server2) {
             "openai/extensions": { "mentions/search": {} },
             ui: { visibility: ["app"] }
           }
-        }, async (params, extra) => ({
+        }, async (params, context) => ({
           content: [],
-          structuredContent: mentionSearchHandler == null ? { items: [] } : await mentionSearchHandler(params, extra)
+          structuredContent: mentionSearchHandler == null ? { items: [] } : await mentionSearchHandler(params, context)
         }));
+        const capability = { searchTool: "search_mentions" };
+        server2.server.registerCapabilities({
+          extensions: { [OPENAI_MENTIONS_CAPABILITY_KEY]: capability },
+          experimental: { [OPENAI_MENTIONS_CAPABILITY_KEY]: capability }
+        });
         mentionsRegistered = true;
       }
       mentionSearchHandler = handler;
@@ -35540,36 +36628,6 @@ function createMentions(server2) {
 }
 
 // node_modules/@openai/mcp-extensions/dist/server/settings.js
-var OPENAI_SETTINGS_CAPABILITY_KEY = "openai/settings";
-var OpenAISettingsCapabilitySchema = external_exports.object({
-  readTool: NonBlankStringSchema,
-  /** Name of the settings update tool on the same MCP server. */
-  updateTool: NonBlankStringSchema
-});
-var OpenAISettingsPropertySchema = external_exports.strictObject({
-  kind: external_exports.literal("property"),
-  property: external_exports.string()
-});
-var OpenAISettingsToolSchema = external_exports.strictObject({
-  kind: external_exports.literal("tool"),
-  tool: NonBlankStringSchema,
-  title: NonBlankStringSchema,
-  description: external_exports.string().optional()
-});
-var settingsLayoutLeafSchema = external_exports.discriminatedUnion("kind", [
-  OpenAISettingsPropertySchema,
-  OpenAISettingsToolSchema
-]);
-var OpenAISettingsGroupSchema = external_exports.strictObject({
-  kind: external_exports.literal("group"),
-  title: NonBlankStringSchema,
-  items: external_exports.array(settingsLayoutLeafSchema)
-});
-var OpenAISettingsLayoutItemSchema = OpenAISettingsGroupSchema;
-var OpenAISettingsFieldPresentationSchema = external_exports.object({
-  title: NonBlankStringSchema,
-  description: external_exports.string().optional()
-});
 var nativeSettingsFieldSchema = external_exports.object({
   type: external_exports.enum(["boolean", "string", "number", "integer"]),
   enum: external_exports.array(external_exports.string()).nonempty().optional(),
@@ -35578,39 +36636,8 @@ var nativeSettingsFieldSchema = external_exports.object({
   oneOf: external_exports.never().optional(),
   allOf: external_exports.never().optional()
 }).refine((field2) => field2.enum === void 0 || field2.type === "string");
-var OpenAISettingsReadResultSchema = external_exports.object({
-  schema: external_exports.looseObject({
-    type: external_exports.literal("object"),
-    properties: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
-    required: external_exports.array(external_exports.string()).optional()
-  }),
-  layout: external_exports.array(OpenAISettingsLayoutItemSchema).optional(),
-  values: external_exports.record(external_exports.string(), external_exports.unknown())
-}).superRefine(({ schema, layout }, context) => {
-  const seen = /* @__PURE__ */ new Set();
-  for (const item of layout ?? []) {
-    for (const entry of item.items) {
-      if (entry.kind !== "property")
-        continue;
-      if (!Object.hasOwn(schema.properties ?? {}, entry.property) || seen.has(entry.property)) {
-        context.addIssue({
-          code: "custom",
-          path: ["layout"],
-          message: `Unknown or duplicate settings key: ${entry.property}`
-        });
-      }
-      seen.add(entry.property);
-    }
-  }
-});
-var OpenAISettingsUpdateArgumentsSchema = external_exports.strictObject({
-  set: external_exports.record(external_exports.string(), external_exports.unknown()).refine((set2) => Object.keys(set2).length > 0, "Set at least one setting.").meta({ minProperties: 1 })
-});
-var OpenAISettingsUpdateResultSchema = external_exports.object({
-  values: external_exports.record(external_exports.string(), external_exports.unknown())
-});
 function createSettings(server2) {
-  const registered2 = Symbol.for("@openai/mcp-extensions/settings/registered");
+  const registered2 = /* @__PURE__ */ Symbol.for("@openai/mcp-extensions/settings/registered");
   return {
     register(options) {
       if (registered2 in server2)
@@ -35633,8 +36660,8 @@ function createSettings(server2) {
         ];
       }));
       const valuesSchema = external_exports.strictObject(shape).required();
-      const schema = ToolSchema.shape.inputSchema.parse(external_exports.toJSONSchema(valuesSchema));
-      for (const [name2, property] of Object.entries(schema.properties ?? {})) {
+      const schema2 = ToolSchema2.shape.inputSchema.parse(external_exports.toJSONSchema(valuesSchema));
+      for (const [name2, property] of Object.entries(schema2.properties ?? {})) {
         OpenAISettingsFieldPresentationSchema.parse(property);
         if (!nativeSettingsFieldSchema.safeParse(property).success) {
           throw new Error(`Unsupported native setting ${JSON.stringify(name2)}: use a boolean, string, string enum, number, or integer field.`);
@@ -35644,7 +36671,7 @@ function createSettings(server2) {
         }
       }
       const { layout } = OpenAISettingsReadResultSchema.parse({
-        schema,
+        schema: schema2,
         layout: options.layout,
         values: {}
       });
@@ -35655,12 +36682,12 @@ function createSettings(server2) {
           values: valuesSchema
         }),
         annotations: { readOnlyHint: true }
-      }, async (_args, extra) => ({
+      }, async (_args, context) => ({
         content: [],
         structuredContent: {
-          schema,
+          schema: schema2,
           ...layout === void 0 ? {} : { layout },
-          values: valuesSchema.parse(await options.read(extra))
+          values: valuesSchema.parse(await options.read(context))
         }
       }));
       try {
@@ -35669,11 +36696,11 @@ function createSettings(server2) {
           outputSchema: OpenAISettingsUpdateResultSchema.extend({
             values: valuesSchema
           })
-        }, async ({ set: set2 }, extra) => ({
+        }, async ({ set: set2 }, context) => ({
           content: [],
           // The MCP SDK validated set against the partial form of this same schema.
           structuredContent: {
-            values: valuesSchema.parse(await options.update(set2, extra))
+            values: valuesSchema.parse(await options.update(set2, context))
           }
         }));
         const capability = { readTool, updateTool };
@@ -35692,11 +36719,18 @@ function createSettings(server2) {
 
 // node_modules/@openai/mcp-extensions/dist/server/extensions.js
 var OpenAIExtensions = class {
+  /**
+   * Request a form elicitation with OpenAI form extensions on connections that predate MCP 2026-07-28.
+   * Pass the current tool handler context.
+   */
+  elicitInputLegacy;
+  /** @deprecated Use elicitInputLegacy. */
   elicitInput;
   mentions;
   settings;
   constructor(server2) {
-    this.elicitInput = createElicitInput(server2);
+    this.elicitInputLegacy = createElicitInput(server2);
+    this.elicitInput = this.elicitInputLegacy;
     this.mentions = createMentions(server2);
     this.settings = createSettings(server2);
   }
@@ -35802,8 +36836,8 @@ function Clone(value) {
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/clone/type.mjs
-function CloneType(schema, options) {
-  return options === void 0 ? Clone(schema) : Clone({ ...options, ...schema });
+function CloneType(schema2, options) {
+  return options === void 0 ? Clone(schema2) : Clone({ ...options, ...schema2 });
 }
 
 // node_modules/@sinclair/typebox/build/esm/value/guard/guard.mjs
@@ -35880,8 +36914,8 @@ function Immutable(value) {
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/create/type.mjs
-function CreateType(schema, options) {
-  const result2 = options !== void 0 ? { ...options, ...schema } : schema;
+function CreateType(schema2, options) {
+  const result2 = options !== void 0 ? { ...options, ...schema2 } : schema2;
   switch (TypeSystemPolicy.InstanceMode) {
     case "freeze":
       return Immutable(result2);
@@ -35900,11 +36934,11 @@ var TypeBoxError = class extends Error {
 };
 
 // node_modules/@sinclair/typebox/build/esm/type/symbols/symbols.mjs
-var TransformKind = Symbol.for("TypeBox.Transform");
-var ReadonlyKind = Symbol.for("TypeBox.Readonly");
-var OptionalKind = Symbol.for("TypeBox.Optional");
-var Hint = Symbol.for("TypeBox.Hint");
-var Kind = Symbol.for("TypeBox.Kind");
+var TransformKind = /* @__PURE__ */ Symbol.for("TypeBox.Transform");
+var ReadonlyKind = /* @__PURE__ */ Symbol.for("TypeBox.Readonly");
+var OptionalKind = /* @__PURE__ */ Symbol.for("TypeBox.Optional");
+var Hint = /* @__PURE__ */ Symbol.for("TypeBox.Hint");
+var Kind = /* @__PURE__ */ Symbol.for("TypeBox.Kind");
 
 // node_modules/@sinclair/typebox/build/esm/type/guard/kind.mjs
 function IsReadonly(value) {
@@ -36199,16 +37233,16 @@ function IsBoolean3(value) {
   return IsKindOf2(value, "Boolean") && value.type === "boolean" && IsOptionalString(value.$id);
 }
 function IsComputed2(value) {
-  return IsKindOf2(value, "Computed") && IsString(value.target) && IsArray(value.parameters) && value.parameters.every((schema) => IsSchema2(schema));
+  return IsKindOf2(value, "Computed") && IsString(value.target) && IsArray(value.parameters) && value.parameters.every((schema2) => IsSchema2(schema2));
 }
 function IsConstructor2(value) {
-  return IsKindOf2(value, "Constructor") && value.type === "Constructor" && IsOptionalString(value.$id) && IsArray(value.parameters) && value.parameters.every((schema) => IsSchema2(schema)) && IsSchema2(value.returns);
+  return IsKindOf2(value, "Constructor") && value.type === "Constructor" && IsOptionalString(value.$id) && IsArray(value.parameters) && value.parameters.every((schema2) => IsSchema2(schema2)) && IsSchema2(value.returns);
 }
 function IsDate3(value) {
   return IsKindOf2(value, "Date") && value.type === "Date" && IsOptionalString(value.$id) && IsOptionalNumber(value.exclusiveMaximumTimestamp) && IsOptionalNumber(value.exclusiveMinimumTimestamp) && IsOptionalNumber(value.maximumTimestamp) && IsOptionalNumber(value.minimumTimestamp) && IsOptionalNumber(value.multipleOfTimestamp);
 }
 function IsFunction3(value) {
-  return IsKindOf2(value, "Function") && value.type === "Function" && IsOptionalString(value.$id) && IsArray(value.parameters) && value.parameters.every((schema) => IsSchema2(schema)) && IsSchema2(value.returns);
+  return IsKindOf2(value, "Function") && value.type === "Function" && IsOptionalString(value.$id) && IsArray(value.parameters) && value.parameters.every((schema2) => IsSchema2(schema2)) && IsSchema2(value.returns);
 }
 function IsImport(value) {
   return IsKindOf2(value, "Import") && HasPropertyKey(value, "$defs") && IsObject(value.$defs) && IsProperties(value.$defs) && HasPropertyKey(value, "$ref") && IsString(value.$ref) && value.$ref in value.$defs;
@@ -36217,10 +37251,10 @@ function IsInteger2(value) {
   return IsKindOf2(value, "Integer") && value.type === "integer" && IsOptionalString(value.$id) && IsOptionalNumber(value.exclusiveMaximum) && IsOptionalNumber(value.exclusiveMinimum) && IsOptionalNumber(value.maximum) && IsOptionalNumber(value.minimum) && IsOptionalNumber(value.multipleOf);
 }
 function IsProperties(value) {
-  return IsObject(value) && Object.entries(value).every(([key, schema]) => IsControlCharacterFree(key) && IsSchema2(schema));
+  return IsObject(value) && Object.entries(value).every(([key, schema2]) => IsControlCharacterFree(key) && IsSchema2(schema2));
 }
 function IsIntersect2(value) {
-  return IsKindOf2(value, "Intersect") && (IsString(value.type) && value.type !== "object" ? false : true) && IsArray(value.allOf) && value.allOf.every((schema) => IsSchema2(schema) && !IsTransform2(schema)) && IsOptionalString(value.type) && (IsOptionalBoolean(value.unevaluatedProperties) || IsOptionalSchema(value.unevaluatedProperties)) && IsOptionalString(value.$id);
+  return IsKindOf2(value, "Intersect") && (IsString(value.type) && value.type !== "object" ? false : true) && IsArray(value.allOf) && value.allOf.every((schema2) => IsSchema2(schema2) && !IsTransform2(schema2)) && IsOptionalString(value.type) && (IsOptionalBoolean(value.unevaluatedProperties) || IsOptionalSchema(value.unevaluatedProperties)) && IsOptionalString(value.$id);
 }
 function IsIterator3(value) {
   return IsKindOf2(value, "Iterator") && value.type === "Iterator" && IsOptionalString(value.$id) && IsSchema2(value.items);
@@ -36268,9 +37302,9 @@ function IsPromise2(value) {
   return IsKindOf2(value, "Promise") && value.type === "Promise" && IsOptionalString(value.$id) && IsSchema2(value.item);
 }
 function IsRecord2(value) {
-  return IsKindOf2(value, "Record") && value.type === "object" && IsOptionalString(value.$id) && IsAdditionalProperties(value.additionalProperties) && IsObject(value.patternProperties) && ((schema) => {
-    const keys = Object.getOwnPropertyNames(schema.patternProperties);
-    return keys.length === 1 && IsPattern(keys[0]) && IsObject(schema.patternProperties) && IsSchema2(schema.patternProperties[keys[0]]);
+  return IsKindOf2(value, "Record") && value.type === "object" && IsOptionalString(value.$id) && IsAdditionalProperties(value.additionalProperties) && IsObject(value.patternProperties) && ((schema2) => {
+    const keys = Object.getOwnPropertyNames(schema2.patternProperties);
+    return keys.length === 1 && IsPattern(keys[0]) && IsObject(schema2.patternProperties) && IsSchema2(schema2.patternProperties[keys[0]]);
   })(value);
 }
 function IsRecursive(value) {
@@ -36299,16 +37333,16 @@ function IsTransform2(value) {
 }
 function IsTuple2(value) {
   return IsKindOf2(value, "Tuple") && value.type === "array" && IsOptionalString(value.$id) && IsNumber(value.minItems) && IsNumber(value.maxItems) && value.minItems === value.maxItems && // empty
-  (IsUndefined(value.items) && IsUndefined(value.additionalItems) && value.minItems === 0 || IsArray(value.items) && value.items.every((schema) => IsSchema2(schema)));
+  (IsUndefined(value.items) && IsUndefined(value.additionalItems) && value.minItems === 0 || IsArray(value.items) && value.items.every((schema2) => IsSchema2(schema2)));
 }
 function IsUndefined4(value) {
   return IsKindOf2(value, "Undefined") && value.type === "undefined" && IsOptionalString(value.$id);
 }
 function IsUnionLiteral(value) {
-  return IsUnion2(value) && value.anyOf.every((schema) => IsLiteralString(schema) || IsLiteralNumber(schema));
+  return IsUnion2(value) && value.anyOf.every((schema2) => IsLiteralString(schema2) || IsLiteralNumber(schema2));
 }
 function IsUnion2(value) {
-  return IsKindOf2(value, "Union") && IsOptionalString(value.$id) && IsObject(value) && IsArray(value.anyOf) && value.anyOf.every((schema) => IsSchema2(schema));
+  return IsKindOf2(value, "Union") && IsOptionalString(value.$id) && IsObject(value) && IsArray(value.anyOf) && value.anyOf.every((schema2) => IsSchema2(schema2));
 }
 function IsUint8Array3(value) {
   return IsKindOf2(value, "Uint8Array") && value.type === "Uint8Array" && IsOptionalString(value.$id) && IsOptionalNumber(value.minByteLength) && IsOptionalNumber(value.maxByteLength);
@@ -36590,8 +37624,8 @@ function IsTemplateLiteralExpressionFinite(expression) {
     throw new TemplateLiteralFiniteError(`Unknown expression type`);
   })();
 }
-function IsTemplateLiteralFinite(schema) {
-  const expression = TemplateLiteralParseExact(schema.pattern);
+function IsTemplateLiteralFinite(schema2) {
+  const expression = TemplateLiteralParseExact(schema2.pattern);
   return IsTemplateLiteralExpressionFinite(expression);
 }
 
@@ -36622,8 +37656,8 @@ function* TemplateLiteralExpressionGenerate(expression) {
     throw new TemplateLiteralGenerateError("Unknown expression");
   })();
 }
-function TemplateLiteralGenerate(schema) {
-  const expression = TemplateLiteralParseExact(schema.pattern);
+function TemplateLiteralGenerate(schema2) {
+  const expression = TemplateLiteralParseExact(schema2.pattern);
   return IsTemplateLiteralExpressionFinite(expression) ? [...TemplateLiteralExpressionGenerate(expression)] : [];
 }
 
@@ -36699,18 +37733,18 @@ var TemplateLiteralPatternError = class extends TypeBoxError {
 function Escape(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function Visit2(schema, acc) {
-  return IsTemplateLiteral(schema) ? schema.pattern.slice(1, schema.pattern.length - 1) : IsUnion(schema) ? `(${schema.anyOf.map((schema2) => Visit2(schema2, acc)).join("|")})` : IsNumber3(schema) ? `${acc}${PatternNumber}` : IsInteger(schema) ? `${acc}${PatternNumber}` : IsBigInt2(schema) ? `${acc}${PatternNumber}` : IsString2(schema) ? `${acc}${PatternString}` : IsLiteral(schema) ? `${acc}${Escape(schema.const.toString())}` : IsBoolean2(schema) ? `${acc}${PatternBoolean}` : (() => {
-    throw new TemplateLiteralPatternError(`Unexpected Kind '${schema[Kind]}'`);
+function Visit2(schema2, acc) {
+  return IsTemplateLiteral(schema2) ? schema2.pattern.slice(1, schema2.pattern.length - 1) : IsUnion(schema2) ? `(${schema2.anyOf.map((schema3) => Visit2(schema3, acc)).join("|")})` : IsNumber3(schema2) ? `${acc}${PatternNumber}` : IsInteger(schema2) ? `${acc}${PatternNumber}` : IsBigInt2(schema2) ? `${acc}${PatternNumber}` : IsString2(schema2) ? `${acc}${PatternString}` : IsLiteral(schema2) ? `${acc}${Escape(schema2.const.toString())}` : IsBoolean2(schema2) ? `${acc}${PatternBoolean}` : (() => {
+    throw new TemplateLiteralPatternError(`Unexpected Kind '${schema2[Kind]}'`);
   })();
 }
 function TemplateLiteralPattern(kinds) {
-  return `^${kinds.map((schema) => Visit2(schema, "")).join("")}$`;
+  return `^${kinds.map((schema2) => Visit2(schema2, "")).join("")}$`;
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/template-literal/union.mjs
-function TemplateLiteralToUnion(schema) {
-  const R2 = TemplateLiteralGenerate(schema);
+function TemplateLiteralToUnion(schema2) {
+  const R2 = TemplateLiteralGenerate(schema2);
   const L2 = R2.map((S) => Literal(S));
   return UnionEvaluated(L2);
 }
@@ -36831,8 +37865,8 @@ function RequiredArray(properties2) {
 }
 function _Object_(properties2, options) {
   const required4 = RequiredArray(properties2);
-  const schema = required4.length > 0 ? { [Kind]: "Object", type: "object", required: required4, properties: properties2 } : { [Kind]: "Object", type: "object", properties: properties2 };
-  return CreateType(schema, options);
+  const schema2 = required4.length > 0 ? { [Kind]: "Object", type: "object", required: required4, properties: properties2 } : { [Kind]: "Object", type: "object", properties: properties2 };
+  return CreateType(schema2, options);
 }
 var Object2 = _Object_;
 
@@ -36842,18 +37876,18 @@ function Promise2(item, options) {
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/readonly/readonly.mjs
-function RemoveReadonly(schema) {
-  return CreateType(Discard(schema, [ReadonlyKind]));
+function RemoveReadonly(schema2) {
+  return CreateType(Discard(schema2, [ReadonlyKind]));
 }
-function AddReadonly(schema) {
-  return CreateType({ ...schema, [ReadonlyKind]: "Readonly" });
+function AddReadonly(schema2) {
+  return CreateType({ ...schema2, [ReadonlyKind]: "Readonly" });
 }
-function ReadonlyWithFlag(schema, F2) {
-  return F2 === false ? RemoveReadonly(schema) : AddReadonly(schema);
+function ReadonlyWithFlag(schema2, F2) {
+  return F2 === false ? RemoveReadonly(schema2) : AddReadonly(schema2);
 }
-function Readonly(schema, enable) {
+function Readonly(schema2, enable) {
   const F2 = enable ?? true;
-  return IsMappedResult(schema) ? ReadonlyFromMappedResult(schema, F2) : ReadonlyWithFlag(schema, F2);
+  return IsMappedResult(schema2) ? ReadonlyFromMappedResult(schema2, F2) : ReadonlyWithFlag(schema2, F2);
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/readonly/readonly-from-mapped-result.mjs
@@ -36932,18 +37966,18 @@ function Mapped(key, map2, options) {
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/optional/optional.mjs
-function RemoveOptional(schema) {
-  return CreateType(Discard(schema, [OptionalKind]));
+function RemoveOptional(schema2) {
+  return CreateType(Discard(schema2, [OptionalKind]));
 }
-function AddOptional(schema) {
-  return CreateType({ ...schema, [OptionalKind]: "Optional" });
+function AddOptional(schema2) {
+  return CreateType({ ...schema2, [OptionalKind]: "Optional" });
 }
-function OptionalWithFlag(schema, F2) {
-  return F2 === false ? RemoveOptional(schema) : AddOptional(schema);
+function OptionalWithFlag(schema2, F2) {
+  return F2 === false ? RemoveOptional(schema2) : AddOptional(schema2);
 }
-function Optional(schema, enable) {
+function Optional(schema2, enable) {
   const F2 = enable ?? true;
-  return IsMappedResult(schema) ? OptionalFromMappedResult(schema, F2) : OptionalWithFlag(schema, F2);
+  return IsMappedResult(schema2) ? OptionalFromMappedResult(schema2, F2) : OptionalWithFlag(schema2, F2);
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/optional/optional-from-mapped-result.mjs
@@ -36963,7 +37997,7 @@ function OptionalFromMappedResult(R2, F2) {
 
 // node_modules/@sinclair/typebox/build/esm/type/intersect/intersect-create.mjs
 function IntersectCreate(T3, options = {}) {
-  const allObjects = T3.every((schema) => IsObject3(schema));
+  const allObjects = T3.every((schema2) => IsObject3(schema2));
   const clonedUnevaluatedProperties = IsSchema(options.unevaluatedProperties) ? { unevaluatedProperties: options.unevaluatedProperties } : {};
   return CreateType(options.unevaluatedProperties === false || IsSchema(options.unevaluatedProperties) || allObjects ? { ...clonedUnevaluatedProperties, [Kind]: "Intersect", type: "object", allOf: T3 } : { ...clonedUnevaluatedProperties, [Kind]: "Intersect", allOf: T3 }, options);
 }
@@ -36986,7 +38020,7 @@ function IntersectEvaluated(types, options = {}) {
     return CreateType(types[0], options);
   if (types.length === 0)
     return Never(options);
-  if (types.some((schema) => IsTransform(schema)))
+  if (types.some((schema2) => IsTransform(schema2)))
     throw new Error("Cannot intersect transform types");
   return ResolveIntersect(types, options);
 }
@@ -36997,7 +38031,7 @@ function Intersect(types, options) {
     return CreateType(types[0], options);
   if (types.length === 0)
     return Never(options);
-  if (types.some((schema) => IsTransform(schema)))
+  if (types.some((schema2) => IsTransform(schema2)))
     throw new Error("Cannot intersect transform types");
   return IntersectCreate(types, options);
 }
@@ -37188,8 +38222,8 @@ function Const(T3, options) {
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/constructor-parameters/constructor-parameters.mjs
-function ConstructorParameters(schema, options) {
-  return IsConstructor(schema) ? Tuple(schema.parameters, options) : Never(options);
+function ConstructorParameters(schema2, options) {
+  return IsConstructor(schema2) ? Tuple(schema2.parameters, options) : Never(options);
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/enum/enum.mjs
@@ -37227,7 +38261,7 @@ function FromAnyRight(left, right) {
   return ExtendsResult.True;
 }
 function FromAny(left, right) {
-  return type_exports.IsIntersect(right) ? FromIntersectRight(left, right) : type_exports.IsUnion(right) && right.anyOf.some((schema) => type_exports.IsAny(schema) || type_exports.IsUnknown(schema)) ? ExtendsResult.True : type_exports.IsUnion(right) ? ExtendsResult.Union : type_exports.IsUnknown(right) ? ExtendsResult.True : type_exports.IsAny(right) ? ExtendsResult.True : ExtendsResult.Union;
+  return type_exports.IsIntersect(right) ? FromIntersectRight(left, right) : type_exports.IsUnion(right) && right.anyOf.some((schema2) => type_exports.IsAny(schema2) || type_exports.IsUnknown(schema2)) ? ExtendsResult.True : type_exports.IsUnion(right) ? ExtendsResult.Union : type_exports.IsUnknown(right) ? ExtendsResult.True : type_exports.IsAny(right) ? ExtendsResult.True : ExtendsResult.Union;
 }
 function FromArrayRight(left, right) {
   return type_exports.IsUnknown(left) ? ExtendsResult.False : type_exports.IsAny(left) ? ExtendsResult.Union : type_exports.IsNever(left) ? ExtendsResult.True : ExtendsResult.False;
@@ -37248,13 +38282,13 @@ function FromBoolean(left, right) {
   return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) ? FromObjectRight(left, right) : type_exports.IsRecord(right) ? FromRecordRight(left, right) : type_exports.IsBoolean(right) ? ExtendsResult.True : ExtendsResult.False;
 }
 function FromConstructor(left, right) {
-  return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) ? FromObjectRight(left, right) : !type_exports.IsConstructor(right) ? ExtendsResult.False : left.parameters.length > right.parameters.length ? ExtendsResult.False : !left.parameters.every((schema, index) => IntoBooleanResult(Visit3(right.parameters[index], schema)) === ExtendsResult.True) ? ExtendsResult.False : IntoBooleanResult(Visit3(left.returns, right.returns));
+  return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) ? FromObjectRight(left, right) : !type_exports.IsConstructor(right) ? ExtendsResult.False : left.parameters.length > right.parameters.length ? ExtendsResult.False : !left.parameters.every((schema2, index) => IntoBooleanResult(Visit3(right.parameters[index], schema2)) === ExtendsResult.True) ? ExtendsResult.False : IntoBooleanResult(Visit3(left.returns, right.returns));
 }
 function FromDate(left, right) {
   return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) ? FromObjectRight(left, right) : type_exports.IsRecord(right) ? FromRecordRight(left, right) : type_exports.IsDate(right) ? ExtendsResult.True : ExtendsResult.False;
 }
 function FromFunction(left, right) {
-  return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) ? FromObjectRight(left, right) : !type_exports.IsFunction(right) ? ExtendsResult.False : left.parameters.length > right.parameters.length ? ExtendsResult.False : !left.parameters.every((schema, index) => IntoBooleanResult(Visit3(right.parameters[index], schema)) === ExtendsResult.True) ? ExtendsResult.False : IntoBooleanResult(Visit3(left.returns, right.returns));
+  return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) ? FromObjectRight(left, right) : !type_exports.IsFunction(right) ? ExtendsResult.False : left.parameters.length > right.parameters.length ? ExtendsResult.False : !left.parameters.every((schema2, index) => IntoBooleanResult(Visit3(right.parameters[index], schema2)) === ExtendsResult.True) ? ExtendsResult.False : IntoBooleanResult(Visit3(left.returns, right.returns));
 }
 function FromIntegerRight(left, right) {
   return type_exports.IsLiteral(left) && value_exports.IsNumber(left.const) ? ExtendsResult.True : type_exports.IsNumber(left) || type_exports.IsInteger(left) ? ExtendsResult.True : ExtendsResult.False;
@@ -37263,10 +38297,10 @@ function FromInteger(left, right) {
   return type_exports.IsInteger(right) || type_exports.IsNumber(right) ? ExtendsResult.True : IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) ? FromObjectRight(left, right) : type_exports.IsRecord(right) ? FromRecordRight(left, right) : ExtendsResult.False;
 }
 function FromIntersectRight(left, right) {
-  return right.allOf.every((schema) => Visit3(left, schema) === ExtendsResult.True) ? ExtendsResult.True : ExtendsResult.False;
+  return right.allOf.every((schema2) => Visit3(left, schema2) === ExtendsResult.True) ? ExtendsResult.True : ExtendsResult.False;
 }
 function FromIntersect4(left, right) {
-  return left.allOf.some((schema) => Visit3(schema, right) === ExtendsResult.True) ? ExtendsResult.True : ExtendsResult.False;
+  return left.allOf.some((schema2) => Visit3(schema2, right) === ExtendsResult.True) ? ExtendsResult.True : ExtendsResult.False;
 }
 function FromIterator(left, right) {
   return IsStructuralRight(right) ? StructuralRight(left, right) : !type_exports.IsIterator(right) ? ExtendsResult.False : IntoBooleanResult(Visit3(left.items, right.items));
@@ -37280,8 +38314,8 @@ function FromNeverRight(left, right) {
 function FromNever(left, right) {
   return ExtendsResult.True;
 }
-function UnwrapTNot(schema) {
-  let [current, depth] = [schema, 0];
+function UnwrapTNot(schema2) {
+  let [current, depth] = [schema2, 0];
   while (true) {
     if (!type_exports.IsNot(current))
       break;
@@ -37302,44 +38336,44 @@ function FromNumberRight(left, right) {
 function FromNumber(left, right) {
   return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) ? FromObjectRight(left, right) : type_exports.IsRecord(right) ? FromRecordRight(left, right) : type_exports.IsInteger(right) || type_exports.IsNumber(right) ? ExtendsResult.True : ExtendsResult.False;
 }
-function IsObjectPropertyCount(schema, count3) {
-  return Object.getOwnPropertyNames(schema.properties).length === count3;
+function IsObjectPropertyCount(schema2, count3) {
+  return Object.getOwnPropertyNames(schema2.properties).length === count3;
 }
-function IsObjectStringLike(schema) {
-  return IsObjectArrayLike(schema);
+function IsObjectStringLike(schema2) {
+  return IsObjectArrayLike(schema2);
 }
-function IsObjectSymbolLike(schema) {
-  return IsObjectPropertyCount(schema, 0) || IsObjectPropertyCount(schema, 1) && "description" in schema.properties && type_exports.IsUnion(schema.properties.description) && schema.properties.description.anyOf.length === 2 && (type_exports.IsString(schema.properties.description.anyOf[0]) && type_exports.IsUndefined(schema.properties.description.anyOf[1]) || type_exports.IsString(schema.properties.description.anyOf[1]) && type_exports.IsUndefined(schema.properties.description.anyOf[0]));
+function IsObjectSymbolLike(schema2) {
+  return IsObjectPropertyCount(schema2, 0) || IsObjectPropertyCount(schema2, 1) && "description" in schema2.properties && type_exports.IsUnion(schema2.properties.description) && schema2.properties.description.anyOf.length === 2 && (type_exports.IsString(schema2.properties.description.anyOf[0]) && type_exports.IsUndefined(schema2.properties.description.anyOf[1]) || type_exports.IsString(schema2.properties.description.anyOf[1]) && type_exports.IsUndefined(schema2.properties.description.anyOf[0]));
 }
-function IsObjectNumberLike(schema) {
-  return IsObjectPropertyCount(schema, 0);
+function IsObjectNumberLike(schema2) {
+  return IsObjectPropertyCount(schema2, 0);
 }
-function IsObjectBooleanLike(schema) {
-  return IsObjectPropertyCount(schema, 0);
+function IsObjectBooleanLike(schema2) {
+  return IsObjectPropertyCount(schema2, 0);
 }
-function IsObjectBigIntLike(schema) {
-  return IsObjectPropertyCount(schema, 0);
+function IsObjectBigIntLike(schema2) {
+  return IsObjectPropertyCount(schema2, 0);
 }
-function IsObjectDateLike(schema) {
-  return IsObjectPropertyCount(schema, 0);
+function IsObjectDateLike(schema2) {
+  return IsObjectPropertyCount(schema2, 0);
 }
-function IsObjectUint8ArrayLike(schema) {
-  return IsObjectArrayLike(schema);
+function IsObjectUint8ArrayLike(schema2) {
+  return IsObjectArrayLike(schema2);
 }
-function IsObjectFunctionLike(schema) {
+function IsObjectFunctionLike(schema2) {
   const length = Number2();
-  return IsObjectPropertyCount(schema, 0) || IsObjectPropertyCount(schema, 1) && "length" in schema.properties && IntoBooleanResult(Visit3(schema.properties["length"], length)) === ExtendsResult.True;
+  return IsObjectPropertyCount(schema2, 0) || IsObjectPropertyCount(schema2, 1) && "length" in schema2.properties && IntoBooleanResult(Visit3(schema2.properties["length"], length)) === ExtendsResult.True;
 }
-function IsObjectConstructorLike(schema) {
-  return IsObjectPropertyCount(schema, 0);
+function IsObjectConstructorLike(schema2) {
+  return IsObjectPropertyCount(schema2, 0);
 }
-function IsObjectArrayLike(schema) {
+function IsObjectArrayLike(schema2) {
   const length = Number2();
-  return IsObjectPropertyCount(schema, 0) || IsObjectPropertyCount(schema, 1) && "length" in schema.properties && IntoBooleanResult(Visit3(schema.properties["length"], length)) === ExtendsResult.True;
+  return IsObjectPropertyCount(schema2, 0) || IsObjectPropertyCount(schema2, 1) && "length" in schema2.properties && IntoBooleanResult(Visit3(schema2.properties["length"], length)) === ExtendsResult.True;
 }
-function IsObjectPromiseLike(schema) {
+function IsObjectPromiseLike(schema2) {
   const then = Function2([Any()], Any());
-  return IsObjectPropertyCount(schema, 0) || IsObjectPropertyCount(schema, 1) && "then" in schema.properties && IntoBooleanResult(Visit3(schema.properties["then"], then)) === ExtendsResult.True;
+  return IsObjectPropertyCount(schema2, 0) || IsObjectPropertyCount(schema2, 1) && "then" in schema2.properties && IntoBooleanResult(Visit3(schema2.properties["then"], then)) === ExtendsResult.True;
 }
 function Property(left, right) {
   return Visit3(left, right) === ExtendsResult.False ? ExtendsResult.False : type_exports.IsOptional(left) && !type_exports.IsOptional(right) ? ExtendsResult.False : ExtendsResult.True;
@@ -37370,11 +38404,11 @@ function FromObject(left, right) {
 function FromPromise2(left, right) {
   return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) && IsObjectPromiseLike(right) ? ExtendsResult.True : !type_exports.IsPromise(right) ? ExtendsResult.False : IntoBooleanResult(Visit3(left.item, right.item));
 }
-function RecordKey(schema) {
-  return PatternNumberExact in schema.patternProperties ? Number2() : PatternStringExact in schema.patternProperties ? String2() : Throw("Unknown record key pattern");
+function RecordKey(schema2) {
+  return PatternNumberExact in schema2.patternProperties ? Number2() : PatternStringExact in schema2.patternProperties ? String2() : Throw("Unknown record key pattern");
 }
-function RecordValue(schema) {
-  return PatternNumberExact in schema.patternProperties ? schema.patternProperties[PatternNumberExact] : PatternStringExact in schema.patternProperties ? schema.patternProperties[PatternStringExact] : Throw("Unable to get record value schema");
+function RecordValue(schema2) {
+  return PatternNumberExact in schema2.patternProperties ? schema2.patternProperties[PatternNumberExact] : PatternStringExact in schema2.patternProperties ? schema2.patternProperties[PatternStringExact] : Throw("Unable to get record value schema");
 }
 function FromRecordRight(left, right) {
   const [Key, Value] = [RecordKey(right), RecordValue(right)];
@@ -37408,13 +38442,13 @@ function FromTemplateLiteral2(left, right) {
   return type_exports.IsTemplateLiteral(left) ? Visit3(TemplateLiteralToUnion(left), right) : type_exports.IsTemplateLiteral(right) ? Visit3(left, TemplateLiteralToUnion(right)) : Throw("Invalid fallthrough for TemplateLiteral");
 }
 function IsArrayOfTuple(left, right) {
-  return type_exports.IsArray(right) && left.items !== void 0 && left.items.every((schema) => Visit3(schema, right.items) === ExtendsResult.True);
+  return type_exports.IsArray(right) && left.items !== void 0 && left.items.every((schema2) => Visit3(schema2, right.items) === ExtendsResult.True);
 }
 function FromTupleRight(left, right) {
   return type_exports.IsNever(left) ? ExtendsResult.True : type_exports.IsUnknown(left) ? ExtendsResult.False : type_exports.IsAny(left) ? ExtendsResult.Union : ExtendsResult.False;
 }
 function FromTuple3(left, right) {
-  return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) && IsObjectArrayLike(right) ? ExtendsResult.True : type_exports.IsArray(right) && IsArrayOfTuple(left, right) ? ExtendsResult.True : !type_exports.IsTuple(right) ? ExtendsResult.False : value_exports.IsUndefined(left.items) && !value_exports.IsUndefined(right.items) || !value_exports.IsUndefined(left.items) && value_exports.IsUndefined(right.items) ? ExtendsResult.False : value_exports.IsUndefined(left.items) && !value_exports.IsUndefined(right.items) ? ExtendsResult.True : left.items.every((schema, index) => Visit3(schema, right.items[index]) === ExtendsResult.True) ? ExtendsResult.True : ExtendsResult.False;
+  return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) && IsObjectArrayLike(right) ? ExtendsResult.True : type_exports.IsArray(right) && IsArrayOfTuple(left, right) ? ExtendsResult.True : !type_exports.IsTuple(right) ? ExtendsResult.False : value_exports.IsUndefined(left.items) && !value_exports.IsUndefined(right.items) || !value_exports.IsUndefined(left.items) && value_exports.IsUndefined(right.items) ? ExtendsResult.False : value_exports.IsUndefined(left.items) && !value_exports.IsUndefined(right.items) ? ExtendsResult.True : left.items.every((schema2, index) => Visit3(schema2, right.items[index]) === ExtendsResult.True) ? ExtendsResult.True : ExtendsResult.False;
 }
 function FromUint8Array(left, right) {
   return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) ? FromObjectRight(left, right) : type_exports.IsRecord(right) ? FromRecordRight(left, right) : type_exports.IsUint8Array(right) ? ExtendsResult.True : ExtendsResult.False;
@@ -37423,10 +38457,10 @@ function FromUndefined(left, right) {
   return IsStructuralRight(right) ? StructuralRight(left, right) : type_exports.IsObject(right) ? FromObjectRight(left, right) : type_exports.IsRecord(right) ? FromRecordRight(left, right) : type_exports.IsVoid(right) ? FromVoidRight(left, right) : type_exports.IsUndefined(right) ? ExtendsResult.True : ExtendsResult.False;
 }
 function FromUnionRight(left, right) {
-  return right.anyOf.some((schema) => Visit3(left, schema) === ExtendsResult.True) ? ExtendsResult.True : ExtendsResult.False;
+  return right.anyOf.some((schema2) => Visit3(left, schema2) === ExtendsResult.True) ? ExtendsResult.True : ExtendsResult.False;
 }
 function FromUnion6(left, right) {
-  return left.anyOf.every((schema) => Visit3(schema, right) === ExtendsResult.True) ? ExtendsResult.True : ExtendsResult.False;
+  return left.anyOf.every((schema2) => Visit3(schema2, right) === ExtendsResult.True) ? ExtendsResult.True : ExtendsResult.False;
 }
 function FromUnknownRight(left, right) {
   return ExtendsResult.True;
@@ -37563,13 +38597,13 @@ function ExtractFromMappedResult(R2, T3) {
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/instance-type/instance-type.mjs
-function InstanceType(schema, options) {
-  return IsConstructor(schema) ? CreateType(schema.returns, options) : Never(options);
+function InstanceType(schema2, options) {
+  return IsConstructor(schema2) ? CreateType(schema2.returns, options) : Never(options);
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/readonly-optional/readonly-optional.mjs
-function ReadonlyOptional(schema) {
-  return Readonly(Optional(schema));
+function ReadonlyOptional(schema2) {
+  return Readonly(Optional(schema2));
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/record/record.mjs
@@ -37742,11 +38776,11 @@ function ApplyUppercase(value) {
 function ApplyLowercase(value) {
   return value.toLowerCase();
 }
-function FromTemplateLiteral3(schema, mode, options) {
-  const expression = TemplateLiteralParseExact(schema.pattern);
+function FromTemplateLiteral3(schema2, mode, options) {
+  const expression = TemplateLiteralParseExact(schema2.pattern);
   const finite = IsTemplateLiteralExpressionFinite(expression);
   if (!finite)
-    return { ...schema, pattern: FromLiteralValue(schema.pattern, mode) };
+    return { ...schema2, pattern: FromLiteralValue(schema2.pattern, mode) };
   const strings4 = [...TemplateLiteralExpressionGenerate(expression)];
   const literals2 = strings4.map((value) => Literal(value));
   const mapped = FromRest5(literals2, mode);
@@ -37759,14 +38793,14 @@ function FromLiteralValue(value, mode) {
 function FromRest5(T3, M3) {
   return T3.map((L2) => Intrinsic(L2, M3));
 }
-function Intrinsic(schema, mode, options = {}) {
+function Intrinsic(schema2, mode, options = {}) {
   return (
     // Intrinsic-Mapped-Inference
-    IsMappedKey(schema) ? IntrinsicFromMappedKey(schema, mode, options) : (
+    IsMappedKey(schema2) ? IntrinsicFromMappedKey(schema2, mode, options) : (
       // Standard-Inference
-      IsTemplateLiteral(schema) ? FromTemplateLiteral3(schema, mode, options) : IsUnion(schema) ? Union(FromRest5(schema.anyOf, mode), options) : IsLiteral(schema) ? Literal(FromLiteralValue(schema.const, mode), options) : (
+      IsTemplateLiteral(schema2) ? FromTemplateLiteral3(schema2, mode, options) : IsUnion(schema2) ? Union(FromRest5(schema2.anyOf, mode), options) : IsLiteral(schema2) ? Literal(FromLiteralValue(schema2.const, mode), options) : (
         // Default Type
-        CreateType(schema, options)
+        CreateType(schema2, options)
       )
     )
   );
@@ -38163,8 +39197,8 @@ function Not(type, options) {
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/parameters/parameters.mjs
-function Parameters(schema, options) {
-  return IsFunction2(schema) ? Tuple(schema.parameters, options) : Never();
+function Parameters(schema2, options) {
+  return IsFunction2(schema2) ? Tuple(schema2.parameters, options) : Never();
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/recursive/recursive.mjs
@@ -38192,40 +39226,40 @@ function Rest(T3) {
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/return-type/return-type.mjs
-function ReturnType(schema, options) {
-  return IsFunction2(schema) ? CreateType(schema.returns, options) : Never(options);
+function ReturnType(schema2, options) {
+  return IsFunction2(schema2) ? CreateType(schema2.returns, options) : Never(options);
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/transform/transform.mjs
 var TransformDecodeBuilder = class {
-  constructor(schema) {
-    this.schema = schema;
+  constructor(schema2) {
+    this.schema = schema2;
   }
   Decode(decode3) {
     return new TransformEncodeBuilder(this.schema, decode3);
   }
 };
 var TransformEncodeBuilder = class {
-  constructor(schema, decode3) {
-    this.schema = schema;
+  constructor(schema2, decode3) {
+    this.schema = schema2;
     this.decode = decode3;
   }
-  EncodeTransform(encode3, schema) {
-    const Encode = (value) => schema[TransformKind].Encode(encode3(value));
-    const Decode = (value) => this.decode(schema[TransformKind].Decode(value));
+  EncodeTransform(encode3, schema2) {
+    const Encode = (value) => schema2[TransformKind].Encode(encode3(value));
+    const Decode = (value) => this.decode(schema2[TransformKind].Decode(value));
     const Codec = { Encode, Decode };
-    return { ...schema, [TransformKind]: Codec };
+    return { ...schema2, [TransformKind]: Codec };
   }
-  EncodeSchema(encode3, schema) {
+  EncodeSchema(encode3, schema2) {
     const Codec = { Decode: this.decode, Encode: encode3 };
-    return { ...schema, [TransformKind]: Codec };
+    return { ...schema2, [TransformKind]: Codec };
   }
   Encode(encode3) {
     return IsTransform(this.schema) ? this.EncodeTransform(encode3, this.schema) : this.EncodeSchema(encode3, this.schema);
   }
 };
-function Transform(schema) {
-  return new TransformDecodeBuilder(schema);
+function Transform(schema2) {
+  return new TransformDecodeBuilder(schema2);
 }
 
 // node_modules/@sinclair/typebox/build/esm/type/unsafe/unsafe.mjs
@@ -39020,6 +40054,24 @@ function receiptCost(value) {
     throw new Error("knownCost must contain positive amounts with unique units");
   }
   return { cost: null, knownCost };
+}
+function costSummary(calls) {
+  const summary = { byUnit: {}, unknownCalls: 0, freeCalls: 0 };
+  for (const call of calls) {
+    let pricing;
+    try {
+      pricing = receiptCost(call);
+    } catch {
+      pricing = { cost: null };
+    }
+    if (pricing.cost === null) summary.unknownCalls += 1;
+    else if (pricing.cost.length === 0) summary.freeCalls += 1;
+    for (const { amount, unit } of pricing.cost ?? pricing.knownCost ?? []) {
+      const previous = Object.hasOwn(summary.byUnit, unit) ? summary.byUnit[unit] : 0;
+      Object.defineProperty(summary.byUnit, unit, { value: previous + amount, enumerable: true, configurable: true });
+    }
+  }
+  return summary;
 }
 
 // src/status.mjs
@@ -40342,8 +41394,10 @@ function readCard(yaml) {
         continue;
       }
       const parsed = scalar(value);
-      if (Array.isArray(parsed)) lists[entry[1]] = parsed.map(String);
-      else fields[entry[1]] = parsed;
+      if (Array.isArray(parsed)) {
+        if (parsed.some((value2) => !["string", "number"].includes(typeof value2))) partial2 = true;
+        lists[entry[1]] = parsed.filter((value2) => ["string", "number"].includes(typeof value2)).map(String);
+      } else fields[entry[1]] = parsed;
     } else if (item && list) {
       const parsed = scalar(item[1]);
       if (typeof parsed === "string" || typeof parsed === "number") list.push(String(parsed));
@@ -41182,13 +42236,26 @@ function openInDig(file2, id = identity) {
 var isDigDocument = (file2) => /\/digs\/[^/]+\/[^/]+\.md$/.test(file2);
 var trim = (text6, max) => text6.length > max ? `${text6.slice(0, max - 1).replace(/\s+\S*$/, "")}\u2026` : text6;
 function savedResearch(snapshot2, file2, text6) {
-  const item = snapshot2.items.find((entry) => entry.files.includes(file2));
+  const item = snapshot2.items.find((entry) => entry.answer === file2 || entry.reports.includes(file2));
   if (!item) throw new Error("This file is not part of a dig in the selected library");
   const { meta: meta3, body } = frontMatter(text6);
   const answer = file2.endsWith("/answer.md");
+  const calls = answer ? item.calls : item.calls.filter((call) => call.claimedBy === file2);
+  const common = {
+    question: item.title,
+    cost: { ...costSummary(calls), totalCalls: calls.length, scope: answer ? "dig" : "report" },
+    findings: [],
+    contradictions: [],
+    followUps: [],
+    confidence: null,
+    evidenceGrade: null,
+    schemaWarnings: [],
+    insights: []
+  };
   if (answer) {
     const reports = Array.isArray(meta3.reports) ? meta3.reports.map((name2) => catalog.fileLabel(String(name2))) : [];
     return {
+      ...common,
       kind: "answer",
       file: file2,
       title: item.title,
@@ -41203,10 +42270,14 @@ function savedResearch(snapshot2, file2, text6) {
     };
   }
   const { card, summary } = reportParts(body);
+  const lists = card && !card.partial ? card.lists : {};
+  const list = (name2) => Array.isArray(lists[name2]) ? lists[name2].filter((x2) => typeof x2 === "string").slice(0, 6).map((x2) => trim(x2, 1e3)) : [];
+  const grade = (value) => ["high", "medium", "low"].includes(value) ? value : null;
   return {
+    ...common,
     kind: "report",
     file: file2,
-    title: item.title,
+    title: displayTitle(item.title, "single", [{ title: meta3.title, topic: meta3.topic, source: meta3.source }]),
     label: catalog.fileLabel(file2),
     source: meta3.source ?? null,
     method: meta3.agent ?? null,
@@ -41215,7 +42286,13 @@ function savedResearch(snapshot2, file2, text6) {
     savedAt: meta3.generated_at ?? null,
     summary: trim(firstParagraph(summary), 280),
     retrievals: item.calls.filter((call) => call.claimedBy === file2).length,
-    link: openInDig(file2)
+    link: openInDig(file2),
+    findings: list("strongest_findings"),
+    contradictions: list("contradictions"),
+    followUps: list("follow_up_targets"),
+    confidence: card?.partial ? null : grade(card?.fields?.confidence),
+    evidenceGrade: card?.partial ? null : grade(card?.fields?.evidence_grade),
+    schemaWarnings: card?.partial ? ["The report assessment contains unsupported structure. Read the full report for the original wording."] : []
   };
 }
 var shortDate = (iso) => {
@@ -41399,8 +42476,8 @@ async function requestJson(policy) {
 }
 
 // src/providers/outcome.ts
-function outcome(status, text6, details) {
-  return { status, text: text6, ...details ? { details } : {} };
+function outcome(status, text6, details2) {
+  return { status, text: text6, ...details2 ? { details: details2 } : {} };
 }
 function free(spec) {
   return { ...spec, billing: "free" };
@@ -41422,12 +42499,12 @@ function failed(text6) {
 function normalizeOutcome(result2) {
   if (typeof result2 !== "string" && result2.status) return result2;
   const text6 = typeof result2 === "string" ? result2 : result2.text;
-  const details = typeof result2 === "string" ? void 0 : result2.details;
-  const recorded = details?.status;
+  const details2 = typeof result2 === "string" ? void 0 : result2.details;
+  const recorded = details2?.status;
   const status = text6.startsWith("ERROR:") || /^Status: failed(?:\r?\n|$)/.test(text6) ? "failed" : /^Status: skipped(?:\r?\n|$)/.test(text6) ? "skipped" : ["empty", "partial", "failed", "cancelled", "skipped"].includes(
     String(recorded)
   ) ? recorded : "success";
-  return outcome(status, text6, details);
+  return outcome(status, text6, details2);
 }
 async function executeSource(spec, args, context) {
   if (context.abort.aborted)
@@ -41475,8 +42552,8 @@ async function executeSource(spec, args, context) {
   const amounts = [...totals].map(([unit, amount]) => ({ amount, unit }));
   const partial2 = threw || context.abort.aborted || incomplete || observations === 0;
   const pricing = billing === "free" ? { cost: [] } : partial2 ? { cost: null, ...amounts.length ? { knownCost: amounts } : {} } : { cost: amounts };
-  const { cost: _cost, knownCost: _knownCost, ...details } = result2.details ?? {};
-  return { ...result2, details: { ...details, ...pricing } };
+  const { cost: _cost, knownCost: _knownCost, ...details2 } = result2.details ?? {};
+  return { ...result2, details: { ...details2, ...pricing } };
 }
 
 // src/providers/tools/evidence_rank.ts
@@ -45211,7 +46288,7 @@ async function searchViaAPI(query, limit2, days, apiKey2, signal, keep) {
     candidates.set(v3.id, v3);
   }
   try {
-    const details = await items(
+    const details2 = await items(
       await get2("videos", {
         part: "snippet,statistics,contentDetails",
         id: [...candidates.keys()].join(",")
@@ -45219,7 +46296,7 @@ async function searchViaAPI(query, limit2, days, apiKey2, signal, keep) {
       "YouTube video details"
     );
     const seen = /* @__PURE__ */ new Set();
-    for (const item of details) {
+    for (const item of details2) {
       const v3 = candidates.get(item?.id);
       if (!v3) continue;
       seen.add(v3.id);
@@ -48672,7 +49749,7 @@ function normalizeScrapeDoChart(value) {
 }
 function normalizeScrapeDoSeller(payload) {
   const rating = asRecord4(payload.rating);
-  const details = asRecord4(payload.business_details);
+  const details2 = asRecord4(payload.business_details);
   const namedKeys = /* @__PURE__ */ new Set([
     "business_name",
     "business_type",
@@ -48683,7 +49760,7 @@ function normalizeScrapeDoSeller(payload) {
     "business_address",
     "fields"
   ]);
-  const otherFields = recordToSummaryLines(details?.fields).filter((line) => {
+  const otherFields = recordToSummaryLines(details2?.fields).filter((line) => {
     const key = line.slice(0, line.indexOf(":")).trim().toLowerCase().replace(/\s+/g, "_");
     return !namedKeys.has(key);
   });
@@ -48692,13 +49769,13 @@ function normalizeScrapeDoSeller(payload) {
     name: firstString3(payload.name),
     about: truncateText3(firstString3(payload.about), DESCRIPTION_MAX_CHARS),
     positiveFeedbackPercent: firstNumber3(rating?.positive_percentage),
-    businessName: firstString3(details?.business_name),
-    businessType: firstString3(details?.business_type),
-    tradeRegisterNumber: firstString3(details?.trade_register_number),
-    vatNumber: firstString3(details?.vat_number),
-    phoneNumber: firstString3(details?.phone_number),
-    email: firstString3(details?.email),
-    businessAddress: uniqStrings2(asArray4(details?.business_address).map((item) => firstString3(item))),
+    businessName: firstString3(details2?.business_name),
+    businessType: firstString3(details2?.business_type),
+    tradeRegisterNumber: firstString3(details2?.trade_register_number),
+    vatNumber: firstString3(details2?.vat_number),
+    phoneNumber: firstString3(details2?.phone_number),
+    email: firstString3(details2?.email),
+    businessAddress: uniqStrings2(asArray4(details2?.business_address).map((item) => firstString3(item))),
     otherFields: otherFields.slice(0, 10)
   };
 }
@@ -49513,7 +50590,7 @@ async function discoverSeller(args) {
   if (profile.about) lines.push(`- About (seller's own text, truncated): ${profile.about}`);
   lines.push("");
   lines.push("## Business Details");
-  const details = [
+  const details2 = [
     ["Business name", profile.businessName],
     ["Business type", profile.businessType],
     ["Trade register number", profile.tradeRegisterNumber],
@@ -49522,7 +50599,7 @@ async function discoverSeller(args) {
     ["Email", profile.email],
     ["Address", profile.businessAddress.length > 0 ? profile.businessAddress.join(", ") : null]
   ];
-  const present2 = details.filter((entry) => entry[1] !== null);
+  const present2 = details2.filter((entry) => entry[1] !== null);
   if (present2.length === 0 && profile.otherFields.length === 0) {
     lines.push("- No business details were published for this seller on this marketplace.");
   } else {
@@ -50003,8 +51080,8 @@ var contents = exaMetered({
       lines.push("Fetch failures (per-URL status from Exa):");
       for (const f2 of failures) {
         const tag = f2.error?.tag ?? "ERROR";
-        const http = typeof f2.error?.httpStatusCode === "number" ? ` (HTTP ${f2.error.httpStatusCode})` : "";
-        lines.push(redactText(`- ${f2.id} \u2014 ${tag}${http}`, knownSecrets()));
+        const http2 = typeof f2.error?.httpStatusCode === "number" ? ` (HTTP ${f2.error.httpStatusCode})` : "";
+        lines.push(redactText(`- ${f2.id} \u2014 ${tag}${http2}`, knownSecrets()));
       }
     }
     if (unaccounted.length > 0) {
@@ -51366,10 +52443,10 @@ function noneReturned(requested, resources, nouns, mark) {
   ];
   return { status, missing, text: lines.join("\n") };
 }
-function withProblem(problem, text6, details) {
-  if (!problem) return outcome("success", bounded3(text6), details);
+function withProblem(problem, text6, details2) {
+  if (!problem) return outcome("success", bounded3(text6), details2);
   const [first, ...rest] = text6.split("\n");
-  return outcome("partial", bounded3([first, `Partial: ${problem}`, ...rest].join("\n")), details);
+  return outcome("partial", bounded3([first, `Partial: ${problem}`, ...rest].join("\n")), details2);
 }
 var POST_HOSTS = /* @__PURE__ */ new Set(["x.com", "twitter.com"]);
 var NUMERIC_ID = /^\d{1,19}$/;
@@ -51725,9 +52802,9 @@ var search_posts = {
     const scope = [archive ? "full archive" : "last 7 days", timeWindow(start, str(args.end_time)), sort === "relevancy" ? "most relevant first" : "newest first"].filter(Boolean).join(", ");
     const reachedLimit = result2.more && !result2.error && !result2.capped;
     const head = `X search for "${query}" (${scope}): ${count(result2.posts.length, "post", "posts")} over ${count(result2.pages, "page", "pages")}${reachedLimit ? `; X has more beyond limit ${limit2}` : ""}.`;
-    const details = { endpoint: archive ? "/2/tweets/search/all" : "/2/tweets/search/recent", pages: result2.pages, returned: result2.posts.length, more: result2.more, capped: result2.capped };
+    const details2 = { endpoint: archive ? "/2/tweets/search/all" : "/2/tweets/search/recent", pages: result2.pages, returned: result2.posts.length, more: result2.more, capped: result2.capped };
     if (result2.error && !result2.posts.length) return outcome("failed", `ERROR: ${result2.error}
-${head}`, details);
+${head}`, details2);
     const lines = [
       head,
       ...result2.error ? [`Page ${result2.pages} failed or reported a problem, so later matches may be missing: ${result2.error}`] : [],
@@ -51735,7 +52812,7 @@ ${head}`, details);
       ...result2.posts.length ? ["", ZERO_NOTE, ...result2.posts.flatMap((item) => formatListPost(item, inc))] : ["", "X found no posts matching this query."]
     ];
     const status = result2.error || result2.capped ? "partial" : result2.posts.length ? "success" : "empty";
-    return outcome(status, bounded3(lines.join("\n")), details);
+    return outcome(status, bounded3(lines.join("\n")), details2);
   }
 };
 var GRANULARITIES = ["minute", "hour", "day"];
@@ -51777,11 +52854,11 @@ var count_posts = {
     } while (pageToken && pages < MAX_COUNT_PAGES);
     const summed = buckets.reduce((sum, bucket) => sum + bucket.count, 0);
     const total2 = reportedTotal ?? summed;
-    const details = { endpoint, granularity, pages, buckets: buckets.length, total: total2, more: Boolean(pageToken) };
+    const details2 = { endpoint, granularity, pages, buckets: buckets.length, total: total2, more: Boolean(pageToken) };
     const scope = [archive ? "full archive" : "last 7 days", timeWindow(start, str(args.end_time)), `per ${granularity}`].filter(Boolean).join(", ");
     const head = `X post counts for "${query}" (${scope}): ${count(total2, "post", "posts")} in ${count(buckets.length, "bucket", "buckets")}.`;
     if (error51 && !buckets.length) return outcome("failed", `ERROR: ${error51}
-${head}`, details);
+${head}`, details2);
     const label = (bucketStart) => granularity === "day" ? bucketStart.slice(0, 10) : utc(bucketStart);
     const lines = [
       head,
@@ -51791,7 +52868,7 @@ ${head}`, details);
       ...buckets.map((bucket) => `${label(bucket.start)}: ${bucket.count.toLocaleString("en-US")}`)
     ];
     const status = error51 || pageToken ? "partial" : total2 > 0 ? "success" : "empty";
-    return outcome(status, bounded3(lines.join("\n")), details);
+    return outcome(status, bounded3(lines.join("\n")), details2);
   }
 };
 async function userTimeline(user, kind, wanted, inc, ctx, token2) {
@@ -51988,13 +53065,13 @@ async function tikhubCommunitySearch(query, wanted, apiKey2, ctx) {
   }
   const communities = found.slice(0, wanted);
   const head = `X Communities search for "${query}" via TikHub: ${count(communities.length, "Community", "Communities")}${more ? " (TikHub has more)" : ""}.`;
-  const details = { kind: "communities", items: communities.length, provider: "tikhub", via: "TikHub" };
+  const details2 = { kind: "communities", items: communities.length, provider: "tikhub", via: "TikHub" };
   if (error51 && !communities.length) return outcome("failed", `ERROR: ${error51}
-${head}`, details);
-  if (!communities.length) return outcome("empty", `${head} TikHub found none.`, details);
+${head}`, details2);
+  if (!communities.length) return outcome("empty", `${head} TikHub found none.`, details2);
   const cap = capped ? [`Stopped at the ${TIKHUB_PAGES}-page safety limit with ${count(communities.length, "Community", "Communities")} of the ${wanted} asked for; TikHub has more.`] : [];
   const lines = [head, ...error51 ? [`Page ${pages} failed, so later Communities may be missing: ${error51}`] : [], ...cap, "", ...communities.flatMap(formatTikhubCommunity)];
-  return outcome(error51 || capped ? "partial" : "success", bounded3(lines.join("\n")), { ...details, capped });
+  return outcome(error51 || capped ? "partial" : "success", bounded3(lines.join("\n")), { ...details2, capped });
 }
 var explore = {
   description: "Explore X through the X API by kind: trends (woeid, default 1 = worldwide; limit up to 50, default 20), spaces (query; state live, scheduled or all, default all; limit), communities (query; limit) or list (a List id or link; limit, default 25), each limit up to 100 and default 25 unless stated. Arguments that do not belong to the kind are refused. Trends, Spaces and Lists use X_BEARER_TOKEN. Communities search runs signed in when X sign-in is set (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET), because X serves it only to a signed-in account; otherwise it is read through TikHub (TIKHUB_API_KEY) and labelled via TikHub. Each Community comes with its link, which x_community reads. X and TikHub report no per-call charge, so the cost is recorded as unknown.",
@@ -52092,7 +53169,7 @@ var matches = (post2, inc, words) => {
   const text6 = matchText(post2, inc);
   return words.every(({ pattern }) => pattern.test(text6));
 };
-function ownOutcome(read5, words, inc, details) {
+function ownOutcome(read5, words, inc, details2) {
   const shown2 = words.length ? read5.posts.filter((post2) => matches(post2, inc, words)) : read5.posts;
   const asked = words.map(({ word }) => word).join(" ");
   const matching = words.length ? `, ${count(shown2.length, "post", "posts")} matching "${asked}"` : "";
@@ -52103,7 +53180,7 @@ function ownOutcome(read5, words, inc, details) {
     ...read5.failures.length ? [`Some requested reads failed: ${read5.failures.join(" | ")}`] : [],
     ...read5.incomplete ?? []
   ];
-  const all = { ...details, read: read5.posts.length, matching: shown2.length, more: read5.more, missing: read5.missing, failures: read5.failures };
+  const all = { ...details2, read: read5.posts.length, matching: shown2.length, more: read5.more, missing: read5.missing, failures: read5.failures };
   if (!read5.posts.length && (read5.error || read5.failures.length)) return outcome("failed", [`ERROR: ${read5.error ?? read5.failures[0]}`, head, ...read5.missing.map((item) => `Not returned: ${item.id} \u2014 ${item.reason}`)].join("\n"), all);
   const lines = [
     head,
@@ -52302,7 +53379,7 @@ var community = {
     if (!token2 && !apiKey2) return failed(`x_community reads a Community's details with ${KEY} or through TikHub, and its posts through TikHub; neither ${KEY} nor TIKHUB_API_KEY is set in Dig's keys.env.`);
     const failures = [];
     let name2 = null;
-    let details = [];
+    let details2 = [];
     let source = null;
     if (token2) {
       const answer = await xGet(`/2/communities/${id}`, { "community.fields": COMMUNITY_FIELDS.join(",") }, `Community ${id}`, context, token2);
@@ -52318,7 +53395,7 @@ var community = {
       if (!answer.ok) failures.push(answer.message);
       else if (data) {
         name2 = str(data.name);
-        details = communityDetails(data);
+        details2 = communityDetails(data);
         source = "X API";
         if (answer.problem) failures.push(answer.problem);
       }
@@ -52328,7 +53405,7 @@ var community = {
       else if (!str(info.data.name)) failures.push(`TikHub fetch_community_info returned no Community ${id}`);
       else {
         name2 = str(info.data.name);
-        details = tikhubCommunityDetails(info.data);
+        details2 = tikhubCommunityDetails(info.data);
         source = "TikHub";
       }
     }
@@ -52351,7 +53428,7 @@ var community = {
       }
     }
     const head = `X Community ${id}${name2 ? ` "${name2}"` : ""} (${communityLink(id)}): ${source ? `details ${source === "TikHub" ? "via TikHub" : "from the X API"}` : "details not read"}${wanted > 0 ? `, ${count(postsRead, "post", "posts")} via TikHub` : ""}.`;
-    const lines = [head, ...failures.length ? [`Not read: ${failures.join(" | ")}`] : [], ...withGap(details), ...withGap(postLines)];
+    const lines = [head, ...failures.length ? [`Not read: ${failures.join(" | ")}`] : [], ...withGap(details2), ...withGap(postLines)];
     const result2 = { community: id, details: source, posts: postsRead, ...source === "TikHub" || postsRead ? { via: "TikHub" } : {} };
     if (failures.length && !source && !postsRead) return outcome("failed", bounded3([`ERROR: ${failures[0]}`, ...lines].join("\n")), result2);
     return outcome(failures.length ? "partial" : "success", bounded3(lines.join("\n")), result2);
@@ -52775,23 +53852,23 @@ function cursorContinuation(payload, same, flag) {
   const cursor = asString(payload.cursor);
   const reported = flag ? payload[flag] : void 0;
   const more = typeof reported === "boolean" ? reported : null;
-  const details = { cursor: more === false ? null : cursor, ...flag ? { [flag]: more } : {} };
-  if (more === false) return { line: `Next page: none; the provider reports ${flag} false.`, details };
-  if (cursor) return { line: `Next page: pass cursor="${cursor}" with ${same}${flag && more === null ? ` (${flag} not reported)` : ""}.`, details };
+  const details2 = { cursor: more === false ? null : cursor, ...flag ? { [flag]: more } : {} };
+  if (more === false) return { line: `Next page: none; the provider reports ${flag} false.`, details: details2 };
+  if (cursor) return { line: `Next page: pass cursor="${cursor}" with ${same}${flag && more === null ? ` (${flag} not reported)` : ""}.`, details: details2 };
   return {
     line: more === true ? `Next page: ${flag} is true but no cursor came back; continuation unavailable.` : "Next page: no cursor returned; this is the last page or continuation is unavailable.",
-    details
+    details: details2
   };
 }
 function pairedContinuation(payload) {
   const cursor = asString(payload.cursor);
   const nextPageId = asString(payload.next_page_id);
-  const details = { cursor, next_page_id: nextPageId, continuation: Boolean(cursor && nextPageId) };
-  if (cursor && nextPageId) return { line: `Next page: pass cursor="${cursor}" and next_page_id="${nextPageId}" with the same url.`, details };
+  const details2 = { cursor, next_page_id: nextPageId, continuation: Boolean(cursor && nextPageId) };
+  if (cursor && nextPageId) return { line: `Next page: pass cursor="${cursor}" and next_page_id="${nextPageId}" with the same url.`, details: details2 };
   if (cursor || nextPageId) {
-    return { line: `Next page: the provider returned only ${cursor ? "cursor" : "next_page_id"}; this endpoint needs both, so continuation is unavailable.`, details };
+    return { line: `Next page: the provider returned only ${cursor ? "cursor" : "next_page_id"}; this endpoint needs both, so continuation is unavailable.`, details: details2 };
   }
-  return { line: "Next page: no cursor or next_page_id returned; this is the last page or continuation is unavailable.", details };
+  return { line: "Next page: no cursor or next_page_id returned; this is the last page or continuation is unavailable.", details: details2 };
 }
 function listResult(page) {
   const { entries: entries2, ids, unreadable } = page.read;
@@ -53738,14 +54815,14 @@ function transparencyLines(info) {
   if (info.is_ad_taken_down === true) lines.push("  Meta reports the ad as taken down");
   return lines;
 }
-function result(status, lines, details) {
+function result(status, lines, details2) {
   const text6 = lines.join("\n");
   const truncated = text6.length > OUTPUT_LIMIT3;
   return {
     status,
     text: truncated ? `${text6.slice(0, OUTPUT_LIMIT3)}
 [Truncated at ${OUTPUT_LIMIT3} of ${text6.length} characters. ${TRUNCATION_NOTE3}]` : text6,
-    details: { provider: "scrapecreators", ...details, truncated }
+    details: { provider: "scrapecreators", ...details2, truncated }
   };
 }
 var plural = (count3, one, many) => `${count3} ${count3 === 1 ? one : many}`;
@@ -53817,7 +54894,7 @@ async function listAds(kind, args, headers, ctx) {
   if (kind === "company" && pages.length) lines.push(`Advertiser pages in these results: ${pages.map((page) => `${page.name}${page.id ? ` (${page.id})` : ""}`).join("; ")}`);
   lines.push(EVIDENCE_SCOPE);
   if (formatted.some((ad) => ad.media > 0)) lines.push(MEDIA_NOTE2);
-  const details = {
+  const details2 = {
     kind,
     ...kind === "search" ? { query: target.query } : { page_id: target.pageId ?? null, company_name: target.companyName ?? null },
     filters: filters.shown,
@@ -53835,10 +54912,10 @@ async function listAds(kind, args, headers, ctx) {
       "",
       `The Ad Library returned no ads for this ${kind === "search" ? "query" : "advertiser"} and filter set.${args.status ? "" : " status defaults to ACTIVE, so inactive ads are not included unless status=ALL or INACTIVE."}`
     );
-    return result("empty", lines, details);
+    return result("empty", lines, details2);
   }
   for (const ad of formatted) lines.push("", ...ad.lines);
-  return result(unreadable ? "partial" : "success", lines, details);
+  return result(unreadable ? "partial" : "success", lines, details2);
 }
 async function adDetail(args, headers, ctx) {
   const target = adTarget(args, "ad");
@@ -53889,20 +54966,20 @@ async function adTranscript(args, headers, ctx) {
     `Ad Library: ${asString(data.url) ?? (id ? `${LIBRARY_AD_URL}${id}` : target.shown)}`,
     provenanceLine(payload)
   ];
-  const details = { kind: "transcript", ad_id: id, transcript_available: available, cached: payload.cached === true, credits_charged: asNumber(payload.credits_charged) };
+  const details2 = { kind: "transcript", ad_id: id, transcript_available: available, cached: payload.cached === true, credits_charged: asNumber(payload.credits_charged) };
   if (transcript2 === null || !transcript2.trim()) {
     lines.push(
       "",
       `No transcript: the provider returned ${transcript2 === null ? "none (transcript: null" : 'an empty transcript (transcript: ""'}${available === null ? "" : `, transcript_available: ${available}`}). This does not show that the ad has no spoken words. The response's reported charge is shown above; a missing charge stays unknown.`
     );
-    return result("empty", lines, details);
+    return result("empty", lines, details2);
   }
   lines.push(
     "Source: Facebook's captions when it exposes them, otherwise ScrapeCreators' transcription of the public video; the response does not say which. Dig has not watched the video.",
     "",
     ...block("Transcript", transcript2, "")
   );
-  return result("success", lines, details);
+  return result("success", lines, details2);
 }
 async function companySearch(args, headers, ctx) {
   const query = args.query?.trim();
@@ -53930,7 +55007,7 @@ async function companySearch(args, headers, ctx) {
     `Pages returned: ${pages.length}`
   ];
   if (unreadable) lines.push(`Unreadable entries: ${plural(unreadable, "returned entry", "returned entries")} carried no page_id and ${unreadable === 1 ? "was" : "were"} skipped; see the retained original.`);
-  const details = {
+  const details2 = {
     kind: "companies",
     query,
     returned: pages.length,
@@ -53940,7 +55017,7 @@ async function companySearch(args, headers, ctx) {
   };
   if (!pages.length) {
     lines.push("", "The Ad Library returned no advertiser pages for this name.");
-    return result("empty", lines, details);
+    return result("empty", lines, details2);
   }
   for (const [index, { page, id }] of pages.entries()) {
     const likes2 = asNumber(page.likes);
@@ -53961,7 +55038,7 @@ async function companySearch(args, headers, ctx) {
       lines.push(`   Instagram: @${instagram2}${followers !== null ? ` (${fmtNum(followers)} followers)` : ""}${page.ig_verification === true ? ", verified" : ""}`);
     }
   }
-  return result(unreadable ? "partial" : "success", lines, details);
+  return result(unreadable ? "partial" : "success", lines, details2);
 }
 var library = creditMetered({
   description: "Read Meta's public Ad Library via ScrapeCreators, one request per call. kind='search': ads matching a keyword, with status (provider default ACTIVE), country, media_type, language, date range, sort_by, exact-phrase search_type and political ad_type filters. kind='company': one advertiser's ads by page_id (exact) or company_name (resolved by the provider), with the same filters. kind='companies': find advertiser pages and their page_id by name. kind='ad': one ad's details by ad_id or Ad Library url, including Meta's EU and political transparency data when present. kind='transcript': one video ad's transcript (null, and free, when there is none). search and company return one page and a cursor for the next. Creative text is shown in full with links, run dates, platforms and media URLs. The library does not report performance; impressions, spend and reach appear only when Meta discloses them. Requires SCRAPECREATORS_API_KEY; 1 credit per request, a transcript only when returned, ad and transcript cache hits free with cache_max_age.",
@@ -56326,7 +57403,7 @@ function describe3(payload, httpStatus, call) {
       (task) => `Task ${task.id ?? "(no id)"}: ${task.status_code ?? "missing"} ${task.status_message ?? ""} \xB7 cost ${usd(task.cost)} \xB7 result_count ${task.result_count ?? 0}`
     )
   ];
-  const details = {
+  const details2 = {
     endpoint: call.path,
     method: call.method,
     sandbox: call.sandbox,
@@ -56341,7 +57418,7 @@ function describe3(payload, httpStatus, call) {
   };
   if (!ACCEPTED.has(Number(body.status_code)))
     return outcome("failed", `${lines.join("\n")}
-The request failed; look up the status code in the documentation's Appendix (errors).`, details);
+The request failed; look up the status code in the documentation's Appendix (errors).`, details2);
   const classes = tasks.map(classify);
   const status = classes.length && classes.every((c) => c === "error") ? "failed" : classes.some((c) => c === "error" || c === "partial") ? "partial" : classes.some((c) => c === "results" || c === "notReady") ? "success" : "empty";
   const notes = [
@@ -56356,7 +57433,7 @@ The request failed; look up the status code in the documentation's Appendix (err
   return outcome(status, `${[...lines, ...notes].join("\n")}
 
 Tasks (data echoes the request; null and empty fields omitted):
-${shown2}`, { ...details, truncated });
+${shown2}`, { ...details2, truncated });
 }
 async function sendOnce(url2, init, label, context) {
   context.abort.throwIfAborted();
@@ -58777,13 +59854,87 @@ function createSchemas(T3, sources = reportSources(ALL_MODULES)) {
       )
     })
   };
-  for (const schema of Object.values(schemas2))
-    if (typeof schema === "object") schema.additionalProperties ??= false;
+  for (const schema2 of Object.values(schemas2))
+    if (typeof schema2 === "object") schema2.additionalProperties ??= false;
   return schemas2;
 }
 
 // src/version.mjs
-var VERSION2 = "0.6.0";
+var VERSION2 = "0.7.0";
+
+// src/presentation.mjs
+import { basename as basename4 } from "node:path";
+var bounded6 = (max) => external_exports.string().trim().min(1).max(max);
+var http = bounded6(2048).refine((value) => {
+  try {
+    const url2 = new URL(value);
+    return ["http:", "https:"].includes(url2.protocol) && !url2.username && !url2.password;
+  } catch {
+    return false;
+  }
+}, "An absolute HTTP(S) URL without credentials is required");
+var details = external_exports.strictObject({ label: bounded6(80), value: bounded6(1e3), url: http.optional() });
+var nextStep = external_exports.strictObject({ label: bounded6(80), prompt: bounded6(4e3) });
+var INSIGHT_SCHEMA = external_exports.strictObject({
+  title: bounded6(180),
+  statement: bounded6(1500),
+  details: external_exports.array(details).max(4).default([]),
+  evidence: external_exports.array(bounded6(4096)).min(1).max(4),
+  limits: external_exports.array(bounded6(500)).max(4).default([]),
+  nextStep: nextStep.optional()
+});
+var PRESENTATION_INPUT = { file: bounded6(4096), insights: external_exports.array(INSIGHT_SCHEMA).min(1).max(6) };
+var schema = external_exports.strictObject(PRESENTATION_INPUT);
+var nullableText = external_exports.string().nullable();
+var CARD_SCHEMA = external_exports.looseObject({
+  file: external_exports.string(),
+  path: external_exports.string().optional(),
+  kind: external_exports.enum(["report", "answer"]),
+  title: external_exports.string(),
+  question: external_exports.string(),
+  label: external_exports.string(),
+  glyph: external_exports.string(),
+  status: nullableText,
+  savedAt: nullableText,
+  summary: external_exports.string(),
+  retrievals: external_exports.number().int().nonnegative(),
+  link: nullableText,
+  cost: external_exports.object({ byUnit: external_exports.record(external_exports.string(), external_exports.number().nonnegative()), unknownCalls: external_exports.number().int().nonnegative(), freeCalls: external_exports.number().int().nonnegative(), totalCalls: external_exports.number().int().nonnegative(), scope: external_exports.enum(["report", "dig"]) }),
+  findings: external_exports.array(external_exports.string()),
+  contradictions: external_exports.array(external_exports.string()),
+  followUps: external_exports.array(external_exports.string()),
+  confidence: nullableText,
+  evidenceGrade: nullableText,
+  schemaWarnings: external_exports.array(external_exports.string()),
+  insights: external_exports.array(external_exports.object({
+    title: external_exports.string(),
+    statement: external_exports.string(),
+    details: external_exports.array(details),
+    evidence: external_exports.array(external_exports.object({ file: external_exports.string(), path: external_exports.string(), label: external_exports.string(), link: nullableText })),
+    limits: external_exports.array(external_exports.string()),
+    nextStep: nextStep.optional()
+  }))
+});
+var PRESENTATION_OUTPUT = { file: external_exports.string(), path: external_exports.string(), card: CARD_SCHEMA };
+async function presentResearch(config3, snapshot2, input) {
+  const args = schema.parse(input);
+  if (Buffer.byteLength(JSON.stringify(args), "utf8") > 48e3) throw new Error("Presentation exceeds 48000 UTF-8 bytes; select fewer findings. Nothing was truncated.");
+  const report = await readLibraryFile(config3, args.file, 0, Number.MAX_SAFE_INTEGER);
+  const card = savedResearch(snapshot2, report.file, report.text);
+  const item = snapshot2.items.find((item2) => item2.answer === report.file || item2.reports.includes(report.file));
+  const namedReports = card.kind === "answer" ? frontMatter(report.text).meta.reports : null;
+  const reportPrefix = report.file.slice(0, report.file.lastIndexOf("/") + 1);
+  const allowedReports = card.kind === "answer" ? Array.isArray(namedReports) ? namedReports.filter((name2) => typeof name2 === "string").map((name2) => reportPrefix + name2).filter((file2) => item.reports.includes(file2)) : [] : item.reports;
+  const allowed = /* @__PURE__ */ new Set([report.file, ...allowedReports, ...item.calls.map((call) => call.rawFile).filter(Boolean)]);
+  const references2 = /* @__PURE__ */ new Map();
+  for (const file2 of new Set(args.insights.flatMap((insight) => insight.evidence))) {
+    const read5 = await readLibraryFile(config3, file2, 0, 1);
+    if (!allowed.has(read5.file)) throw new Error("Presentation evidence must be a report or retained original associated with the selected dig. Composed answers may reference only their named reports.");
+    references2.set(file2, { file: read5.file, path: read5.path, label: basename4(read5.file), link: openInDig(read5.path) });
+  }
+  const insights = args.insights.map((insight) => ({ ...insight, evidence: [...new Map(insight.evidence.map((file2) => [references2.get(file2).file, references2.get(file2)])).values()] }));
+  return { file: report.file, path: report.path, card: { ...card, path: report.path, link: openInDig(report.path), insights } };
+}
 
 // src/server.mjs
 loadKeys();
@@ -58809,8 +59960,8 @@ var project = external_exports.string().min(1).refine(isAbsolute5, "An absolute 
 var dig = external_exports.string().min(1).describe("Optional grouping id returned by dig_start or an existing saved report. A provider call\u2019s receipt records it, so the call counts toward that dig even if no report is saved.");
 var readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 var localWrite = { destructiveHint: false, openWorldHint: false };
-var snapshot = async () => {
-  const c = await loadConfig();
+var snapshot = async (config3) => {
+  const c = config3 ?? await loadConfig();
   return { ...await listLibrary(c), version: VERSION2, replaced: packageReplaced(), library: c.library, libraryFolder: await libraryFolder(c), configPath: c.path, enabledSources: c.sources.enabled, sources: MODULES.map(({ id, kind, label }) => ({ id, kind: kind ?? "source", label })), keepRaw: c.keep_raw };
 };
 var threadOf = (extra) => {
@@ -58872,13 +60023,27 @@ K3(server, "use_environment_keys", {
 });
 K3(server, "saved_research", {
   title: "Saved research card",
-  description: "Details of one saved report or answer for the inline saved-research card.",
+  description: "Derived details of one saved report or answer, with author assessments and scoped provider costs.",
   inputSchema: { file: external_exports.string().min(1) },
+  outputSchema: CARD_SCHEMA,
   annotations: readOnly,
   _meta: { ui: { resourceUri: CARD_URI, visibility: ["app"] } }
 }, async ({ file: file2 }) => {
-  const read5 = await readLibraryFile(await loadConfig(), file2, 0, Number.MAX_SAFE_INTEGER);
-  return reply(savedResearch(await snapshot(), read5.file, read5.text));
+  const c = await loadConfig();
+  const read5 = await readLibraryFile(c, file2, 0, Number.MAX_SAFE_INTEGER);
+  return reply(redactValue({ ...savedResearch(await snapshot(c), read5.file, read5.text), path: read5.path, link: openInDig(read5.path) }, knownSecrets()));
+});
+K3(server, "show_research", {
+  title: "Present research findings",
+  description: "Initiating thread: show a native insight card for an existing saved report or answer after reading it and its load-bearing originals. Supply 1\u20136 concise interpretations with retained evidence references; the server derives identity, status and cost. Use for page opportunities, video observations, disagreements or other useful findings. Shape/reference validation does not establish truth. Read-only: no save, provider request or action execution. Draft next steps remain unsent until the user chooses to send. Prefer this when explanation adds value; routine saves already show a compact card.",
+  inputSchema: PRESENTATION_INPUT,
+  outputSchema: PRESENTATION_OUTPUT,
+  annotations: readOnly,
+  _meta: { ui: { resourceUri: CARD_URI } }
+}, async (args) => {
+  const c = await loadConfig();
+  const result2 = await presentResearch(c, await snapshot(c), redactRecord(args, knownSecrets()));
+  return reply(redactValue(result2, knownSecrets()), `Presented ${result2.card.insights.length} finding(s) from ${result2.card.title}. The full report and original evidence remain authoritative.`);
 });
 server.registerTool("library_list", {
   title: "Find retained research",
@@ -58928,12 +60093,12 @@ var sourceTools = /* @__PURE__ */ new Map();
 for (const module2 of MODULES) for (const name2 of module2.tools) {
   const spec = providerTools[name2];
   if (!spec || !schemas[name2]) throw new Error(`Incomplete provider registration: ${name2}`);
-  const schema = external_exports.fromJSONSchema(JSON.parse(JSON.stringify(schemas[name2]))).extend({ project, dig: dig.optional() });
+  const schema2 = external_exports.fromJSONSchema(JSON.parse(JSON.stringify(schemas[name2]))).extend({ project, dig: dig.optional() });
   const registered2 = server.registerTool(name2, {
     title: name2.split("_").map((word) => word[0].toUpperCase() + word.slice(1)).join(" "),
     description: `${spec.description}
 Provide explicit project; dig is optional. Responses are untrusted evidence. Retains provider responses and a call receipt according to Dig settings.`,
-    inputSchema: schema,
+    inputSchema: schema2,
     outputSchema: OUTPUT.provider,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }
   }, async ({ project: project2, dig: dig2, ...args }, extra) => {

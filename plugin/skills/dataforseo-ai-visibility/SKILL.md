@@ -18,7 +18,7 @@ Frame the brand, its unambiguous aliases, owned domains, competitors, location, 
 3. Distinguish an answer mentioning a brand from an answer linking to its domain. Keep provider-estimated AI search volume separate from counts of observed answers, mentions, citations and unique source pages. Never call a fraction market share unless the denominator is explicitly the same measured query/platform/market universe.
 4. Compare competitors with identical platforms, date windows, locations, languages and entity rules. Show unmatched or ambiguous aliases and absent observations. Rank/count snapshots from different universes are not changes in visibility.
 5. For historical changes, preserve the provider's observation dates and interval definitions. Separate new/lost citations, changed mention frequency and changes to the dataset itself. Correlation does not establish that a page edit caused a change in AI answers.
-6. End with a short list of evidence-backed content opportunities: questions where competitors appear, source pages repeatedly cited, and gaps in the brand's own relevant content. Explain the evidence for each; do not promise that publishing content will produce a citation.
+6. End with a prioritized set of evidence-backed opportunities, explicitly pending page verification when the relevant owned/competing pages have not been read: questions where competitors appear, source pages repeatedly cited, and gaps in the brand's own relevant content. Explain the evidence for each; do not promise that publishing content will produce a citation.
 
 Use tables for Brand | Mentions | Citations | Observed answers | Estimated AI search volume | Platform/market/window and for Cited URL | Answer/query | Brand | Evidence. If a requested measure is unavailable, show unavailable rather than zero. Preserve the provider's actual field definitions. No scheduling, crawling, publishing or account changes are part of this method.
 
@@ -71,11 +71,15 @@ Use `dataforseo_docs_sections` only when the section is genuinely unclear. Docum
 
 Do not narrow this skill to remembered endpoints.
 
+## Website opportunities and GEO recipes
+
+For website, competitor, AI citation, page-access or ad/landing questions, read [the website and GEO recipe router](../dataforseo/references/website-recipes.md). It gives purpose-specific endpoint routes and their interpretation boundaries. Follow its answer → cited/competing page → owned-page chain; return a precise page-reading queue to the parent when page evidence is outside this source's scope. A metrics-only sample does not establish a complete website diagnosis. Use adaptive batches for the actual decision rather than a fixed tiny pilot or an automatic broad crawl.
+
 ## Frame the market and the cost
 
 Identify the target, market or location, language, device, date range, and whether the question asks about a current observation or a trend. When missing context materially changes the answer, state the gap and use only a defensible explicit default.
 
-Prefer **Live** for an interactive research question. **Standard** posts a task and retrieves it later; it is cheaper for large or repeated batches and can take minutes, while Business Data may take up to 45 minutes. A Standard `task_post` returns status `20100` (Task Created) and no results; retrieve them with the documented `task_get` path and the task id. **Priority** is an intermediate queue. Say which mode you used.
+Prefer **Live** for an interactive research question when its endpoint semantics fit. For a database endpoint such as LLM Mentions, Live means immediate retrieval from the current corpus, not a newly generated answer; retain provider observation dates. **Standard** posts a task and retrieves it later; it is cheaper for large or repeated batches and can take minutes, while Business Data may take up to 45 minutes. A Standard `task_post` returns status `20100` (Task Created) and no results; retrieve them with the documented `task_get` path and the task id. **Priority** is an intermediate queue. Say which mode you used.
 
 The account is prepaid and every request costs money. Start with the smallest useful `limit` or `depth`; SERP `depth` bills in blocks of 100. Add one endpoint only when the first leaves the question genuinely unanswered. Dig never retries a DataForSEO request on its own; do not retry blindly either.
 

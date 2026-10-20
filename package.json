@@ -1,12 +1,12 @@
 {
   "name": "dig",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "license": "MIT",
   "scripts": {
     "build": "node --import ./scripts/typescript.mjs scripts/build.mjs",
-    "test": "node --import ./scripts/typescript.mjs --test test/*.test.mjs src/providers/*.test.ts src/providers/tools/*.test.ts",
+    "test": "node --conditions=development --import ./scripts/typescript.mjs --test test/*.test.mjs src/providers/*.test.ts src/providers/tools/*.test.ts",
     "check": "npm run build && npm test",
     "preview": "node --import ./scripts/typescript.mjs scripts/preview.mjs",
     "smoke": "node scripts/smoke.mjs"
@@ -15,16 +15,27 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@base-ui/react": "1.9.0",
     "@iarna/toml": "2.2.5",
     "@modelcontextprotocol/ext-apps": "1.7.5",
-    "@modelcontextprotocol/sdk": "1.30.0",
-    "@openai/mcp-extensions": "0.1.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@openai/mcp-extensions": "0.2.0",
     "@sinclair/typebox": "0.34.52",
+    "@tanstack/react-query": "5.104.5",
+    "@tanstack/react-router": "1.170.45",
+    "clsx": "2.1.1",
     "marked": "18.0.7",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tailwind-merge": "3.7.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "esbuild": "0.25.12",
-    "expect": "30.5.2"
+    "@tailwindcss/vite": "4.3.3",
+    "esbuild": "0.28.2",
+    "expect": "30.5.2",
+    "happy-dom": "21.0.4",
+    "tailwindcss": "4.3.3",
+    "vite": "8.3.4"
   }
 }

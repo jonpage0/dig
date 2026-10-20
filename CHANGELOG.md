@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 — 2026-10-20
+
+- Adopt React 19, Tailwind 4, Base UI/shadcn conventions and an open-source ReUI timeline. The library uses TanStack Router and Query; inline cards remain a separate self-contained bundle sharing components and a native host adapter.
+- Add read-only `show_research` insight cards for retained findings and comparisons, with scoped provider usage, validated evidence references, safe original-reading dialogs and explicit unsent next-step drafts. Saved reports also gain concise titles and their existing author assessments.
+- Pin card/evidence reads to their originating canonical files, reject mixed-file pagination, and clear open research when the selected library changes.
+- Add an initiating-thread website opportunity workflow and DataForSEO/GEO endpoint recipes connecting queries and AI answers to inspected competing and owned pages, specific recommendations and verification. No new history store or scheduler.
+- Upgrade MCP Extensions to 0.2.0 and the MCP SDK to 1.32.1. Preserve versioned inline resources, startup-cached HTML and independent source enablement.
+
 ## 0.6.0 — 2026-10-20
 
 - Add optional Evidence ranking with TypeSafe Jev: suggest a reading order for supplied excerpts and optionally assess their support, contradiction or insufficiency for one claim. Every candidate and its uncertainty remains available; no automatic filtering or source fetching.

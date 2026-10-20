@@ -52,6 +52,10 @@ Pick a source only because it answers a named part of the question; never run ev
 - `facebook-ads`: Meta Ad Library advertisers, ad creatives, run dates and available transcripts, not inferred performance.
 - `tiktok-ads`: TikTok Creative Center ad analytics and the public Ad Library.
 
+## Website discovery, SEO, GEO and advertising questions
+
+When the goal is to improve how a website gets found or compare its opportunities with competitors, read [the website opportunity workflow](references/website-opportunities.md). It connects customer intent and quantitative observations to actual cited/competing and owned pages, then to a specific change and verification. The initiating conversation owns that cross-source interpretation. Use the existing DataForSEO and AI visibility methods, Exa page reads and any supplied owner exports; there is no new specialist service or stored-metrics authority.
+
 ## Run one source
 
 A single source is complete research on its own. Read its skill at the method's `skillPath` and run it inline, or spawn one ordinary worker for it with a full assignment, as described under "Give every worker a full assignment" below. Choose the explicit absolute project directory from the user's workspace; never use the plugin's install or cache directory. No `dig_start` is needed: `research_save` without a `dig` creates the dig from the `question` when the report is saved. The reading rules below still apply to a worker's report.
@@ -91,6 +95,12 @@ When several workers share a question, give each of them the whole shared contex
 - Do not re-delegate this reading, summarize summaries, or trust a worker's summary.
 - Keep each source's limits attached to its claims. Separate what was observed from what was inferred. Say which claims are corroborated, single-source, disputed or unresolved; repeated social claims are not facts.
 - Each report's `## Needs Follow-Up` section lists checks it leaves to you.
+
+## Present a useful finding in the conversation
+
+After reading a saved report or answer and its load-bearing originals, `show_research` can display a native insight card without saving another file or calling a provider. Pass `file` and one to six `insights`: `title`, `statement`, optional ordered `details` (`label`, `value`, optional HTTP(S) `url`), one to four `evidence` library file references, optional `limits`, and optional `nextStep` (`label`, `prompt`). Reference only reports or retained originals associated with that dig; an answer may cite only its named reports. The server derives identity, status and scoped cost from the saved file. Shape validation is not factual verification.
+
+Use cards for a material conclusion, comparison or proposed next step; routine saves already show a compact card. Keep important uncertainty visible and distinguish observations, interpretations and proposed actions. A draft button prepares an unsent message only when the user invokes it; the card never performs research or implements a recommendation. Composition and deliberate presentation belong to the initiating thread, not source workers. Full reports remain the authority.
 
 ## Answer, and record it when you grouped the dig
 

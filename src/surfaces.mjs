@@ -9,6 +9,8 @@ import { createCatalog } from './ui/catalog.mjs';
 import { firstParagraph, frontMatter, reportParts } from './ui/markdown.mjs';
 import { answerWord, runWord } from './status.mjs';
 import { glyphFor, monochromeSvg, svgDataUri } from './glyphs.mjs';
+import { costSummary } from './providers/library/cost.ts';
+import { displayTitle } from './library.mjs';
 
 export const catalog = createCatalog(MODULES.map(({ id, label }) => ({ id, label })));
 
@@ -55,22 +57,34 @@ const trim = (text, max) => (text.length > max ? `${text.slice(0, max - 1).repla
 
 /** Details for the saved-research card: what was saved, about which question, its own status as a tag word, and how much evidence it retains. */
 export function savedResearch(snapshot, file, text) {
-  const item = snapshot.items.find(entry => entry.files.includes(file));
+  const item = snapshot.items.find(entry => entry.answer === file || entry.reports.includes(file));
   if (!item) throw new Error('This file is not part of a dig in the selected library');
   const { meta, body } = frontMatter(text);
   const answer = file.endsWith('/answer.md');
+  const calls = answer ? item.calls : item.calls.filter(call => call.claimedBy === file);
+  const common = {
+    question: item.title,
+    cost: { ...costSummary(calls), totalCalls: calls.length, scope: answer ? 'dig' : 'report' },
+    findings: [], contradictions: [], followUps: [], confidence: null, evidenceGrade: null, schemaWarnings: [], insights: [],
+  };
   if (answer) {
     const reports = Array.isArray(meta.reports) ? meta.reports.map(name => catalog.fileLabel(String(name))) : [];
     return {
-      kind: 'answer', file, title: item.title, label: 'Answer', glyph: 'shovel', status: answerWord(meta.status) ?? (typeof meta.status === 'string' ? meta.status : null), savedAt: meta.finished_at ?? null,
+      ...common, kind: 'answer', file, title: item.title, label: 'Answer', glyph: 'shovel', status: answerWord(meta.status) ?? (typeof meta.status === 'string' ? meta.status : null), savedAt: meta.finished_at ?? null,
       summary: trim(firstParagraph(body), 280), reports, retrievals: item.calls.length, link: openInDig(file),
     };
   }
   const { card, summary } = reportParts(body);
+  const lists = card && !card.partial ? card.lists : {};
+  const list = name => Array.isArray(lists[name]) ? lists[name].filter(x => typeof x === 'string').slice(0, 6).map(x => trim(x, 1000)) : [];
+  const grade = value => ['high', 'medium', 'low'].includes(value) ? value : null;
   return {
-    kind: 'report', file, title: item.title, label: catalog.fileLabel(file), source: meta.source ?? null, method: meta.agent ?? null,
+    ...common, kind: 'report', file, title: displayTitle(item.title, 'single', [{ title: meta.title, topic: meta.topic, source: meta.source }]), label: catalog.fileLabel(file), source: meta.source ?? null, method: meta.agent ?? null,
     glyph: glyphFor(meta.source, meta.agent), status: runWord(card?.fields?.status), savedAt: meta.generated_at ?? null,
     summary: trim(firstParagraph(summary), 280), retrievals: item.calls.filter(call => call.claimedBy === file).length, link: openInDig(file),
+    findings: list('strongest_findings'), contradictions: list('contradictions'), followUps: list('follow_up_targets'),
+    confidence: card?.partial ? null : grade(card?.fields?.confidence), evidenceGrade: card?.partial ? null : grade(card?.fields?.evidence_grade),
+    schemaWarnings: card?.partial ? ['The report assessment contains unsupported structure. Read the full report for the original wording.'] : [],
   };
 }
 

@@ -24,6 +24,30 @@ const eventually = async (read, expected, message) => {
   assert.equal(value, expected, message);
 };
 
+test('rich research cards expose read-only validated presentation without creating a second record', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dig-native-presentation-'));
+  const { client } = await startServer(root);
+  try {
+    const saved = await client.callTool({ name: 'research_save', arguments: { project: root, source: 'hackernews', content: report, question: 'A retained question' } });
+    assert.notEqual(saved.isError, true);
+    const file = saved.structuredContent.file;
+    const before = (await client.callTool({ name: 'library_revision', arguments: {} })).structuredContent.revision;
+    const result = await client.callTool({ name: 'show_research', arguments: { file, insights: [{ title: 'One bounded finding', statement: '<script>source text remains text</script>', details: [{ label: 'Observed', value: 'One small sample' }], evidence: [file], limits: ['Not representative'], nextStep: { label: 'Draft follow-up', prompt: 'Read the retained report before extending this finding.' } }] } });
+    assert.notEqual(result.isError, true);
+    assert.equal(result.structuredContent.card.insights[0].statement, '<script>source text remains text</script>');
+    assert.equal(result.structuredContent.card.cost.totalCalls, 0);
+    assert.equal(result.structuredContent.card.cost.scope, 'report');
+    assert.equal(result.structuredContent.card.insights[0].evidence[0].file, file);
+    assert.equal((await client.callTool({ name: 'library_revision', arguments: {} })).structuredContent.revision, before);
+    const tool = (await client.listTools()).tools.find(t => t.name === 'show_research');
+    assert.equal(tool.annotations.readOnlyHint, true);
+    assert.ok(tool.outputSchema.properties.card);
+    assert.match(tool._meta.ui.resourceUri, /ui:\/\/dig\/saved\/v/);
+    const refused = await client.callTool({ name: 'show_research', arguments: { file, insights: [{ title: 'Unsafe link', statement: 'Example', details: [{ label: 'Bad', value: 'Bad', url: 'javascript:alert(1)' }], evidence: [file] }] } });
+    assert.equal(refused.isError, true);
+  } finally { await client.close(); }
+});
+
 test('optional evidence ranking uses native key authority, redacts outbound state and retains a shared-tool receipt', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dig-native-evidence-'));
   const secret = 'typesafe-protocol-synthetic-key';
@@ -181,7 +205,9 @@ test('standalone bundle starts outside the repo, exposes native metadata, retain
     assert.equal(`${link.protocol}//${link.host}${link.pathname}`, 'codex://plugins/dig@test-market/app/open_library');
     assert.equal(new URL(link.searchParams.get('path'), 'https://dig.invalid').searchParams.get('file'), saved.structuredContent.file);
     const card = (await client.callTool({ name: 'saved_research', arguments: { file: saved.structuredContent.file } })).structuredContent;
-    assert.deepEqual([card.kind, card.label, card.title, card.retrievals, card.link], ['report', 'Hacker News report', 'Explicit test identity', 5, saved.structuredContent.link]);
+    assert.deepEqual([card.kind, card.label, card.title, card.retrievals], ['report', 'Hacker News report', 'Explicit test identity', 5]);
+    assert.equal(card.path, saved.structuredContent.path);
+    assert.equal(new URL(new URL(card.link).searchParams.get('path'), 'https://dig.invalid').searchParams.get('file'), card.path, 'Cards pin report links to their originating library');
     const panel = (await client.callTool({ name: 'open_trail', arguments: {}, _meta: { threadId: 'thread:protocol' } })).structuredContent;
     assert.deepEqual([panel.view, panel.thread, panel.items], ['panel', 'thread-protocol', undefined]);
     const unidentified = (await client.callTool({ name: 'open_trail', arguments: {}, _meta: { threadId: '::' } })).structuredContent;

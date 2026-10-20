@@ -86,6 +86,12 @@ Good to know:
 - **Public research by default.** Optional X sign-in reads your own bookmarks and likes. Video analysis can upload a local project clip you select. Coverage varies by platform.
 - **X has two ways in.** X's API returns the posts themselves; Grok adds search by meaning and reads images and videos. Three methods use them: X judge weighs claims, X breadth finds as many angles as it can, X post inspects one post.
 
+## Findings in the conversation
+
+Saved research opens as a compact native card with its findings, limits and provider usage. Ask Dig to present a useful comparison or recommendation with an insight card: inspect the retained evidence, open the full report, or prepare an editable follow-up draft without sending it. Questions and actions stay in the host conversation. See [research cards](docs/insight-cards.md).
+
+For website discovery, SEO and GEO questions, Dig's method connects customer intent and search/AI observations to the actual cited or competing page and the owned page, then proposes specific changes and verification. The initiating conversation combines DataForSEO evidence, page reads and any owner-supplied analytics; provider-native history and saved reports support comparisons without a separate tracking system.
+
 ## Video understanding
 
 Ask **“Use Dig’s YouTube video method to analyze this demo from 35 to 55 seconds. What changes, and does it support the speaker’s claim? Give the video URL and original timestamps for each finding.”**

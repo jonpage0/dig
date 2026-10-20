@@ -7,16 +7,19 @@ import { fileURLToPath } from 'node:url';
 import { transform } from 'esbuild';
 
 export async function resolve(specifier, context, nextResolve) {
-  if (context.parentURL?.endsWith('.ts') && /^\.\.?\//.test(specifier) && specifier.endsWith('.js')) {
-    const source = new URL(`${specifier.slice(0, -'.js'.length)}.ts`, context.parentURL);
-    if (existsSync(source)) return { url: source.href, shortCircuit: true };
+  if (/\.tsx?$/.test(context.parentURL ?? '') && /^\.\.?\//.test(specifier)) {
+    const base = specifier.endsWith('.js') ? specifier.slice(0, -3) : specifier;
+    for (const extension of ['.ts', '.tsx']) {
+      const source = new URL(`${base}${extension}`, context.parentURL);
+      if (existsSync(source)) return { url: source.href, shortCircuit: true };
+    }
   }
   return nextResolve(specifier, context);
 }
 
 export async function load(url, context, nextLoad) {
-  if (!url.startsWith('file:') || !url.endsWith('.ts')) return nextLoad(url, context);
+  if (!url.startsWith('file:') || !/\.tsx?$/.test(url)) return nextLoad(url, context);
   const file = fileURLToPath(url);
-  const { code } = await transform(await readFile(file, 'utf8'), { loader: 'ts', format: 'esm', target: 'node22', sourcefile: file, sourcemap: 'inline' });
+  const { code } = await transform(await readFile(file, 'utf8'), { loader: url.endsWith('.tsx') ? 'tsx' : 'ts', jsx: 'automatic', format: 'esm', target: 'node22', sourcefile: file, sourcemap: 'inline' });
   return { format: 'module', source: code, shortCircuit: true };
 }

@@ -1,0 +1,57 @@
+.dig-inline-card { margin: 0 auto; max-width: 760px; padding: 10px; color: var(--foreground); }
+.insight-card { overflow: hidden; box-shadow: none; gap: 0; padding: 0; }
+.insight-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 18px 0; }
+.insight-source { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.insight-source p { font-size: 12px; font-weight: 600; margin: 0; }
+.insight-source-icon { display: grid; place-items: center; width: 31px; height: 31px; flex: none; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); }
+.insight-glyph { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.insight-small-label { display: block; font-size: 11px; color: var(--muted-foreground); line-height: 1.5; }
+.insight-heading { padding: 15px 18px; }
+.insight-heading h2 { font-size: 19px; font-weight: 600; line-height: 1.4; letter-spacing: -.25px; margin: 0; overflow-wrap: anywhere; }
+.insight-summary, .insight-report-caption { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; margin: 7px 0 0; }
+.insight-usage { margin-inline: 18px; display: flex; align-items: center; justify-content: space-between; gap: 5px 12px; padding-block: 6px; border-block: 1px solid var(--border); }
+.insight-usage-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.insight-usage-facts strong { font-weight: 600; }
+.insight-usage-label { color: var(--muted-foreground); }
+.insight-content { padding: 16px 18px; display: grid; gap: 13px; }
+.insight-body, .insight-secondary { display: grid; gap: 13px; min-width: 0; }
+.insight-statement { font-size: 13px; line-height: 1.7; margin: 0; overflow-wrap: anywhere; }
+.insight-next { padding: 11px 13px; border: 1px solid var(--border); border-radius: 9px; background: var(--muted); }
+.insight-next p { font-size: 13px; font-weight: 550; line-height: 1.6; margin: 3px 0 0; }
+.insight-timeline { margin-top: 5px; margin-left: 5px; }
+.insight-timeline p { font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.insight-limits { font-size: 12px; line-height: 1.65; color: var(--muted-foreground); padding-top: 8px; }
+.insight-limits h4, .insight-assessment h4 { color: var(--foreground); font-size: 12px; font-weight: 600; margin: 0 0 5px; }
+.insight-limits ul, .insight-assessment ul { list-style: disc; padding-left: 18px; display: grid; gap: 5px; }
+.insight-assessment { font-size: 12px; }
+.insight-assessment p { margin-block: 6px; }
+.insight-secondary { padding-block: 16px; border-bottom: 1px solid var(--border); }
+.insight-secondary:last-child { border-bottom: 0; padding-bottom: 2px; }
+.insight-secondary h3 { font-size: 14px; font-weight: 600; line-height: 1.5; }
+.insight-secondary-actions, .insight-action-group { display: flex; flex-wrap: wrap; gap: 7px; }
+.insight-actions { display: flex; align-items: center; justify-content: space-between; gap: 9px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--muted); }
+.insight-empty, .insight-muted, .insight-preview-note, .insight-saved { color: var(--muted-foreground); font-size: 11px; line-height: 1.65; }
+.insight-saved, .insight-preview-note { padding: 0 4px; margin: 8px 0 0; }
+.insight-notice { font-size: 12px; line-height: 1.6; margin: 12px 0 0; padding: 10px 12px; border-left: 2px solid var(--foreground); background: var(--muted); overflow-wrap: anywhere; }
+.insight-error { font-size: 12px; line-height: 1.6; border-left: 2px solid var(--foreground); padding-left: 10px; }
+.insight-error p + p { margin-top: 6px; color: var(--muted-foreground); }
+.insight-dialog-content { display: grid; gap: 13px; font-size: 13px; line-height: 1.65; }
+.insight-evidence-reader { min-width: 0; }
+.insight-evidence-choices { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 18px; }
+.insight-evidence-choices button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; height: auto; min-height: 30px; }
+.insight-reader-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.insight-reader-head h3 { font-weight: 600; font-size: 14px; }
+.insight-file-details { color: var(--muted-foreground); font-size: 11px; margin-bottom: 12px; }
+.insight-file-details summary { cursor: pointer; padding-block: 3px; }
+.insight-file-details code { display: block; white-space: normal; overflow-wrap: anywhere; padding-block: 8px; }
+.insight-original { border: 1px solid var(--border); border-radius: 8px; background: var(--muted); padding: 13px; font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 58dvh; overflow: auto; tab-size: 2; margin-block: 10px; }
+.insight-draft { width: 100%; min-height: 160px; max-height: 45dvh; padding: 13px; resize: vertical; color: var(--foreground); background: var(--muted); border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 13px; line-height: 1.7; }
+@media (max-width: 420px) {
+  .dig-inline-card { padding: 5px; }
+  .insight-header { padding: 14px 14px 0; }
+  .insight-heading { padding: 13px 14px; }
+  .insight-heading h2 { font-size: 18px; }
+  .insight-usage { margin-inline: 14px; }
+  .insight-content { padding: 14px; }
+  .insight-actions { padding: 11px 14px; }
+}

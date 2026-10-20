@@ -18,7 +18,7 @@ const token = value => typeof value === 'string' && /^[a-zA-Z0-9_][a-zA-Z0-9._-]
 const slug = value => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 65) || 'research';
 const time = value => { const at = typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(at) ? at : null; };
 // A compact view label from metadata already saved with a single-source report. The original question stays title.
-function displayTitle(question, mode, reports) {
+export function displayTitle(question, mode, reports) {
   if (mode !== 'single' || !reports.length) return question;
   const report = reports.at(-1);
   const title = typeof report.title === 'string' ? report.title.trim() : '';

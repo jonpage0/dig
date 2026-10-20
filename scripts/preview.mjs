@@ -6,6 +6,7 @@ import { listLibrary, libraryFolder, libraryRevision, readLibraryFile } from '..
 import { sourceInfo, settingsDocument, environmentPresence } from '../src/catalog.mjs';
 import { packageReplaced, savedResearch } from '../src/surfaces.mjs';
 import { VERSION } from '../src/version.mjs';
+import { presentResearch } from '../src/presentation.mjs';
 const port = Number(process.env.PORT || 43187);
 loadKeys(); // Readiness reflects keys.env exactly as the server sees it.
 const server = createServer(async (req, res) => {
@@ -23,6 +24,7 @@ const server = createServer(async (req, res) => {
     else if (url.pathname === '/api/settings.read') value = settingsDocument(c);
     else if (url.pathname === '/api/library_read') value = await readLibraryFile(c, args.file, args.offset, args.limit);
     else if (url.pathname === '/api/saved_research') { const read = await readLibraryFile(c, args.file, 0, Number.MAX_SAFE_INTEGER); value = savedResearch(await listLibrary(c), read.file, read.text); }
+    else if (url.pathname === '/api/show_research') value = await presentResearch(c, await listLibrary(c), args);
     else { res.writeHead(404); res.end(); return; }
     res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value));
   } catch (e) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ isError: true, content: [{ type: 'text', text: e.message }] })); }

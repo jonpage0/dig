@@ -1,0 +1,82 @@
+@import "tailwindcss";
+@import "@openai/mcp-extensions/app/styles.css";
+@source "../";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+@layer base {
+  :root {
+    --muted-foreground: color-mix(in srgb, var(--foreground) 68%, var(--background));
+    --ring: var(--color-ring-primary, var(--foreground));
+  }
+  * { box-sizing: border-box; }
+  body { -webkit-font-smoothing: antialiased; }
+  [hidden] { display: none !important; }
+  button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
+  a { text-underline-offset: .18em; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+  button { cursor: var(--cursor-interaction, pointer); }
+}
+@layer components {
+  .dig-button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 34px; border: 1px solid transparent; border-radius: calc(var(--radius) - 4px);
+    padding: 6px 12px; font: inherit; font-size: 13px; font-weight: var(--font-weight-medium, 500);
+    color: var(--foreground); background: var(--secondary); text-align: center;
+    transition: background-color 120ms, border-color 120ms; white-space: nowrap;
+  }
+  .dig-button:hover { background: var(--muted); }
+  .dig-button:disabled, .dig-button[data-disabled] { opacity: .45; cursor: not-allowed; }
+  .dig-button-default { background: var(--foreground); color: var(--background); }
+  .dig-button-default:hover { background: color-mix(in srgb, var(--foreground) 83%, var(--background)); }
+  .dig-button-outline { border-color: var(--border); background: transparent; }
+  .dig-button-ghost { background: transparent; }
+  .dig-button-size-sm { min-height: 30px; padding: 4px 9px; font-size: 12px; }
+  .dig-button-size-icon { width: 32px; height: 32px; padding: 0; }
+  .dig-card { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); overflow-wrap: anywhere; }
+  .dig-card-header, .dig-card-content, .dig-card-footer { padding: 16px; }
+  .dig-card-header + .dig-card-content { padding-top: 0; }
+  .dig-card-title { font-size: 16px; line-height: 1.4; font-weight: var(--font-weight-medium, 500); }
+  .dig-card-description { font-size: 13px; line-height: 1.55; color: var(--muted-foreground); }
+  .dig-card-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-top: 1px solid var(--border); }
+  .dig-badge { display: inline-flex; align-items: center; border-radius: 4px; padding: 1px 6px; font-size: 11px; line-height: 18px; color: var(--foreground); background: var(--muted); font-weight: var(--font-weight-medium, 500); }
+  .dig-badge[data-tone=success] { background: color-mix(in srgb, var(--foreground) 14%, transparent); }
+  .dig-badge[data-tone=partial] { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--foreground) 10%, transparent) 0 1.5px, transparent 1.5px 5px), var(--muted); }
+  .dig-badge[data-tone=warning] { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--destructive) 22%, transparent) 0 1.5px, transparent 1.5px 5px), color-mix(in srgb, var(--destructive) 10%, transparent); }
+  .dig-badge[data-tone=muted] { background: radial-gradient(circle, color-mix(in srgb, var(--foreground) 28%, transparent) 0 .7px, transparent 1.1px) 1px 1px / 5px 5px; color: var(--muted-foreground); }
+  .dig-disclosure { border-top: 1px solid var(--border); }
+  .dig-disclosure-trigger { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; padding: 10px 0; border: 0; font: inherit; font-size: 13px; text-align: left; color: var(--foreground); background: transparent; }
+  .dig-chevron { transition: transform 140ms; }
+  .dig-disclosure-trigger[data-panel-open] .dig-chevron { transform: rotate(180deg); }
+  .dig-disclosure-panel { padding: 0 0 12px; }
+  .dig-dialog-backdrop { position: fixed; inset: 0; z-index: 100; background: rgb(0 0 0 / .4); }
+  .dig-dialog { position: fixed; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius); z-index: 101; box-shadow: 0 20px 60px rgb(0 0 0 / .18); overflow: hidden; }
+  .dig-dialog-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; padding: 16px; border-bottom: 1px solid var(--border); }
+  .dig-dialog-title { font-size: 16px; font-weight: var(--font-weight-medium, 500); }
+  .dig-dialog-body { overflow: auto; padding: 16px; min-height: 0; }
+  .dig-dialog-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .dig-tabs-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .dig-tabs-trigger { font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 7px; border: 0; background: transparent; color: var(--muted-foreground); }
+  .dig-tabs-trigger[data-active] { background: var(--muted); color: var(--foreground); }
+  .dig-tabs-panel { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

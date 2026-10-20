@@ -58,11 +58,15 @@ Use `dataforseo_docs_sections` only when the section is genuinely unclear. Docum
 
 Do not narrow this skill to remembered endpoints.
 
+## Website opportunities and GEO recipes
+
+For website, competitor, AI citation, page-access or ad/landing questions, read [the website and GEO recipe router](references/website-recipes.md). It gives purpose-specific endpoint routes and their interpretation boundaries. Follow its answer → cited/competing page → owned-page chain; return a precise page-reading queue to the parent when page evidence is outside this source's scope. A metrics-only sample does not establish a complete website diagnosis. Use adaptive batches for the actual decision rather than a fixed tiny pilot or an automatic broad crawl.
+
 ## Frame the market and the cost
 
 Identify the target, market or location, language, device, date range, and whether the question asks about a current observation or a trend. When missing context materially changes the answer, state the gap and use only a defensible explicit default.
 
-Prefer **Live** for an interactive research question. **Standard** posts a task and retrieves it later; it is cheaper for large or repeated batches and can take minutes, while Business Data may take up to 45 minutes. A Standard `task_post` returns status `20100` (Task Created) and no results; retrieve them with the documented `task_get` path and the task id. **Priority** is an intermediate queue. Say which mode you used.
+Prefer **Live** for an interactive research question when its endpoint semantics fit. For a database endpoint such as LLM Mentions, Live means immediate retrieval from the current corpus, not a newly generated answer; retain provider observation dates. **Standard** posts a task and retrieves it later; it is cheaper for large or repeated batches and can take minutes, while Business Data may take up to 45 minutes. A Standard `task_post` returns status `20100` (Task Created) and no results; retrieve them with the documented `task_get` path and the task id. **Priority** is an intermediate queue. Say which mode you used.
 
 The account is prepaid and every request costs money. Start with the smallest useful `limit` or `depth`; SERP `depth` bills in blocks of 100. Add one endpoint only when the first leaves the question genuinely unanswered. Dig never retries a DataForSEO request on its own; do not retry blindly either.
 
