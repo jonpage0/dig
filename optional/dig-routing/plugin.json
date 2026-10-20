@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "dig-routing",
+  "version": "0.1.0",
+  "description": "Route Dig research and saved-report lookups to the current or connected computer.",
+  "author": { "name": "Jon Page" },
+  "license": "MIT",
+  "keywords": ["dig", "research", "connected-computer", "dots"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Dig routing",
+        "shortDescription": "Dig on your computer",
+        "longDescription": "An optional instruction-only companion to Dig. Use an existing local Dig connection or delegate research and saved-report lookup to an authorized connected computer, then return findings to the requesting conversation. Requires the host to expose the skill and the appropriate tools; contains no server or credentials.",
+        "developerName": "Jon Page",
+        "category": "Research",
+        "capabilities": ["Interactive"],
+        "defaultPrompt": ["Use Dig on my connected computer to research this question and return the findings here."]
+      }
+    }
+  }
+}

@@ -23,6 +23,12 @@ Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the
 - An explicit mention still loads a hidden skill in full. Codex matches a plugin skill only by its qualified name, such as `$dig:reddit`, so the skills suggest that form.
 - `setup` is the manifest's `extensions.com.openai.onboardingSkill`. It reads `settings.read` and `source_info`, asks which sources to enable, changes only the fields the user chose through `settings.update`, and explains each remaining step. It never handles a key and runs the Papers bridge only on the user's yes.
 
+### Optional connected-computer routing
+
+`optional/dig-routing` is a separate instruction-only plugin, version 0.1.0, available as `dig-routing@dig` in the same marketplace. It is not bundled into or installed with `dig`. Its implicitly discoverable `route` skill first uses an existing Dig connection, otherwise delegates through the host's supported local-task interface to an authorized connected computer. The installed Dig skill still owns research, persistence and evidence checks; the companion creates no server, library, credentials or durable routing record. A delegated local task never forwards itself again.
+
+The companion includes a portable root manifest and a Codex compatibility manifest, without an MCP dependency or local-executor requirement, so a host can make the instructions available before choosing where Dig executes. Local installation proves only local discovery; cloud-dot visibility and the complete task/result round trip need separate host verification. Missing connection grants, offline computers and absent delegation tools remain explicit prerequisites, not reasons to copy credentials or silently switch providers.
+
 | Source | Local provider tools | Prerequisite boundary |
 | --- | --- | --- |
 | Hacker News | `hackernews`, `hackernews_read` | Public keyless Algolia search and comment-tree enrichment |

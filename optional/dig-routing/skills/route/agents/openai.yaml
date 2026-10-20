@@ -1,0 +1,6 @@
+interface:
+  display_name: "Dig routing"
+  short_description: "Use Dig on the current or connected computer"
+  default_prompt: "Use $dig-routing:route to research this question with my installed Dig and return the findings here."
+policy:
+  allow_implicit_invocation: true

@@ -6,5 +6,10 @@
     "source": { "source": "local", "path": "./plugin" },
     "policy": { "installation": "AVAILABLE", "authentication": "ON_USE" },
     "category": "Research"
+  }, {
+    "name": "dig-routing",
+    "source": { "source": "local", "path": "./optional/dig-routing" },
+    "policy": { "installation": "AVAILABLE", "authentication": "ON_USE" },
+    "category": "Research"
   }]
 }

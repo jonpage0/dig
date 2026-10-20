@@ -126,6 +126,17 @@ Keys never go in the chat. On Dig's **Sources** page, click **Edit keys.env**, p
 - **Open Dig** from the sidebar to read reports, original responses and costs.
 - **Reuse past research** by typing `@` in the composer.
 
+## Optional: route Dig from another conversation
+
+The [Dig routing companion](optional/dig-routing/README.md) is a separate, instruction-only plugin that can use the current Dig connection or delegate to an authorized connected computer. Install it only if you want that routing skill:
+
+```sh
+codex plugin marketplace upgrade dig
+codex plugin add dig-routing@dig
+```
+
+Its explicit invocation is `$dig-routing:route`; matching requests may select it automatically. Local installation makes it discoverable locally. Cloud-dot discovery and delegation require host support and separate verification.
+
 ## Update
 
 ```sh
