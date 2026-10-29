@@ -300,7 +300,17 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
     const go = async (to: string) => {
       if (to === '/about') update({ aboutReturn: latest.current.view });
       else if (to !== '/reader' && latest.current.state.current) leaveReader();
+      if (to === '/trail' && latest.current.state.mode === 'panel') {
+        try { await host.requestDisplayMode?.('inline'); }
+        catch { notify('The host could not return Dig to inline mode.'); }
+      }
       await navigate(to);
+    };
+    const expand = async (to: '/library' | '/sources' | '/settings') => {
+      // Start the host request inside the click's user activation, before routing or other awaits.
+      try { await host.requestDisplayMode?.('fullscreen'); }
+      catch { notify('The host could not expand Dig. This page is available here.'); }
+      await go(to);
     };
     const back = async () => {
       const { current, returnView } = latest.current.state;
@@ -368,7 +378,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
       if (['/library', '/trail'].includes(latest.current.view)) void navigate(mode === 'panel' ? '/trail' : '/library');
     };
     return {
-      update, notify, poll, read, refreshPages, showFile, showDig, loadAssessment, inspectRecords, inspectRaw, closeEvidence, go, back, saveSetting, editKeys, useEnvironment, activate,
+      update, notify, poll, read, refreshPages, showFile, showDig, loadAssessment, inspectRecords, inspectRaw, closeEvidence, go, expand, back, saveSetting, editKeys, useEnvironment, activate,
       readerOrigin: () => { readerOrigin = { focus: document.getElementById('reader-evidence'), scroll: globalThis.scrollY ?? 0 }; },
       backAbout: () => navigate(latest.current.state.aboutReturn === '/reader' && !latest.current.state.current ? '/library' : latest.current.state.aboutReturn),
       start: async () => {

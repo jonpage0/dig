@@ -60222,7 +60222,7 @@ function createSchemas(T3, sources = reportSources(ALL_MODULES)) {
 }
 
 // src/version.mjs
-var VERSION2 = "0.9.3";
+var VERSION2 = "0.9.4";
 
 // src/call-activity.mjs
 import { randomUUID as randomUUID3 } from "node:crypto";

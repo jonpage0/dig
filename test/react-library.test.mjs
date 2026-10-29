@@ -464,3 +464,19 @@ test('thread resource starts in compact activity before the host delivers its re
   assert.match($('panel-digs').textContent, /Question A/);
   assert.equal($('browse').hidden, true);
 });
+
+
+test('Open library requests fullscreen, while This conversation returns inline; refusal keeps navigation usable', async t => {
+  const modes = [];
+  const host = scriptedHost(snapshotOf([]), { host: { requestDisplayMode: async mode => { modes.push(mode); return mode; } } });
+  await mount(t, host, { trail: true });
+  await React.act(async () => host.emitResult({ view: 'panel', thread: 'thread-1' })); await settle();
+  const open = () => [...$('panel').querySelectorAll('button')].find(node => node.textContent.includes('Open library'));
+  await click(open());
+  assert.deepEqual(modes, ['fullscreen']); assert.equal($('browse').hidden, false);
+  await click($('nav-trail'));
+  assert.deepEqual(modes, ['fullscreen', 'inline']); assert.equal($('panel').hidden, false);
+  host.requestDisplayMode = async () => { throw Error('Host refused'); };
+  await click(open());
+  assert.equal($('browse').hidden, false); assert.match($('notice').textContent, /could not expand/);
+});

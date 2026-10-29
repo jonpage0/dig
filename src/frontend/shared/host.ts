@@ -9,6 +9,7 @@ export type DigHost = {
   call(name: string, args?: Record<string, unknown>): Promise<any>;
   openLink(url: string): Promise<void>;
   openFile(path: string): Promise<void>;
+  requestDisplayMode(mode: 'inline' | 'fullscreen'): Promise<string | null>;
   draft(text: string): Promise<void>;
   getContext(): any;
   readDeepLink(): string | null;
@@ -108,6 +109,15 @@ export function createDigHost(name: string, options: HostOptions = {}): DigHost 
       try { parsed = new URL(url); } catch { throw new Error('This link is invalid.'); }
       if (!['http:', 'https:', 'codex:'].includes(parsed.protocol)) throw new Error('This link type cannot be opened by Dig.');
       assertAccepted(await app.openLink({ url }), 'The host did not open this link.');
+    },
+    async requestDisplayMode(mode) {
+      if (preview) return null;
+      requireNative();
+      const context = app.getHostContext();
+      if (!context?.availableDisplayModes?.includes(mode)) return context?.displayMode ?? null;
+      const result = await app.requestDisplayMode({ mode });
+      assertAccepted(result, 'The host could not change Dig’s display mode.');
+      return result.mode;
     },
     async openFile(path) {
       requireNative();

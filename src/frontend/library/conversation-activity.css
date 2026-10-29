@@ -47,3 +47,6 @@
 }
 
 .activity-expand.dig-button { min-height: 25px; font-size: 10px; justify-self: start; padding: 3px 0; color: var(--muted-foreground); }
+
+.activity-header { flex-wrap: wrap; }
+.activity-header > .activity-actions { margin-left: auto; gap: 3px; }

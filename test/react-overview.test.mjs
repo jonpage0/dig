@@ -35,7 +35,7 @@ function fixture(items = [question()], live = []) {
   const actions = [];
   const app = {
     snapshot: { library: '/library', items, live, activeCalls: [] }, snapshotLoaded: true, usageDays: 30, thread: 'current-chat', catalog: createCatalog(MODULES),
-    go: path => actions.push(['go', path]), update: patch => actions.push(['update', patch]), showDig: (...args) => actions.push(['showDig', ...args]), notify: (...args) => actions.push(['notice', ...args]),
+    go: path => actions.push(['go', path]), expand: path => actions.push(['expand', path]), update: patch => actions.push(['update', patch]), showDig: (...args) => actions.push(['showDig', ...args]), notify: (...args) => actions.push(['notice', ...args]),
   };
   const host = { preview: false, canDraft: () => false, canOpenFile: () => true, openFile: async path => actions.push(['openFile', path]), draft: async value => actions.push(['draft', value]), openLink: async value => actions.push(['openLink', value]), call: async () => { throw new Error('Overview must not call providers'); } };
   return { app, host, actions };
@@ -141,7 +141,9 @@ test('compact conversation view leads with active calls and sources, with no das
   await click(document.querySelector('.activity-result'));
   assert.deepEqual(data.actions, [['showDig', mine]]);
   await click([...$('panel').querySelectorAll('button')].find(node => node.textContent.includes('Open library')));
-  assert.deepEqual(data.actions.at(-1), ['go', '/library']);
+  assert.deepEqual(data.actions.at(-1), ['expand', '/library']);
+  await click($('panel').querySelector('[aria-label="Configure Dig"]'));
+  assert.deepEqual(data.actions.at(-1), ['expand', '/sources']);
   await ui.render({ ...props, app: { ...data.app, snapshot: { ...data.app.snapshot, activeCalls: [] } } });
   assert.match(document.querySelector('.activity-status').textContent, /No active calls/);
   assert.equal(document.querySelector('.activity-active'), null);

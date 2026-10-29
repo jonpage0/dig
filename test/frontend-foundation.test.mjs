@@ -109,3 +109,22 @@ test('browser preview is the only HTTP adapter and cannot draft or open native f
     host.dispose(); globalThis.fetch = originalFetch; window.location.href = 'https://dig.test/';
   }
 });
+
+
+test('display mode uses the standard host capability and respects refused or unavailable modes', async () => {
+  const { host, app, calls, setContext } = nativeFixture();
+  await host.start();
+  app.requestDisplayMode = async value => { calls.push(['display', value]); return { mode: value.mode }; };
+  setContext({ displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] });
+  assert.equal(await host.requestDisplayMode('fullscreen'), 'fullscreen');
+  assert.deepEqual(calls.at(-1), ['display', { mode: 'fullscreen' }]);
+  setContext({ displayMode: 'inline', availableDisplayModes: ['inline'] });
+  const before = calls.length;
+  assert.equal(await host.requestDisplayMode('fullscreen'), 'inline'); assert.equal(calls.length, before);
+  setContext({ displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] });
+  app.requestDisplayMode = async () => ({ mode: 'inline' });
+  assert.equal(await host.requestDisplayMode('fullscreen'), 'inline', 'Host-selected mode is authoritative');
+  app.requestDisplayMode = async () => { throw Error('Refused'); };
+  await assert.rejects(host.requestDisplayMode('fullscreen'), /Refused/);
+  host.dispose();
+});

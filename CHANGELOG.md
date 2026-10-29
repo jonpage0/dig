@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.4 — 2026-10-29
+
+- Open library now requests host fullscreen from the activity panel. This conversation returns inline; unsupported or refused expansion keeps navigation usable.
+- Add a direct Configure action to open existing source and provider settings in the expanded view.
+
 ## 0.9.3 — 2026-10-29
 
 - Replace the in-thread dashboard with compact conversation activity: observed running calls, call/source/report counts, source outcomes and links to saved results. Keep the full library an explicit destination.

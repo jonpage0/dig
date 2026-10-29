@@ -21,7 +21,8 @@ export function ConversationActivity({ app, hidden }: { app: any; hidden: boolea
   const read = (item: any) => { void app.showDig(item); };
   return <section id="panel" className="conversation-activity" hidden={hidden} aria-label="Dig conversation activity">
     <header className="activity-header"><div><strong>Dig</strong><span id="panel-scope">This conversation</span></div>
-      <Button size="sm" variant="ghost" onClick={() => { void app.go('/library'); }}>Open library <span aria-hidden="true">↗</span></Button>
+      <div className="activity-actions"><Button size="sm" variant="ghost" aria-label="Configure Dig" onClick={() => { void app.expand('/sources'); }}>Configure</Button>
+        <Button size="sm" variant="ghost" onClick={() => { void app.expand('/library'); }}>Open library <span aria-hidden="true">↗</span></Button></div>
     </header>
     <div className="activity-status" role="status"><span className="activity-indicator" data-running={liveAvailable && active > 0} aria-hidden="true" />{status}</div>
     {scope.identified ? <>
