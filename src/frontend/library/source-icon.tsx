@@ -16,4 +16,3 @@ export function SourceIcon({ id }: { id: string }) {
       </svg>}
   </IconTile>;
 }
-
