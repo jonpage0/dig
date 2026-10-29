@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect } from "expect";
+import { Type } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import { executeSource } from "../outcome.js";
+import { createSchemas } from "../schemas.js";
 import type { ToolContext } from "../types.js";
 import { search } from "./xsearch.js";
 
@@ -34,6 +37,151 @@ const context: ToolContext = {
 	abort: new AbortController().signal,
 	keep: () => {},
 };
+
+const complete = (overrides: Record<string, unknown> = {}) => ({
+	id: "r-new",
+	status: "completed",
+	output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: "A readable finding." }] }],
+	usage: { total_tokens: 12, cost_in_usd_ticks: 50000000 },
+	...overrides,
+});
+
+test("a charged chained storage-limit failure is retained without a context-losing retry", async () => {
+	const bodies: any[] = [];
+	const retained: unknown[][] = [];
+	const failure = { error: { message: "Response is too large to store" }, usage: { total_tokens: 12, cost_in_usd_ticks: 123400000 } };
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		bodies.push(JSON.parse(String(init?.body)));
+		return bodies.length === 1 ? Response.json(failure, { status: 400 }) : Response.json(complete());
+	}) as typeof fetch;
+	const result = await executeSource(search, { query: "Now compare the opposing view.", previousResponseId: "r-prior" }, {
+		...context, keep: (...args) => { retained.push(args); },
+	});
+	expect(bodies).toHaveLength(1);
+	expect(bodies[0].previous_response_id).toBe("r-prior");
+	expect(result.status).toBe("failed");
+	expect(result.text).toContain("chained request was not retried without its previous response context");
+	expect(result.text).not.toContain("Chained from:");
+	expect(result.details?.cost).toEqual([{ amount: 0.01234, unit: "USD" }]);
+	expect(retained).toEqual([["x_search", 400, failure]]);
+});
+
+test("an unchained storage-limit retry keeps its full standalone input and all reported charges", async () => {
+	const bodies: any[] = [];
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		bodies.push(JSON.parse(String(init?.body)));
+		return bodies.length === 1
+			? Response.json({ error: { message: "Response is too large to store" }, usage: { total_tokens: 12, cost_in_usd_ticks: 123400000 } }, { status: 400 })
+			: Response.json(complete());
+	}) as typeof fetch;
+	const result = await executeSource(search, { query: "A complete standalone question." }, context);
+	expect(bodies).toHaveLength(2);
+	expect(bodies[0].input.map((value: any) => value.role)).toEqual(["system", "user"]);
+	expect(bodies[1].input).toEqual(bodies[0].input);
+	expect(bodies[1].store).toBe(false);
+	expect(result.status).toBe("success");
+	expect(result.details?.cost).toEqual([{ amount: 0.01734, unit: "USD" }]);
+	expect(result.text).toContain("- Store: false");
+});
+
+test("a reasoning-parameter retry preserves a chained request's prior response", async () => {
+	const bodies: any[] = [];
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		bodies.push(JSON.parse(String(init?.body)));
+		return bodies.length === 1
+			? Response.json({ error: { message: "reasoning effort is not supported" }, usage: { total_tokens: 0, cost_in_usd_ticks: 0 } }, { status: 400 })
+			: Response.json(complete());
+	}) as typeof fetch;
+	const result = await executeSource(search, { query: "A follow-up question.", previousResponseId: "r-prior" }, context);
+	expect(bodies.map(value => value.previous_response_id)).toEqual(["r-prior", "r-prior"]);
+	expect(bodies[1].input).toEqual(bodies[0].input);
+	expect(bodies[1].reasoning).toBeUndefined();
+	expect(result.status).toBe("success");
+	expect(result.text).toContain("- Chained from: r-prior");
+});
+
+test("incomplete response or message status preserves readable evidence as partial with reported usage", async () => {
+	for (const variant of [
+		{ status: "incomplete", incomplete_details: { reason: "max_output_tokens" } },
+		{ output: [{ type: "message", status: "incomplete", content: [{ type: "output_text", text: "A partial finding." }] }] },
+	]) {
+		let calls = 0;
+		globalThis.fetch = (async () => { calls += 1; return Response.json(complete(variant)); }) as typeof fetch;
+		const result = await executeSource(search, { query: "A bounded question." }, context);
+		expect(calls).toBe(1);
+		expect(result.status).toBe("partial");
+		expect(result.text).toContain("finding.");
+		expect(result.text).toContain("**Incomplete response:**");
+		expect(result.details?.cost).toEqual([{ amount: 0.005, unit: "USD" }]);
+	}
+});
+
+test("an incomplete response without readable text fails while retaining its reported cost", async () => {
+	globalThis.fetch = (async () => Response.json(complete({ status: "incomplete", output: [] }))) as typeof fetch;
+	const result = await executeSource(search, { query: "No readable result." }, context);
+	expect(result.status).toBe("failed");
+	expect(result.text).toContain("incomplete response with no readable content");
+	expect(result.details?.cost).toEqual([{ amount: 0.005, unit: "USD" }]);
+});
+
+test("oversized handle scopes are rejected by the schema and runtime before a request", async () => {
+	const schema = createSchemas(Type).xsearch;
+	let calls = 0;
+	globalThis.fetch = (async () => { calls += 1; return Response.json(complete()); }) as typeof fetch;
+	for (const field of ["handles", "excludeHandles"]) {
+		const args = { query: "A scoped question.", [field]: Array.from({ length: 21 }, (_, index) => `person${index}`) };
+		expect(Value.Check(schema, args)).toBe(false);
+		const result = await executeSource(search, args, context);
+		expect(result.status).toBe("failed");
+		expect(result.text).toContain("at most 20 handles");
+	}
+	expect(calls).toBe(0);
+});
+
+test("all twenty allowed or excluded handles are forwarded and reported", async () => {
+	const bodies: any[] = [];
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		bodies.push(JSON.parse(String(init?.body))); return Response.json(complete());
+	}) as typeof fetch;
+	const handles = Array.from({ length: 20 }, (_, index) => `@person${index}`);
+	for (const [field, providerField] of [["handles", "allowed_x_handles"], ["excludeHandles", "excluded_x_handles"]]) {
+		const args = { query: "A scoped question.", [field]: handles };
+		expect(Value.Check(createSchemas(Type).xsearch, args)).toBe(true);
+		const result = await executeSource(search, args, context);
+		expect(result.status).toBe("success");
+		expect(bodies.at(-1).tools[0][providerField]).toEqual(handles.map(value => value.slice(1)));
+		expect(result.text).toContain("person19");
+	}
+});
+
+test("date-time strings, invalid dates and empty or reversed ranges are rejected before retrieval", async () => {
+	let calls = 0;
+	globalThis.fetch = (async () => { calls += 1; return Response.json(complete()); }) as typeof fetch;
+	const invalid = [
+		{ fromDate: "2026-10-28T00:00:00Z" }, { toDate: "2026-02-30" }, { fromDate: "" },
+		{ fromDate: "2026-10-28", toDate: "2026-10-28" }, { fromDate: "2026-10-29", toDate: "2026-10-28" },
+	];
+	for (const dates of invalid) {
+		const result = await executeSource(search, { query: "Date-constrained research.", ...dates }, context);
+		expect(result.status).toBe("failed");
+	}
+	expect(calls).toBe(0);
+	expect(Value.Check(createSchemas(Type).xsearch, { query: "Date-constrained research.", fromDate: "2026-10-28T00:00:00Z" })).toBe(false);
+});
+
+test("single-day UTC boundaries remain explicit in the request and returned scope", async () => {
+	let body: any;
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => { body = JSON.parse(String(init?.body)); return Response.json(complete()); }) as typeof fetch;
+	const result = await executeSource(search, { query: "One day.", fromDate: "2026-10-28", toDate: "2026-10-29" }, context);
+	expect(result.status).toBe("success");
+	expect(body.tools[0].from_date).toBe("2026-10-28");
+	expect(body.tools[0].to_date).toBe("2026-10-29");
+	for (const input of body.input) {
+		expect(input.content).toContain("from 2026-10-28 00:00 UTC (inclusive)");
+		expect(input.content).toContain("before 2026-10-29 00:00 UTC (exclusive)");
+	}
+	expect(result.text).toContain("- Date Range: from 2026-10-28 00:00 UTC (inclusive); before 2026-10-29 00:00 UTC (exclusive)");
+});
 
 test("a transport failure after a charged storage-limit response leaves the total unknown and keeps the reported USD subtotal", async () => {
 	let calls = 0;

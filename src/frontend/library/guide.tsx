@@ -199,7 +199,7 @@ export function GuidePage({ hidden, onNavigate }: GuidePageProps) {
           <FramePanel><h4>The question and saved outcome</h4><p>See what the research addresses and what answer has been saved. “No answer saved yet” describes the record; it does not say that work is running or paused.</p></FramePanel>
           <FramePanel><h4>Coverage, findings, and gaps</h4><p>See which methods have reports, what their authors found, and what remains uncertain. More sources can add perspective without making the research exhaustive or correct.</p></FramePanel>
           <FramePanel><h4>Usage and dated activity</h4><p>Compare saved reports and recorded tool outcomes with their associated provider usage. These are retained observations, not a live progress bar.</p></FramePanel>
-          <FramePanel><h4>A way to steer or inspect</h4><p>Choose a next direction through an unsent conversation draft. Inspect records opens full reports and available originals when you want to examine a particular finding.</p></FramePanel>
+          <FramePanel><h4>A way to steer or inspect</h4><p>Open a saved question to read its answer or latest report. Research details keeps coverage and activity available, and Inspect records reopens hidden documents. You can also review an unsent conversation draft for a next direction.</p></FramePanel>
         </Frame>
       </section>
     </div>

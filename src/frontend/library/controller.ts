@@ -18,7 +18,7 @@ export function replacedMessage(value: any) {
 const emptySnapshot = { items: [], live: [] };
 const emptyState = {
   mode: 'library', thread: null, connected: false, notice: '', failure: false, updatesFailed: false,
-  current: null, document: null, evidence: null, assessment: null, inspectionOpen: false, callsOpen: false, returnFile: null, returnView: '/library',
+  current: null, document: null, evidence: null, assessment: null, inspectionOpen: false, detailsOpen: false, callsOpen: false, returnFile: null, returnView: '/library',
   aboutReturn: '/library', usageDays: 30,
 };
 
@@ -83,7 +83,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
         libraryGeneration++; navigation++; evidenceNavigation++; assessmentNavigation++;
         evidenceOrigin = null; readerOrigin = null; browseScroll = 0;
         update({
-          current: null, document: null, evidence: null, assessment: null, inspectionOpen: false, callsOpen: false, returnFile: null, returnView: '/library',
+          current: null, document: null, evidence: null, assessment: null, inspectionOpen: false, detailsOpen: false, callsOpen: false, returnFile: null, returnView: '/library',
           ...(latest.current.state.aboutReturn === '/reader' ? { aboutReturn: '/library' } : {}),
         });
         queries.removeQueries({ queryKey: ['file'] });
@@ -241,22 +241,21 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
         browseScroll = globalThis.scrollY ?? 0;
         update({ returnView: latest.current.view === '/about' ? latest.current.state.aboutReturn : latest.current.view });
       }
-      update({ current: item, document: null, assessment: null, inspectionOpen: false, callsOpen: false, returnFile: null });
+      update({ current: item, document: null, assessment: null, inspectionOpen: false, detailsOpen: false, callsOpen: false, returnFile: null });
       await navigate('/reader');
       if (!alive || request !== navigation) return;
-      if (file) await showFile(file);
-      else {
-        const report = [...(item.reportDetails ?? [])].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]?.file ?? item.reports[0] ?? item.answer;
-        if (report) void loadAssessment(report);
-      }
-      if (!file && latest.current.state.current?.id === item.id && latest.current.state.current?.project === item.project) {
-        const completedNavigation = navigation;
-        requestAnimationFrame(() => {
-          if (!alive || completedNavigation !== navigation) return;
-          document.getElementById('dig-title')?.focus({ preventScroll: true });
-          globalThis.scrollTo?.({ top: 0, behavior: 'instant' });
-        });
-      }
+      // Open the result immediately. Accounting and recorded history stay available below the reader.
+      const primary = file ?? item.answer ?? [...(item.reportDetails ?? [])].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]?.file ?? item.reports[0] ?? item.files.find((path: string) => path.endsWith('/dig.md'));
+      const reading = primary ? showFile(primary) : null;
+      const completedNavigation = navigation;
+      // Move focus when the view opens, including while a local read is pending or fails. Do not steal it
+      // again when the read finishes or let a late navigation focus a different question.
+      requestAnimationFrame(() => {
+        if (!alive || completedNavigation !== navigation || latest.current.state.current?.id !== item.id || latest.current.state.current?.project !== item.project) return;
+        document.getElementById('dig-title')?.focus({ preventScroll: true });
+        document.getElementById('detail')?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+      });
+      if (reading) await reading;
     };
     const inspectRecords = async () => {
       const item = latest.current.state.current;
@@ -296,7 +295,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
     };
     const leaveReader = () => {
       closeEvidence(false); navigation++; assessmentNavigation++;
-      update({ current: null, document: null, assessment: null, inspectionOpen: false, callsOpen: false, returnFile: null });
+      update({ current: null, document: null, assessment: null, inspectionOpen: false, detailsOpen: false, callsOpen: false, returnFile: null });
     };
     const go = async (to: string) => {
       if (to === '/about') update({ aboutReturn: latest.current.view });

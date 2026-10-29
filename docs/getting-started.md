@@ -28,7 +28,7 @@ An open research question helps you answer five practical questions:
 
 These are observations from saved records. “No answer saved yet” does not mean a worker is running, paused, or stopped. A count of sources is breadth of retained material, not a guarantee of complete coverage or independent agreement. Dig does not infer a live progress percentage.
 
-Your assistant does the detailed reading. Choose **Inspect records** when you want to examine a full report, saved answer, or available original response yourself.
+Your assistant does the detailed reading. Open a saved question to read its answer, or its latest report when no answer is saved. **Research details & activity** keeps coverage, follow-up targets and calls available; **Inspect records** can reopen a hidden document. An overflowing row of document tabs has left/right controls, and **Retrievals** opens the retained originals.
 
 The **Start here** tab includes a made-up worked example near the top: a finding, the passage supporting it, and an illustrative original response. It shows how one passage can support offline editing while leaving sync reliability unanswered—and how that gap becomes a useful next question. The example runs no research and is not saved in your library.
 

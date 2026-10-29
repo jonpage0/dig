@@ -105,7 +105,6 @@ async function mount(t, host) {
 }
 async function openDig(host, id, body) {
   await click(byKey(`dig:/project/${id}:${id}`));
-  await click($('inspect-records'));
   if (body !== undefined) { await React.act(async () => host.reads.get(`${report(id)}:0`)(body)); await settle(); }
 }
 
@@ -229,15 +228,53 @@ test('Start here is discoverable without replacing the overview or starting rese
   assert.deepEqual([...new Set(host.calls.map(call => call.name))].sort(), ['library_revision', 'library_snapshot', 'source_info']);
 });
 
-test('opening research observes its state first; explicitly inspecting an original reopens hidden records', async t => {
+test('a saved answer opens before newer source reports and detailed accounting', async t => {
+  const answer = 'p/digs/A/answer.md';
+  const host = scriptedHost(snapshotOf([item('A', { answer, status: 'answered', files: [report('A'), answer] })]));
+  await mount(t, host);
+  await click(byKey('dig:/project/A:A'));
+  assert.equal(document.activeElement, $('dig-title'));
+  assert.equal(host.calls.find(call => call.name === 'library_read').args.file, '/library/' + answer);
+  await React.act(async () => host.reads.get(answer + ':0')('# Saved answer\n\nThe retained conclusion.')); await settle();
+  assert.match($('document').textContent, /The retained conclusion/);
+  const details = document.querySelector('.reader-research-details');
+  assert.ok($('document').compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.equal(details.querySelector('.dig-disclosure-trigger').getAttribute('aria-expanded'), 'false');
+  assert.equal(host.calls.some(call => !['library_snapshot', 'library_revision', 'library_read', 'saved_research'].includes(call.name)), false);
+});
+
+test('document strip reveals directional controls only for overflow and updates at either edge', async t => {
+  const host = scriptedHost(snapshotOf([item('A')]));
+  await mount(t, host);
+  await openDig(host, 'A', '# Report');
+  const list = $('files');
+  assert.equal(document.querySelector('[aria-label="Scroll documents"]'), null);
+  Object.defineProperties(list, { clientWidth: { configurable: true, value: 200 }, scrollWidth: { configurable: true, value: 500 } });
+  list.scrollBy = ({ left }) => { list.scrollLeft = Math.min(300, Math.max(0, list.scrollLeft + left)); list.dispatchEvent(new Event('scroll')); };
+  await React.act(async () => window.dispatchEvent(new Event('resize'))); await settle();
+  const left = document.querySelector('[aria-label="Scroll documents left"]');
+  const right = document.querySelector('[aria-label="Scroll documents right"]');
+  assert.equal(left.disabled, true); assert.equal(right.disabled, false);
+  await click(right);
+  assert.ok(list.scrollLeft > 0); assert.equal(left.disabled, false);
+  await click(right);
+  assert.equal(list.scrollLeft, 300); assert.equal(right.disabled, true);
+  await click(left);
+  assert.ok(list.scrollLeft < 300); assert.equal(right.disabled, false);
+  Object.defineProperty(list, 'clientWidth', { configurable: true, value: 600 });
+  list.scrollLeft = 0;
+  await React.act(async () => window.dispatchEvent(new Event('resize'))); await settle();
+  assert.equal(document.querySelector('[aria-label="Scroll documents"]'), null);
+});
+
+test('opening research reads its result first; explicitly inspecting an original reopens hidden records', async t => {
   const host = scriptedHost(snapshotOf([item('A', { planned: ['hackernews', 'exa'], calls: [rawCall] })]));
   await mount(t, host);
   await click(byKey('dig:/project/A:A'));
-  assert.equal(host.calls.filter(call => call.name === 'library_read').length, 0);
-  assert.equal(document.querySelector('.research-record-inspection').hidden, true);
+  assert.equal(host.calls.filter(call => call.name === 'library_read').length, 1);
+  assert.equal(document.querySelector('.research-record-inspection').hidden, false);
   assert.match($('detail').textContent, /No report saved/);
   assert.equal(host.calls.filter(call => call.name === 'saved_research').length, 1);
-  await click($('inspect-records'));
   await React.act(async () => host.reads.get(report('A') + ':0')('RETAINED REPORT')); await settle();
   await click($('inspect-records'));
   assert.equal(document.querySelector('.research-record-inspection').hidden, true);
@@ -281,7 +318,7 @@ test('unsupported assessment and composed-answer defaults never claim an absence
   assert.match($('detail').textContent, /Unsupported report structure/);
   assert.doesNotMatch($('detail').textContent, /No follow-up targets/);
   answer = true;
-  await click($('inspect-records'));
+  await click(byKey('file:p/digs/A/answer.md'));
   assert.match($('detail').textContent, /saved answer has no source-author assessment/);
   assert.doesNotMatch($('detail').textContent, /No follow-up targets/);
 });

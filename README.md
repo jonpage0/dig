@@ -78,9 +78,9 @@ Ask a question in Codex. Your assistant chooses useful enabled sources, reads th
 What you get back:
 
 - **An overview of saved research**, with provider usage visible and a research trail for the current conversation.
-- **A state view for each question:** saved outcome, methods with reports, recorded findings and gaps, and dated activity.
+- **Direct reading for each question:** its saved answer or latest report, with coverage, reported gaps and activity available under Research details.
 - **A way to steer the next step:** review a proposed instruction, place it in the conversation as an unsent draft or copy it, then send when ready.
-- **Inspect records** for full source reports, saved answers and original responses retained when enabled and saving succeeds.
+- **A retained-evidence reader** for full reports and saved answers, with document navigation and original responses retained when enabled and saving succeeds.
 
 The interface shows retained observations. A missing report does not mean an agent is paused or still running, and a source count does not prove that a question has been fully covered. Provider costs remain in their reported units; unknown never means free.
 

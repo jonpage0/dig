@@ -19,6 +19,13 @@ const $ = id => document.getElementById(id);
 const keyed = key => [...document.querySelectorAll('[data-key]')].find(node => node.dataset.key === key);
 const settle = async () => React.act(async () => { for (let i = 0; i < 3; i++) await new Promise(resolve => setTimeout(resolve, 0)); });
 const click = async element => { assert.ok(element); await React.act(async () => element.click()); await settle(); };
+const fill = async (element, value) => {
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(element, value);
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await settle();
+};
 const at = new Date(Date.now() - 60_000).toISOString();
 const startedAt = new Date(Date.now() - 120_000).toISOString();
 const file = 'p/digs/a/exa.md';
@@ -85,7 +92,41 @@ test('state rows distinguish saved work, absent reports and author assessments w
   assert.equal(data.actions[0][0], 'showDig');
   assert.equal(data.actions[0].length, 2, 'primary action opens the research state, not an implicit file');
   assert.equal(data.actions[0][1], data.app.snapshot.items[0]);
-  assert.equal(document.querySelectorAll('input[type="search"],textarea').length, 0);
+  assert.equal(document.querySelectorAll('input[type="search"]').length, 1);
+  assert.equal(document.querySelectorAll('textarea').length, 0);
+  assert.match(rows.querySelector('.research-overview-summary').textContent, /Retained evidence suggests a page comparison/);
+});
+
+test('saved document actions open the answer or latest report without changing retained data', async t => {
+  const newer = 'p/digs/b/exa-2.md';
+  const answered = question({ answer: 'p/digs/a/answer.md', status: 'answered' });
+  const sourceOnly = question({ id: 'b', title: 'A source-only question', answer: null, reportDetails: [{ file, source: 'exa', method: 'exa', at: startedAt }, { file: newer, source: 'exa', method: 'exa', at }], reports: [file, newer] });
+  const data = fixture([answered, sourceOnly]);
+  await mount(t, ConversationOverview, { ...data, hidden: false });
+  const rows = [...$('panel-digs').querySelectorAll('article')];
+  assert.equal(rows[0].querySelector('.research-overview-question-details').open, false);
+  assert.equal(document.querySelector('.research-overview-conversation-usage').open, false);
+  await click(rows[0].querySelector('.research-overview-primary-action'));
+  await click(rows[1].querySelector('.research-overview-primary-action'));
+  assert.deepEqual(data.actions, [['showDig', answered, answered.answer], ['showDig', sourceOnly, newer]]);
+  assert.equal(sourceOnly.reports.length, 2);
+});
+
+test('library filter uses saved titles and summaries locally and clears when the library changes', async t => {
+  const first = question();
+  const second = question({ id: 'b', title: 'A second question', displayTitle: 'Another topic', snippet: 'A telescope comparison.', project: '/projects/sky' });
+  const data = fixture([first, second]);
+  const props = { ...data, hidden: false };
+  const ui = await mount(t, ResearchOverview, props);
+  await fill($('research-filter'), 'telescope sky');
+  assert.equal($('list').querySelectorAll('article').length, 1);
+  assert.match($('list').textContent, /Another topic/);
+  await fill($('research-filter'), 'not-found-anywhere');
+  assert.match($('list').textContent, /No saved questions match/);
+  assert.deepEqual(data.actions, [], 'filtering makes no host or provider calls');
+  await ui.render({ ...props, app: { ...data.app, snapshot: { ...data.app.snapshot, library: '/another-library' } } });
+  assert.equal($('research-filter').value, '');
+  assert.equal($('list').querySelectorAll('article').length, 2);
 });
 
 test('conversation totals include its attributed question and own unassigned calls, excluding other workers', async t => {

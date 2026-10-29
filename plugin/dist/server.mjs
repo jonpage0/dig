@@ -42327,15 +42327,19 @@ ${document2.summary}`.toLowerCase();
     return Number.isFinite(fallback) ? fallback : -Infinity;
   };
   entries2.sort((a, b2) => dated(b2) - dated(a) || (a.file < b2.file ? -1 : a.file > b2.file ? 1 : 0));
-  return entries2.slice(0, MENTION_LIMIT).map(({ item, file: file2, label, glyph, at }) => ({
-    type: "resource_link",
-    uri: `dig://library/${encodeURIComponent(file2)}`,
-    name: file2.split("/").at(-1),
-    title: trim(item.title, 120),
-    description: [label, shortDate(at) || shortDate(item.startedAt)].filter(Boolean).join(" \xB7 "),
-    mimeType: "text/markdown",
-    icons: iconFor(glyph)
-  }));
+  return entries2.slice(0, MENTION_LIMIT).map(({ item, file: file2, label, glyph, at, summary }) => {
+    const kind = trim(label, 48);
+    const question = String(item.displayTitle || item.title || "Saved research").replace(/\s+/g, " ").trim();
+    return {
+      type: "resource_link",
+      uri: `dig://library/${encodeURIComponent(file2)}`,
+      name: file2.split("/").at(-1),
+      title: `${trim(question, 120 - kind.length - 3)} \xB7 ${kind}`,
+      description: [shortDate(at) || shortDate(item.startedAt), trim(String(summary || "").replace(/\s+/g, " ").trim(), 160)].filter(Boolean).join(" \xB7 "),
+      mimeType: "text/markdown",
+      icons: iconFor(glyph)
+    };
+  });
 }
 function readinessText(info) {
   const enabled = info.sources.filter((source) => source.enabled);
@@ -43275,7 +43279,6 @@ var MAX_TRANSCRIPT_LIMIT = 10;
 var DEFAULT_ENRICH_LIMIT = 5;
 var MAX_ENRICH_LIMIT = 10;
 var TRANSCRIPT_WORD_CAP = 500;
-var TIKTOK_AI_FALLBACK_CREDITS = 10;
 var INSTAGRAM_VIEWS_REMOVED_ON = "2026-08-19";
 function scrapecreatorsHeaders() {
   const key = process.env.SCRAPECREATORS_API_KEY?.trim();
@@ -43407,7 +43410,7 @@ function displayScalar(value) {
 }
 function capWords(text6) {
   const words = text6.split(/\s+/);
-  return words.length > TRANSCRIPT_WORD_CAP ? `${words.slice(0, TRANSCRIPT_WORD_CAP).join(" ")}...` : words.join(" ");
+  return words.length > TRANSCRIPT_WORD_CAP ? `[Excerpt: first ${TRANSCRIPT_WORD_CAP} of ${words.length} words. Read this call's original provider response, when retained, for the full returned text.] ${words.slice(0, TRANSCRIPT_WORD_CAP).join(" ")}\u2026` : words.join(" ");
 }
 function hashtagsIn(text6) {
   return (text6.match(/#(\w+)/g) || []).map((h2) => h2.slice(1));
@@ -43585,15 +43588,15 @@ var tiktok = creditMetered({
       `Filters: ${filters.join(" | ")}`,
       "Order: as returned by TikTok for the chosen sort_by; no local re-ranking.",
       nextCursor !== null ? `Next page: pass cursor=${nextCursor}${hasMore === false ? " (provider reports no more results)" : ""}` : "Next page: no cursor returned.",
-      `${credits.describe()}${aiFallback ? ` (AI fallback adds up to ${TIKTOK_AI_FALLBACK_CREDITS} per video)` : ""}`,
+      `${credits.describe()}${aiFallback ? " (AI fallback enabled; a successful fallback up to 120 seconds costs 1 credit per transcript request, not an extra fee)" : ""}`,
       fetchTranscripts ? `Transcripts: ${transcriptsFetched} fetched of ${transcriptsRequested} requested${transcriptFailures.length ? `; ${transcriptFailures.length} failed` : ""}` : "Transcripts: not requested",
       views.counted > 0 || likes2.counted > 0 ? `Totals over videos reporting metrics: ${views.counted > 0 ? `${fmtNum(views.total)} views (${views.counted}/${items.length})` : "no views reported"} | ${likes2.counted > 0 ? `${fmtNum(likes2.total)} likes (${likes2.counted}/${items.length})` : "no likes reported"}` : "Totals: no video reported a view or like count."
     ];
     if (unreadable) header.push(`Unreadable entries: ${unreadable} returned entr${unreadable === 1 ? "y" : "ies"} lacked a readable video record and ${unreadable === 1 ? "was" : "were"} skipped.`);
     if (transcriptFailures.length) header.push(`Transcript failures: ${transcriptFailures.join("; ")}`);
     return {
-      // Failed transcript requests leave the enrichment incomplete.
-      status: transcriptFailures.length ? "partial" : "success",
+      // Skipped unreadable entries or failed transcripts leave coverage incomplete.
+      status: unreadable || transcriptFailures.length ? "partial" : "success",
       text: [header.join("\n"), ...results].join("\n\n"),
       details: {
         provider: "scrapecreators",
@@ -43855,7 +43858,7 @@ var instagram = creditMetered({
     if (enrichFailures.length) header.push(`View lookup failures: ${enrichFailures.join("; ")}`);
     if (transcriptFailures.length) header.push(`Transcript failures: ${transcriptFailures.join("; ")}`);
     return {
-      status: enrichFailures.length || transcriptFailures.length ? "partial" : "success",
+      status: unreadable || enrichFailures.length || transcriptFailures.length ? "partial" : "success",
       text: [header.join("\n"), ...items.map(reelLine)].join("\n\n"),
       details: {
         provider: "scrapecreators",
@@ -43887,16 +43890,23 @@ async function instagramNative(query, limit2, headers, ctx) {
   if (!hashtagList.ok) return `ERROR: ${hashtagList.error}`;
   if (!placeList.ok) return `ERROR: ${placeList.error}`;
   if (!keywordList.ok) return `ERROR: ${keywordList.error}`;
-  const users2 = userList.items.map(asRecord).filter((r2) => r2 !== null);
-  const hashtags = hashtagList.items.map(asRecord).filter((r2) => r2 !== null);
-  const places = placeList.items.map(asRecord).filter((r2) => r2 !== null);
-  const keywords = keywordList.items.map((entry) => typeof entry === "string" ? entry : asString(asRecord(entry)?.name) ?? asString(asRecord(entry)?.keyword)).filter((value) => value !== null);
+  const users2 = userList.items.map(asRecord).filter((r2) => r2 !== null && asString(r2.username) !== null);
+  const hashtags = hashtagList.items.map(asRecord).filter((r2) => r2 !== null && asString(r2.name) !== null);
+  const places = placeList.items.map(asRecord).filter((r2) => r2 !== null && (asString(r2.title) ?? asString(r2.name) ?? asString(r2.id)) !== null);
+  const keywords = keywordList.items.map((entry) => typeof entry === "string" ? asString(entry) : asString(asRecord(entry)?.name) ?? asString(asRecord(entry)?.keyword)).filter((value) => value !== null);
+  const returnedCount = userList.items.length + hashtagList.items.length + placeList.items.length + keywordList.items.length;
+  const readableCount = users2.length + hashtags.length + places.length + keywords.length;
+  const unreadable = returnedCount - readableCount;
+  if (readableCount === 0 && unreadable > 0) {
+    return `ERROR: ${label} returned an unexpected payload: none of the ${unreadable} returned entr${unreadable === 1 ? "y" : "ies"} carried a readable account, hashtag, place, or keyword record`;
+  }
   const lines = [
     `Instagram native search: "${query}"`,
     "Source: Instagram's own ranked search (not Google-indexed); one page only; returns accounts, hashtags, places, and keyword suggestions, not posts.",
     provenanceLine(response.payload),
     `Returned: ${users2.length} users | ${hashtags.length} hashtags | ${places.length} places | ${keywords.length} keywords (showing up to ${limit2} per list)`
   ];
+  if (unreadable) lines.push(`Unreadable entries: ${unreadable} returned entr${unreadable === 1 ? "y" : "ies"} lacked a readable search record and ${unreadable === 1 ? "was" : "were"} skipped.`);
   if (users2.length) {
     lines.push("", "Users:");
     for (const user of users2.slice(0, limit2)) {
@@ -43924,6 +43934,7 @@ async function instagramNative(query, limit2, headers, ctx) {
   if (keywords.length) lines.push("", `Keyword suggestions: ${keywords.slice(0, limit2).join(", ")}`);
   if (!users2.length && !hashtags.length && !places.length && !keywords.length) lines.push("", "Instagram returned empty user, hashtag, place, and keyword lists for this query.");
   return {
+    status: unreadable ? "partial" : readableCount ? "success" : "empty",
     text: lines.join("\n"),
     details: {
       provider: "scrapecreators",
@@ -43933,6 +43944,7 @@ async function instagramNative(query, limit2, headers, ctx) {
       hashtags: hashtags.length,
       places: places.length,
       keywords: keywords.length,
+      unreadable,
       credits_charged: asNumber(response.payload.credits_charged)
     }
   };
@@ -43943,7 +43955,11 @@ async function instagramPopular(query, cursor, limit2, fetchTranscripts, transcr
   const payload = response.payload;
   const listed = expectArray(payload, "posts", "ScrapeCreators Instagram popular search");
   if (!listed.ok) return `ERROR: ${listed.error}`;
-  const posts = listed.items.map(asRecord).filter((r2) => r2 !== null);
+  const posts = listed.items.map(asRecord).filter((r2) => r2 !== null && (asString(r2.id) ?? asNumber(r2.id) ?? asString(r2.pk) ?? asNumber(r2.pk) ?? asString(r2.shortcode) ?? asString(r2.code) ?? asString(r2.url)) !== null);
+  const unreadable = listed.items.length - posts.length;
+  if (posts.length === 0 && unreadable > 0) {
+    return `ERROR: ScrapeCreators Instagram popular search returned an unexpected payload: none of the ${unreadable} returned post entr${unreadable === 1 ? "y" : "ies"} carried a readable post record (missing id, shortcode, and URL)`;
+  }
   const shown2 = posts.slice(0, limit2);
   const nextCursor = asString(payload.cursor);
   const hasMore = typeof payload.has_more === "boolean" ? payload.has_more : null;
@@ -43958,6 +43974,7 @@ async function instagramPopular(query, cursor, limit2, fetchTranscripts, transcr
     `Posts: ${shown2.length} shown of ${posts.length} returned${totalMedia !== null ? `; Instagram reports ${fmtNum(totalMedia)} total media for the topic` : ""}`,
     hasMore === false ? "Next page: provider reports no more posts" : nextCursor ? `Next page: pass cursor="${nextCursor}" with the same query` : "Next page: no cursor returned and has_more not reported; continuation unavailable"
   ];
+  if (unreadable) lines.push(`Unreadable entries: ${unreadable} returned entr${unreadable === 1 ? "y" : "ies"} lacked a readable post record and ${unreadable === 1 ? "was" : "were"} skipped.`);
   const plain2 = cleanText(description?.plain_text);
   if (plain2) {
     lines.push(`Instagram description: ${truncate(plain2, 400)}`);
@@ -44015,6 +44032,7 @@ async function instagramPopular(query, cursor, limit2, fetchTranscripts, transcr
     else if (transcriptNotes.has(index)) lines.push(`   Transcript: ${transcriptNotes.get(index)}`);
   }
   return {
+    status: unreadable || transcriptFailures.length ? "partial" : shown2.length ? "success" : "empty",
     text: lines.join("\n"),
     details: {
       provider: "scrapecreators",
@@ -44022,6 +44040,7 @@ async function instagramPopular(query, cursor, limit2, fetchTranscripts, transcr
       query,
       returned: posts.length,
       shown: shown2.length,
+      unreadable,
       cursor: hasMore === false ? null : nextCursor,
       has_more: hasMore,
       credits: credits.details(),
@@ -51861,6 +51880,17 @@ var search4 = {
 var API_BASE = "https://api.x.ai/v1";
 var USD_TICKS_PER_DOLLAR = 1e10;
 var RAW_LABEL = "x_search";
+function validDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date6 = /* @__PURE__ */ new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date6.getTime()) && date6.toISOString().slice(0, 10) === value;
+}
+function dateRange(fromDate, toDate) {
+  return [
+    fromDate ? `from ${fromDate} 00:00 UTC (inclusive)` : "start not set",
+    toDate ? `before ${toDate} 00:00 UTC (exclusive)` : "end not set"
+  ].join("; ");
+}
 function buildSystemMessage(options) {
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
   let message3 = `You are an X.com search specialist. Current Date: ${today} (UTC).
@@ -51888,7 +51918,7 @@ You also have web_search available. Prioritize X.com posts \u2014 they are the p
   if (options.fromDate || options.toDate) {
     message3 += `
 
-Date constraints: ${options.fromDate ? `from ${options.fromDate}` : ""}${options.fromDate && options.toDate ? " " : ""}${options.toDate ? `to ${options.toDate}` : ""}`;
+Date constraints: ${dateRange(options.fromDate, options.toDate)}.`;
   }
   return message3;
 }
@@ -52002,7 +52032,7 @@ function getServerSideToolUsage(response) {
   return response.server_side_tool_usage ?? response.usage?.server_side_tool_usage_details;
 }
 var search5 = metered({
-  description: "Search X.com (Twitter) for real-time posts and discussions using xAI Agent Tools API. Returns synthesized findings with citations to X posts, and can report per-post public metrics (likes, reposts, quotes, replies, bookmarks, views) when asked for them. Supports X search operators in the query, handle filtering, date ranges, multimedia understanding, and multi-turn chaining via previousResponseId.",
+  description: "Search X.com (Twitter) for real-time posts and discussions using xAI Agent Tools API. Returns synthesized findings with citations to X posts, and can report per-post public metrics (likes, reposts, quotes, replies, bookmarks, views) when asked for them. Supports X search operators in the query, handle filtering, date ranges, multimedia understanding, and multi-turn chaining via previousResponseId. Date bounds are inclusive fromDate and exclusive toDate at 00:00 UTC. Each handle filter accepts at most 20 handles.",
   async execute(args, context) {
     const xConfig = loadConfig2().x;
     let attempts = 0;
@@ -52024,12 +52054,23 @@ var search5 = metered({
     if (args.handles?.length && args.excludeHandles?.length) {
       return "ERROR: Cannot use both 'handles' and 'excludeHandles' - choose one";
     }
+    if (args.handles?.length > 20 || args.excludeHandles?.length > 20) {
+      return "ERROR: Each handle filter accepts at most 20 handles. Split a larger scope into explicit searches; no handles were silently omitted.";
+    }
+    for (const name2 of ["fromDate", "toDate"]) {
+      if (args[name2] !== void 0 && !validDate(args[name2])) {
+        return `ERROR: ${name2} must be a valid YYYY-MM-DD date. Date-time values are not applied by X Search.`;
+      }
+    }
+    if (args.fromDate && args.toDate && args.fromDate >= args.toDate) {
+      return "ERROR: toDate must be after fromDate. toDate is exclusive at 00:00 UTC; to search one day, use the following date.";
+    }
     const xSearchTool = { type: "x_search" };
     if (args.handles?.length) {
-      xSearchTool.allowed_x_handles = args.handles.map((h2) => h2.replace(/^@/, "")).slice(0, 20);
+      xSearchTool.allowed_x_handles = args.handles.map((h2) => h2.replace(/^@/, ""));
     }
     if (args.excludeHandles?.length) {
-      xSearchTool.excluded_x_handles = args.excludeHandles.map((h2) => h2.replace(/^@/, "")).slice(0, 20);
+      xSearchTool.excluded_x_handles = args.excludeHandles.map((h2) => h2.replace(/^@/, ""));
     }
     if (args.fromDate) xSearchTool.from_date = args.fromDate;
     if (args.toDate) xSearchTool.to_date = args.toDate;
@@ -52045,10 +52086,7 @@ var search5 = metered({
     }
     let queryWithContext = args.query;
     if (args.fromDate || args.toDate) {
-      const dateContext = [];
-      if (args.fromDate) dateContext.push(`from ${args.fromDate}`);
-      if (args.toDate) dateContext.push(`to ${args.toDate}`);
-      queryWithContext = `${args.query} (Date range: ${dateContext.join(" ")})`;
+      queryWithContext = `${args.query} (Date range: ${dateRange(args.fromDate, args.toDate)})`;
     }
     const input = [];
     if (!args.previousResponseId) {
@@ -52077,6 +52115,9 @@ var search5 = metered({
       if (!response.ok) {
         const errorText2 = await keptText(response, keep, RAW_LABEL);
         if (shouldRetryWithoutStorage(response.status, errorText2)) {
+          if (requestBody.previous_response_id) {
+            return fail(`${parseError(response.status, errorText2)} (status ${response.status}). The chained request was not retried without its previous response context. To continue, start an explicit new pass with the full question and relevant prior evidence.`);
+          }
           const retryBody = {
             ...requestBody,
             store: false,
@@ -52106,10 +52147,17 @@ var search5 = metered({
       const data = await keptJson(response, keep, RAW_LABEL);
       if (data.error) return fail(data.error.message);
       const { text: text6, sources } = extractContent(data);
-      if (!text6) return fail("No response content from xAI API");
+      const incomplete = data.status === "incomplete" || data.output.some((item) => item.type === "message" && item.status === "incomplete");
+      if (!text6) return fail(incomplete ? "xAI returned an incomplete response with no readable content" : "No response content from xAI API");
       const passLabel = args.passLabel?.trim() || "pass-1";
       let result2 = `${passLabel}
 ${text6}`;
+      if (incomplete) {
+        const reason2 = typeof data.incomplete_details?.reason === "string" ? ` (${data.incomplete_details.reason})` : "";
+        result2 += `
+
+**Incomplete response:** xAI marked this response incomplete${reason2}. The readable text is retained, but it is not a complete research result.`;
+      }
       const numbered = numberedCitations(text6);
       if (numbered.length > 0) {
         const markers = numbered.length === 1 ? "1 bracketed marker that looks like a citation by number" : `${numbered.length} bracketed markers that look like citations by number`;
@@ -52136,10 +52184,10 @@ ${text6}`;
 `;
       result2 += `- Excluded Handles: ${excludeList}
 `;
-      result2 += `- Date Range: ${args.fromDate ?? "not set"} to ${args.toDate ?? "not set"}
+      result2 += `- Date Range: ${dateRange(args.fromDate, args.toDate)}
 `;
-      if (args.previousResponseId) {
-        result2 += `- Chained from: ${args.previousResponseId}
+      if (requestBody.previous_response_id) {
+        result2 += `- Chained from: ${requestBody.previous_response_id}
 `;
       }
       if (sources.length > 0) {
@@ -52177,7 +52225,7 @@ ${text6}`;
 `;
         }
       }
-      return result2;
+      return outcome(incomplete ? "partial" : "success", result2);
     } catch (error51) {
       return fail(error51 instanceof Error ? error51.message : "Unknown error");
     }
@@ -59169,10 +59217,10 @@ function createSchemas(T3, sources = reportSources(ALL_MODULES)) {
       previousResponseId: T3.Optional(
         T3.String({ description: "Previous response id for chaining." })
       ),
-      handles: stringArray(T3, "Limit to handles, without @."),
-      excludeHandles: stringArray(T3, "Exclude handles, without @."),
-      fromDate: T3.Optional(T3.String({ description: "Start date YYYY-MM-DD." })),
-      toDate: T3.Optional(T3.String({ description: "End date YYYY-MM-DD." })),
+      handles: T3.Optional(T3.Array(T3.String(), { maxItems: 20, description: "Limit to at most 20 handles, without @. Mutually exclusive with excludeHandles." })),
+      excludeHandles: T3.Optional(T3.Array(T3.String(), { maxItems: 20, description: "Exclude at most 20 handles, without @. Mutually exclusive with handles." })),
+      fromDate: T3.Optional(T3.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Inclusive start date, YYYY-MM-DD at 00:00 UTC." })),
+      toDate: T3.Optional(T3.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Exclusive end date, YYYY-MM-DD at 00:00 UTC. To include a whole day, use the following date." })),
       depth: enumSchema(
         T3,
         ["quick", "standard", "max", "ultra"],
@@ -60174,7 +60222,7 @@ function createSchemas(T3, sources = reportSources(ALL_MODULES)) {
 }
 
 // src/version.mjs
-var VERSION2 = "0.9.1";
+var VERSION2 = "0.9.2";
 
 // src/presentation.mjs
 import { basename as basename4 } from "node:path";

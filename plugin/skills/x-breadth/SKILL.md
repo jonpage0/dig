@@ -36,6 +36,8 @@ From September 21, 2026 at 12:00 PM Pacific, [X Search billing](https://docs.x.a
 
 ## Search for width
 
+**Keep date boundaries exact.** Grok's `xsearch` accepts only `YYYY-MM-DD` dates: `fromDate` includes 00:00 UTC on that date, while `toDate` excludes 00:00 UTC on that date. To include October 28, use `toDate: "2026-10-29"`; a full timestamp is not a Grok date filter. X's API uses the separate ISO timestamp arguments `start_time` and `end_time`. For research through the present, omit `end_time` rather than guessing a future timestamp. Report the actual UTC window, converting to the reader's timezone when it matters.
+
 Before the first call, split the question into distinct reader-relevant angles. Give each angle its own labeled pass, `pass-1`, `pass-2` and retry suffixes such as `pass-4-retry`, and record each pass's tool, query, window and result count in `## Search Method` (`xsearch` also takes the label as `passLabel`). Six to ten passes are normal for a material breadth run; fewer than four are thin unless the topic is genuinely narrow. Most of them go through X's search, since a run uses at most four Grok passes.
 
 **X's search is the finder.** `x_search_posts` returns the posts themselves, pages through results up to `limit`, and lets you vary each angle deliberately:

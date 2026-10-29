@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { Badge, Button } from '../shared/components';
 import { Frame, FrameHeader, FrameTitle, FrameDescription, FramePanel, FrameFooter } from '../shared/frame';
 import { IconTile } from '../shared/icon-tile';
@@ -10,7 +10,6 @@ import { costAmounts, costShort, costTotal, COST_SCOPE, COST_CAVEAT, num, plural
 import { usageOf, outcomeCounts, WINDOWS } from '../../ui/usage.mjs';
 import { callWord, patternOf } from '../../status.mjs';
 import { projectResearch, projectMethodCoverage, projectConversation, projectRecordedActivity, canonicalResearchFile, CALL_OUTCOME_LABELS } from './research-state';
-import { ResearchSteering } from './research-steering';
 import type { DigHost } from '../shared/host';
 
 type ViewProps = { app: any; host: DigHost; hidden: boolean };
@@ -181,6 +180,8 @@ function ResearchRow({ item, app, host, trail = false }: { item: any; app: any; 
   const sources = state.sourcesWithReports.length ? state.sourcesWithReports : state.sourcesAndToolsCalled;
   const missing = state.methods.filter(method => !method.reports.length);
   const cost = costShort(state.cost, state.callCount);
+  const latestReport = [...(item.reportDetails ?? [])].sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))[0]?.file ?? item.reports?.at(-1);
+  const primaryFile = item.answer ?? latestReport;
   return <article className={`research-overview-row${trail ? ' research-overview-trail-row' : ''}`} aria-label={state.question}>
     <Frame className="research-overview-question-frame" spacing="sm">
       <FramePanel className="research-overview-question-panel">
@@ -192,23 +193,22 @@ function ResearchRow({ item, app, host, trail = false }: { item: any; app: any; 
           <p>{plural(state.reportCount, 'report')} · {plural(state.callCount, 'retrieval')}</p>
           {cost && <strong title={costTotal(state.cost, state.callCount)}>{cost}</strong>}
         </div></div>
+        {item.snippet && (state.reportCount > 0 || state.hasAnswer) && <div className="research-overview-summary"><span>Saved summary</span><p>{item.snippet}</p></div>}
         <div className="research-overview-coverage-line"><span>{plural(state.reportedMethodCount, 'method')} with saved reports</span>{missing.length > 0 && <span>{missing.map(method => method.label).join(', ')}: No report saved</span>}{!state.hasAnswer && <span>No answer saved yet</span>}</div>
         {recent && <p className="research-overview-latest" title={recent.detail}>Latest recorded: {recent.label} <time dateTime={eventDate(recent.at)}>{date(recent.at)}</time>{recent.kind === 'recorded-call' && <span>Call start time</span>}</p>}
         {state.reviewSignals.length > 0 && <div className="research-overview-recorded-issues"><span>Recorded issues</span><ul>{state.reviewSignals.slice(0, 2).map(signal => <li key={signal}>{signal}</li>)}</ul>{state.reviewSignals.length > 2 && <span>{state.reviewSignals.length - 2} more in Details</span>}</div>}
-        {trail && <MethodLedger item={item} catalog={app.catalog} />}
-        {trail && <RecordedMilestones item={item} catalog={app.catalog} app={app} />}
       </FramePanel>
       <FrameFooter className="research-overview-question-footer">
-        <details className="research-overview-question-details"><summary data-key={`preview:${item.project}:${item.id}`}>Details</summary><div>
+        <details className="research-overview-question-details"><summary data-key={`preview:${item.project}:${item.id}`}>Research details</summary><div>
           <h4>Original question</h4><p>{state.question}</p>
           {state.reviewSignals.length > 2 && <><h4>Recorded issues</h4><ul>{state.reviewSignals.map(signal => <li key={signal}>{signal}</li>)}</ul></>}
-          {item.snippet && <><h4>Saved summary preview</h4><p>{item.snippet}</p></>}
-          {!trail && <MethodLedger item={item} catalog={app.catalog} />}
+          <MethodLedger item={item} catalog={app.catalog} />
+          {trail && <RecordedMilestones item={item} catalog={app.catalog} app={app} />}
           {state.callCount > 0 && <p className="research-overview-cost-detail">{costTotal(state.cost, state.callCount)}</p>}
+          {trail && item.calls?.length > 0 && <RecordedCalls calls={item.calls} app={app} host={host} item={item} scope="Saved with this question" />}
         </div></details>
-        <ResearchSteering host={host} item={item} library={app.snapshot.library} triggerLabel="Discuss next step" />
+        {primaryFile && <Button className="research-overview-primary-action" size="sm" variant="outline" onClick={() => { void app.showDig(item, primaryFile); }}>{item.answer ? 'View answer' : 'Read latest report'}</Button>}
       </FrameFooter>
-      {trail && item.calls?.length > 0 && <RecordedCalls calls={item.calls} app={app} host={host} item={item} scope="Saved with this question" />}
     </Frame>
   </article>;
 }
@@ -237,11 +237,19 @@ function RecordedCalls({ calls, app, host, item, scope, initiallyShown = 3 }: an
 
 export function ResearchOverview({ app, host, hidden }: ViewProps) {
   const items = app.snapshot.items ?? [];
+  const [query, setQuery] = useState('');
+  useEffect(() => { setQuery(''); }, [app.snapshot.library]);
+  const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const shown = words.length ? items.filter((item: any) => {
+    const text = [item.title, item.displayTitle, item.snippet, item.project].filter(Boolean).join(' ').toLocaleLowerCase();
+    return words.every(word => text.includes(word));
+  }) : items;
   return <section id="browse" className="research-overview" hidden={hidden}>
     <header className="research-overview-heading"><h2>Research library</h2><p>Saved questions, their evidence and what is still open.</p></header>
     <UsageOverview app={app} />
-    <div className="research-overview-recent-heading"><div><h2>Recent research</h2><p>Open a question to inspect its saved state and choose what to do next.</p></div><span>{plural(items.length, 'question')}</span></div>
-    <div id="list" className="research-overview-list">{items.length ? items.map((item: any) => <ResearchRow key={`${app.snapshot.library}:${item.project}:${item.id}`} item={item} app={app} host={host} />) : <Frame className="research-overview-empty"><FramePanel><IconTile variant="frame"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4M9 3v6h6M9 3l6 6m-6 6h6" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg></IconTile><h3>{app.snapshotLoaded ? 'Your next question starts in the conversation' : 'Reading saved research…'}</h3><p>{app.snapshotLoaded ? 'Ask Dig to investigate a question. Its saved reports, source evidence and provider usage will appear here.' : 'The library is loading retained work.'}</p></FramePanel></Frame>}</div>
+    <div className="research-overview-recent-heading"><div><h2>Recent research</h2><p>Return to an answer or explore its evidence.</p></div><span>{words.length ? `${shown.length} of ${plural(items.length, 'question')}` : plural(items.length, 'question')}</span></div>
+    {!!items.length && <div className="research-overview-search"><label htmlFor="research-filter" className="sr-only">Search saved research</label><input id="research-filter" type="search" placeholder="Find a saved question…" value={query} onChange={event => setQuery(event.target.value)} /><span>Titles, summaries and projects</span></div>}
+    <div id="list" className="research-overview-list">{shown.length ? shown.map((item: any) => <ResearchRow key={`${app.snapshot.library}:${item.project}:${item.id}`} item={item} app={app} host={host} />) : words.length ? <div className="research-overview-no-matches" role="status"><h3>No saved questions match</h3><p>Try a different title, topic or project.</p><Button variant="ghost" size="sm" onClick={() => setQuery('')}>Clear search</Button></div> : <Frame className="research-overview-empty"><FramePanel><IconTile variant="frame"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4M9 3v6h6M9 3l6 6m-6 6h6" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg></IconTile><h3>{app.snapshotLoaded ? 'Your next question starts in the conversation' : 'Reading saved research…'}</h3><p>{app.snapshotLoaded ? 'Ask Dig to investigate a question. Its saved reports, source evidence and provider usage will appear here.' : 'The library is loading retained work.'}</p></FramePanel></Frame>}</div>
   </section>;
 }
 
@@ -250,15 +258,14 @@ export function ConversationOverview({ app, host, hidden }: ViewProps) {
   const counts = outcomeCounts(scope.calls);
   const reports = scope.digs.flatMap(item => item.reportDetails ?? []);
   return <section id="panel" className="research-overview research-overview-conversation" hidden={hidden}>
-    <header className="research-overview-heading"><h2 id="panel-scope">{scope.identified ? 'This conversation' : 'Conversation not identified'}</h2><p>Saved questions, reports and provider calls attributed to this conversation.</p></header>
-    <Frame className="research-overview-usage-frame" hidden={!scope.identified || (!scope.calls.length && !reports.length)}><FramePanel><section id="panel-figures" aria-label="This conversation’s retrievals and provider cost"><RetainedFigures counts={counts} reports={reports.length} cost={scope.cost} scope="panel" /><p className="research-overview-scope-note">{COST_SCOPE}. {COST_CAVEAT}</p>{scope.otherUnassignedCallCount > 0 && <p className="research-overview-scope-note">Not included: {plural(scope.otherUnassignedCallCount, 'retrieval')} by workers or other conversations that no saved report has claimed yet.</p>}</section></FramePanel></Frame>
+    <header className="research-overview-heading"><h2 id="panel-scope">{scope.identified ? 'This conversation' : 'Conversation not identified'}</h2><p>Answers and evidence saved alongside this chat.</p></header>
+    <details className="research-overview-conversation-usage" hidden={!scope.identified || (!scope.calls.length && !reports.length)}><summary><span>Provider usage</span><strong>{costShort(scope.cost, scope.calls.length) || 'No calls recorded'}</strong><span>{plural(scope.calls.length, 'retrieval')}</span></summary><section id="panel-figures" aria-label="This conversation’s retrievals and provider cost"><RetainedFigures counts={counts} reports={reports.length} cost={scope.cost} scope="panel" /><p className="research-overview-scope-note">{COST_SCOPE}. {COST_CAVEAT}</p>{scope.otherUnassignedCallCount > 0 && <p className="research-overview-scope-note">Not included: {plural(scope.otherUnassignedCallCount, 'retrieval')} by workers or other conversations that no saved report has claimed yet.</p>}</section></details>
     <div id="panel-digs" className="research-overview-list">{!scope.identified ? <Frame><FramePanel><p className="research-overview-empty-message">Codex did not identify this conversation to Dig, so the trail cannot pick out its research. Use Library to browse everything.</p></FramePanel></Frame> : scope.digs.length ? scope.digs.map(item => <ResearchRow key={`${app.snapshot.library}:${item.project}:${item.id}`} item={item} app={app} host={host} trail />) : <Frame><FramePanel><p className="research-overview-empty-message">No question has been recorded for this conversation yet. Saved research appears here when it is attributed to this chat.</p></FramePanel></Frame>}</div>
-    <Frame className="research-overview-unassigned"><FrameHeader><FrameTitle><h3>Retrievals not yet in a saved report or answer</h3></FrameTitle><FrameDescription>These are retained call receipts. Their presence does not establish whether any worker is currently active.</FrameDescription></FrameHeader>
-      <FramePanel><div id="panel-live">
+    <details className="research-overview-unassigned"><summary><span>Unassigned retrievals</span><span>{plural(scope.ownUnassignedCalls.length + scope.otherUnassignedCallCount, 'call')}</span></summary><p className="research-overview-scope-note">Retained calls not yet in a saved report or answer. They do not establish whether any worker is currently active.</p><div id="panel-live">
         {scope.ownUnassignedCalls.length > 0 && <section className="research-overview-unassigned-group"><h4>This conversation</h4><p>Included in this conversation’s provider usage.</p><RecordedCalls calls={scope.ownUnassignedCalls} app={app} host={host} scope="This conversation" /></section>}
         {scope.otherUnassignedCallCount > 0 && <section className="research-overview-unassigned-group"><h4>Other conversations or workers</h4><p id="live-caveat">Excluded from this conversation’s totals. A worker’s call is associated with its own conversation until the saved records attribute it to a question.</p><RecordedCalls calls={scope.otherUnassignedCalls} app={app} host={host} scope="Other conversation or worker; excluded from totals" /></section>}
         {!scope.ownUnassignedCalls.length && !scope.otherUnassignedCallCount && <p className="research-overview-empty-chart">No unassigned retrievals recorded.</p>}
-      </div></FramePanel>
-    </Frame>
+      </div>
+    </details>
   </section>;
 }

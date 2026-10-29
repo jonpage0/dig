@@ -194,7 +194,23 @@ export function CardApp({ host, initialResult }: { host: DigHost; initialResult?
   const returned = explicit ? featured?.statement : card?.summary || featured?.statement;
   const limitation = explicit ? cardStrings(featured?.limits, 1)[0] : cardStrings(card?.contradictions, 1)[0];
   const followUp = cardStrings(card?.followUps, 1)[0];
-  const openReport = () => { if (digLink(card?.link)) void navigate(digLink(card?.link)); else if (reportReference) openEvidence([reportReference]); };
+  const openReport = async () => {
+    if (!reportReference) return;
+    const link = digLink(card?.link);
+    if (!link) { openEvidence([reportReference]); return; }
+    const version = generation.current;
+    const interaction = ++readGeneration.current;
+    const current = () => alive.current && version === generation.current && interaction === readGeneration.current;
+    setNotice('');
+    try {
+      await host.openLink(link);
+      if (current()) setNotice('');
+    } catch {
+      // Hosts may render MCP Apps without recognizing Codex deep links. The retained reader is still
+      // available, but an older navigation failure must never open evidence for a replaced card.
+      if (current()) openEvidence([reportReference]);
+    }
+  };
   const showDraft = (step: { label: string; prompt: string }) => {
     rememberFocus();
     readGeneration.current++; setReader(null); setNotice(''); setDraftBusy(false);

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.2 — 2026-10-28
+
+- Focus the conversation trail on saved questions and findings, with compact usage and expandable records. Add local library filtering, clearer composer mention choices, and direct answer/report opening.
+- Put retained documents before detailed question accounting, preserve evidence inspection, and fall back to the in-app reader when a host rejects a native report link. Remove the Overview/trail Discuss next step action.
+- Keep chained X searches from retrying without their prior context; preserve incomplete results as partial, validate full handle scope and make date boundaries explicit.
+- Correct remaining social transcript pricing/excerpt wording and report unreadable entries or failed enrichment as partial coverage.
+- Allow staged source-worker reuse when one inventory should inform the next method, while preserving independent parallel inquiry and initiating-thread composition.
+
 ## 0.9.1 — 2026-10-20
 
 - Add direct TikTok and Instagram reads for supplied posts, public creator profiles and feeds, standalone transcripts, and selected comment replies. Preserve TikTok photo posts and Instagram carousel identities.

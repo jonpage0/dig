@@ -1315,10 +1315,10 @@ export function createSchemas(
       previousResponseId: T.Optional(
         T.String({ description: "Previous response id for chaining." }),
       ),
-      handles: stringArray(T, "Limit to handles, without @."),
-      excludeHandles: stringArray(T, "Exclude handles, without @."),
-      fromDate: T.Optional(T.String({ description: "Start date YYYY-MM-DD." })),
-      toDate: T.Optional(T.String({ description: "End date YYYY-MM-DD." })),
+      handles: T.Optional(T.Array(T.String(), { maxItems: 20, description: "Limit to at most 20 handles, without @. Mutually exclusive with excludeHandles." })),
+      excludeHandles: T.Optional(T.Array(T.String(), { maxItems: 20, description: "Exclude at most 20 handles, without @. Mutually exclusive with handles." })),
+      fromDate: T.Optional(T.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Inclusive start date, YYYY-MM-DD at 00:00 UTC." })),
+      toDate: T.Optional(T.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Exclusive end date, YYYY-MM-DD at 00:00 UTC. To include a whole day, use the following date." })),
       depth: enumSchema(
         T,
         ["quick", "standard", "max", "ultra"],

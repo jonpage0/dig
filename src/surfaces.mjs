@@ -115,10 +115,18 @@ export function mentionItems(snapshot, query) {
     return Number.isFinite(fallback) ? fallback : -Infinity;
   };
   entries.sort((a, b) => dated(b) - dated(a) || (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
-  return entries.slice(0, MENTION_LIMIT).map(({ item, file, label, glyph, at }) => ({
-    type: 'resource_link', uri: `dig://library/${encodeURIComponent(file)}`, name: file.split('/').at(-1),
-    title: trim(item.title, 120), description: [label, shortDate(at) || shortDate(item.startedAt)].filter(Boolean).join(' · '), mimeType: 'text/markdown', icons: iconFor(glyph),
-  }));
+  return entries.slice(0, MENTION_LIMIT).map(({ item, file, label, glyph, at, summary }) => {
+    // Keep the record kind visible even when the question is long. The host can show several documents
+    // from the same dig together; their shared question alone does not identify the selected evidence.
+    const kind = trim(label, 48);
+    const question = String(item.displayTitle || item.title || 'Saved research').replace(/\s+/g, ' ').trim();
+    return {
+      type: 'resource_link', uri: `dig://library/${encodeURIComponent(file)}`, name: file.split('/').at(-1),
+      title: `${trim(question, 120 - kind.length - 3)} · ${kind}`,
+      description: [shortDate(at) || shortDate(item.startedAt), trim(String(summary || '').replace(/\s+/g, ' ').trim(), 160)].filter(Boolean).join(' · '),
+      mimeType: 'text/markdown', icons: iconFor(glyph),
+    };
+  });
 }
 
 /** Plain text for the settings-page button: grouped readiness of every source, presence-only. */

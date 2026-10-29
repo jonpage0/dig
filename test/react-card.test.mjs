@@ -204,6 +204,63 @@ test('unknown costs and an empty finding do not become zero or invented conclusi
   assert.match(body(), /could not be read completely/);
 });
 
+test('a rejected native report link opens the same canonical file in the retained reader', async () => {
+  const text = '# Retained report\nThe original research remains readable.';
+  const host = fakeHost({
+    openLink: async url => { host.links.push(url); throw new Error('Unsupported link scheme.'); },
+    call: async (name, args) => {
+      host.calls.push({name,args});
+      return {file,path:'/library/report.md',text,offset:0,nextOffset:null,totalCharacters:text.length};
+    },
+  });
+  const link = 'codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport';
+  await render(host,{file,path:'/library/report.md',card:card({link})});
+  await click('Inspect research');
+  assert.deepEqual(host.links,[link]);
+  assert.deepEqual(host.calls,[{name:'library_read',args:{file:'/library/report.md',offset:0,limit:60000}}]);
+  assert.match(document.querySelector('pre').textContent,/The original research remains readable/);
+  assert.match(body(),/Complete retained file/);
+  assert.doesNotMatch(body(),/Unable to open the link/);
+});
+
+test('accepted native navigation and rejected external pages do not open the fallback reader', async () => {
+  const link='codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport';
+  const host=fakeHost({openLink:async url=>{
+    host.links.push(url);
+    if(url.startsWith('https:')) throw new Error('External page refused.');
+  }});
+  await render(host,{file,path:'/library/report.md',card:card({link})});
+  await click('Inspect research');
+  assert.deepEqual(host.calls,[]);
+  assert.equal(document.querySelector('[role="dialog"]'),null);
+  await click('Findings & evidence');
+  await click('Open page');
+  assert.match(body(),/Unable to open the link: External page refused/);
+  assert.deepEqual(host.calls,[]);
+  assert.equal(document.querySelector('pre'),null);
+});
+
+test('a late rejected native report link does not reopen a replaced card or displace a newer dialog', async () => {
+  const pending=[];
+  const host=fakeHost({openLink:()=>new Promise((_resolve,reject)=>pending.push(reject))});
+  const link='codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport';
+  await render(host,{file,path:'/library/report.md',card:card({link})});
+  await click('Inspect research');
+  const next='project/digs/next/youtube.md';
+  await act(async()=>host.emit({structuredContent:{file:next,path:'/library/next.md',card:card({file:next,path:'/library/next.md',title:'New research',link})}}));
+  await act(async()=>pending[0](new Error('Old link rejected.')));
+  assert.match(body(),/New research/);
+  assert.equal(document.querySelector('[role="dialog"]'),null);
+  assert.deepEqual(host.calls,[]);
+
+  await click('Inspect research');
+  await click('Usage details');
+  await act(async()=>pending[1](new Error('Earlier navigation rejected.')));
+  assert.match(document.querySelector('[role="dialog"]').textContent,/Retained provider usage/);
+  assert.equal(document.querySelector('pre'),null);
+  assert.deepEqual(host.calls,[]);
+});
+
 test('a failed save without a file does not claim that research was saved', async () => {
   const host = fakeHost();
   await render(host, { isError: true, content: [{ type: 'text', text: 'The save did not complete.' }] });

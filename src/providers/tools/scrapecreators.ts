@@ -53,7 +53,6 @@ const MAX_TRANSCRIPT_LIMIT = 10
 const DEFAULT_ENRICH_LIMIT = 5
 const MAX_ENRICH_LIMIT = 10
 const TRANSCRIPT_WORD_CAP = 500
-const TIKTOK_AI_FALLBACK_CREDITS = 10
 const INSTAGRAM_VIEWS_REMOVED_ON = "2026-08-19"
 
 // ---------------------------------------------------------------------------
@@ -252,7 +251,9 @@ function displayScalar(value: unknown): string | null {
 
 function capWords(text: string): string {
   const words = text.split(/\s+/)
-  return words.length > TRANSCRIPT_WORD_CAP ? `${words.slice(0, TRANSCRIPT_WORD_CAP).join(" ")}...` : words.join(" ")
+  return words.length > TRANSCRIPT_WORD_CAP
+    ? `[Excerpt: first ${TRANSCRIPT_WORD_CAP} of ${words.length} words. Read this call's original provider response, when retained, for the full returned text.] ${words.slice(0, TRANSCRIPT_WORD_CAP).join(" ")}…`
+    : words.join(" ")
 }
 
 function hashtagsIn(text: string): string[] {
@@ -494,7 +495,7 @@ export const tiktok = creditMetered({
       nextCursor !== null
         ? `Next page: pass cursor=${nextCursor}${hasMore === false ? " (provider reports no more results)" : ""}`
         : "Next page: no cursor returned.",
-      `${credits.describe()}${aiFallback ? ` (AI fallback adds up to ${TIKTOK_AI_FALLBACK_CREDITS} per video)` : ""}`,
+      `${credits.describe()}${aiFallback ? " (AI fallback enabled; a successful fallback up to 120 seconds costs 1 credit per transcript request, not an extra fee)" : ""}`,
       fetchTranscripts
         ? `Transcripts: ${transcriptsFetched} fetched of ${transcriptsRequested} requested${transcriptFailures.length ? `; ${transcriptFailures.length} failed` : ""}`
         : "Transcripts: not requested",
@@ -506,8 +507,8 @@ export const tiktok = creditMetered({
     if (transcriptFailures.length) header.push(`Transcript failures: ${transcriptFailures.join("; ")}`)
 
     return {
-      // Failed transcript requests leave the enrichment incomplete.
-      status: transcriptFailures.length ? "partial" : "success",
+      // Skipped unreadable entries or failed transcripts leave coverage incomplete.
+      status: unreadable || transcriptFailures.length ? "partial" : "success",
       text: [header.join("\n"), ...results].join("\n\n"),
       details: {
         provider: "scrapecreators",
@@ -869,7 +870,7 @@ export const instagram = creditMetered({
     if (transcriptFailures.length) header.push(`Transcript failures: ${transcriptFailures.join("; ")}`)
 
     return {
-      status: enrichFailures.length || transcriptFailures.length ? "partial" : "success",
+      status: unreadable || enrichFailures.length || transcriptFailures.length ? "partial" : "success",
       text: [header.join("\n"), ...items.map(reelLine)].join("\n\n"),
       details: {
         provider: "scrapecreators",
@@ -904,12 +905,20 @@ async function instagramNative(query: string, limit: number, headers: Record<str
   if (!hashtagList.ok) return `ERROR: ${hashtagList.error}`
   if (!placeList.ok) return `ERROR: ${placeList.error}`
   if (!keywordList.ok) return `ERROR: ${keywordList.error}`
-  const users = userList.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null)
-  const hashtags = hashtagList.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null)
-  const places = placeList.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null)
+  // An object without its displayed identity is unreadable, not an unknown-named
+  // search result. Keep that lost coverage separate from genuine empty lists.
+  const users = userList.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null && asString(r.username) !== null)
+  const hashtags = hashtagList.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null && asString(r.name) !== null)
+  const places = placeList.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null && (asString(r.title) ?? asString(r.name) ?? asString(r.id)) !== null)
   const keywords = keywordList.items
-    .map((entry) => (typeof entry === "string" ? entry : asString(asRecord(entry)?.name) ?? asString(asRecord(entry)?.keyword)))
+    .map((entry) => (typeof entry === "string" ? asString(entry) : asString(asRecord(entry)?.name) ?? asString(asRecord(entry)?.keyword)))
     .filter((value): value is string => value !== null)
+  const returnedCount = userList.items.length + hashtagList.items.length + placeList.items.length + keywordList.items.length
+  const readableCount = users.length + hashtags.length + places.length + keywords.length
+  const unreadable = returnedCount - readableCount
+  if (readableCount === 0 && unreadable > 0) {
+    return `ERROR: ${label} returned an unexpected payload: none of the ${unreadable} returned entr${unreadable === 1 ? "y" : "ies"} carried a readable account, hashtag, place, or keyword record`
+  }
 
   const lines = [
     `Instagram native search: "${query}"`,
@@ -917,6 +926,7 @@ async function instagramNative(query: string, limit: number, headers: Record<str
     provenanceLine(response.payload),
     `Returned: ${users.length} users | ${hashtags.length} hashtags | ${places.length} places | ${keywords.length} keywords (showing up to ${limit} per list)`,
   ]
+  if (unreadable) lines.push(`Unreadable entries: ${unreadable} returned entr${unreadable === 1 ? "y" : "ies"} lacked a readable search record and ${unreadable === 1 ? "was" : "were"} skipped.`)
   if (users.length) {
     lines.push("", "Users:")
     for (const user of users.slice(0, limit)) {
@@ -945,6 +955,7 @@ async function instagramNative(query: string, limit: number, headers: Record<str
   if (!users.length && !hashtags.length && !places.length && !keywords.length) lines.push("", "Instagram returned empty user, hashtag, place, and keyword lists for this query.")
 
   return {
+    status: unreadable ? "partial" as const : readableCount ? "success" as const : "empty" as const,
     text: lines.join("\n"),
     details: {
       provider: "scrapecreators",
@@ -954,6 +965,7 @@ async function instagramNative(query: string, limit: number, headers: Record<str
       hashtags: hashtags.length,
       places: places.length,
       keywords: keywords.length,
+      unreadable,
       credits_charged: asNumber(response.payload.credits_charged),
     },
   }
@@ -974,7 +986,13 @@ async function instagramPopular(
   const payload = response.payload
   const listed = expectArray(payload, "posts", "ScrapeCreators Instagram popular search")
   if (!listed.ok) return `ERROR: ${listed.error}`
-  const posts = listed.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null)
+  // Posts may omit captions or metrics, but need an identity to be inspected.
+  const posts = listed.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null
+    && (asString(r.id) ?? asNumber(r.id) ?? asString(r.pk) ?? asNumber(r.pk) ?? asString(r.shortcode) ?? asString(r.code) ?? asString(r.url)) !== null)
+  const unreadable = listed.items.length - posts.length
+  if (posts.length === 0 && unreadable > 0) {
+    return `ERROR: ScrapeCreators Instagram popular search returned an unexpected payload: none of the ${unreadable} returned post entr${unreadable === 1 ? "y" : "ies"} carried a readable post record (missing id, shortcode, and URL)`
+  }
   const shown = posts.slice(0, limit)
   const nextCursor = asString(payload.cursor)
   const hasMore = typeof payload.has_more === "boolean" ? payload.has_more : null
@@ -994,6 +1012,7 @@ async function instagramPopular(
         ? `Next page: pass cursor="${nextCursor}" with the same query`
         : "Next page: no cursor returned and has_more not reported; continuation unavailable",
   ]
+  if (unreadable) lines.push(`Unreadable entries: ${unreadable} returned entr${unreadable === 1 ? "y" : "ies"} lacked a readable post record and ${unreadable === 1 ? "was" : "were"} skipped.`)
   const plain = cleanText(description?.plain_text)
   if (plain) {
     lines.push(`Instagram description: ${truncate(plain, 400)}`)
@@ -1056,6 +1075,7 @@ async function instagramPopular(
   }
 
   return {
+    status: unreadable || transcriptFailures.length ? "partial" as const : shown.length ? "success" as const : "empty" as const,
     text: lines.join("\n"),
     details: {
       provider: "scrapecreators",
@@ -1063,6 +1083,7 @@ async function instagramPopular(
       query,
       returned: posts.length,
       shown: shown.length,
+      unreadable,
       cursor: hasMore === false ? null : nextCursor,
       has_more: hasMore,
       credits: credits.details(),

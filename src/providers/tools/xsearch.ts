@@ -12,7 +12,7 @@ import { Lexer, type Token, type Tokens } from "marked"
 import type { KeepRaw, ToolSpec } from "../types.js"
 import { loadConfig } from "../runtime-config.js"
 import { keptJson, keptText } from "../http.js"
-import { metered } from "../outcome.js"
+import { metered, outcome } from "../outcome.js"
 
 const API_BASE = "https://api.x.ai/v1"
 /** xAI reports cost in ticks of 1e-10 USD. */
@@ -77,6 +77,8 @@ interface MessageOutput {
 
 interface ResponsesResponse {
   id: string
+  status?: string
+  incomplete_details?: { reason?: string }
   output: Array<MessageOutput | { type: string; [key: string]: unknown }>
   citations?: string[]
   usage?: {
@@ -100,6 +102,19 @@ interface ResponsesResponse {
 }
 
 // -- Helpers --
+
+function validDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
+function dateRange(fromDate?: string, toDate?: string): string {
+  return [
+    fromDate ? `from ${fromDate} 00:00 UTC (inclusive)` : "start not set",
+    toDate ? `before ${toDate} 00:00 UTC (exclusive)` : "end not set",
+  ].join("; ")
+}
 
 function buildSystemMessage(options: {
   fromDate?: string
@@ -131,7 +146,7 @@ Never fabricate posts. If search returns empty, say so clearly.`
   }
 
   if (options.fromDate || options.toDate) {
-    message += `\n\nDate constraints: ${options.fromDate ? `from ${options.fromDate}` : ""}${options.fromDate && options.toDate ? " " : ""}${options.toDate ? `to ${options.toDate}` : ""}`
+    message += `\n\nDate constraints: ${dateRange(options.fromDate, options.toDate)}.`
   }
 
   return message
@@ -292,7 +307,8 @@ export const search = metered({
     "Returns synthesized findings with citations to X posts, and can report per-post public " +
     "metrics (likes, reposts, quotes, replies, bookmarks, views) when asked for them. " +
     "Supports X search operators in the query, handle filtering, date ranges, multimedia " +
-    "understanding, and multi-turn chaining via previousResponseId.",
+    "understanding, and multi-turn chaining via previousResponseId. Date bounds are " +
+    "inclusive fromDate and exclusive toDate at 00:00 UTC. Each handle filter accepts at most 20 handles.",
   async execute(args, context) {
     const xConfig = loadConfig().x
 
@@ -320,14 +336,25 @@ export const search = metered({
     if (args.handles?.length && args.excludeHandles?.length) {
       return "ERROR: Cannot use both 'handles' and 'excludeHandles' - choose one"
     }
+    if (args.handles?.length > 20 || args.excludeHandles?.length > 20) {
+      return "ERROR: Each handle filter accepts at most 20 handles. Split a larger scope into explicit searches; no handles were silently omitted."
+    }
+    for (const name of ["fromDate", "toDate"]) {
+      if (args[name] !== undefined && !validDate(args[name])) {
+        return `ERROR: ${name} must be a valid YYYY-MM-DD date. Date-time values are not applied by X Search.`
+      }
+    }
+    if (args.fromDate && args.toDate && args.fromDate >= args.toDate) {
+      return "ERROR: toDate must be after fromDate. toDate is exclusive at 00:00 UTC; to search one day, use the following date."
+    }
 
     // Build tools array
     const xSearchTool: XSearchToolConfig = { type: "x_search" }
     if (args.handles?.length) {
-      xSearchTool.allowed_x_handles = args.handles.map((h: string) => h.replace(/^@/, "")).slice(0, 20)
+      xSearchTool.allowed_x_handles = args.handles.map((h: string) => h.replace(/^@/, ""))
     }
     if (args.excludeHandles?.length) {
-      xSearchTool.excluded_x_handles = args.excludeHandles.map((h: string) => h.replace(/^@/, "")).slice(0, 20)
+      xSearchTool.excluded_x_handles = args.excludeHandles.map((h: string) => h.replace(/^@/, ""))
     }
     if (args.fromDate) xSearchTool.from_date = args.fromDate
     if (args.toDate) xSearchTool.to_date = args.toDate
@@ -347,10 +374,7 @@ export const search = metered({
     // Build query with date context
     let queryWithContext = args.query
     if (args.fromDate || args.toDate) {
-      const dateContext = []
-      if (args.fromDate) dateContext.push(`from ${args.fromDate}`)
-      if (args.toDate) dateContext.push(`to ${args.toDate}`)
-      queryWithContext = `${args.query} (Date range: ${dateContext.join(" ")})`
+      queryWithContext = `${args.query} (Date range: ${dateRange(args.fromDate, args.toDate)})`
     }
     // Build input messages
     const input: InputMessage[] = []
@@ -383,6 +407,9 @@ export const search = metered({
       if (!response.ok) {
         const errorText = await keptText(response, keep, RAW_LABEL)
         if (shouldRetryWithoutStorage(response.status, errorText)) {
+          if (requestBody.previous_response_id) {
+            return fail(`${parseError(response.status, errorText)} (status ${response.status}). The chained request was not retried without its previous response context. To continue, start an explicit new pass with the full question and relevant prior evidence.`)
+          }
           const retryBody: ResponsesRequest = {
             ...requestBody,
             store: false,
@@ -414,11 +441,16 @@ export const search = metered({
       if (data.error) return fail(data.error.message)
 
       const { text, sources } = extractContent(data)
-      if (!text) return fail("No response content from xAI API")
+      const incomplete = data.status === "incomplete" || data.output.some(item => item.type === "message" && item.status === "incomplete")
+      if (!text) return fail(incomplete ? "xAI returned an incomplete response with no readable content" : "No response content from xAI API")
 
       // Build result
       const passLabel = args.passLabel?.trim() || "pass-1"
       let result = `${passLabel}\n${text}`
+      if (incomplete) {
+        const reason = typeof data.incomplete_details?.reason === "string" ? ` (${data.incomplete_details.reason})` : ""
+        result += `\n\n**Incomplete response:** xAI marked this response incomplete${reason}. The readable text is retained, but it is not a complete research result.`
+      }
       const numbered = numberedCitations(text)
       if (numbered.length > 0) {
         const markers = numbered.length === 1 ? "1 bracketed marker that looks like a citation by number" : `${numbered.length} bracketed markers that look like citations by number`
@@ -439,9 +471,9 @@ export const search = metered({
       result += `- Store: ${requestBody.store === false ? "false" : "true"}\n`
       result += `- Handles: ${handleList}\n`
       result += `- Excluded Handles: ${excludeList}\n`
-      result += `- Date Range: ${args.fromDate ?? "not set"} to ${args.toDate ?? "not set"}\n`
-      if (args.previousResponseId) {
-        result += `- Chained from: ${args.previousResponseId}\n`
+      result += `- Date Range: ${dateRange(args.fromDate, args.toDate)}\n`
+      if (requestBody.previous_response_id) {
+        result += `- Chained from: ${requestBody.previous_response_id}\n`
       }
 
       if (sources.length > 0) {
@@ -485,7 +517,7 @@ export const search = metered({
         }
       }
 
-      return result
+      return outcome(incomplete ? "partial" : "success", result)
     } catch (error) {
       return fail(error instanceof Error ? error.message : "Unknown error")
     }

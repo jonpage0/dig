@@ -212,6 +212,74 @@ describe("scrapecreators tools", () => {
 		expect(mock.calls.map((call) => call.url.pathname)).toEqual(["/v1/instagram/search", "/v1/instagram/search/popular"]);
 	});
 
+	test("instagram native search reports malformed list entries without turning them into empty results", async () => {
+		const mock = installFetchMock({
+			"/v1/instagram/search": (url: URL) => {
+				const query = url.searchParams.get("query");
+				return {
+					success: true,
+					credits_charged: 1,
+					users: query === "empty" ? [] : query === "bad" ? [{}] : [{ username: "nike" }, {}],
+					hashtags: query === "empty" ? [] : query === "bad" ? [null] : [{ name: "nike" }, null],
+					places: query === "empty" ? [] : query === "bad" ? [42] : [{ title: "Nike Store", id: "place-1" }, 42],
+					keywords: query === "empty" ? [] : query === "bad" ? ["  "] : ["nike shoes", "  "],
+				};
+			},
+		});
+		restore = mock.restore;
+
+		const mixed = await executeSource(instagram, { query: "mixed", mode: "native", limit: 1 }, context);
+		expect(mixed.status).toBe("partial");
+		expect(text(mixed)).toContain("Returned: 1 users | 1 hashtags | 1 places | 1 keywords");
+		expect(text(mixed)).toContain("Unreadable entries: 4 returned entries lacked a readable search record and were skipped.");
+		expect(text(mixed)).toContain("@nike");
+		expect(text(mixed)).toContain("#nike");
+		expect(text(mixed)).toContain("Nike Store");
+		expect(text(mixed)).toContain("Keyword suggestions: nike shoes");
+		expect(details(mixed)).toMatchObject({ unreadable: 4, cost: [{ amount: 1, unit: "credits" }] });
+
+		const bad = await executeSource(instagram, { query: "bad", mode: "native" }, context);
+		expect(bad.status).toBe("failed");
+		expect(text(bad)).toContain("none of the 4 returned entries carried a readable account, hashtag, place, or keyword record");
+		expect(details(bad).cost).toEqual([{ amount: 1, unit: "credits" }]);
+
+		const empty = await executeSource(instagram, { query: "empty", mode: "native" }, context);
+		expect(empty.status).toBe("empty");
+		expect(text(empty)).toContain("Instagram returned empty user, hashtag, place, and keyword lists");
+		expect(details(empty).cost).toEqual([{ amount: 1, unit: "credits" }]);
+	});
+
+	test("instagram popular search keeps cursor and usable posts when malformed entries make coverage partial", async () => {
+		const mock = installFetchMock({
+			"/v1/instagram/search/popular": (url: URL) => ({
+				success: true,
+				credits_charged: 1,
+				posts: url.searchParams.get("query") === "empty" ? [] : url.searchParams.get("query") === "bad" ? [{}, null] : [{ ...reelFixture, type: "reel" }, {}, null],
+				cursor: "next-page",
+				has_more: true,
+			}),
+		});
+		restore = mock.restore;
+
+		const mixed = await executeSource(instagram, { query: "mixed", mode: "popular", cursor: "previous-page", transcripts: false }, context);
+		expect(mixed.status).toBe("partial");
+		expect(text(mixed)).toContain("@fetchmycamera_");
+		expect(text(mixed)).toContain("Unreadable entries: 2 returned entries lacked a readable post record and were skipped.");
+		expect(text(mixed)).toContain('Next page: pass cursor="next-page" with the same query');
+		expect(details(mixed)).toMatchObject({ shown: 1, unreadable: 2, cursor: "next-page", has_more: true, cost: [{ amount: 1, unit: "credits" }] });
+		expect(mock.calls[0].url.searchParams.get("cursor")).toBe("previous-page");
+
+		const bad = await executeSource(instagram, { query: "bad", mode: "popular", transcripts: false }, context);
+		expect(bad.status).toBe("failed");
+		expect(text(bad)).toContain("none of the 2 returned post entries carried a readable post record");
+		expect(details(bad).cost).toEqual([{ amount: 1, unit: "credits" }]);
+
+		const empty = await executeSource(instagram, { query: "empty", mode: "popular", transcripts: false }, context);
+		expect(empty.status).toBe("empty");
+		expect(text(empty)).toContain("empty post list");
+		expect(details(empty).cost).toEqual([{ amount: 1, unit: "credits" }]);
+	});
+
 	test("tiktok forwards provider filters, keeps provider order, dedupes, and leaves missing views unreported", async () => {
 		const mock = installFetchMock({
 			"/v1/tiktok/search/keyword": { success: true, credits_charged: 1, cursor: 12, search_item_list: [tiktokFixture("1", 50), tiktokFixture("2"), tiktokFixture("1", 50)] },
@@ -264,7 +332,88 @@ describe("scrapecreators tools", () => {
 		expect(output).toContain("Totals over videos reporting metrics: 99 views (1/1) | no likes reported");
 		expect(output).not.toContain("0 likes");
 		expect(output).toContain("Unreadable entries: 1 returned entry lacked a readable video record and was skipped.");
+		expect(mixed).toMatchObject({ status: "partial" });
 		expect(details(mixed)).toMatchObject({ returned: 1, unreadable: 1 });
+	});
+
+	test("instagram reels distinguishes mixed unreadable entries, wholly unreadable pages, and real empty pages", async () => {
+		const mock = installFetchMock({
+			"/v2/instagram/reels/search": (url: URL) => ({
+				success: true,
+				credits_charged: 1,
+				reels: url.searchParams.get("query") === "empty" ? []
+					: url.searchParams.get("query") === "unreadable" ? [{ unexpected: "schema-drift" }]
+						: [reelFixture, { unexpected: "schema-drift" }],
+			}),
+		});
+		restore = mock.restore;
+
+		const mixed = await executeSource(instagram, { query: "mixed", transcripts: false }, context);
+		expect(mixed.status).toBe("partial");
+		expect(text(mixed)).toContain("Unreadable entries: 1 returned entry lacked a readable reel record and was skipped.");
+		expect(details(mixed)).toMatchObject({ returned: 1, unreadable: 1, cost: [{ amount: 1, unit: "credits" }] });
+
+		const unreadable = await executeSource(instagram, { query: "unreadable", transcripts: false }, context);
+		expect(unreadable.status).toBe("failed");
+		expect(text(unreadable)).toContain("none of the 1 reels entry carried a readable reel record");
+		expect(details(unreadable).cost).toEqual([{ amount: 1, unit: "credits" }]);
+
+		const empty = await executeSource(instagram, { query: "empty", transcripts: false }, context);
+		expect(empty.status).toBe("empty");
+		expect(text(empty)).toContain("The provider returned an empty reels list");
+		expect(details(empty).cost).toEqual([{ amount: 1, unit: "credits" }]);
+	});
+
+	test("tiktok runtime AI-fallback pricing agrees with actual reported charges without an additive fee", async () => {
+		const mock = installFetchMock({
+			"/v1/tiktok/search/keyword": { success: true, credits_charged: 1, search_item_list: [tiktokFixture("1", 5)] },
+			"/v1/tiktok/video/transcript": { success: true, credits_charged: 1, transcript: "An AI transcript" },
+		});
+		restore = mock.restore;
+
+		const result = await executeSource(tiktok, { query: "x", transcript_ai_fallback: true }, context);
+		expect(text(result)).toContain("Credits charged: 2");
+		expect(text(result)).toContain("successful fallback up to 120 seconds costs 1 credit per transcript request");
+		expect(text(result)).not.toContain("adds up to");
+		expect(text(result)).not.toContain("10 per video");
+		expect(details(result).cost).toEqual([{ amount: 2, unit: "credits" }]);
+		expect(mock.calls[1].url.searchParams.get("use_ai_as_fallback")).toBe("true");
+	});
+
+	test("long social transcripts are labeled as excerpts and the complete provider text remains captured", async () => {
+		const longTranscript = Array.from({ length: 505 }, (_, index) => `word${index + 1}`).join(" ");
+		const mock = installFetchMock({
+			"/v1/tiktok/search/keyword": { success: true, credits_charged: 1, search_item_list: [tiktokFixture("1", 5)] },
+			"/v1/tiktok/video/transcript": { success: true, credits_charged: 1, transcript: longTranscript },
+			"/v2/instagram/reels/search": { success: true, credits_charged: 1, reels: [reelFixture] },
+			"/v2/instagram/media/transcript": { success: true, credits_charged: 1, transcripts: [{ text: longTranscript }] },
+		});
+		restore = mock.restore;
+		const originals: string[] = [];
+		const retained = { ...context, keep: (_label: string, _status: number, body: unknown) => { originals.push(JSON.stringify(body)); } };
+
+		for (const provider of [tiktok, instagram]) {
+			const result = await executeSource(provider, { query: "x" }, retained);
+			expect(result.status).toBe("success");
+			expect(text(result)).toContain("Transcript: [Excerpt: first 500 of 505 words.");
+			expect(text(result)).toContain("Read this call's original provider response, when retained, for the full returned text.");
+			expect(text(result)).toContain("word500…");
+			expect(text(result)).not.toContain("word501");
+		}
+		expect(originals.filter(body => body.includes("word505"))).toHaveLength(2);
+	});
+
+	test("a transcript at the display boundary is not labeled as an excerpt", async () => {
+		const transcript = Array.from({ length: 500 }, (_, index) => `word${index + 1}`).join(" ");
+		const mock = installFetchMock({
+			"/v1/tiktok/search/keyword": { success: true, credits_charged: 1, search_item_list: [tiktokFixture("1", 5)] },
+			"/v1/tiktok/video/transcript": { success: true, credits_charged: 1, transcript },
+		});
+		restore = mock.restore;
+
+		const result = await tiktok.execute({ query: "x" }, context);
+		expect(text(result)).toContain("word500");
+		expect(text(result)).not.toContain("[Excerpt:");
 	});
 
 	test("a failed enrichment request without a charge leaves the credit total unknown and keeps the reported subtotal", async () => {
@@ -315,6 +464,30 @@ describe("scrapecreators tools", () => {
 		expect(output).not.toContain("over 2 minutes");
 		expect(output).toContain("Transcripts: 0 fetched of 2 requested; 1 failed");
 		expect(details(result)).toMatchObject({ transcripts: { requested: 2, fetched: 0, failed: 1 }, credits: { charged: 3, unreported: 0 } });
+	});
+
+	test("instagram popular keeps usable posts partial when transcript enrichment fails", async () => {
+		const mock = installFetchMock({
+			"/v1/instagram/search/popular": (url: URL) => ({
+				success: true,
+				credits_charged: 1,
+				posts: url.searchParams.get("query") === "empty" ? [] : [{ ...reelFixture, type: "reel" }],
+			}),
+			"/v2/instagram/media/transcript": { status: 503, body: { success: false, credits_charged: 0, error: "Transcript temporarily unavailable" } },
+		});
+		restore = mock.restore;
+
+		const partial = await executeSource(instagram, { query: "dogs", mode: "popular" }, context);
+		expect(partial.status).toBe("partial");
+		expect(text(partial)).toContain("@fetchmycamera_");
+		expect(text(partial)).toContain("Transcripts: 0 fetched of 1 requested (reels/videos only); 1 failed");
+		expect(details(partial)).toMatchObject({ shown: 1, transcripts: { requested: 1, fetched: 0, failed: 1 }, cost: [{ amount: 1, unit: "credits" }] });
+
+		const complete = await executeSource(instagram, { query: "dogs", mode: "popular", transcripts: false }, context);
+		expect(complete.status).toBe("success");
+		const empty = await executeSource(instagram, { query: "empty", mode: "popular", transcripts: false }, context);
+		expect(empty.status).toBe("empty");
+		expect(text(empty)).toContain("empty post list");
 	});
 
 	test("linkedin search sends query, date_posted, and cursor to the posts search endpoint", async () => {

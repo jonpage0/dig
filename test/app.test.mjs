@@ -620,6 +620,7 @@ test('keys.env buttons in a source card prepare and open the file, copy an envir
   const list = ui.$('sources-list'); const model = named(list, 'x_model');
   const keys = () => byKey(list, 'keys:exa'); const reuse = () => byKey(list, 'env:exa');
   const keyRow = name => [...list.walk()].find(e => e.className === 'key-row' && e.children[0].children[1]?.textContent === name)?.textContent;
+  await waitFor(() => byKey(list, 'setup:exa') && byKey(ui.$('accounts'), 'accounts'));
   const setup = byKey(list, 'setup:exa').parentNode; const accounts = byKey(ui.$('accounts'), 'accounts').parentNode;
   assert.equal(setup.tagName, 'DETAILS'); assert.ok(setup.contains(keys()), 'Edit keys.env sits in the card’s Setup details');
   assert.equal(byKey(list, 'setup:exa').textContent, 'Setup detailsKeys and suggested worker');
