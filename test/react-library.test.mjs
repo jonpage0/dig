@@ -85,9 +85,9 @@ function scriptedHost(initial, extra = {}) {
   };
   return host;
 }
-async function mount(t, host) {
+async function mount(t, host, { trail = false } = {}) {
   document.body.replaceChildren();
-  const element = document.createElement('div'); document.body.append(element);
+  const element = document.createElement('div'); element.id = 'root'; if (trail) element.dataset.digSurface = 'trail'; document.body.append(element);
   const queryClient = createLibraryQueryClient();
   const originalInterval = globalThis.setInterval; const originalClear = globalThis.clearInterval;
   const intervals = new Map(); let sequence = 100;
@@ -203,7 +203,7 @@ test('conversation trail scopes cost and source setup shares settings without st
   await React.act(async () => host.emitResult({ view: 'panel', thread: 'thread-1' })); await settle();
   assert.equal($('panel').hidden, false);
   assert.match($('panel-digs').textContent, /Question A/); assert.doesNotMatch($('panel-digs').textContent, /Question B/);
-  assert.match($('panel-figures').textContent, /0\.42/); assert.doesNotMatch($('panel-figures').textContent, /100\.00/);
+  assert.match(document.querySelector('.activity-footer').textContent, /0\.42/); assert.doesNotMatch($('panel').textContent, /100\.00/);
   await click($('nav-sources'));
   assert.ok($('source-hackernews'));
   assert.match($('sources-summary').textContent, /1 of 1/);
@@ -450,4 +450,17 @@ test('paged reads pin canonical paths and reject changed identity or inconsisten
     assert.doesNotMatch($('document').textContent, /AAABBB/);
     await click($('back'));
   }
+});
+
+
+test('thread resource starts in compact activity before the host delivers its result', async t => {
+  const host = scriptedHost(snapshotOf([item('A')]));
+  await mount(t, host, { trail: true });
+  assert.equal($('panel').hidden, false);
+  assert.equal($('browse').hidden, true);
+  assert.ok(document.querySelector('.dig-library.is-conversation'));
+  assert.match($('panel').textContent, /Conversation not identified/);
+  await React.act(async () => host.emitResult({ view: 'panel', thread: 'thread-1' })); await settle();
+  assert.match($('panel-digs').textContent, /Question A/);
+  assert.equal($('browse').hidden, true);
 });

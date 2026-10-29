@@ -31,7 +31,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
   const sourcesQuery = useQuery({ queryKey: ['sources'], queryFn: () => host.call('source_info'), enabled: false });
   const snapshot: any = snapshotQuery.data ?? emptySnapshot;
   const catalog = useMemo(() => createCatalog(snapshot.sources), [snapshot.sources]);
-  const [state, setState] = useState<any>(emptyState);
+  const [state, setState] = useState<any>(() => ({ ...emptyState, ...(view === '/trail' ? { mode: 'panel' } : {}) }));
   const latest = useRef<any>({});
   latest.current = { state, view, snapshot, catalog };
   const methods = useMemo(() => {

@@ -130,7 +130,7 @@ function LibraryShell({ host }: { host: DigHost }) {
     if (!url) { app.notify('This link is not an HTTP or HTTPS address.', true); return; }
     host.openLink(url).catch((error: any) => app.notify(`Unable to open ${url}: ${error.message}`, true));
   };
-  return <main className="dig-library" onClick={outbound} onPointerDown={event => { if (app.mode === 'panel' && navMore.current?.open && !navMore.current.contains(event.target as Node)) navMore.current.open = false; }}>
+  return <main className={`dig-library${app.mode === 'panel' && view === '/trail' ? ' is-conversation' : ''}`} onClick={outbound} onPointerDown={event => { if (app.mode === 'panel' && navMore.current?.open && !navMore.current.contains(event.target as Node)) navMore.current.open = false; }}>
     <header className="masthead">
       <div className="brand"><h1>Dig</h1><p className="tagline" id="tagline">{app.mode === 'panel' ? 'Research trail' : 'Research state'}</p></div>
       <nav className="nav" aria-label="Dig views">
@@ -179,7 +179,7 @@ export function LibraryApp({ host, queryClient }: { host: DigHost; queryClient?:
   const router = useMemo(() => {
     const rootRoute = createRootRoute({ component: () => <LibraryShell host={host} /> });
     const children = ['/library', '/trail', '/reader', '/sources', '/guide', '/settings', '/about'].map(path => createRoute({ getParentRoute: () => rootRoute, path, component: () => null }));
-    return createRouter({ routeTree: rootRoute.addChildren(children), history: createMemoryHistory({ initialEntries: ['/library'] }), defaultPreload: false });
+    return createRouter({ routeTree: rootRoute.addChildren(children), history: createMemoryHistory({ initialEntries: [document.getElementById('root')?.dataset.digSurface === 'trail' ? '/trail' : '/library'] }), defaultPreload: false });
   }, [host]);
   return <QueryClientProvider client={queries}><RouterProvider router={router} /></QueryClientProvider>;
 }

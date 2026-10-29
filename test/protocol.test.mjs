@@ -176,8 +176,10 @@ test('standalone bundle starts outside the repo, exposes native metadata, retain
     // Codex caches a view by its URI, so each version's views carry the version in their URIs, and every tool that
     // renders or serves a view names a view the server lists; a mismatch would leave that tool without a view.
     const views = (await client.listResources()).resources.map(r => r.uri).filter(uri => uri.startsWith('ui://')).sort();
-    assert.deepEqual(views, [`ui://dig/library/v${VERSION}.html`, `ui://dig/saved/v${VERSION}.html`]);
+    assert.deepEqual(views, [`ui://dig/library/v${VERSION}.html`, `ui://dig/saved/v${VERSION}.html`, `ui://dig/trail/v${VERSION}.html`]);
     for (const tool of tools.filter(t => t._meta?.ui?.resourceUri)) assert.ok(views.includes(tool._meta.ui.resourceUri), `${tool.name} names a listed view`);
+    const trailResource = await client.readResource({ uri: trail._meta.ui.resourceUri });
+    assert.equal(trailResource.contents[0]._meta['openai/ui'].preferredDisplayMode, 'inline');
     const app = await client.readResource({ uri: open._meta.ui.resourceUri });
     assert.equal(app.contents[0].mimeType, 'text/html;profile=mcp-app');
     const source = (await client.callTool({ name: 'source_info', arguments: { source: 'hackernews' } })).structuredContent.sources[0];

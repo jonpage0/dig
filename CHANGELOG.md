@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.3 — 2026-10-29
+
+- Replace the in-thread dashboard with compact conversation activity: observed running calls, call/source/report counts, source outcomes and links to saved results. Keep the full library an explicit destination.
+- Observe executing provider calls in memory while they run and finalize their receipts; never infer active work from unassigned receipts. Add an inline-preferred thread resource with its own initial route.
+
 ## 0.9.2 — 2026-10-28
 
 - Focus the conversation trail on saved questions and findings, with compact usage and expandable records. Add local library filtering, clearer composer mention choices, and direct answer/report opening.

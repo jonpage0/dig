@@ -113,3 +113,22 @@ export function steeringPrompt(item: any, library: string, intent: SteeringInten
     '', 'Use Dig to inspect the saved research and read the relevant reports and originals before relying on them. A missing report does not establish whether a worker is running. Reuse existing evidence before making new provider calls.',
   ].join('\n');
 }
+
+/** Active calls are observations from this server, never inferred from saved plans or unclaimed receipts. */
+export function projectConversationActivity(snapshot: any, thread: string | null | undefined) {
+  const scope = projectConversation(snapshot, thread);
+  const liveAvailable = Array.isArray(snapshot?.activeCalls);
+  const activeCalls = scope.identified ? array(snapshot?.activeCalls).filter(call =>
+    call.session === thread || scope.digs.some(item => call.dig === item.id && call.project === item.project)) : [];
+  const calls = [...new Map(scope.calls.map(call => [`${call.session}:${call.id}`, call])).values()];
+  const sources = names([...activeCalls, ...calls].map(call => call.source)).map(source => {
+    const active = activeCalls.filter(call => call.source === source);
+    const finished = calls.filter(call => call.source === source);
+    return { source, active, finished, partial: finished.filter(call => call.status === 'partial').length,
+      failed: finished.filter(call => call.status === 'failed').length,
+      stopped: finished.filter(call => call.status === 'cancelled' || call.status === 'skipped').length,
+      empty: finished.filter(call => call.status === 'empty').length };
+  }).sort((a, b) => b.active.length - a.active.length || b.finished.length - a.finished.length || a.source.localeCompare(b.source));
+  return { ...scope, calls, activeCalls, liveAvailable, sources, totalCalls: calls.length + activeCalls.length,
+    reports: scope.digs.reduce((n, item) => n + array(item.reports).length, 0), cost: costSummary(calls) };
+}

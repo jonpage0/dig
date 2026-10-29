@@ -12,6 +12,7 @@ import './library/about.css';
 import './library/research-overview.css';
 import './library/research-detail.css';
 import './library/polish.css';
+import './library/conversation-activity.css';
 
 export { LibraryApp } from './library/app';
 

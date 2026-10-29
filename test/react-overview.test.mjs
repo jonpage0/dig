@@ -34,8 +34,8 @@ const question = (overrides = {}) => ({ id: 'a', title: 'Which page should we im
 function fixture(items = [question()], live = []) {
   const actions = [];
   const app = {
-    snapshot: { library: '/library', items, live }, snapshotLoaded: true, usageDays: 30, thread: 'current-chat', catalog: createCatalog(MODULES),
-    update: patch => actions.push(['update', patch]), showDig: (...args) => actions.push(['showDig', ...args]), notify: (...args) => actions.push(['notice', ...args]),
+    snapshot: { library: '/library', items, live, activeCalls: [] }, snapshotLoaded: true, usageDays: 30, thread: 'current-chat', catalog: createCatalog(MODULES),
+    go: path => actions.push(['go', path]), update: patch => actions.push(['update', patch]), showDig: (...args) => actions.push(['showDig', ...args]), notify: (...args) => actions.push(['notice', ...args]),
   };
   const host = { preview: false, canDraft: () => false, canOpenFile: () => true, openFile: async path => actions.push(['openFile', path]), draft: async value => actions.push(['draft', value]), openLink: async value => actions.push(['openLink', value]), call: async () => { throw new Error('Overview must not call providers'); } };
   return { app, host, actions };
@@ -97,20 +97,6 @@ test('state rows distinguish saved work, absent reports and author assessments w
   assert.match(rows.querySelector('.research-overview-summary').textContent, /Retained evidence suggests a page comparison/);
 });
 
-test('saved document actions open the answer or latest report without changing retained data', async t => {
-  const newer = 'p/digs/b/exa-2.md';
-  const answered = question({ answer: 'p/digs/a/answer.md', status: 'answered' });
-  const sourceOnly = question({ id: 'b', title: 'A source-only question', answer: null, reportDetails: [{ file, source: 'exa', method: 'exa', at: startedAt }, { file: newer, source: 'exa', method: 'exa', at }], reports: [file, newer] });
-  const data = fixture([answered, sourceOnly]);
-  await mount(t, ConversationOverview, { ...data, hidden: false });
-  const rows = [...$('panel-digs').querySelectorAll('article')];
-  assert.equal(rows[0].querySelector('.research-overview-question-details').open, false);
-  assert.equal(document.querySelector('.research-overview-conversation-usage').open, false);
-  await click(rows[0].querySelector('.research-overview-primary-action'));
-  await click(rows[1].querySelector('.research-overview-primary-action'));
-  assert.deepEqual(data.actions, [['showDig', answered, answered.answer], ['showDig', sourceOnly, newer]]);
-  assert.equal(sourceOnly.reports.length, 2);
-});
 
 test('library filter uses saved titles and summaries locally and clears when the library changes', async t => {
   const first = question();
@@ -129,57 +115,8 @@ test('library filter uses saved titles and summaries locally and clears when the
   assert.equal($('list').querySelectorAll('article').length, 2);
 });
 
-test('conversation totals include its attributed question and own unassigned calls, excluding other workers', async t => {
-  const mine = question({ calls: [call('mine', { cost: [{ unit: 'USD', amount: .4 }] })] });
-  const other = question({ id: 'other', title: 'Other conversation question', displayTitle: null, session: 'other-chat', calls: [call('foreign', { cost: [{ unit: 'USD', amount: 500 }] })] });
-  const ownUnassigned = call('own-unassigned', { session: 'current-chat', claimedBy: null, cost: [{ unit: 'USD', amount: .2 }] });
-  const foreignUnassigned = call('foreign-unassigned', { session: 'other-worker', claimedBy: null, cost: [{ unit: 'USD', amount: 999 }] });
-  const data = fixture([mine, other], [ownUnassigned, foreignUnassigned]);
-  await mount(t, ConversationOverview, { ...data, hidden: false });
-  assert.match($('panel-figures').textContent, /\$0\.6000/);
-  assert.doesNotMatch($('panel-figures').textContent, /500|999/);
-  assert.match($('panel-figures').textContent, /Not included: 1 retrieval/);
-  assert.doesNotMatch($('panel-digs').textContent, /Other conversation question/);
-  assert.match($('panel-live').textContent, /This conversationIncluded/);
-  assert.match($('panel-live').textContent, /Other conversations or workersExcluded/);
-  const open = [...$('panel-live').querySelectorAll('button')].find(button => button.textContent === 'Open original response');
-  await click(open);
-  assert.deepEqual(data.actions, [['openFile', `/library/${ownUnassigned.rawFile}`]]);
-});
 
-test('unknown conversation scope claims no attribution or costs and retains an honest fallback', async t => {
-  const data = fixture([question()], [call('foreign')]);
-  data.app.thread = null;
-  await mount(t, ConversationOverview, { ...data, hidden: false });
-  assert.match($('panel-scope').textContent, /Conversation not identified/);
-  assert.match($('panel-digs').textContent, /cannot pick out its research/);
-  assert.ok($('panel-figures').closest('[hidden]'));
-  assert.match($('panel-live').textContent, /Other conversations or workers/);
-  assert.deepEqual(data.actions, []);
-});
 
-test('recorded milestones use real dates and reports, and refreshes preserve expanded row details', async t => {
-  const secondFile = 'p/digs/a/exa-2.md';
-  const finishedAt = new Date(Date.now() - 10_000).toISOString();
-  const item = question({ answer: 'p/digs/a/answer.md', finishedAt, status: 'partly answered', reports: [file, secondFile], reportDetails: [{ file, source: 'exa', method: 'exa', status: 'partial', at }, { file: secondFile, source: 'exa', method: 'exa', status: 'complete', at: finishedAt }] });
-  const data = fixture([item]);
-  const props = { ...data, hidden: false };
-  const ui = await mount(t, ConversationOverview, props);
-  const row = $('panel-digs').querySelector('article');
-  assert.match(row.textContent, /Answer has gaps/);
-  assert.match(row.textContent, /Latest author assessment: complete/);
-  assert.equal(row.querySelectorAll('[data-slot="timeline-item"]').length, 3);
-  const expand = [...row.querySelectorAll('button')].find(button => button.textContent.includes('Show all 4 saved milestones'));
-  await click(expand);
-  assert.equal(row.querySelectorAll('[data-slot="timeline-item"]').length, 4);
-  const times = [...row.querySelectorAll('[data-slot="timeline-date"]')].map(node => node.getAttribute('datetime'));
-  assert.ok(times.includes(startedAt)); assert.ok(times.includes(finishedAt));
-  const details = row.querySelector('.research-overview-question-details'); details.open = true; details.querySelector('summary').focus();
-  await ui.render({ ...props, app: { ...data.app, snapshot: { ...data.app.snapshot, items: [{ ...item, calls: [...item.calls, call('late')] }] } } });
-  assert.equal($('panel-digs').querySelector('.research-overview-question-details'), details);
-  assert.equal(details.open, true); assert.equal(document.activeElement, details.querySelector('summary'));
-  assert.equal(row.querySelectorAll('[data-slot="timeline-item"]').length, 4);
-});
 
 test('an empty or undated library never describes missing pricing as free', async t => {
   const data = fixture([question({ calls: [], reports: [], reportDetails: [], methods: [], sources: [], planned: [] })]);
@@ -187,4 +124,51 @@ test('an empty or undated library never describes missing pricing as free', asyn
   assert.match($('usage').textContent, /No calls recorded/);
   assert.doesNotMatch($('list').textContent, /no charge recorded|\$0\.00|free/i);
   assert.match($('list').textContent, /Question recorded/);
+});
+
+
+test('compact conversation view leads with active calls and sources, with no dashboard or foreign receipts', async t => {
+  const mine = question({ calls: [call('mine', { cost: [{ unit: 'USD', amount: .4 }] })] });
+  const data = fixture([mine], [call('own', { session: 'current-chat', claimedBy: null, cost: null }), call('foreign', { session: 'elsewhere', source: 'youtube', cost: [{ unit: 'USD', amount: 999 }] })]);
+  data.app.snapshot.activeCalls = [{ id: 'running', project: mine.project, dig: mine.id, session: 'worker', source: 'exa', tool: 'exa_search' }];
+  const props = { ...data, hidden: false }; const ui = await mount(t, ConversationOverview, props);
+  assert.match(document.querySelector('.activity-status').textContent, /1 call running/);
+  assert.deepEqual([...$('panel-figures').querySelectorAll('dd')].map(node => node.textContent), ['1', '3', '1', '1']);
+  assert.match(document.querySelector('.activity-source').textContent, /ExaSearch1 running2 finished/);
+  assert.doesNotMatch($('panel').textContent, /999|YouTube|Unassigned retrievals|Pricing details|Report coverage/);
+  assert.equal($('panel').querySelectorAll('svg[role="img"], textarea, input').length, 0);
+  assert.match(document.querySelector('.activity-footer').textContent, /unknown|unpriced|incomplete/i);
+  await click(document.querySelector('.activity-result'));
+  assert.deepEqual(data.actions, [['showDig', mine]]);
+  await click([...$('panel').querySelectorAll('button')].find(node => node.textContent.includes('Open library')));
+  assert.deepEqual(data.actions.at(-1), ['go', '/library']);
+  await ui.render({ ...props, app: { ...data.app, snapshot: { ...data.app.snapshot, activeCalls: [] } } });
+  assert.match(document.querySelector('.activity-status').textContent, /No active calls/);
+  assert.equal(document.querySelector('.activity-active'), null);
+});
+
+test('missing identity, old-server telemetry and paused updates never claim zero or current running activity', async t => {
+  const data = fixture(); data.app.thread = null;
+  const props = { ...data, hidden: false }; const ui = await mount(t, ConversationOverview, props);
+  assert.match($('panel').textContent, /Conversation not identified/); assert.equal($('panel-figures'), null);
+  await ui.render({ ...props, app: { ...data.app, thread: 'current-chat', snapshot: { ...data.app.snapshot, activeCalls: undefined } } });
+  assert.match(document.querySelector('.activity-status').textContent, /Live status unavailable/);
+  assert.equal($('panel-figures').querySelector('dd').textContent, '—');
+  await ui.render({ ...props, app: { ...data.app, thread: 'current-chat', updatesFailed: true } });
+  assert.match(document.querySelector('.activity-status').textContent, /Updates paused/);
+  assert.equal($('panel-figures').querySelector('dd').textContent, '—');
+});
+
+
+test('large source sets stay compact while running sources remain visible', async t => {
+  const sources = ['exa', 'github', 'hackernews', 'x', 'youtube', 'reddit', 'papers'];
+  const data = fixture([question({ calls: sources.map((source, i) => call(String(i), { source })) })]);
+  data.app.snapshot.activeCalls = [{ id: 'now', source: 'papers', session: 'current-chat', tool: 'papers_multi_search' }];
+  await mount(t, ConversationOverview, { ...data, hidden: false });
+  assert.equal(document.querySelectorAll('.activity-source').length, 5);
+  assert.match(document.querySelector('.activity-source').textContent, /Papers/);
+  const expand = [...$('panel').querySelectorAll('button')].find(node => node.textContent === 'Show all 7 sources');
+  await click(expand);
+  assert.equal(document.querySelectorAll('.activity-source').length, 7);
+  assert.equal(expand.getAttribute('aria-expanded'), 'true');
 });

@@ -1,0 +1,49 @@
+/* The thread entrypoint is a compact activity readout; the full library stays an explicit destination. */
+.conversation-activity { color: var(--foreground); font-size: 12px; line-height: 1.5; }
+.activity-header, .activity-header > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.activity-header { justify-content: space-between; }
+.activity-header strong { font-size: 16px; letter-spacing: -.35px; }
+.activity-header > div > span { color: var(--muted-foreground); font-size: 11px; }
+.activity-header .dig-button { font-size: 11px; min-height: 28px; padding: 4px 7px; }
+.activity-status { display: flex; align-items: center; gap: 7px; margin: 12px 0 14px; font-weight: 500; font-size: 12px; }
+.activity-indicator { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--muted-foreground); }
+.activity-indicator[data-running=true] { background: var(--foreground); box-shadow: 0 0 0 3px color-mix(in srgb, var(--foreground) 10%, transparent); }
+.activity-counts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 0 0 9px; gap: 10px; }
+.activity-counts > div { min-width: 0; }
+.activity-counts dt { color: var(--muted-foreground); font-size: 10px; }
+.activity-counts dd { margin: 1px 0 0; font-size: 23px; line-height: 1.2; font-weight: 550; font-variant-numeric: tabular-nums; letter-spacing: -.6px; }
+.activity-sources { display: grid; }
+.activity-source { display: flex; gap: 9px; align-items: center; padding: 9px 0; border-top: 1px solid var(--border); min-width: 0; }
+.activity-source .research-overview-icon { flex: 0 0 24px; width: 24px; height: 24px; border-radius: 6px; padding: 3px; }
+.activity-source-name { display: flex; flex-direction: column; min-width: 65px; flex: 1; }
+.activity-source-name strong { font-size: 12px; font-weight: 550; }
+.activity-source-name > span { font-size: 10px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.activity-source-counts { display: flex; justify-content: end; align-items: center; flex-wrap: wrap; gap: 3px 9px; max-width: 62%; font-size: 10px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.activity-active { color: var(--foreground); font-weight: 550; }
+.activity-problem { color: var(--foreground); text-decoration: underline dotted; text-underline-offset: 3px; }
+.activity-results { border-top: 1px solid var(--border); margin-top: 3px; padding-top: 5px; }
+.activity-result { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%; padding: 6px 0; border: 0; background: transparent; color: var(--foreground); font: inherit; text-align: left; cursor: pointer; }
+.activity-result > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.activity-result > span:last-child { flex-shrink: 0; font-size: 10px; color: var(--muted-foreground); }
+.activity-result:hover > span:first-child { text-decoration: underline; }
+.activity-result:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
+.activity-footer { border-top: 1px solid var(--border); display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 5px; padding-top: 9px; font-size: 10px; color: var(--muted-foreground); }
+.activity-footer > span { overflow-wrap: anywhere; }
+.activity-footer details { flex-shrink: 0; max-width: 60%; }
+.activity-footer summary { cursor: pointer; text-align: right; }
+.activity-footer details[open] { flex-shrink: 1; }
+.activity-footer p { line-height: 1.6; margin: 6px 0 0; }
+.activity-empty { margin: 9px 0 13px; font-size: 11px; color: var(--muted-foreground); }
+.dig-library.is-conversation { padding: 14px 16px; max-width: 680px; margin: 0 auto; }
+.dig-library.is-conversation > .masthead,
+.dig-library.is-conversation > .foot { display: none; }
+.dig-library.is-conversation > .notice-row:not(.has-notice) { display: none; }
+@media (max-width: 400px) {
+  .activity-header > div { gap: 7px; }
+  .activity-header > div > span { font-size: 10px; }
+  .activity-counts { gap: 7px; }
+  .activity-counts dd { font-size: 21px; }
+  .activity-source-counts { gap: 2px 7px; max-width: 57%; }
+}
+
+.activity-expand.dig-button { min-height: 25px; font-size: 10px; justify-self: start; padding: 3px 0; color: var(--muted-foreground); }

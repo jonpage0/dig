@@ -4,12 +4,11 @@ import { Frame, FrameHeader, FrameTitle, FrameDescription, FramePanel, FrameFoot
 import { IconTile } from '../shared/icon-tile';
 import { Timeline, TimelineItem, TimelineHeader, TimelineTitle, TimelineDate, TimelineContent, TimelineIndicator, TimelineSeparator } from '../shared/timeline';
 import { MODULES } from '../../providers/modules.ts';
-import { GLYPHS, glyphFor } from '../../glyphs.mjs';
 import { costSummary } from '../../providers/library/cost.ts';
 import { costAmounts, costShort, costTotal, COST_SCOPE, COST_CAVEAT, num, plural, shortDate, clock, basename } from '../../ui/format.mjs';
 import { usageOf, outcomeCounts, WINDOWS } from '../../ui/usage.mjs';
 import { callWord, patternOf } from '../../status.mjs';
-import { projectResearch, projectMethodCoverage, projectConversation, projectRecordedActivity, canonicalResearchFile, CALL_OUTCOME_LABELS } from './research-state';
+import { projectResearch, projectMethodCoverage, projectRecordedActivity, canonicalResearchFile, CALL_OUTCOME_LABELS } from './research-state';
 import type { DigHost } from '../shared/host';
 
 type ViewProps = { app: any; host: DigHost; hidden: boolean };
@@ -19,19 +18,7 @@ const date = (at: string) => Number.isFinite(Date.parse(at)) ? `${shortDate(at)}
 const eventDate = (at: any) => Number.isFinite(Date.parse(at)) ? at : undefined;
 const tone = (word: string) => patternOf(word) === 'warning' ? 'warning' : patternOf(word) === 'stripes' ? 'partial' : patternOf(word) === 'solid' ? 'success' : 'neutral';
 
-/** Logos remain package-owned symbols on a light tile, never remote images. */
-function SourceIcon({ id }: { id: string }) {
-  const module = MODULES.find(module => module.id === id);
-  return <IconTile size="sm" variant="outline" className="research-overview-icon">
-    {module?.logo ? <svg aria-hidden="true" focusable="false"><use href={`#logo-${module.logo}`} /></svg>
-      : <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className="research-overview-glyph">
-        {GLYPHS[glyphFor(id)].map(([tag, attributes]: [string, Record<string, string>], index: number) => React.createElement(tag, {
-          key: index,
-          ...Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key.replace(/-([a-z])/g, (_: string, letter: string) => letter.toUpperCase()), value])),
-        }))}
-      </svg>}
-  </IconTile>;
-}
+import { SourceIcon } from './source-icon';
 
 /** This disclosure is deliberately uncontrolled. Polling updates its text without replacing its node/focus. */
 function ProviderUsage({ cost, total, scope }: { cost: any; total: number; scope: string }) {
@@ -253,19 +240,4 @@ export function ResearchOverview({ app, host, hidden }: ViewProps) {
   </section>;
 }
 
-export function ConversationOverview({ app, host, hidden }: ViewProps) {
-  const scope = projectConversation(app.snapshot, app.thread);
-  const counts = outcomeCounts(scope.calls);
-  const reports = scope.digs.flatMap(item => item.reportDetails ?? []);
-  return <section id="panel" className="research-overview research-overview-conversation" hidden={hidden}>
-    <header className="research-overview-heading"><h2 id="panel-scope">{scope.identified ? 'This conversation' : 'Conversation not identified'}</h2><p>Answers and evidence saved alongside this chat.</p></header>
-    <details className="research-overview-conversation-usage" hidden={!scope.identified || (!scope.calls.length && !reports.length)}><summary><span>Provider usage</span><strong>{costShort(scope.cost, scope.calls.length) || 'No calls recorded'}</strong><span>{plural(scope.calls.length, 'retrieval')}</span></summary><section id="panel-figures" aria-label="This conversation’s retrievals and provider cost"><RetainedFigures counts={counts} reports={reports.length} cost={scope.cost} scope="panel" /><p className="research-overview-scope-note">{COST_SCOPE}. {COST_CAVEAT}</p>{scope.otherUnassignedCallCount > 0 && <p className="research-overview-scope-note">Not included: {plural(scope.otherUnassignedCallCount, 'retrieval')} by workers or other conversations that no saved report has claimed yet.</p>}</section></details>
-    <div id="panel-digs" className="research-overview-list">{!scope.identified ? <Frame><FramePanel><p className="research-overview-empty-message">Codex did not identify this conversation to Dig, so the trail cannot pick out its research. Use Library to browse everything.</p></FramePanel></Frame> : scope.digs.length ? scope.digs.map(item => <ResearchRow key={`${app.snapshot.library}:${item.project}:${item.id}`} item={item} app={app} host={host} trail />) : <Frame><FramePanel><p className="research-overview-empty-message">No question has been recorded for this conversation yet. Saved research appears here when it is attributed to this chat.</p></FramePanel></Frame>}</div>
-    <details className="research-overview-unassigned"><summary><span>Unassigned retrievals</span><span>{plural(scope.ownUnassignedCalls.length + scope.otherUnassignedCallCount, 'call')}</span></summary><p className="research-overview-scope-note">Retained calls not yet in a saved report or answer. They do not establish whether any worker is currently active.</p><div id="panel-live">
-        {scope.ownUnassignedCalls.length > 0 && <section className="research-overview-unassigned-group"><h4>This conversation</h4><p>Included in this conversation’s provider usage.</p><RecordedCalls calls={scope.ownUnassignedCalls} app={app} host={host} scope="This conversation" /></section>}
-        {scope.otherUnassignedCallCount > 0 && <section className="research-overview-unassigned-group"><h4>Other conversations or workers</h4><p id="live-caveat">Excluded from this conversation’s totals. A worker’s call is associated with its own conversation until the saved records attribute it to a question.</p><RecordedCalls calls={scope.otherUnassignedCalls} app={app} host={host} scope="Other conversation or worker; excluded from totals" /></section>}
-        {!scope.ownUnassignedCalls.length && !scope.otherUnassignedCallCount && <p className="research-overview-empty-chart">No unassigned retrievals recorded.</p>}
-      </div>
-    </details>
-  </section>;
-}
+export { ConversationActivity as ConversationOverview } from './conversation-activity';
