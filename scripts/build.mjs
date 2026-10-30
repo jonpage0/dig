@@ -15,6 +15,7 @@ for (const manifest of ['package.json', 'plugin/.codex-plugin/plugin.json']) {
 }
 
 await mkdir('plugin/dist', { recursive: true });
+await import('./search-runtime.mjs');
 // Skill icons (agents/openai.yaml icon_small/icon_large) are generated from the one glyph table.
 await mkdir('plugin/assets/skills', { recursive: true });
 for (const name of Object.keys(GLYPHS)) await writeFile(`plugin/assets/skills/${name}.svg`, tileSvg(name));
@@ -90,7 +91,7 @@ for (const root of [...bundled].sort()) {
   else throw new Error(`${pkg.name} is bundled but ships no license file; its notice must travel with the plugin`);
   notices.push(`## ${pkg.name} ${pkg.version}\n\nLicense: ${pkg.license ?? 'see below'}\n\n\`\`\`\`text\n${text.replace(/[ \t]+$/gm, '')}\n\`\`\`\`\n`);
 }
-await writeFile('plugin/THIRD_PARTY_NOTICES.md', `# Third-party notices\n\nDig's bundled server and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).\n\nThe selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.\n\n${notices.join('\n')}`);
+await writeFile('plugin/THIRD_PARTY_NOTICES.md', `# Third-party notices\n\nDig's bundled server and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).\n\nLocal semantic search additionally uses ONNX Runtime Node/Common 1.30.0 (Microsoft, MIT); Search-Runtime-LICENSE and Search-Runtime-ThirdPartyNotices.txt carry its runtime notices. Only the accepted macOS arm64 binding is included.\n\nThe selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.\n\n${notices.join('\n')}`);
 await writeFile('plugin/.mcp.json', `${JSON.stringify({ mcpServers: { dig: {
   command: 'node', args: ['./dist/server.mjs'], cwd: '.', startup_timeout_sec: 30, tool_timeout_sec: 600,
   env_vars: ['DIG_STATE_DIR', 'PAPER_SEARCH_MCP_ENV_FILE', ...moduleEnvironment(ALL_MODULES)],

@@ -22,7 +22,7 @@ Use only this plugin's `dig` MCP server, not another Dig installation, CLI or li
 - `source_info` with `source: "facebook"` before the first retrieval;
 - `scrapecreators_facebook` for public social content;
 - `scrapecreators_facebook_events` for public event discovery and details;
-- `library_list`, `library_read` and `research_save` for evidence and reporting.
+- `library_list`, `library_search`, `library_read` and `research_save` for evidence and reporting.
 
 Pass the absolute `project` on provider and save calls and the assigned `dig` when present. These file the evidence locally and do not reach the provider. Read each tool's schema for its modes and required arguments; do not guess unsupported filters or pagination fields.
 

@@ -75,7 +75,7 @@ export function sourceInfo(config, source) {
       ...(m.helperSkill ? { helperSkillPath: join(packageRoot, 'skills', m.helperSkill, 'SKILL.md') } : {}),
       methods: allMethods.filter(method => method.module === m.id).map(method => ({
         name: method.name, helper: method.helper, skillPath: join(packageRoot, 'skills', method.skill, 'SKILL.md'),
-        tools: method.helper ? ['library_read'] : ['source_info', 'library_list', 'library_read', 'research_save', ...m.tools],
+        tools: method.helper ? ['library_read'] : ['source_info', 'library_list', 'library_search', 'library_read', 'research_save', ...m.tools],
         workerDefault: workerDefault(config, method.name),
       })),
       credentials, credentialGuidance: m.credential ?? 'No API key required', prerequisites,
@@ -186,6 +186,7 @@ const workerFields = agent => {
   };
 };
 export const settingsFields = {
+  search_semantic: { schema: z.boolean(), title: 'Local semantic report search', description: 'Enable BGE-small on this computer. First use downloads about 34 MB plus tokenizer assets. Report text stays local; no embedding API key. Keyword search works while this is off.' },
   library: { schema: z.string().min(1), title: 'Research library', description: 'Absolute directory outside the plugin cache. Changing it selects a library; it does not move research.' },
   keep_raw: { schema: z.boolean(), title: 'Retain original provider responses' },
   worker_model: { schema: z.string().min(1), title: 'Source worker model', description: `The Codex model Dig suggests for source workers, ${WORKER_DEFAULTS.default.model} unless you change it. The conversation chooses each worker’s model and may choose another; Dig does not check that your account offers it. Each method follows this until it has its own suggestion on the Sources & tools page; X judge and X breadth start with their own.` },
@@ -203,14 +204,14 @@ const properties = names => names.map(property => ({ kind: 'property', property 
 const X_SETTINGS = ['x_model', 'x_depth', 'x_web_search', 'x_code_execution'];
 const ownSettings = m => [...(m.id === 'x' ? X_SETTINGS : []), ...METHODS.filter(agent => agent.module === m.id).flatMap(agent => [workerSetting(agent.name, 'model'), workerSetting(agent.name, 'effort')])];
 export const settingsLayout = [
-  { kind: 'group', title: 'Library', items: properties(['library', 'keep_raw']) },
+  { kind: 'group', title: 'Library', items: properties(['library', 'keep_raw', 'search_semantic']) },
   { kind: 'group', title: 'Source workers', items: properties(['worker_model', 'worker_effort']) },
   { kind: 'group', title: 'Sources', items: [...properties(MODULES.filter(m => m.kind !== 'tool').flatMap(m => [sourceSetting(m.id), ...ownSettings(m)])), { kind: 'tool', tool: 'source_readiness', title: 'Check source and tool readiness', description: 'Credential names and local prerequisites for every source and shared tool. Does not call providers.' }] },
   { kind: 'group', title: 'Shared tools', items: properties(MODULES.filter(m => m.kind === 'tool').map(m => sourceSetting(m.id))) },
 ];
 /** Each worker field shows the guidance in effect: its own stored value, else what it inherits. */
 export const settingsValues = c => ({
-  library: c.library, keep_raw: c.keep_raw,
+  library: c.library, keep_raw: c.keep_raw, search_semantic: c.search.semantic,
   ...Object.fromEntries(MODULES.map(m => [sourceSetting(m.id), c.sources.enabled.includes(m.id)])),
   ...Object.fromEntries(Object.entries(c.x).map(([key, value]) => [`x_${key}`, value])),
   ...Object.fromEntries(WORKER_TABLES.flatMap(name => { const { model, effort } = workerGuidance(c, name); return [[workerSetting(name, 'model'), model], [workerSetting(name, 'effort'), effort]]; })),

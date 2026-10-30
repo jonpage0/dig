@@ -34,7 +34,7 @@ export function safeSegment(value, fallback) {
   const cleaned = typeof value === 'string' ? value.trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').slice(0, 120) : '';
   return cleaned || fallback;
 }
-function frontMatter(text) {
+export function frontMatter(text) {
   const values = {};
   for (const line of (/^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '').split('\n')) {
     const match = /^([a-z_]+): (.+)$/.exec(line);

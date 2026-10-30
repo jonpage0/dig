@@ -19,7 +19,7 @@ Use only this plugin's `dig` MCP server:
 
 - `source_info` with `source: "facebook-ads"` before the first retrieval;
 - `facebook_ad_library` for advertiser search, ad search, an advertiser's ads, individual ad details and transcripts;
-- `library_list`, `library_read` and `research_save` for evidence and reports.
+- `library_list`, `library_search`, `library_read` and `research_save` for evidence and reports.
 
 Read the tool schema for supported kinds, filters and pagination. Pass absolute `project` on each provider and save call, and the assigned `dig` when supplied; they are local filing arguments, not provider inputs. Stop if disabled: enablement is the user's choice. The source uses `SCRAPECREATORS_API_KEY` from Dig's `keys.env`; never ask for, accept, copy or print the key. Direct setup to the Sources page outside chat. Presence is not proof the provider accepts the key.
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.0 — 2026-10-29
+
+- Add library_search over full saved report and answer bodies, with file/project/source/date filters, exact passage readback and explicit correction handling.
+- Combine BM25 with optional local BGE-small Q8 embeddings. Keep a rebuildable content-checked cache outside the package; return honest keyword fallback and coverage warnings.
+- Add the existing-authority search_semantic setting, off by default, with pinned integrity-checked model assets and a packaged macOS arm64 CPU runtime. No embedding API or provider retrieval is required.
+
 ## 0.9.4 — 2026-10-29
 
 - Open library now requests host fullscreen from the activity panel. This conversation returns inline; unsupported or refused expansion keeps navigation usable.

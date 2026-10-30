@@ -206,6 +206,10 @@ test('standalone bundle starts outside the repo, exposes native metadata, retain
     const link = new URL(saved.structuredContent.link);
     assert.equal(`${link.protocol}//${link.host}${link.pathname}`, 'codex://plugins/dig@test-market/app/open_library');
     assert.equal(new URL(link.searchParams.get('path'), 'https://dig.invalid').searchParams.get('file'), saved.structuredContent.file);
+    const search = await client.callTool({ name: 'library_search', arguments: { query: 'inspected sample', mode: 'keyword', file: saved.structuredContent.file } });
+    assert.equal(search.structuredContent.status, 'complete'); assert.ok(search.structuredContent.hits.length);
+    const hit = search.structuredContent.hits[0];
+    assert.equal((await client.callTool({ name: 'library_read', arguments: hit.read })).structuredContent.text, hit.excerpt);
     const card = (await client.callTool({ name: 'saved_research', arguments: { file: saved.structuredContent.file } })).structuredContent;
     assert.deepEqual([card.kind, card.label, card.title, card.retrievals], ['report', 'Hacker News report', 'Explicit test identity', 5]);
     assert.equal(card.path, saved.structuredContent.path);

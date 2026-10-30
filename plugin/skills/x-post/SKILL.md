@@ -24,7 +24,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 - Grok's X search, which needs `XAI_API_KEY`: `xsearch`, for what a post's video or images show, and for Grok's reading of the wider conversation when the assignment asks for it;
 - `research_save` with `source: "x"` and `agent: "x-post"`.
 
-Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_read`, and `research_save`.
+Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_search`, `library_read`, and `research_save`.
 
 Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports. When `X_BEARER_TOKEN` is missing or X's API fails, `x_post` can still read a single post through TikHub, and its result says "via TikHub"; the thread, replies, quotes and reposters then need X's API, so say which parts the run could not reach and mark it `partial`.
 

@@ -21,7 +21,7 @@ When an already collected shortlist is burdensome to compare, you may choose the
 
 The source-method skills do not trigger on their own; reach each one through its `skillPath`, as below. A user can still invoke one directly with its plugin-qualified name, such as `$dig:reddit`, and then you run that method. Codex matches plugin skills only by that qualified name, so use it when you suggest one. Every Dig tool returns its complete result in `structuredContent` and only a one-line summary in `content`: a provider call's results are in `structuredContent.text`, and a read's text is in `structuredContent.text` with `nextOffset`.
 
-Use only enabled sources. If the user asks for one that is disabled or not ready, say so and name what is missing; enabling a source is the user's choice in Dig's settings, and credentials are set by the user outside the chat. Never ask for, print or copy a key, and never substitute another source silently. Before paying for fresh research, the `library` skill (`$dig:library`) can show what earlier digs already found.
+Use only enabled sources. If the user asks for one that is disabled or not ready, say so and name what is missing; enabling a source is the user's choice in Dig's settings, and credentials are set by the user outside the chat. Never ask for, print or copy a key, and never substitute another source silently. Use `library_search` to locate passages inside full saved reports/answers (or `file` for one report); inspect coverage/fallback warnings and then read full reports with `library_read`. Search scores are discovery aids, not truth. Before paying for fresh research, the `library` skill (`$dig:library`) can show what earlier digs already found.
 
 ## Show the research alongside the conversation
 

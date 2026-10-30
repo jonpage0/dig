@@ -1,6 +1,6 @@
 # Dig architecture
 
-Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the repository is also `dig`): a bundled Node MCP server, also named `dig`, three native MCP App resources (the library, compact conversation activity and an inline saved-research card), and source-specific skills for ordinary workers or inline use. Version 0.9.4 presents retained research state for human observation and steering while source skills remain the agents’ operating instructions. `src/version.mjs` is the one version source for the server, both views and the preview; the build refuses a package or plugin manifest that disagrees with it.
+Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the repository is also `dig`): a bundled Node MCP server, also named `dig`, three native MCP App resources (the library, compact conversation activity and an inline saved-research card), and source-specific skills for ordinary workers or inline use. Version 0.10.0 presents retained research state for human observation and steering while source skills remain the agents’ operating instructions. `src/version.mjs` is the one version source for the server, both views and the preview; the build refuses a package or plugin manifest that disagrees with it.
 
 ## Boundaries
 
@@ -348,3 +348,9 @@ Direct paper tools add Semantic Scholar snippet/relationship reads and true prov
 The Papers bridge pins the October 2 upstream revision and recognizes both the current patch and the two earlier patches at their original revision before migration. Setup synchronizes the pinned dependency lock. OpenReview joins the enabled search connectors. `papers_sections` reads only PDFs under the existing paper library; its subprocess is limited by CPU/time and by address space on supported POSIX hosts, or sampled resident memory on macOS, where RLIMIT_AS is rejected. A macOS process can briefly exceed the resident-memory threshold between samples. No parser-side network or arbitrary file path is added.
 
 OpenAlex-backed bridge searches retain one billing observation per HTTP response, including unknown transport outcomes. Dig prices each observation independently and preserves a known subtotal if a later page's charge is unknown. This extends the bridge's provider payload only; the stored receipt and report schemas do not change.
+
+## Local report search
+
+`library_search` searches complete report and answer body passages, including code, URLs and audit sections. The [search contract](library-search.md) owns its exact inputs, outputs, chunking, ranking and index fields. Each result includes canonical `library_read` arguments and an exact excerpt; existing containment rules still authorize every read. `library_list` retains its bounded title/Summary discovery behavior.
+
+The local cache lives below the existing state directory, namespaced by canonical library path and content fingerprints. It is not research authority or provider billing. `[search].semantic` defaults false; its native field `search_semantic` uses the existing settings file and explains the pinned one-time download. BM25 is always available. Enabled semantics uses local BGE-small Q8, direct ONNX CPU inference and a pure-JS tokenizer, four threads maximum with serialized embedding work and idle disposal. Unsupported platforms or unavailable semantics return explicit partial keyword fallback. macOS arm64 is the initially accepted native runtime; no runtime code is downloaded at search time.

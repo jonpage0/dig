@@ -19,6 +19,7 @@ import { createSchemas } from './providers/schemas.ts';
 import { executeSource } from './providers/outcome.ts';
 import { knownSecrets, redactText, redactValue, redactRecord } from './providers/secrets.ts';
 import { TOPIC_VOLATILITIES } from './providers/library/files.ts';
+import { searchLibrary } from './search/search.mjs';
 import { VERSION } from './version.mjs';
 import { ANSWER_STATUSES } from './status.mjs';
 import { createCallActivity } from './call-activity.mjs';
@@ -83,7 +84,7 @@ registerAppTool(server, 'open_trail', {
 registerAppTool(server, 'library_revision', {
   title: 'Library revision', description: 'Cheap change fingerprint for the visible Dig view.', inputSchema: {}, annotations: readOnly,
   _meta: { ui: { resourceUri: URI, visibility: ['app'] } },
-}, async () => { const c = await loadConfig(); return reply({ revision: createHash('sha256').update(JSON.stringify([VERSION, packageReplaced(), callActivity.revision, await libraryRevision(c), c.library, await libraryFolder(c), c.keep_raw, c.sources.enabled, c.x, c.workers, environmentPresence()])).digest('hex').slice(0, 24) }); });
+}, async () => { const c = await loadConfig(); return reply({ revision: createHash('sha256').update(JSON.stringify([VERSION, packageReplaced(), callActivity.revision, await libraryRevision(c), c.library, await libraryFolder(c), c.keep_raw, c.sources.enabled, c.x, c.workers, c.search, environmentPresence()])).digest('hex').slice(0, 24) }); });
 registerAppTool(server, 'library_snapshot', { title: 'Library view', description: 'Full read-only snapshot for the Dig interface.', inputSchema: {}, annotations: readOnly, _meta: { ui: { resourceUri: URI, visibility: ['app'] } } }, async () => reply(await snapshot()));
 // The Sources page's keys.env buttons. Edit keys.env writes only empty NAME= lines and the host opens the file; Use
 // existing key copies a credential Codex's environment already has, server-side. Values never pass through the view,
@@ -117,6 +118,13 @@ server.registerTool('library_list', {
   const nextOffset = offset + limit < items.length ? offset + limit : null;
   return reply({ library: data.library, configPath: data.configPath, items: page, total: items.length, nextOffset, live: live.slice(0, limit), liveTotal: live.length }, `${page.length} of ${items.length} saved questions${nextOffset === null ? '' : `; continue at offset ${nextOffset}`}; ${live.length} unclaimed retrievals.`);
 });
+const searchHit = z.object({file:z.string(),path:z.string(),project:z.string(),dig:z.string(),kind:z.enum(['report','answer']),source:z.enum(reportSources(ALL_MODULES)).nullable(),method:z.string().nullable(),title:z.string(),question:z.string(),at:z.string().nullable(),superseded:z.boolean(),heading:z.string().nullable(),start:z.number().int().nonnegative(),end:z.number().int().positive(),excerpt:z.string().max(2400),score:z.number().nonnegative().finite(),matched_by:z.array(z.enum(['keyword','semantic'])).min(1),read:z.object({file:z.string(),offset:z.number().int().nonnegative(),limit:z.number().int().positive()}).strict()}).strict();
+server.registerTool('library_search', {
+ title:'Search inside retained reports', description:'Find exact text and semantic passages inside full saved reports and answers. Use file to search within one report, or project/dig/source/date filters. Results are discovery excerpts with exact library_read arguments. Read full reports and load-bearing originals before relying on them. Local cache only; hybrid falls back explicitly to keyword when semantics is unavailable.',
+ inputSchema:z.object({query:z.string().trim().min(1).max(2000),mode:z.enum(['hybrid','keyword']).default('hybrid'),file:z.string().min(1).max(4096).optional(),project:project.optional(),dig:z.string().min(1).max(200).optional(),source:z.enum(reportSources(ALL_MODULES)).optional(),after:z.string().optional(),before:z.string().optional(),include_superseded:z.boolean().default(false),limit:z.number().int().min(1).max(30).default(10)}).strict(),
+ outputSchema:z.object({status:z.enum(['complete','partial']),mode_requested:z.enum(['hybrid','keyword']),mode_used:z.enum(['hybrid','keyword']),library:z.string(),index_revision:z.string().regex(/^[a-f0-9]{64}$/).nullable(),coverage:z.object({eligible_files:z.number().int().nonnegative(),searched_files:z.number().int().nonnegative(),skipped_files:z.number().int().nonnegative(),semantic_passages:z.number().int().nonnegative(),lexical_passages:z.number().int().nonnegative()}).strict(),warnings:z.array(z.object({code:z.enum(['semantic_disabled','semantic_unavailable','unreadable_file','invalid_metadata','correction_graph','changed_during_search','cache_unavailable']),message:z.string().min(1)}).strict()),hits:z.array(searchHit).max(30)}).strict(),
+ annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
+}, async(args,extra)=>{const result=await searchLibrary(await loadConfig(),args,{signal:extra.signal});return {...reply(result,JSON.stringify(result)),structuredContent:result};});
 server.registerTool('library_read', {
   title: 'Read retained research', description: 'Read a report, answer, transcript, receipt or original response. Follow nextOffset until null. Paths must resolve inside the active library.',
   inputSchema: { file: z.string().min(1).describe('Library-relative file reference or absolute Primary artifact path inside the active library.'), offset: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(100000).default(60000) }, outputSchema: OUTPUT.read, annotations: readOnly,

@@ -475,9 +475,9 @@ test('Sources gives each source a card holding its own settings, Settings holds 
   assert.deepEqual([inOwnSettings('x_judge_worker_model'), inOwnSettings('x_model')], [false, true]);
   const onSources = names(list);
   ui.$('nav-settings').onclick(); await settle();
-  assert.deepEqual(names(ui.$('settings-fields')), ['library', 'keep_raw', 'worker_model', 'worker_effort']);
+  assert.deepEqual(names(ui.$('settings-fields')), ['library', 'keep_raw', 'search_semantic', 'worker_model', 'worker_effort']);
   // Between them the two pages show every setting exactly once.
-  assert.deepEqual([...onSources, 'library', 'keep_raw', 'worker_model', 'worker_effort'].sort(), Object.keys(settingsDocument(await loadConfig(state)).schema.properties).sort());
+  assert.deepEqual([...onSources, 'library', 'keep_raw', 'search_semantic', 'worker_model', 'worker_effort'].sort(), Object.keys(settingsDocument(await loadConfig(state)).schema.properties).sort());
 
   ui.$('nav-sources').onclick(); await settle();
   const exa = named(list, 'exa_enabled'); const [, exaWords, exaState] = exa.parentNode.children;
