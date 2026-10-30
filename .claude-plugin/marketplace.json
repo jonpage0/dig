@@ -1,0 +1,17 @@
+{
+  "name": "dig",
+  "owner": {
+    "name": "Jon Page"
+  },
+  "metadata": {
+    "description": "Dig: source-specific research with a retained-evidence library."
+  },
+  "plugins": [
+    {
+      "name": "dig",
+      "source": "./plugin",
+      "description": "Source-specific research tools and methods with a native retained-evidence library.",
+      "category": "research"
+    }
+  ]
+}

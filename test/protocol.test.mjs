@@ -311,3 +311,15 @@ test('a later install that removes this version’s folder leaves the running se
     assert.notEqual(await revision(), fingerprint, 'An open view notices the replacement');
   } finally { await client.close(); }
 });
+
+// Claude Code's plugin cache has Codex's layout, but a codex:// link cannot open there.
+test('a server launched by Claude Code emits no codex:// links', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dig-native-claude-'));
+  const { client } = await startServer(root, { DIG_HOST: 'claude-code' });
+  try {
+    const saved = await client.callTool({ name: 'research_save', arguments: { project: root, source: 'hackernews', content: report, question: 'A Claude Code question' } });
+    assert.equal(saved.structuredContent.link, null);
+    assert.ok(saved.structuredContent.path.startsWith(join(await realpath(root), 'state')), saved.structuredContent.path);
+    assert.equal((await client.callTool({ name: 'library_read', arguments: { file: saved.structuredContent.file } })).structuredContent.link, null);
+  } finally { await client.close(); }
+});

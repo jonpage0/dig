@@ -1,6 +1,7 @@
 ---
 name: facebook
 description: Public Facebook profiles, posts, groups, videos, comments and events through ScrapeCreators, using the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # Public Facebook research

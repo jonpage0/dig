@@ -1,6 +1,7 @@
 ---
 name: china-social
 description: Mainland-China social evidence across Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou and WeChat through TikHub, with an explicit Just One fallback and careful translation, using the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # China-social research
@@ -25,7 +26,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_search`, `library_read`, and `research_save`.
 
-Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. The primary backend needs `TIKHUB_API_KEY`; `JUSTONE_API_KEY` matters only for the explicit fallback. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
+Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. The primary backend needs `TIKHUB_API_KEY`; `JUSTONE_API_KEY` matters only for the explicit fallback. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (in Codex, Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
 
 `provider: "auto"` selects TikHub, the primary backend. `provider: "justone"` is an explicit credential-gated fallback through Just One API; its cross-platform search can be cached or incomplete for uncommon terms. It uses the official GET/query-token contract, never automatic failover. Initial requests require `justone_start` and `justone_end` in `yyyy-MM-dd HH:mm:ss` format: the provider's prose requires them despite optional OpenAPI flags. Keep the caller's intended date window explicit; do not invent an all-time boundary. Common sort/time intent and platform-specific verticals are unsupported by Just One; only those explicit date boundaries apply. A missing `JUSTONE_API_KEY` makes this backend unavailable, not an empty search.
 

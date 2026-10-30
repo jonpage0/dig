@@ -1,6 +1,7 @@
 ---
 name: github
 description: Discover public GitHub repositories for a need across established, emerging and adjacent projects, inspect their real activity and source, and rank them with explicit reasons, through the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # GitHub discovery and evaluation
@@ -27,7 +28,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_search`, `library_read`, and `research_save`.
 
-Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a token; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
+Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a token; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (in Codex, Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
 
 All three tools reach GitHub natively and read public repositories only. They authenticate with `GH_TOKEN`, then `GITHUB_TOKEN`, then a logged-in `gh`; each result names which one it used or says `ANONYMOUS`. Anonymous mode has much lower limits and no collaboration samples; report it as a coverage limit, never as missing evidence about a repository. Search has its own limit of roughly 30 requests per minute; a rate-limit result names the reset time — wait for it or narrow the plan, and record the gap.
 

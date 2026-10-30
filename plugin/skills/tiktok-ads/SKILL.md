@@ -1,6 +1,7 @@
 ---
 name: tiktok-ads
 description: TikTok advertising, from Creative Center top ads with CTR, percentile and retention analytics (TikHub) to the public Ad Library of what a named advertiser is running (ScrapeCreators), using the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # TikTok ads research
@@ -33,7 +34,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_search`, `library_read`, and `research_save`.
 
-Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. The Creative Center tools need `TIKHUB_API_KEY`; the Ad Library needs `SCRAPECREATORS_API_KEY`. One missing key leaves the other dataset usable; report the unavailable one as a coverage gap. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
+Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. The Creative Center tools need `TIKHUB_API_KEY`; the Ad Library needs `SCRAPECREATORS_API_KEY`. One missing key leaves the other dataset usable; report the unavailable one as a coverage gap. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (in Codex, Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
 
 Every TikHub call is metered; `tiktok_ads_detail` makes one request plus two for analytics and one for similar ads. Every ScrapeCreators call costs one credit. Keep `limit` small until a first page shows the filters are right.
 

@@ -1,0 +1,21 @@
+{
+  "name": "dig",
+  "version": "0.11.0",
+  "description": "Source-specific research tools and methods with a native retained-evidence library.",
+  "author": {
+    "name": "Jon Page"
+  },
+  "homepage": "https://github.com/jonpage0/dig",
+  "repository": "https://github.com/jonpage0/dig",
+  "license": "MIT",
+  "keywords": ["research", "evidence", "mcp"],
+  "mcpServers": {
+    "dig": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/server.mjs"],
+      "env": {
+        "DIG_HOST": "claude-code"
+      }
+    }
+  }
+}

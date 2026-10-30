@@ -1,6 +1,6 @@
 # Dig architecture
 
-Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the repository is also `dig`): a bundled Node MCP server, also named `dig`, three native MCP App resources (the library, compact conversation activity and an inline saved-research card), and source-specific skills for ordinary workers or inline use. Version 0.10.1 presents retained research state for human observation and steering while source skills remain the agents’ operating instructions. `src/version.mjs` is the one version source for the server, both views and the preview; the build refuses a package or plugin manifest that disagrees with it.
+Dig is a self-contained local plugin for Codex and Claude Code named `dig` (plugin id `dig@dig`; the repository is also `dig`): a bundled Node MCP server, also named `dig`, three native MCP App resources (the library, compact conversation activity and an inline saved-research card), and source-specific skills for ordinary workers or inline use. Version 0.11.0 presents retained research state for human observation and steering while source skills remain the agents’ operating instructions. `src/version.mjs` is the one version source for the server, both views and the preview; the build refuses a package or plugin manifest that disagrees with it.
 
 ## Boundaries
 
@@ -22,6 +22,16 @@ Dig is a self-contained local Codex plugin named `dig` (plugin id `dig@dig`; the
 - The 26 source-method skills and the YouTube helper set `policy.allow_implicit_invocation: false`. Codex then leaves them out of the model's skill list; the designed route is `dig` → `source_info` → each method's `skillPath`, and workers load skills by path. `dig`, `library`, `setup`, `video-analyze` and `evidence-rank` are listed to the model.
 - An explicit mention still loads a hidden skill in full. Codex matches a plugin skill only by its qualified name, such as `$dig:reddit`, so the skills suggest that form.
 - `setup` is the manifest's `extensions.com.openai.onboardingSkill`. It reads `settings.read` and `source_info`, asks which sources to enable, changes only the fields the user chose through `settings.update`, and explains each remaining step. It never handles a key and runs the Papers bridge only on the user's yes.
+
+### Claude Code
+
+- One package serves both hosts. Codex reads `plugin/.codex-plugin/plugin.json` and `plugin/.mcp.json`; Claude Code reads `plugin/.claude-plugin/plugin.json`, whose inline `dig` server runs `node ${CLAUDE_PLUGIN_ROOT}/dist/server.mjs` with `DIG_HOST=claude-code`. That entry overrides the same-named root `.mcp.json` server, whose relative path does not resolve under Claude. The repository's `.claude-plugin/marketplace.json` names the marketplace `dig` and points at `./plugin`, so Claude's plugin id is also `dig@dig`. The build checks the Claude manifest's version with the others.
+- Each host launches its own stdio process over the same `<state>` settings, `keys.env` and library. Claude passes its environment to the server, so `DIG_STATE_DIR` isolates state there too. Claude runs a plugin from a local-directory marketplace in place rather than from a copy.
+- Claude Code hands the model a tool's `structuredContent` in place of `content` when it is present and at most about 1 MiB of JSON (8 MiB for a tool naming a `ui://` resource); above that it keeps only `content`. Dig's bounded reads and pages stay well below that limit.
+- The 26 source-method skills and the YouTube helper also set `disable-model-invocation: true`, Claude's equivalent of the Codex policy above; Codex tolerates the key. Claude lists `dig`, `library`, `setup`, `video-analyze` and `evidence-rank` to the model, and a user runs a hidden method as `/dig:<method>`.
+- Claude Code renders no MCP App resources, and `DIG_HOST=claude-code` makes every `link` null because a `codex://` link cannot open there; skills cite the report's absolute `path` instead and skip `open_trail`, `open_library` and `show_research`. T3's Claude provider likewise has no MCP Apps bridge as of its checked source, while its Codex provider does.
+- Claude supplies no `_meta.threadId`, so every Claude conversation's calls share `session-unavailable` (see the attribution limits below). The server instructions and the `dig` skill therefore have a Claude thread call `dig_start` before the first provider call, even for one source, and pass its `dig` to every call and save.
+- `workerDefault` names Codex models. A Claude thread spawns an ordinary general-purpose subagent with a Claude model of its choosing; there is no Claude-specific worker setting.
 
 ### Optional connected-computer routing
 
@@ -256,7 +266,7 @@ The source selection determines the federated Papers call's policy before execut
 
 ### Conversation identity and attribution limits
 
-`session` is the filesystem-safe calling Codex `_meta.threadId`, including a worker's own thread. Missing identity is `session-unavailable`; it is never guessed from recent work.
+`session` is the filesystem-safe calling Codex `_meta.threadId`, including a worker's own thread. Missing identity, as in every Claude Code call, is `session-unavailable`; it is never guessed from recent work.
 
 A receipt that names its `dig` belongs to that dig, whichever conversation made the call, so its cost counts toward the dig even when no report is ever saved with it, as when a worker stops before saving. A receipt naming a dig that is no longer in the library stays live activity.
 

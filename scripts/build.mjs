@@ -9,7 +9,7 @@ import { GLYPHS, tileSvg } from '../src/glyphs.mjs';
 import { VERSION } from '../src/version.mjs';
 import { logoSprite } from './logo-sprite.mjs';
 
-for (const manifest of ['package.json', 'plugin/.codex-plugin/plugin.json']) {
+for (const manifest of ['package.json', 'plugin/.codex-plugin/plugin.json', 'plugin/.claude-plugin/plugin.json']) {
   const { version } = JSON.parse(await readFile(manifest, 'utf8'));
   if (version !== VERSION) throw new Error(`${manifest} is version ${version}; src/version.mjs is ${VERSION}`);
 }

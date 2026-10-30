@@ -1,6 +1,7 @@
 ---
 name: hackernews
 description: Hacker News stories, comments, Ask HN and Show HN, for developer and startup community discussion, through the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # Hacker News research

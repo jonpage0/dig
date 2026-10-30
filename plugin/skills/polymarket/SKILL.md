@@ -1,6 +1,7 @@
 ---
 name: polymarket
 description: Polymarket prediction markets, with outcome-aware odds, volume, liquidity and movement read as market beliefs, not facts, through the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # Polymarket research

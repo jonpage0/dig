@@ -1,6 +1,7 @@
 ---
 name: commerce
 description: Amazon products, deals, Best Sellers charts and seller profiles through Scrape.do, plus review samples and up to 365 days of price and rank history through Nexscope, using the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # Amazon commerce research
@@ -29,7 +30,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_search`, `library_read`, and `research_save`.
 
-Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. Scrape.do needs `SCRAPE_DO_API_KEY` or `SCRAPEDO_API_TOKEN`; reviews and history need `NEXSCOPE_API_KEY`. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
+Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. Scrape.do needs `SCRAPE_DO_API_KEY` or `SCRAPEDO_API_TOKEN`; reviews and history need `NEXSCOPE_API_KEY`. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (in Codex, Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
 
 Scrape.do supplies current-state Amazon snapshots; each successful call costs one Scrape.do credit and failed deal, chart, or seller requests are documented as not charged. ZIP-level marketplaces are localized to a fixed example ZIP; country-level marketplaces such as amazon.com.mx receive no ZIP localization, and every result states which applies. Nexscope supplies retrospective events for price, Buy Box, rank, seller count, rating, review count, and monthly sold, and sampled review text. Nexscope is not an official daily Amazon feed: its timestamps have no timezone, missing `-1` values are omitted, marketplace or sales signals can be estimates, and its review list is a per-star sample rather than the complete review history. Each tool prints the provider-reported credit cost when the provider returns one.
 

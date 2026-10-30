@@ -1,6 +1,7 @@
 ---
 name: deepwiki
 description: Architecture, module responsibilities and public APIs of one named public GitHub repository, through DeepWiki's generated documentation and focused Q&A, using the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # DeepWiki repository research

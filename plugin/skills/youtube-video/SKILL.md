@@ -1,6 +1,7 @@
 ---
 name: youtube-video
 description: Analyze supplied public YouTube videos with Gemini 3.8 Flash as the standard, use Gemini 4 Argon for harder reasoning, and save timestamped findings in a complete YouTube source report.
+disable-model-invocation: true
 ---
 
 # YouTube video analysis
@@ -30,7 +31,7 @@ Check YouTube enablement and `GEMINI_API_KEY` presence before analysis. This met
 2. **Prefer Gemini 4 Argon for harder reasoning** when Flash leaves a consequential inference, comparison or explanation unresolved. State the remaining question; do not run Argon merely to repeat an adequate answer.
 3. **Use Glimpse for a specific visual need or the user's choice.** The separate `video_analyze` tool can inspect a focused clip when object changes, fine visual details or temporal behavior warrant it. Read `source_info` for `video` and its `helperSkillPath` first. This is an explicit supporting-tool exception, not a second report source.
 
-The initiating thread's Codex worker model and Gemini's provider model are different choices. Worker guidance never selects the Gemini model automatically. The order above is guidance, not a mandatory chain or permission to exceed the user's paid scope.
+The initiating thread's worker model and Gemini's provider model are different choices. Worker guidance never selects the Gemini model automatically. The order above is guidance, not a mandatory chain or permission to exceed the user's paid scope.
 
 Frame what the analysis must establish. Prefer the smallest relevant interval; use the whole video when the question requires its full arc. Preserve the original URL and any requested interval. URL timestamps are not a reliable substitute for explicit clip parameters. For several videos, label each one and require every timestamped claim to identify its video. Differences between models analyzing the same footage are not independent corroboration.
 

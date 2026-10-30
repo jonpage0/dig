@@ -7,7 +7,7 @@ description: Suggest a reading order for a burdensome shortlist of supplied evid
 
 Use this optional helper when comparing an already collected shortlist would be burdensome. A few obvious candidates usually need no extra call. Nothing invokes the tool automatically when it is enabled, and no research method depends on it.
 
-Read `source_info` with `source: "evidence"` and use this plugin's `evidence_rank`. It is a shared tool with no source report or worker model configuration. Respect enablement and the user's paid-provider scope. The user supplies `TYPESAFE_API_KEY` outside chat in Dig's existing keys.env; never ask for or expose its value. The provider model is pinned to `jev-1.13.0`, independently of the Codex model running this conversation.
+Read `source_info` with `source: "evidence"` and use this plugin's `evidence_rank`. It is a shared tool with no source report or worker model configuration. Respect enablement and the user's paid-provider scope. The user supplies `TYPESAFE_API_KEY` outside chat in Dig's existing keys.env; never ask for or expose its value. The provider model is pinned to `jev-1.13.0`, independently of the model running this conversation.
 
 ## Supply evidence, not retrieval instructions
 

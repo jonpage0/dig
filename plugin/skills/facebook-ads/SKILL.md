@@ -1,6 +1,7 @@
 ---
 name: facebook-ads
 description: Meta Ad Library advertisers, ads, creative text, run dates and available transcripts through ScrapeCreators, using the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # Facebook ads research

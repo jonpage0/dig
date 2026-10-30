@@ -1,6 +1,7 @@
 ---
 name: x-post
 description: The X post reader, which reads one or more supplied X posts exactly and gathers what surrounds them (thread, replies, quotes, reposters, author, spread over time and earlier instances), through the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # X post

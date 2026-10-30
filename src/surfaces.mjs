@@ -17,9 +17,11 @@ export const catalog = createCatalog(MODULES.map(({ id, label }) => ({ id, label
 /**
  * The installed plugin's identity, read from Codex's cache layout `<cache>/<marketplace>/<plugin>/<version>/`.
  * Codex passes no plugin id to the server; outside an installed copy (tests, preview, the repository) this is
- * null and Dig emits no links rather than guessing a marketplace.
+ * null and Dig emits no links rather than guessing a marketplace. Claude Code's plugin cache has the same layout but
+ * cannot open codex:// links; its manifest launches the server with DIG_HOST=claude-code, which also yields null.
  */
-export function pluginIdentity(root = packageRoot) {
+export function pluginIdentity(root = packageRoot, env = process.env) {
+  if (env.DIG_HOST === 'claude-code') return null;
   const parts = root.replace(/[\\/]+$/, '').split(sep);
   const at = parts.lastIndexOf('cache');
   if (at < 2 || parts[at - 1] !== 'plugins' || parts.length !== at + 4) return null;

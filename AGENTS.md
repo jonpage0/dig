@@ -12,4 +12,4 @@ Keep the UI visually aligned with OpenAI's native plugin conventions: shared MCP
 
 Test with isolated state (`DIG_STATE_DIR`). Never edit installed plugin cache files. Provider calls can cost money: beyond `npm run smoke`'s one keyless call, make live provider calls only with the maintainer's go-ahead.
 
-Run `npm run check` for offline verification and `npm run smoke` for one isolated keyless call. A release bumps the version in `package.json`, `plugin/.codex-plugin/plugin.json` and `src/version.mjs` (the build refuses a mismatch) and adds a `CHANGELOG.md` entry. Native rendering, conversation-side placement and restart recovery need separate host evidence.
+Run `npm run check` for offline verification and `npm run smoke` for one isolated keyless call. A release bumps the version in `package.json`, `plugin/.codex-plugin/plugin.json`, `plugin/.claude-plugin/plugin.json` and `src/version.mjs` (the build refuses a mismatch) and adds a `CHANGELOG.md` entry. Native rendering, conversation-side placement and restart recovery need separate host evidence.

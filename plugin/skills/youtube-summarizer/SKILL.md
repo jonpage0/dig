@@ -1,6 +1,7 @@
 ---
 name: youtube-summarizer
 description: Helper for the native Dig plugin's YouTube method that reads one complete YouTube transcript and writes only its sibling -summary.md file with transcript-grounded analysis and quotes.
+disable-model-invocation: true
 ---
 
 # YouTube transcript summarizer

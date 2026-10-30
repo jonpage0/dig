@@ -1,6 +1,6 @@
 # Dig
 
-Research across many sources for Codex in the ChatGPT desktop app. See what has been found, what is still uncertain, what it used, and where to steer next.
+Research across many sources for Codex in the ChatGPT desktop app, and in Claude Code. See what has been found, what is still uncertain, what it used, and where to steer next.
 
 <p align="center">
 <img src="docs/logos/exa.svg" width="32" height="32" alt="Exa" title="Exa">
@@ -45,6 +45,17 @@ Refresh the plugin connection, then type **`$dig:setup`** in a new conversation.
 > **Try it with no keys:** Hacker News, DeepWiki and Polymarket work without any account.
 
 For a first run, enable Hacker News and ask: **“Use Dig and Hacker News to research how developers approach local-first software. Show the strongest findings, disagreements and remaining gaps. Save the supporting research and suggest a useful next question.”** Open **Overview**, choose the question, and use its saved findings and coverage to decide what to ask next.
+
+### Claude Code
+
+Dig also runs in [Claude Code](https://code.claude.com) 2.1 or newer, with the same Node 22 requirement:
+
+```sh
+claude plugin marketplace add jonpage0/dig
+claude plugin install dig@dig
+```
+
+Start a new session and type **`/dig:setup`**. Run one method directly with `/dig:hackernews`, `/dig:reddit` and so on, or ask a research question with `/dig:dig`. Claude Code and Codex share the same settings, keys and research library. Claude Code shows no Dig views: research, saved reports, library search and reading work through the conversation, and the library is the folder under `~/.local/share/dig`. Update with `claude plugin marketplace update dig` then `claude plugin update dig@dig`; remove with `claude plugin uninstall dig@dig`.
 
 ## What Dig does
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.0 — 2026-10-30
+
+- Add Claude Code support from the same package: a Claude plugin manifest launches the existing server from the plugin root, and a Claude marketplace names it `dig@dig`. Settings, keys and the research library are shared with Codex.
+- Make the shared skills host-aware: `/dig:<method>` in Claude Code, Claude worker-model choice, and no Dig views or `codex://` links there. Source methods stay out of Claude's automatic skill list, as they do in Codex.
+- In hosts without a conversation id, start the dig before the first provider call and pass it to every call, so receipts stay with their report.
+
 ## 0.10.1 — 2026-10-30
 
 - Make inline result cards compact: short title, save time, source, scoped provider cost and one Open action. Keep findings in the conversation and full research in Dig.

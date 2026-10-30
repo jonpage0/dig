@@ -1,6 +1,7 @@
 ---
 name: youtube
 description: YouTube videos researched through their full saved transcripts, for tutorials, reviews, demos and what creators actually said, through the Dig plugin's tools.
+disable-model-invocation: true
 ---
 
 # YouTube transcript research
@@ -27,7 +28,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_search`, `library_read`, and `research_save`.
 
-Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. `OPENCODE_RESEARCH_GOOGLE_API_KEY` is optional; `yt-dlp` is needed for local captions and keyless search. The separate video method uses optional `GEMINI_API_KEY`; this transcript method does not need it. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (Dig's Sources & tools page can copy one Codex's environment already has), and installs `yt-dlp` themselves. A missing prerequisite is a coverage limit, not evidence that videos or transcripts do not exist. Read readiness per route; the overall source can be partly configured while this method works.
+Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. `OPENCODE_RESEARCH_GOOGLE_API_KEY` is optional; `yt-dlp` is needed for local captions and keyless search. The separate video method uses optional `GEMINI_API_KEY`; this transcript method does not need it. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (in Codex, Dig's Sources & tools page can copy one Codex's environment already has), and installs `yt-dlp` themselves. A missing prerequisite is a coverage limit, not evidence that videos or transcripts do not exist. Read readiness per route; the overall source can be partly configured while this method works.
 
 Use `library_read` or the host's own full-file reader and file discovery for transcript and summary artifacts, and the host's file writer for the one permitted summary recovery write. Never use shell redirection.
 
