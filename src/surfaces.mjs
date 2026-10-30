@@ -70,7 +70,7 @@ export function savedResearch(snapshot, file, text) {
   if (answer) {
     const reports = Array.isArray(meta.reports) ? meta.reports.map(name => catalog.fileLabel(String(name))) : [];
     return {
-      ...common, kind: 'answer', file, title: item.title, label: 'Answer', glyph: 'shovel', status: answerWord(meta.status) ?? (typeof meta.status === 'string' ? meta.status : null), savedAt: meta.finished_at ?? null,
+      ...common, kind: 'answer', file, title: displayTitle(item.title, 'composed', [], reportParts(body).headings.find(h => h.depth === 1)?.text), label: 'Answer', glyph: 'shovel', status: answerWord(meta.status) ?? (typeof meta.status === 'string' ? meta.status : null), savedAt: meta.finished_at ?? null,
       summary: trim(firstParagraph(body), 280), reports, retrievals: item.calls.length, link: openInDig(file),
     };
   }

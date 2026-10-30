@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, writeFile, symlink, mkdir, rename, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, symlink, mkdir, rename, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { loadConfig, updateConfig } from '../src/config.mjs';
 import { startDig, recordCall, saveReport, finishDig, listLibrary, readLibraryFile, projectFolder } from '../src/library.mjs';
 import { savedResearch } from '../src/surfaces.mjs';
@@ -347,4 +347,33 @@ test('a rejected settings update leaves the authority unchanged', async () => {
   const disabled = await updateConfig({ papers_enabled: false, x_depth: 'max' }, state);
   assert.deepEqual(disabled.sources.enabled, ['hackernews']);
   assert.equal((await loadConfig(state)).x.depth, 'max');
+});
+
+test('composed answers accept same-dig report references and use the saved short H1 without rewriting questions', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-answer-references-')); t.after(() => rm(state, { recursive: true, force: true }));
+  const config = await loadConfig(state);
+  const question = 'Which indoor venue maps, capture systems and wearable positioning components fit our detailed requirements?';
+  const group = await startDig(config, state, question);
+  const saved = [];
+  for (let i = 0; i < 3; i++) saved.push(await saveReport(config, { project: state, dig: group.dig, source: 'hackernews', content: report }));
+  const base = await realpath(config.library);
+  const ref = path => relative(base, path);
+  const answer = await finishDig(config, { project: state, dig: group.dig, answer: '# Indoor maps and wearable positioning\n\nBounded findings.', status: 'answered', reports: [saved[0].report, ref(saved[1].path), saved[2].path] });
+  const text = await readFile(answer.path, 'utf8');
+  assert.deepEqual(frontMatter(text).meta.reports, ['hackernews.md', 'hackernews-2.md', 'hackernews-3.md']);
+  const snapshot = await listLibrary(config), item = snapshot.items.find(item => item.id === group.dig);
+  assert.equal(item.title, question); assert.equal(item.displayTitle, 'Indoor maps and wearable positioning');
+  const card = savedResearch(snapshot, item.answer, text);
+  assert.equal(card.title, item.displayTitle); assert.equal(card.question, question);
+  assert.equal(frontMatter(await readFile(join(group.path, 'dig.md'), 'utf8')).meta.question, question);
+});
+
+test('answer references refuse other digs, reserved files and symlinks before writing an answer', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-answer-refusal-')); t.after(() => rm(state, { recursive: true, force: true }));
+  const config = await loadConfig(state), group = await startDig(config, state, 'Selected question'), other = await startDig(config, state, 'Other question');
+  const saved = await saveReport(config, { project: state, dig: other.dig, source: 'hackernews', content: report });
+  await symlink(saved.path, join(group.path, 'hackernews.md'));
+  const finish = reports => finishDig(config, { project: state, dig: group.dig, answer: 'Must not be saved.', status: 'answered', reports });
+  for (const path of [saved.path, relative(await realpath(config.library), saved.path), 'hackernews.md', 'dig.md', '../answer.md']) await assert.rejects(finish([path]));
+  assert.equal(existsSync(join(group.path, 'answer.md')), false);
 });

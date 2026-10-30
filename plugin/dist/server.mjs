@@ -39345,7 +39345,7 @@ var Type = type_exports2;
 // src/server.mjs
 import { readFile as readFile7, realpath as realpath4, stat as stat4 } from "node:fs/promises";
 import { watchFile } from "node:fs";
-import { isAbsolute as isAbsolute6, relative as relative4, resolve as resolve6, dirname as dirname5 } from "node:path";
+import { isAbsolute as isAbsolute6, relative as relative4, resolve as resolve6, dirname as dirname6 } from "node:path";
 import { createHash as createHash4 } from "node:crypto";
 
 // src/config.mjs
@@ -40026,7 +40026,7 @@ function loadKeys(env = process.env, state = stateDirectory(env)) {
 
 // src/library.mjs
 import { mkdir as mkdir2, readFile as readFile2, writeFile as writeFile2, appendFile, readdir, realpath, stat, lstat } from "node:fs/promises";
-import { resolve as resolve2, relative, isAbsolute as isAbsolute2, join as join2, basename as basename2, sep } from "node:path";
+import { resolve as resolve2, relative, isAbsolute as isAbsolute2, join as join2, basename as basename2, dirname, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 
 // src/providers/library/cost.ts
@@ -41454,8 +41454,9 @@ var time4 = (value) => {
   const at = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(at) ? at : null;
 };
-function displayTitle(question, mode, reports) {
-  if (mode !== "single" || !reports.length) return question;
+function displayTitle(question, mode, reports, answerTitle) {
+  if (mode !== "single") return typeof answerTitle === "string" && answerTitle.trim() && answerTitle.trim().length <= 140 && answerTitle.trim().length < question.length ? answerTitle.trim() : question;
+  if (!reports.length) return question;
   const report = reports.at(-1);
   const title = typeof report.title === "string" ? report.title.trim() : "";
   if (title && title !== question && title.length <= 140 && title.length < question.length && title !== `${sourceLabels[report.source]} research`) return title;
@@ -41649,10 +41650,21 @@ async function finishDig(config3, { project: project3, dig: dig2, answer, status
   const folder = await assertDig(config3, project3, dig2);
   const metadata = frontMatter2(await readFile2(join2(folder, "dig.md"), "utf8"));
   if (metadata.mode !== "composed") throw new Error("dig_finish answers only digs created with dig_start");
+  const names = [];
   for (const report of reports) {
-    if (!reportName(report)) throw new Error("Invalid report reference");
-    await readFile2(await contained(config3, join2(folder, report)));
+    let name2 = report;
+    if (typeof report === "string" && !reportName(report)) {
+      const path3 = await contained(config3, isAbsolute2(report) ? report : resolve2(config3.library, report));
+      if (dirname(path3) !== folder) throw new Error("Report reference must belong to this dig");
+      name2 = basename2(path3);
+    }
+    if (!reportName(name2)) throw new Error("reports must name saved source reports in this dig, for example github.md");
+    const target = await contained(config3, join2(folder, name2));
+    if (dirname(target) !== folder) throw new Error("Report reference must belong to this dig");
+    await readFile2(target);
+    names.push(name2);
   }
+  reports = names;
   if (!ANSWER_STATUSES.includes(status)) throw new Error(`status must be one of ${ANSWER_STATUSES.join(", ")}`);
   if (status === "answered" && reports.length === 0) throw new Error("An answered dig must name its source reports");
   const path2 = join2(folder, "answer.md");
@@ -41716,7 +41728,7 @@ async function listLibrary(config3) {
       item.sources = [...new Set(reports.map((r2) => r2.source).filter(Boolean))];
       item.methods = [...new Set(reports.map((r2) => r2.method).filter(Boolean))];
       item.mode = meta3.mode;
-      item.displayTitle = displayTitle(item.title, item.mode, reports);
+      item.displayTitle = displayTitle(item.title, item.mode, reports, reportParts(answerText.replace(/^---\n[\s\S]*?\n---\n/, "")).headings.find((h2) => h2.depth === 1)?.text);
       item.planned = Array.isArray(meta3.planned) ? meta3.planned : [];
       item.refreshes = meta3.refreshes ?? null;
       item.reportDetails = reports.map((r2) => ({ file: `${prefix}/${r2.name}`, source: r2.source, method: r2.method, supersedes: r2.supersedes, summary: r2.summary, at: r2.at, status: typeof r2.status === "string" ? r2.status : null }));
@@ -42133,7 +42145,7 @@ var settingsValues = (c) => ({
 
 // src/surfaces.mjs
 import { existsSync as existsSync2, readdirSync, readFileSync as readFileSync3 } from "node:fs";
-import { dirname, join as join6, sep as sep2 } from "node:path";
+import { dirname as dirname2, join as join6, sep as sep2 } from "node:path";
 
 // src/ui/catalog.mjs
 var REPORT_FILE = /^(.+?)(?:-(\d+))?\.md$/;
@@ -42228,7 +42240,7 @@ function packageReplaced(root = packageRoot) {
   if (existsSync2(join6(root, ".codex-plugin", "plugin.json"))) return null;
   let version2 = null;
   try {
-    version2 = readdirSync(dirname(root.replace(/[\\/]+$/, ""))).filter((name2) => VERSION_FOLDER.test(name2)).reduce((best, name2) => best ? newer(best, name2) : name2, null);
+    version2 = readdirSync(dirname2(root.replace(/[\\/]+$/, ""))).filter((name2) => VERSION_FOLDER.test(name2)).reduce((best, name2) => best ? newer(best, name2) : name2, null);
   } catch {
     version2 = null;
   }
@@ -42263,7 +42275,7 @@ function savedResearch(snapshot2, file2, text6) {
       ...common,
       kind: "answer",
       file: file2,
-      title: item.title,
+      title: displayTitle(item.title, "composed", [], reportParts(body).headings.find((h2) => h2.depth === 1)?.text),
       label: "Answer",
       glyph: "shovel",
       status: answerWord(meta3.status) ?? (typeof meta3.status === "string" ? meta3.status : null),
@@ -60228,7 +60240,7 @@ function createSchemas(T3, sources = reportSources(ALL_MODULES)) {
 
 // src/search/search.mjs
 import { readdir as readdir3, realpath as realpath3, readFile as readFile6, mkdir as mkdir5, writeFile as writeFile5, rename as rename4, rm as rm3, stat as stat3 } from "node:fs/promises";
-import { join as join13, resolve as resolve5, dirname as dirname4, isAbsolute as isAbsolute5 } from "node:path";
+import { join as join13, resolve as resolve5, dirname as dirname5, isAbsolute as isAbsolute5 } from "node:path";
 import { randomUUID as randomUUID4 } from "node:crypto";
 
 // node_modules/@huggingface/tokenizers/dist/tokenizers.mjs
@@ -93907,7 +93919,7 @@ var manifest_default = {
 // src/search/engine.mjs
 import { createHash as createHash3, randomUUID as randomUUID3 } from "node:crypto";
 import { readFile as readFile5, mkdir as mkdir4, writeFile as writeFile4, rename as rename3, rm as rm2, readdir as readdir2 } from "node:fs/promises";
-import { dirname as dirname3, join as join12 } from "node:path";
+import { dirname as dirname4, join as join12 } from "node:path";
 var MODEL = { id: manifest_default.model, revision: manifest_default.revision, dtype: "q8", pooling: "cls", dimensions: 384, normalized: true };
 var tokenizer = new Tokenizer_default(tokenizer_default, tokenizer_config_default);
 var hash2 = (value) => createHash3("sha256").update(value).digest("hex");
@@ -93980,7 +93992,7 @@ async function installAssets(state, signal) {
     signal?.throwIfAborted();
     const path2 = join12(base2, asset.path);
     if (await verified(path2, asset)) continue;
-    await mkdir4(dirname3(path2), { recursive: true });
+    await mkdir4(dirname4(path2), { recursive: true });
     const response = await fetch(asset.url, { signal });
     if (!response.ok) throw Error("Model asset download failed: HTTP " + response.status);
     const bytes2 = Buffer.from(await response.arrayBuffer());
@@ -94167,7 +94179,7 @@ async function searchLibrary(config3, args, { signal, embedding = embed, checkCo
     if (!docs.some((d3) => d3.file === named.file)) throw Error("file must name a report or answer matching this scope");
     selected = selected.filter((d3) => d3.file === named.file);
   }
-  const eligible = selected.length, state = dirname4(config3.path), directory2 = join13(state, "search/indexes", hash2(library3)), indexPath = join13(directory2, "index.json");
+  const eligible = selected.length, state = dirname5(config3.path), directory2 = join13(state, "search/indexes", hash2(library3)), indexPath = join13(directory2, "index.json");
   let old = null;
   try {
     old = cacheSchema.parse(JSON.parse(await readFile6(indexPath, "utf8")));
@@ -94295,7 +94307,7 @@ async function searchLibrary(config3, args, { signal, embedding = embed, checkCo
 }
 
 // src/version.mjs
-var VERSION2 = "0.10.0";
+var VERSION2 = "0.10.1";
 
 // src/call-activity.mjs
 import { randomUUID as randomUUID5 } from "node:crypto";
@@ -94499,8 +94511,8 @@ K3(server, "saved_research", {
   return reply(redactValue({ ...savedResearch(await snapshot(c), read5.file, read5.text), path: read5.path, link: openInDig(read5.path) }, knownSecrets()));
 });
 K3(server, "show_research", {
-  title: "Present research findings",
-  description: "Initiating thread: show a native insight card for an existing saved report or answer after reading it and its load-bearing originals. Supply 1\u20136 concise interpretations with retained evidence references; the server derives identity, status and cost. Use for page opportunities, video observations, disagreements or other useful findings. Shape/reference validation does not establish truth. Read-only: no save, provider request or action execution. Draft next steps remain unsent until the user chooses to send. Prefer this when explanation adds value; routine saves already show a compact card.",
+  title: "Present saved research",
+  description: "Initiating thread: attach validated interpretations to an existing saved report or answer after reading it and its load-bearing originals. The inline card shows only a short title, date, sources, scoped cost and Open. Explain findings in the native conversation; interpretations remain in structuredContent. Supply 1\u20136 insights with retained evidence references. Read-only: no save, provider request or action execution. Shape/reference validation does not establish truth.",
   inputSchema: PRESENTATION_INPUT,
   outputSchema: PRESENTATION_OUTPUT,
   annotations: readOnly,
@@ -94621,7 +94633,7 @@ Open in Dig: ${open}` : ""}`);
 });
 K3(server, "dig_finish", {
   description: "Optional initiating-thread answer for a grouped dig. Read every relied-on report and check load-bearing original evidence first. Writes answer.md once; does not invoke a composer. status says whether the answer settles the question; a failed search or unavailable source is a limit to state in the answer, not a reason for partly-answered. Returns an Open in Dig link.",
-  inputSchema: { project: project2, dig, answer: external_exports.string().min(1), status: external_exports.enum(ANSWER_STATUSES).describe("answered: the question is answered (name the reports it relies on). partly-answered: part of the question is still open. unanswered: the question is not answered."), reports: external_exports.array(external_exports.string()) },
+  inputSchema: { project: project2, dig, answer: external_exports.string().min(1), status: external_exports.enum(ANSWER_STATUSES).describe("answered: the question is answered (name the reports it relies on). partly-answered: part of the question is still open. unanswered: the question is not answered."), reports: external_exports.array(external_exports.string()).describe("Saved source reports in this dig: report filenames (github.md), library-relative references, or absolute saved paths. The server verifies same-dig membership and stores filenames.") },
   outputSchema: OUTPUT.finish,
   annotations: localWrite,
   _meta: { ui: { resourceUri: CARD_URI } }
@@ -94657,7 +94669,7 @@ extensions.settings.register({
 });
 extensions.mentions.setHandler(async ({ query }) => ({ items: mentionItems(await snapshot(), query) }));
 var initialConfig = await initializeConfig();
-await cleanupSearchTemps(dirname5(initialConfig.path));
+await cleanupSearchTemps(dirname6(initialConfig.path));
 syncSources(initialConfig);
 watchFile(initialConfig.path, { persistent: false, interval: 500 }, () => loadConfig().then(syncSources).catch(() => {
   for (const { registered: registered2 } of sourceTools.values()) registered2.disable();

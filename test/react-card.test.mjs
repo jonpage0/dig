@@ -1,7 +1,7 @@
 import { test, afterEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
-import { cardDetails, digLink, readRetained, savedResearchNextStep, webLink } from '../src/frontend/card/model.ts';
+import { cardDetails, compactTitle, digLink, readRetained, webLink } from '../src/frontend/card/model.ts';
 
 const window = new Window({ url: 'http://localhost/?preview=1' });
 for (const name of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'DocumentFragment', 'MutationObserver', 'ResizeObserver', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame']) {
@@ -26,14 +26,7 @@ const card = overrides => ({
   summary: 'A saved summary.', retrievals: 3, glyph: 'search', link: null,
   cost: { byUnit: { USD: 0.03, credits: 2, 'Scrape.do credits': 4 }, unknownCalls: 1, freeCalls: 0, totalCalls: 3, scope: 'report' },
   findings: [], contradictions: [], followUps: [], schemaWarnings: [],
-  insights: [{
-    title: 'Answer the cancellation question',
-    statement: 'The competing page answers fees and timing; the owned page does not.',
-    details: [{ label: 'Query → AI answer', value: 'Answer points to a competitor.', url: 'https://example.org/refunds' }, { label: 'Owned page', value: 'Terms do not answer the cancellation case.' }],
-    evidence: [{ file: raw, path: '/library/raw.json', label: 'Retained AI answer', link: null }],
-    limits: ['One answer does not establish a stable ranking.'],
-    nextStep: { label: 'Draft a cancellation section', prompt: 'Help draft the cancellation section using this retained report.' },
-  }], ...overrides,
+  insights: [], ...overrides,
 });
 function fakeHost(overrides = {}) {
   const calls = [], drafts = [], links = [], files = [];
@@ -41,7 +34,7 @@ function fakeHost(overrides = {}) {
   const host = {
     preview: false, calls, drafts, links, files,
     start: async () => {}, dispose() {}, getContext: () => ({}), readDeepLink: () => null,
-    canOpenFile: () => true, canDraft: () => true,
+    canOpenFile: () => true, canDraft: () => true, requestDisplayMode: async () => null,
     subscribeResult(callback) { subscriber = callback; return () => { subscriber = null; }; },
     subscribeActivation: () => () => {},
     emit: value => subscriber?.(value),
@@ -63,222 +56,6 @@ const buttonName = element => { const clone = element.cloneNode(true); for (cons
 const button = label => { const found = buttons().find(element => buttonName(element) === label); assert.ok(found, `Missing button ${label}`); return found; };
 async function click(label) { await act(async () => { const target = button(label); target.focus(); target.click(); }); await settle(); }
 const body = () => document.body.textContent;
-async function inspectEvidence() { await click('Findings & evidence'); await click('Read evidence'); }
-
-test('inline card keeps action and separate costs visible without a provider call or automatic draft', async () => {
-  const host = fakeHost();
-  await render(host);
-  assert.match(body(), /Answer the cancellation question/);
-  assert.match(body(), /Draft a cancellation section/);
-  assert.match(body(), /Known provider subtotal/);
-  assert.match(body(), /\$0\.0300/);
-  assert.match(body(), /2 ScrapeCreators credits/);
-  assert.match(body(), /4 Scrape\.do credits/);
-  assert.match(body(), /Presented limitationOne answer does not establish/);
-  assert.deepEqual(host.calls, []); assert.deepEqual(host.drafts, []);
-  await click('Usage details');
-  assert.match(body(), /total unknown/);
-  assert.match(body(), /1 of 3 tool calls incompletely priced/);
-  assert.match(body(), /Includes only calls attributed to this report/);
-});
-
-test('the save card reads existing research only and labels saved author assessments', async () => {
-  const host = fakeHost({ call: async (name, args) => {
-    host.calls.push({ name, args });
-    return { structuredContent: card({ insights: [], findings: ['A reported finding.'], confidence: 'high', evidenceGrade: 'direct', followUps: ['Verify the page.'] }) };
-  } });
-  await render(host, { structuredContent: { file, path: '/library/report.md' } });
-  assert.deepEqual(host.calls, [{ name: 'saved_research', args: { file: '/library/report.md' } }]);
-  assert.match(body(), /A saved summary/);
-  await click('Findings & evidence');
-  assert.match(body(), /A reported finding/);
-  await click('Report author’s assessment');
-  assert.match(body(), /Author-reported confidence: high/);
-  assert.match(body(), /Verify the page/);
-  assert.equal(host.drafts.length, 0);
-});
-
-test('insight details use fixed text rendering and refuse unsafe external navigation', async () => {
-  const host = fakeHost();
-  const data = card();
-  data.insights[0].statement = '<img src=x onerror="globalThis.pwned=true"> & <script>bad()</script>';
-  data.insights[0].details.push({ label: 'Untrusted URL', value: '<b>literal</b>', url: 'javascript:alert(1)' });
-  await render(host, { file, card: data });
-  assert.equal(document.querySelector('img,script'), null);
-  assert.match(body(), /<script>bad\(\)<\/script>/);
-  await click('Findings & evidence');
-  assert.match(body(), /<b>literal<\/b>/);
-  assert.equal(buttons().filter(element => element.textContent === 'Open page').length, 1);
-  await click('Open page');
-  assert.deepEqual(host.links, ['https://example.org/refunds']);
-});
-
-test('new tool results supersede late saved-research reads and dismiss old evidence', async () => {
-  const pending = new Map();
-  const host = fakeHost({ call: (name, args) => new Promise(resolve => { pending.set(args.file, resolve); }) });
-  await render(host, { file });
-  const next = 'project/digs/next/youtube.md';
-  await act(async () => host.emit({ structuredContent: { file: next, card: card({ file: next, title: 'New report', insights: [], findings: ['Newest finding.'] }) } }));
-  await act(async () => pending.get(file)(card()));
-  assert.match(body(), /New report/);
-  await click('Findings & evidence');
-  assert.match(body(), /Newest finding/);
-  assert.doesNotMatch(body(), /Answer the cancellation question/);
-});
-
-test('selected retained evidence reads all pages and remains plain text', async () => {
-  const first = '{"first":"<b>literal</b>",';
-  const last = '"last":1}';
-  const host = fakeHost({ call: async (name, args) => {
-    host.calls.push({ name, args });
-    return { structuredContent: { file: raw, path: '/library/raw.json', offset: args.offset, totalCharacters: first.length + last.length,
-      text: args.offset === 0 ? first : last, nextOffset: args.offset === 0 ? first.length : null } };
-  } });
-  await render(host);
-  await inspectEvidence();
-  assert.deepEqual(host.calls, [
-    { name: 'library_read', args: { file: '/library/raw.json', offset: 0, limit: 60000 } },
-    { name: 'library_read', args: { file: '/library/raw.json', offset: first.length, limit: 60000 } },
-  ]);
-  assert.match(document.querySelector('pre').textContent, /\{"first":"<b>literal<\/b>","last":1\}/);
-  assert.equal(document.querySelector('pre b'), null);
-  assert.match(body(), /Complete retained file/);
-  await click('Open file');
-  assert.deepEqual(host.files, ['/library/raw.json']);
-});
-
-test('closing evidence prevents a delayed page from appearing or fetching another page', async () => {
-  let finish;
-  const host = fakeHost({ call: (name, args) => { host.calls.push({ name, args }); return new Promise(resolve => { finish = resolve; }); } });
-  await render(host);
-  await inspectEvidence();
-  await click('Close dialog');
-  await act(async () => finish({ file: raw, text: 'STALE ORIGINAL', offset: 0, nextOffset: 60, totalCharacters: 100 }));
-  assert.doesNotMatch(body(), /STALE ORIGINAL/);
-  assert.equal(host.calls.length, 1);
-});
-
-test('missing raw text is an explicit read failure and not an empty finding', async () => {
-  const host = fakeHost({ call: async () => { throw new Error('Retained original was not found.'); } });
-  await render(host);
-  await inspectEvidence();
-  assert.match(body(), /could not be read completely/);
-  assert.match(body(), /Retained original was not found/);
-  assert.doesNotMatch(body(), /Complete retained file|No matches/);
-});
-
-test('draft preview is inert; an explicit action requests an unsent draft and reports failure honestly', async () => {
-  const host = fakeHost({ draft: async prompt => { host.drafts.push(prompt); throw new Error('Host refused.'); } });
-  await render(host);
-  await click('Review next step');
-  assert.equal(host.drafts.length, 0); assert.equal(host.calls.length, 0);
-  assert.match(body(), /does not send a message or start research/);
-  await click('Draft in composer');
-  assert.deepEqual(host.drafts, ['Help draft the cancellation section using this retained report.']);
-  assert.match(body(), /composer draft was not confirmed/);
-  assert.doesNotMatch(body(), /Draft placed in the composer/);
-});
-
-test('preview and missing host capabilities offer copy rather than pretending to draft', async () => {
-  const host = fakeHost({ preview: true, canDraft: () => false, canOpenFile: () => false });
-  await render(host);
-  await click('Review next step');
-  assert.equal(buttons().some(element => element.textContent === 'Draft in composer'), false);
-  assert.match(body(), /Composer drafts are unavailable here/);
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
-  await click('Copy draft');
-  assert.match(body(), /selected for manual copying/);
-  const field = document.querySelector('textarea');
-  assert.equal(field.selectionStart, 0); assert.equal(field.selectionEnd, field.value.length);
-  assert.equal(host.drafts.length, 0);
-});
-
-test('unknown costs and an empty finding do not become zero or invented conclusions', async () => {
-  const host = fakeHost();
-  await render(host, { file, card: card({ insights: [], findings: [], cost: { byUnit: {}, unknownCalls: 3, freeCalls: 0, totalCalls: 3, scope: 'report' } }) });
-  assert.match(body(), /Cost not reported/);
-  await click('Findings & evidence');
-  assert.match(body(), /No finding was supplied/);
-  assert.doesNotMatch(body(), /\$0|No charge recorded/);
-  await click('Inspect research');
-  assert.match(body(), /could not be read completely/);
-});
-
-test('a rejected native report link opens the same canonical file in the retained reader', async () => {
-  const text = '# Retained report\nThe original research remains readable.';
-  const host = fakeHost({
-    openLink: async url => { host.links.push(url); throw new Error('Unsupported link scheme.'); },
-    call: async (name, args) => {
-      host.calls.push({name,args});
-      return {file,path:'/library/report.md',text,offset:0,nextOffset:null,totalCharacters:text.length};
-    },
-  });
-  const link = 'codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport';
-  await render(host,{file,path:'/library/report.md',card:card({link})});
-  await click('Inspect research');
-  assert.deepEqual(host.links,[link]);
-  assert.deepEqual(host.calls,[{name:'library_read',args:{file:'/library/report.md',offset:0,limit:60000}}]);
-  assert.match(document.querySelector('pre').textContent,/The original research remains readable/);
-  assert.match(body(),/Complete retained file/);
-  assert.doesNotMatch(body(),/Unable to open the link/);
-});
-
-test('accepted native navigation and rejected external pages do not open the fallback reader', async () => {
-  const link='codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport';
-  const host=fakeHost({openLink:async url=>{
-    host.links.push(url);
-    if(url.startsWith('https:')) throw new Error('External page refused.');
-  }});
-  await render(host,{file,path:'/library/report.md',card:card({link})});
-  await click('Inspect research');
-  assert.deepEqual(host.calls,[]);
-  assert.equal(document.querySelector('[role="dialog"]'),null);
-  await click('Findings & evidence');
-  await click('Open page');
-  assert.match(body(),/Unable to open the link: External page refused/);
-  assert.deepEqual(host.calls,[]);
-  assert.equal(document.querySelector('pre'),null);
-});
-
-test('a late rejected native report link does not reopen a replaced card or displace a newer dialog', async () => {
-  const pending=[];
-  const host=fakeHost({openLink:()=>new Promise((_resolve,reject)=>pending.push(reject))});
-  const link='codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport';
-  await render(host,{file,path:'/library/report.md',card:card({link})});
-  await click('Inspect research');
-  const next='project/digs/next/youtube.md';
-  await act(async()=>host.emit({structuredContent:{file:next,path:'/library/next.md',card:card({file:next,path:'/library/next.md',title:'New research',link})}}));
-  await act(async()=>pending[0](new Error('Old link rejected.')));
-  assert.match(body(),/New research/);
-  assert.equal(document.querySelector('[role="dialog"]'),null);
-  assert.deepEqual(host.calls,[]);
-
-  await click('Inspect research');
-  await click('Usage details');
-  await act(async()=>pending[1](new Error('Earlier navigation rejected.')));
-  assert.match(document.querySelector('[role="dialog"]').textContent,/Retained provider usage/);
-  assert.equal(document.querySelector('pre'),null);
-  assert.deepEqual(host.calls,[]);
-});
-
-test('a failed save without a file does not claim that research was saved', async () => {
-  const host = fakeHost();
-  await render(host, { isError: true, content: [{ type: 'text', text: 'The save did not complete.' }] });
-  assert.match(body(), /The save did not complete/);
-  assert.doesNotMatch(body(), /Saved report|Saved answer|Full report/);
-  assert.deepEqual(host.calls, []);
-});
-
-test('additional insights and report contradictions remain available without crowding the first finding', async () => {
-  const data = card({ contradictions: ['A source disagrees with this interpretation.'] });
-  data.insights.push({ title: 'Second finding', statement: 'Another bounded result.', details: [], evidence: [{ file, label: 'Saved report' }], limits: [] });
-  await render(fakeHost(), { file, card: data });
-  assert.doesNotMatch(body(), /Another bounded result/);
-  await click('Findings & evidence');
-  assert.match(body(), /Another bounded result/);
-  await click('Report author’s assessment');
-  assert.match(body(), /A source disagrees with this interpretation/);
-});
 
 test('bounded evidence reading rejects inconsistent pagination and mismatched files', async () => {
   await assert.rejects(() => readRetained(async () => ({ file: 'wrong.md', text: 'wrong', offset: 0, nextOffset: null }), raw, () => true, () => {}), /unexpected evidence page/);
@@ -330,12 +107,12 @@ test('a known card path refuses details from the same relative file in another l
 test('an old card requests its absolute evidence path after an active-library switch', async () => {
   const host = fakeHost({ call: async (name, args) => {
     host.calls.push({ name, args });
-    if (args.file === '/library/raw.json') throw new Error('This file is outside the selected library.');
+    if (args.file === '/library/report.md') throw new Error('This file is outside the selected library.');
     return { file: raw, path: `/library-B/${raw}`, text: 'FOREIGN EVIDENCE', offset: 0, nextOffset: null, totalCharacters: 16 };
   } });
   await render(host);
-  await inspectEvidence();
-  assert.deepEqual(host.calls, [{ name: 'library_read', args: { file: '/library/raw.json', offset: 0, limit: 60000 } }]);
+  await click('Open');
+  assert.deepEqual(host.calls, [{ name: 'library_read', args: { file: '/library/report.md', offset: 0, limit: 60000 } }]);
   assert.match(body(), /outside the selected library/);
   assert.doesNotMatch(body(), /FOREIGN EVIDENCE|Complete retained file/);
 });
@@ -348,134 +125,92 @@ test('retained read refuses a changed total even when file and canonical path ma
   assert.deepEqual(pages, ['AAA']);
 });
 
-test('a saved failed report separates the save event from the author assessment and keeps scope visible', async () => {
-  await render(fakeHost(), { file, card: card({ status: 'failed', insights: [], findings: [], followUps: ['Try the documented endpoint.'] }) });
-  assert.match(document.querySelector('.insight-header').textContent, /Report saved/);
-  assert.doesNotMatch(document.querySelector('.insight-header').textContent, /failed/);
-  assert.match(document.querySelector('.insight-assessment-line').textContent, /Report author’s assessmentfailed/);
-  assert.match(document.querySelector('.insight-usage').textContent, /This report3 retained calls/);
-  assert.match(document.querySelector('.insight-usage').textContent, /1 of 3 calls unpriced/);
-  assert.match(body(), /Follow-up recordedTry the documented endpoint/);
-  assert.equal(buttons().some(element => /pause|cancel|resume|start research/i.test(buttonName(element))), false);
-});
 
-test('saved answers use dig costs and answer status without claiming full completion', async () => {
-  await render(fakeHost(), { file, card: card({ kind: 'answer', label: 'Answer', status: 'partly answered', insights: [], reports: ['Exa', 'DataForSEO'],
-    cost: { byUnit: {}, unknownCalls: 2, freeCalls: 1, totalCalls: 3, scope: 'dig' } }) });
-  assert.match(document.querySelector('.insight-header').textContent, /Answer saved/);
-  assert.match(document.querySelector('.insight-assessment-line').textContent, /Answer statuspartly answered/);
-  assert.match(document.querySelector('.insight-usage').textContent, /This dig3 retained calls/);
-  assert.match(body(), /From the saved answer/);
-  await click('Findings & evidence');
-  assert.match(body(), /Reports cited by this answerExaDataForSEO/);
-});
-
-test('plain saved cards propose a review draft anchored to the question and canonical file without executing it', async () => {
-  const host = fakeHost();
-  await render(host, { file, card: card({ insights: [], findings: [] }) });
-  assert.match(body(), /Review coverage and choose what to do next/);
+test('result cards show compact identity, sources, time and separate provider costs with one Open button', async () => {
+  const host = fakeHost(); await render(host);
+  assert.match(body(), /Make the cancellation policy clear/);
+  assert.match(body(), /DataForSEO/); assert.match(body(), /Oct 20/);
+  assert.match(body(), /\$0\.0300/); assert.match(body(), /2 ScrapeCreators credits/); assert.match(body(), /4 Scrape\.do credits/); assert.match(body(), /unpriced/);
+  assert.match(document.querySelector('.insight-cost').title, /This report.*subtotal.*total unknown/);
+  assert.deepEqual(buttons().map(buttonName), ['Open']);
+  assert.doesNotMatch(body(), /A saved summary|cancellation section|What came back|Findings|next step|One answer does not establish/);
   assert.deepEqual(host.calls, []); assert.deepEqual(host.drafts, []);
-  await click('Review next step');
-  const prompt = document.querySelector('textarea').value;
-  assert.match(prompt, /How can this site answer the customer question\?/);
-  assert.match(prompt, /Retained file: \/library\/report\.md/);
-  assert.match(prompt, /Use retained research first/);
-  assert.deepEqual(host.drafts, []);
-  await click('Draft in composer');
-  assert.deepEqual(host.drafts, [prompt]);
-  assert.match(body(), /Nothing was sent/);
 });
 
-test('explicit insights without a next step do not acquire a fabricated proposed action', async () => {
-  const data = card(); delete data.insights[0].nextStep;
-  await render(fakeHost(), { file, card: data });
-  assert.equal(buttons().some(element => buttonName(element) === 'Review next step'), false);
-  assert.doesNotMatch(body(), /Review coverage and choose/);
-  assert.ok(button('Inspect research'));
-  assert.equal(savedResearchNextStep(card({ path: undefined })), null);
+test('save cards read existing metadata only; answers show cited sources and dig-scoped costs', async () => {
+  const host = fakeHost({call: async (name,args) => {host.calls.push({name,args});return card({kind:'answer',label:'Answer',reports:['GitHub','Exa','GitHub'],insights:[],cost:{byUnit:{USD:.03},unknownCalls:0,freeCalls:0,totalCalls:3,scope:'dig'}});}});
+  await render(host,{structuredContent:{file,path:'/library/report.md'}});
+  assert.deepEqual(host.calls,[{name:'saved_research',args:{file:'/library/report.md'}}]);
+  assert.match(body(),/Answer savedGitHub \+ Exa/);
+  assert.match(document.querySelector('.insight-cost').title,/This dig/);
+  assert.deepEqual(buttons().map(buttonName),['Open']);
 });
 
-test('a failed refresh of the same saved file preserves known state and localizes the error', async () => {
-  let fail;
-  const host = fakeHost({ call: () => new Promise((_resolve, reject) => { fail = reject; }) });
-  await render(host);
-  await act(async () => host.emit({ structuredContent: { file, path: '/library/report.md' } }));
-  assert.match(body(), /Reading saved research/);
-  assert.match(document.querySelector('.insight-header').textContent, /Report saved/);
-  assert.match(document.querySelector('.insight-usage').textContent, /3 retained calls/);
-  await act(async () => fail(new Error('The selected library is unavailable.')));
-  assert.match(body(), /Previously loaded research remains visible/);
-  assert.match(body(), /The selected library is unavailable/);
-  assert.match(body(), /The competing page answers fees and timing/);
-  assert.match(document.querySelector('.insight-usage').textContent, /\$0\.0300/);
+test('titles are bounded for older servers without exposing summaries or executing markup', async () => {
+  const title='A very long research question about indoor maps, video capture, radio tags and independent positioning. '.repeat(8);
+  await render(fakeHost(),{file,card:card({title})});
+  assert(document.querySelector('h2').textContent.length<=96);
+  assert(document.querySelector('h2').textContent.endsWith('…'));
+  assert.equal(compactTitle('Short title'),'Short title');
+  await act(async()=>root.render(React.createElement(CardApp,{host:fakeHost(),initialResult:{file,card:card({title:'<img src=x onerror=bad()> <script>bad()</script>'})}})));await settle();
+  assert.equal(document.querySelector('img,script'),null);
+  assert.match(body(),/<script>bad\(\)<\/script>/);
 });
 
-test('a late draft confirmation from a closed insight cannot confirm or unlock a newer draft', async () => {
-  const pending = [];
-  const host = fakeHost({ draft: prompt => { host.drafts.push(prompt); return new Promise(resolve => pending.push(resolve)); } });
-  const data = card();
-  data.insights.push({ title: 'Second insight', statement: 'A separate finding.', details: [], evidence: [{ file, path: '/library/report.md', label: 'Report' }], limits: [],
-    nextStep: { label: 'Compare the other page', prompt: 'A different draft for the second insight.' } });
-  await render(host, { file, card: data });
-  await click('Review next step');
-  await click('Draft in composer');
-  assert.equal(button('Creating draft…').disabled, true);
-  await click('Close dialog');
-  await click('Findings & evidence');
-  const second = [...document.querySelectorAll('.insight-detail')].find(section => section.textContent.includes('Second insight'));
-  await act(async () => [...second.querySelectorAll('button')].find(element => buttonName(element) === 'Discuss this finding').click());
-  await settle();
-  assert.equal(button('Draft in composer').disabled, false);
-  assert.equal(document.querySelector('textarea').value, 'A different draft for the second insight.');
-  await click('Draft in composer');
-  await act(async () => pending[0]());
-  assert.doesNotMatch(body(), /Draft placed in the composer|draft was not confirmed/);
-  assert.equal(button('Creating draft…').disabled, true);
-  await act(async () => pending[1]());
-  assert.match(body(), /Draft placed in the composer/);
-  assert.equal(button('Draft in composer').disabled, false);
+test('new tool results supersede delayed card metadata and close old reads', async () => {
+  let finish; const host=fakeHost({call:()=>new Promise(resolve=>{finish=resolve;})});
+  await render(host,{file});
+  const next='project/digs/next/youtube.md';
+  await act(async()=>host.emit({file:next,path:'/library/next.md',card:card({file:next,path:'/library/next.md',title:'New report'})}));
+  await act(async()=>finish(card()));
+  assert.match(body(),/New report/);assert.doesNotMatch(body(),/Make the cancellation policy clear/);
 });
 
-test('a late draft failure cannot attach to a newer tool result or leave its draft busy', async () => {
-  let rejectOld;
-  const host = fakeHost({ draft: () => new Promise((_resolve, reject) => { rejectOld = reject; }) });
-  await render(host);
-  await click('Review next step');
-  await click('Draft in composer');
-  const next = 'project/digs/next/youtube.md';
-  await act(async () => host.emit({ structuredContent: { file: next, path: '/library/next.md', card: card({ file: next, path: '/library/next.md', title: 'New research', insights: [] }) } }));
-  await click('Review next step');
-  assert.equal(button('Draft in composer').disabled, false);
-  await act(async () => rejectOld(new Error('OLD DRAFT FAILURE')));
-  assert.doesNotMatch(body(), /OLD DRAFT FAILURE|draft was not confirmed/);
-  assert.equal(button('Draft in composer').disabled, false);
+test('Open follows the exact native Dig link without a provider call', async () => {
+  const link='codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport';
+  const host=fakeHost();await render(host,{file,path:'/library/report.md',card:card({link})});await click('Open');
+  assert.deepEqual(host.links,[link]);assert.deepEqual(host.calls,[]);assert.equal(document.querySelector('[role="dialog"]'),null);
 });
 
-test('a late copy confirmation does not appear after closing the draft preview', async () => {
-  let finishCopy;
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => new Promise(resolve => { finishCopy = resolve; }) } });
-  await render(fakeHost());
-  await click('Review next step');
-  await click('Copy draft');
-  await click('Close dialog');
-  await act(async () => finishCopy());
-  assert.doesNotMatch(body(), /Draft copied|manual copying/);
-  assert.equal(document.querySelector('textarea'), null);
+test('a rejected Dig link opens the same canonical report completely and asks for fullscreen', async () => {
+  const first='# Report\n',last='Original <b>literal</b> research.';const modes=[];
+  const host=fakeHost({openLink:async url=>{host.links.push(url);throw Error('Unsupported link');},requestDisplayMode:async mode=>{modes.push(mode);return null;},call:async(name,args)=>{host.calls.push({name,args});return{file,path:'/library/report.md',offset:args.offset,text:args.offset?last:first,nextOffset:args.offset?null:first.length,totalCharacters:first.length+last.length};}});
+  await render(host,{file,path:'/library/report.md',card:card({link:'codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport'})});await click('Open');
+  assert.deepEqual(modes,['fullscreen']);assert.deepEqual(host.calls.map(x=>x.args.file),['/library/report.md','/library/report.md']);
+  assert.equal(document.querySelector('pre').textContent,first+last);assert.equal(document.querySelector('pre b'),null);assert.match(body(),/Complete retained file/);
 });
 
-test('a late copy failure cannot select or announce a draft for a newer research result', async () => {
-  let failCopy;
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => new Promise((_resolve, reject) => { failCopy = reject; }) } });
-  const host = fakeHost();
-  await render(host);
-  await click('Review next step');
-  await click('Copy draft');
-  const next = 'project/digs/next/youtube.md';
-  await act(async () => host.emit({ structuredContent: { file: next, path: '/library/next.md', card: card({ file: next, path: '/library/next.md', title: 'New research', insights: [] }) } }));
-  await click('Review next step');
-  const field = document.querySelector('textarea');
-  field.setSelectionRange(2, 2);
-  await act(async () => failCopy(new Error('Old clipboard failure')));
-  assert.equal(field.selectionStart, 2); assert.equal(field.selectionEnd, 2);
-  assert.doesNotMatch(body(), /Automatic copy is unavailable|Draft copied/);
+test('closing the fallback reader ignores a delayed page and stops pagination', async () => {
+  let finish;const host=fakeHost({call:async(name,args)=>{host.calls.push({name,args});return new Promise(resolve=>{finish=resolve;});}});
+  await render(host);await click('Open');await click('Close dialog');
+  await act(async()=>finish({file,path:'/library/report.md',offset:0,text:'stale',nextOffset:5,totalCharacters:10}));
+  assert.doesNotMatch(body(),/stale/);assert.equal(host.calls.length,1);
+});
+
+test('a late navigation failure cannot open a replaced card or displace a newer reader', async () => {
+  const rejected=[];const host=fakeHost({openLink:()=>new Promise((_resolve,reject)=>rejected.push(reject))});
+  const link='codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport';
+  await render(host,{file,path:'/library/report.md',card:card({link})});await click('Open');
+  const next='project/digs/next/youtube.md';await act(async()=>host.emit({file:next,path:'/library/next.md',card:card({file:next,path:'/library/next.md',title:'New research',link})}));
+  await act(async()=>rejected[0](Error('Old navigation rejected')));
+  assert.match(body(),/New research/);assert.equal(document.querySelector('[role="dialog"]'),null);assert.deepEqual(host.calls,[]);
+});
+
+test('a failed save is a small explicit error, with no saved claim or Open action', async () => {
+  const host=fakeHost();await render(host,{isError:true,content:[{type:'text',text:'Invalid report reference'}]});
+  assert.match(body(),/Save failed/);assert.match(body(),/Invalid report reference/);
+  assert.doesNotMatch(body(),/Answer saved|Report saved|Research details are unavailable/);assert.deepEqual(buttons(),[]);assert.deepEqual(host.calls,[]);
+});
+
+test('unpriced calls stay unknown and no calls make no zero-cost claim', async () => {
+  const host=fakeHost();await render(host,{file,card:card({cost:{byUnit:{},unknownCalls:3,totalCalls:3,freeCalls:0,scope:'report'}})});
+  assert.match(body(),/cost unknown/);assert.doesNotMatch(body(),/\$0|no charge/);
+  await act(async()=>host.emit({file,card:card({cost:{byUnit:{},unknownCalls:0,totalCalls:0,freeCalls:0,scope:'report'}})}));
+  assert.equal(document.querySelector('.insight-cost'),null);assert.doesNotMatch(body(),/\$0|no charge/);
+});
+
+test('a failed refresh retains identity only for the same canonical saved file', async () => {
+  let fail;const host=fakeHost({call:()=>new Promise((_resolve,reject)=>{fail=reject;})});await render(host);
+  await act(async()=>host.emit({file,path:'/library/report.md'}));await act(async()=>fail(Error('Library unavailable')));
+  assert.match(body(),/Make the cancellation policy clear/);assert.match(body(),/Library unavailable/);assert.match(body(),/\$0\.0300/);assert.ok(button('Open'));
 });

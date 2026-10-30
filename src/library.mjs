@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile, appendFile, readdir, realpath, stat, lstat } from 'node:fs/promises';
-import { resolve, relative, isAbsolute, join, basename, sep } from 'node:path';
+import { resolve, relative, isAbsolute, join, basename, dirname, sep } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { MODULES, moduleAgents, ALL_MODULES, reportSources } from './providers/modules.ts';
 import { receiptCost } from './providers/library/cost.ts';
@@ -17,9 +17,10 @@ const quote = value => JSON.stringify(value);
 const token = value => typeof value === 'string' && /^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,180}$/.test(value);
 const slug = value => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 65) || 'research';
 const time = value => { const at = typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(at) ? at : null; };
-// A compact view label from metadata already saved with a single-source report. The original question stays title.
-export function displayTitle(question, mode, reports) {
-  if (mode !== 'single' || !reports.length) return question;
+// A compact view label from saved report metadata or a composed answer H1. The original question stays title.
+export function displayTitle(question, mode, reports, answerTitle) {
+  if (mode !== 'single') return typeof answerTitle === 'string' && answerTitle.trim() && answerTitle.trim().length <= 140 && answerTitle.trim().length < question.length ? answerTitle.trim() : question;
+  if (!reports.length) return question;
   const report = reports.at(-1);
   const title = typeof report.title === 'string' ? report.title.trim() : '';
   if (title && title !== question && title.length <= 140 && title.length < question.length && title !== `${sourceLabels[report.source]} research`) return title;
@@ -161,10 +162,23 @@ export async function finishDig(config, { project, dig, answer, status, reports 
   const folder = await assertDig(config, project, dig);
   const metadata = frontMatter(await readFile(join(folder, 'dig.md'), 'utf8'));
   if (metadata.mode !== 'composed') throw new Error('dig_finish answers only digs created with dig_start');
+  const names = [];
   for (const report of reports) {
-    if (!reportName(report)) throw new Error('Invalid report reference');
-    await readFile(await contained(config, join(folder, report)));
+    // Saves and discovery return canonical paths; accept those only for this dig.
+    // The durable answer still stores the established report basenames.
+    let name = report;
+    if (typeof report === 'string' && !reportName(report)) {
+      const path = await contained(config, isAbsolute(report) ? report : resolve(config.library, report));
+      if (dirname(path) !== folder) throw new Error('Report reference must belong to this dig');
+      name = basename(path);
+    }
+    if (!reportName(name)) throw new Error('reports must name saved source reports in this dig, for example github.md');
+    const target = await contained(config, join(folder, name));
+    if (dirname(target) !== folder) throw new Error('Report reference must belong to this dig');
+    await readFile(target);
+    names.push(name);
   }
+  reports = names;
   if (!ANSWER_STATUSES.includes(status)) throw new Error(`status must be one of ${ANSWER_STATUSES.join(', ')}`);
   if (status === 'answered' && reports.length === 0) throw new Error('An answered dig must name its source reports');
   const path = join(folder, 'answer.md');
@@ -214,7 +228,7 @@ export async function listLibrary(config) {
       item.sources = [...new Set(reports.map(r => r.source).filter(Boolean))];
       item.methods = [...new Set(reports.map(r => r.method).filter(Boolean))];
       item.mode = meta.mode;
-      item.displayTitle = displayTitle(item.title, item.mode, reports);
+      item.displayTitle = displayTitle(item.title, item.mode, reports, reportParts(answerText.replace(/^---\n[\s\S]*?\n---\n/, '')).headings.find(h => h.depth === 1)?.text);
       item.planned = Array.isArray(meta.planned) ? meta.planned : [];
       item.refreshes = meta.refreshes ?? null;
       // `status` is the report's own source-card run status as its worker wrote it.

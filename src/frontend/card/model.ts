@@ -39,7 +39,7 @@ export interface ResearchCard {
   schemaWarnings?: string[];
   insights?: Insight[];
 }
-export interface SavedResult { file: string; path?: string; card?: ResearchCard }
+export interface SavedResult { file: string; path?: string; link?: string | null; card?: ResearchCard }
 export interface RetainedRead {
   file: string;
   path?: string;
@@ -90,30 +90,12 @@ export function cardDetails(value: unknown, file: string, path?: string): Resear
   return card;
 }
 
-const strings = (value: unknown, max = 6): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && !!item.trim()).slice(0, max) : [];
-export const cardStrings = strings;
-
-/** A proposed conversation action, never an instruction executed by the card. */
-export function savedResearchNextStep(card: ResearchCard, savedPath?: string): { label: string; prompt: string } | null {
-  const path = card.path ?? savedPath;
-  if (!absolutePath(path)) return null;
-  const kind = card.kind === 'answer' ? 'answer' : 'report';
-  return {
-    label: 'Review coverage and choose what to do next',
-    prompt: `Review the saved ${kind} for this question:\n${card.question || card.title}\n\nRetained file: ${path}\n\nRead the complete ${kind} and the retained evidence needed to assess it. Identify unresolved questions, conflicting evidence and the next useful investigation, if any. Use retained research first. Keep the author's assessments separate from what the evidence establishes.`,
-  };
-}
-
-/** Source-card fields keep their labels and authorship; they do not become inferred evidence relationships. */
-export function presentedInsights(card: ResearchCard): Insight[] {
-  if (Array.isArray(card.insights) && card.insights.length) return card.insights.slice(0, 6);
-  return strings(card.findings).map((statement, index) => ({
-    title: index === 0 ? card.title : `Reported finding ${index + 1}`,
-    statement,
-    details: [],
-    evidence: [{ file: card.file, path: card.path, label: 'Saved report', link: card.link }],
-    limits: index === 0 ? strings(card.contradictions, 4) : [],
-  }));
+/** Bound a view label without changing the original question or saved report. */
+export function compactTitle(value: string): string {
+  const title = value.replace(/\s+/g, ' ').trim();
+  if (title.length <= 96) return title;
+  const prefix = title.slice(0, 95).replace(/\s+\S*$/, '');
+  return (prefix || title.slice(0, 95)).replace(/[\uD800-\uDBFF]$/, '') + '…';
 }
 
 /** Selected evidence is read page by page. The caller decides whether this read still belongs to its view. */

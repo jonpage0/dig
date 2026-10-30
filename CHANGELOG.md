@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1 — 2026-10-30
+
+- Make inline result cards compact: short title, save time, source, scoped provider cost and one Open action. Keep findings in the conversation and full research in Dig.
+- Use composed answers’ saved H1 headings for concise names while preserving original questions. Bound legacy card labels to two lines.
+- Accept same-dig report paths as well as filenames when finishing an answer; validate membership and retain the existing filename-only answer metadata.
+
 ## 0.10.0 — 2026-10-29
 
 - Add library_search over full saved report and answer bodies, with file/project/source/date filters, exact passage readback and explicit correction handling.

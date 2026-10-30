@@ -103,8 +103,8 @@ registerAppTool(server, 'saved_research', {
   _meta: { ui: { resourceUri: CARD_URI, visibility: ['app'] } },
 }, async ({ file }) => { const c = await loadConfig(); const read = await readLibraryFile(c, file, 0, Number.MAX_SAFE_INTEGER); return reply(redactValue({ ...savedResearch(await snapshot(c), read.file, read.text), path: read.path, link: openInDig(read.path) }, knownSecrets())); });
 registerAppTool(server, 'show_research', {
-  title: 'Present research findings',
-  description: 'Initiating thread: show a native insight card for an existing saved report or answer after reading it and its load-bearing originals. Supply 1–6 concise interpretations with retained evidence references; the server derives identity, status and cost. Use for page opportunities, video observations, disagreements or other useful findings. Shape/reference validation does not establish truth. Read-only: no save, provider request or action execution. Draft next steps remain unsent until the user chooses to send. Prefer this when explanation adds value; routine saves already show a compact card.',
+  title: 'Present saved research',
+  description: 'Initiating thread: attach validated interpretations to an existing saved report or answer after reading it and its load-bearing originals. The inline card shows only a short title, date, sources, scoped cost and Open. Explain findings in the native conversation; interpretations remain in structuredContent. Supply 1–6 insights with retained evidence references. Read-only: no save, provider request or action execution. Shape/reference validation does not establish truth.',
   inputSchema: PRESENTATION_INPUT, outputSchema: PRESENTATION_OUTPUT, annotations: readOnly,
   _meta: { ui: { resourceUri: CARD_URI } },
 }, async args => { const c = await loadConfig(); const result = await presentResearch(c, await snapshot(c), redactRecord(args, knownSecrets())); return reply(redactValue(result, knownSecrets()), `Presented ${result.card.insights.length} finding(s) from ${result.card.title}. The full report and original evidence remain authoritative.`); });
@@ -195,7 +195,7 @@ registerAppTool(server, 'research_save', {
 });
 registerAppTool(server, 'dig_finish', {
   description: 'Optional initiating-thread answer for a grouped dig. Read every relied-on report and check load-bearing original evidence first. Writes answer.md once; does not invoke a composer. status says whether the answer settles the question; a failed search or unavailable source is a limit to state in the answer, not a reason for partly-answered. Returns an Open in Dig link.',
-  inputSchema: { project, dig, answer: z.string().min(1), status: z.enum(ANSWER_STATUSES).describe('answered: the question is answered (name the reports it relies on). partly-answered: part of the question is still open. unanswered: the question is not answered.'), reports: z.array(z.string()) }, outputSchema: OUTPUT.finish, annotations: localWrite,
+  inputSchema: { project, dig, answer: z.string().min(1), status: z.enum(ANSWER_STATUSES).describe('answered: the question is answered (name the reports it relies on). partly-answered: part of the question is still open. unanswered: the question is not answered.'), reports: z.array(z.string()).describe('Saved source reports in this dig: report filenames (github.md), library-relative references, or absolute saved paths. The server verifies same-dig membership and stores filenames.') }, outputSchema: OUTPUT.finish, annotations: localWrite,
   _meta: { ui: { resourceUri: CARD_URI } },
 }, async args => {
   const c = await loadConfig();
