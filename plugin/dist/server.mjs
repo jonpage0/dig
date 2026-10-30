@@ -39345,7 +39345,7 @@ var Type = type_exports2;
 // src/server.mjs
 import { readFile as readFile7, realpath as realpath4, stat as stat4 } from "node:fs/promises";
 import { watchFile } from "node:fs";
-import { isAbsolute as isAbsolute6, relative as relative4, resolve as resolve6 } from "node:path";
+import { isAbsolute as isAbsolute6, relative as relative4, resolve as resolve6, dirname as dirname5 } from "node:path";
 import { createHash as createHash4 } from "node:crypto";
 
 // src/config.mjs
@@ -60227,7 +60227,7 @@ function createSchemas(T3, sources = reportSources(ALL_MODULES)) {
 }
 
 // src/search/search.mjs
-import { readdir as readdir2, realpath as realpath3, readFile as readFile6, mkdir as mkdir5, writeFile as writeFile5, rename as rename4, rm as rm3, stat as stat3 } from "node:fs/promises";
+import { readdir as readdir3, realpath as realpath3, readFile as readFile6, mkdir as mkdir5, writeFile as writeFile5, rename as rename4, rm as rm3, stat as stat3 } from "node:fs/promises";
 import { join as join13, resolve as resolve5, dirname as dirname4, isAbsolute as isAbsolute5 } from "node:path";
 import { randomUUID as randomUUID4 } from "node:crypto";
 
@@ -93906,7 +93906,7 @@ var manifest_default = {
 
 // src/search/engine.mjs
 import { createHash as createHash3, randomUUID as randomUUID3 } from "node:crypto";
-import { readFile as readFile5, mkdir as mkdir4, writeFile as writeFile4, rename as rename3, rm as rm2 } from "node:fs/promises";
+import { readFile as readFile5, mkdir as mkdir4, writeFile as writeFile4, rename as rename3, rm as rm2, readdir as readdir2 } from "node:fs/promises";
 import { dirname as dirname3, join as join12 } from "node:path";
 var MODEL = { id: manifest_default.model, revision: manifest_default.revision, dtype: "q8", pooling: "cls", dimensions: 384, normalized: true };
 var tokenizer = new Tokenizer_default(tokenizer_default, tokenizer_config_default);
@@ -93985,7 +93985,7 @@ async function installAssets(state, signal) {
     if (!response.ok) throw Error("Model asset download failed: HTTP " + response.status);
     const bytes2 = Buffer.from(await response.arrayBuffer());
     if (bytes2.length !== asset.bytes || hash2(bytes2) !== asset.sha256) throw Error("Model asset integrity check failed: " + asset.path);
-    const temporary = path2 + "." + randomUUID3() + ".tmp";
+    const temporary = path2 + "." + process.pid + "." + randomUUID3() + ".tmp";
     try {
       await writeFile4(temporary, bytes2, { mode: 384 });
       signal?.throwIfAborted();
@@ -94038,6 +94038,26 @@ function embed(state, text6, signal) {
     }
   });
 }
+async function cleanupSearchTemps(state) {
+  async function walk(directory2) {
+    const entries2 = await readdir2(directory2, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries2) {
+      const path2 = join12(directory2, entry.name);
+      if (entry.isDirectory()) await walk(path2);
+      else if (entry.isFile()) {
+        const match = entry.name.match(/\.(\d+)\.[0-9a-f-]{36}\.tmp$/);
+        if (!match) continue;
+        try {
+          process.kill(Number(match[1]), 0);
+        } catch (error51) {
+          if (error51.code === "ESRCH") await rm2(path2, { force: true }).catch(() => {
+          });
+        }
+      }
+    }
+  }
+  await walk(join12(state, "search"));
+}
 
 // src/search/search.mjs
 var vector = external_exports.array(external_exports.number().finite()).length(384).refine((v3) => Math.abs(Math.hypot(...v3) - 1) < 1e-4).nullable();
@@ -94049,7 +94069,7 @@ var compare = (a, b2) => b2.score - a.score || a.file.localeCompare(b2.file) || 
 var validTime = (value) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 19) === value.slice(0, 19);
 async function dirs(path2) {
   try {
-    return await readdir2(path2, { withFileTypes: true });
+    return await readdir3(path2, { withFileTypes: true });
   } catch (e) {
     if (e.code === "ENOENT") return [];
     throw e;
@@ -94212,7 +94232,7 @@ async function searchLibrary(config3, args, { signal, embedding = embed, checkCo
   const cache = { format: 1, library: library3, generation: randomUUID4(), model: MODEL, chunker: "markdown-v1", files: [...indexed, ...(old?.files ?? []).filter((f2) => !indexed.some((x2) => x2.file === f2.file) && docs.some((d3) => d3.file === f2.file && !d3.error))] };
   let index_revision = null;
   signal?.throwIfAborted();
-  const tmp = join13(directory2, "index." + randomUUID4() + ".tmp");
+  const tmp = join13(directory2, "index." + process.pid + "." + randomUUID4() + ".tmp");
   try {
     await mkdir5(directory2, { recursive: true });
     const bytes2 = JSON.stringify(cache);
@@ -94637,6 +94657,7 @@ extensions.settings.register({
 });
 extensions.mentions.setHandler(async ({ query }) => ({ items: mentionItems(await snapshot(), query) }));
 var initialConfig = await initializeConfig();
+await cleanupSearchTemps(dirname5(initialConfig.path));
 syncSources(initialConfig);
 watchFile(initialConfig.path, { persistent: false, interval: 500 }, () => loadConfig().then(syncSources).catch(() => {
   for (const { registered: registered2 } of sourceTools.values()) registered2.disable();

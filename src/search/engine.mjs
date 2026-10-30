@@ -4,7 +4,7 @@ import tokenizerData from './assets/tokenizer.json' with {type:'json'};
 import tokenizerConfig from './assets/tokenizer_config.json' with {type:'json'};
 import manifest from './assets/manifest.json' with {type:'json'};
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile,mkdir,writeFile,rename,rm } from 'node:fs/promises';
+import { readFile,mkdir,writeFile,rename,rm,readdir } from 'node:fs/promises';
 import { dirname,join } from 'node:path';
 export const MODEL={id:manifest.model,revision:manifest.revision,dtype:'q8',pooling:'cls',dimensions:384,normalized:true};
 export const tokenizer=new Tokenizer(tokenizerData,tokenizerConfig);
@@ -43,7 +43,7 @@ export async function installAssets(state,signal){
   await mkdir(dirname(path),{recursive:true});
   const response=await fetch(asset.url,{signal});if(!response.ok)throw Error('Model asset download failed: HTTP '+response.status);const bytes=Buffer.from(await response.arrayBuffer());
   if(bytes.length!==asset.bytes||hash(bytes)!==asset.sha256)throw Error('Model asset integrity check failed: '+asset.path);
-  const temporary=path+'.'+randomUUID()+'.tmp';try{await writeFile(temporary,bytes,{mode:0o600});signal?.throwIfAborted();await rename(temporary,path);}finally{await rm(temporary,{force:true});}
+  const temporary=path+'.'+process.pid+'.'+randomUUID()+'.tmp';try{await writeFile(temporary,bytes,{mode:0o600});signal?.throwIfAborted();await rename(temporary,path);}finally{await rm(temporary,{force:true});}
  }
  return join(base,'onnx/model_quantized.onnx');
 }
@@ -61,3 +61,21 @@ export function embed(state,text,signal){return serialized(async()=>{
  try{output=await session.run(feeds);signal?.throwIfAborted();const t=output.last_hidden_state??Object.values(output)[0];const v=Array.from(t.data.slice(0,384)),norm=Math.hypot(...v);if(!Number.isFinite(norm)||!norm)throw Error('Invalid embedding');return v.map(x=>x/norm);}
  finally{for(const t of Object.values(output??{}))t.dispose();for(const t of Object.values(feeds))t.dispose();timer=setTimeout(()=>{void serialized(async()=>{await session?.release();session=null;sessionPath=null;});},60000);timer.unref();}
 });}
+
+// A crash leaves only derivative temporary files. Preserve any live writer,
+// including another MCP process using the same state directory.
+export async function cleanupSearchTemps(state){
+ async function walk(directory){
+  const entries=await readdir(directory,{withFileTypes:true}).catch(()=>[]);
+  for(const entry of entries){
+   const path=join(directory,entry.name);
+   if(entry.isDirectory())await walk(path);
+   else if(entry.isFile()){
+    const match=entry.name.match(/\.(\d+)\.[0-9a-f-]{36}\.tmp$/);
+    if(!match)continue;
+    try{process.kill(Number(match[1]),0);}catch(error){if(error.code==='ESRCH')await rm(path,{force:true}).catch(()=>{});}
+   }
+  }
+ }
+ await walk(join(state,'search'));
+}

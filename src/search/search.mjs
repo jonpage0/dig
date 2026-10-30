@@ -78,7 +78,7 @@ export async function searchLibrary(config,args,{signal,embedding=embed,checkCon
  }
  if(eligible&&skipped===eligible)throw Error('No eligible research file could be searched');
  const cache={format:1,library,generation:randomUUID(),model:MODEL,chunker:'markdown-v1',files:[...indexed,...(old?.files??[]).filter(f=>!indexed.some(x=>x.file===f.file)&&docs.some(d=>d.file===f.file&&!d.error))]};let index_revision=null;
- signal?.throwIfAborted();const tmp=join(directory,'index.'+randomUUID()+'.tmp');
+ signal?.throwIfAborted();const tmp=join(directory,'index.'+process.pid+'.'+randomUUID()+'.tmp');
  try{await mkdir(directory,{recursive:true});const bytes=JSON.stringify(cache);await writeFile(tmp,bytes,{mode:0o600});signal?.throwIfAborted();await rename(tmp,indexPath);index_revision=hash(bytes);}catch(e){signal?.throwIfAborted();semanticWorking=false;warn('cache_unavailable','Search cache could not be saved');}finally{await rm(tmp,{force:true}).catch(()=>{});}
  const termsByRow=rows.map(r=>terms([r.title,r.heading,r.text.slice(r.start,r.end)].filter(Boolean).join('\n'))),df=new Map();
  for(const t of termsByRow)for(const w of new Set(t))df.set(w,(df.get(w)??0)+1);

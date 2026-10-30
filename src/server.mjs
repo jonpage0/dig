@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { Type } from '@sinclair/typebox';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { watchFile } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, relative, resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { loadConfig, updateConfig, initializeConfig, loadKeys, keysPath } from './config.mjs';
 import { startDig, assertDig, recordCall, saveReport, finishDig, listLibrary, libraryFolder, libraryRevision, readLibraryFile, safeSegment, SESSION_UNAVAILABLE, projectFolder } from './library.mjs';
@@ -20,6 +20,7 @@ import { executeSource } from './providers/outcome.ts';
 import { knownSecrets, redactText, redactValue, redactRecord } from './providers/secrets.ts';
 import { TOPIC_VOLATILITIES } from './providers/library/files.ts';
 import { searchLibrary } from './search/search.mjs';
+import { cleanupSearchTemps } from './search/engine.mjs';
 import { VERSION } from './version.mjs';
 import { ANSWER_STATUSES } from './status.mjs';
 import { createCallActivity } from './call-activity.mjs';
@@ -213,7 +214,7 @@ extensions.settings.register({
 });
 // Composer at-mentions resolve to saved reports and answers through the dig://library/{file} resource template.
 extensions.mentions.setHandler(async ({ query }) => ({ items: mentionItems(await snapshot(), query) }));
-const initialConfig = await initializeConfig(); syncSources(initialConfig);
+const initialConfig = await initializeConfig(); await cleanupSearchTemps(dirname(initialConfig.path)); syncSources(initialConfig);
 watchFile(initialConfig.path, { persistent: false, interval: 500 }, () => loadConfig().then(syncSources).catch(() => { for (const { registered } of sourceTools.values()) registered.disable(); console.error('Invalid Dig settings; source discovery is disabled until corrected.'); }));
 // Saving keys.env applies without a restart. Credentials come only from this file.
 watchFile(keysPath(), { persistent: false, interval: 500 }, () => { try { loadKeys(); } catch (e) { console.error(`Cannot reload keys.env; the previous keys stay in effect: ${e.message}`); } });
