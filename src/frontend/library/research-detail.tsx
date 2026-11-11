@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 import { Badge, Button, Disclosure } from '../shared/components';
 import { Frame, FrameHeader, FramePanel, FrameFooter } from '../shared/frame';
 import { Timeline, TimelineContent, TimelineHeader, TimelineIndicator, TimelineItem, TimelineSeparator, TimelineTitle } from '../shared/timeline';
-import { costAmounts, absTime, plural } from '../../ui/format.mjs';
-import { projectResearch, CALL_OUTCOME_LABELS } from './research-state';
+import { costAmounts, absTime, plural, callOutcome } from '../../ui/format.mjs';
+import { projectResearch } from './research-state';
 import { ResearchSteering } from './research-steering';
 import type { DigHost } from '../shared/host';
 
@@ -90,7 +90,7 @@ export function ResearchDetail({ app, host }: { app: any; host: DigHost }) {
       <FramePanel><Timeline value={0} className="research-event-timeline">{research.activity.slice(0, 4).map((event, index) => <TimelineItem key={event.id} step={index + 1}><TimelineHeader><TimelineSeparator /><TimelineTitle>{event.label}</TimelineTitle><TimelineIndicator>{index + 1}</TimelineIndicator></TimelineHeader><TimelineContent><p>{stamp(event.at)}</p><p>{event.detail}</p></TimelineContent></TimelineItem>)}</Timeline>
         {research.activity.length > 4 && <Disclosure title={'Show all ' + research.activity.length + ' recorded events'}><ul className="research-event-list">{research.activity.map(event => <li key={event.id}><strong>{event.label}</strong><span>{stamp(event.at)}</span><p>{event.detail}</p></li>)}</ul></Disclosure>}
         {!!latestCalls.length && <div id="research-calls"><Disclosure title="Inspect retained calls" open={Boolean(app.callsOpen)} onOpenChange={value => app.update({ callsOpen: value })} keepMounted><div className="research-call-ledger">{latestCalls.map((call: any, index: number) => <div key={(call.session || '') + ':' + call.id + ':' + index}>
-          <div><strong>{app.catalog.label(call.source)}</strong><span>{call.tool}</span><span>Started {stamp(call.at)}</span></div><Badge tone={tone(call.status)}>{CALL_OUTCOME_LABELS[call.status] || 'Unknown'}</Badge>
+          <div><strong>{app.catalog.label(call.source)}</strong><span>{call.tool}</span><span>Started {stamp(call.at)}</span></div><Badge tone={tone(call.status)}>{callOutcome(call.status)}</Badge>
           {call.rawFile ? <Button variant="ghost" size="sm" data-key={'raw:' + call.rawFile} onClick={() => { void app.inspectRaw(call.rawFile); }}>Inspect original</Button> : <span className="research-label">Original not retained</span>}
         </div>)}</div><p className="research-context-note">These are recorded tool outcomes, including any accepted or pending provider operation. They do not certify an answer.</p></Disclosure></div>}
       </FramePanel>

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { environmentValues, initializeConfig, loadConfig, loadKeys } from '../src/config.mjs';
 import { copyEnvironmentKeys, prepareKeysFile, sourceInfo } from '../src/catalog.mjs';
 import { ACCOUNTS } from '../src/providers/modules.ts';
+import { providerTools } from '../src/providers/index.ts';
 
 test('the accounts list names every credential a source reports, each under exactly one provider account', async () => {
   const state = await mkdtemp(join(tmpdir(), 'dig-keys-accounts-')); await initializeConfig(state);
@@ -39,6 +40,50 @@ test('X is ready with both its xAI and X API keys, partly ready with one, and ne
   } finally {
     for (const [name, value] of Object.entries(saved)) if (value === undefined) delete process.env[name]; else process.env[name] = value;
   }
+});
+
+test('DataForSEO is ready only with both its login and password; with one, it needs setup and names the other', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-keys-dataforseo-readiness-')); await initializeConfig(state);
+  const config = { ...(await loadConfig(state)), sources: { enabled: ['dataforseo'] } };
+  const names = ['DATAFORSEO_USERNAME', 'DATAFORSEO_PASSWORD'];
+  const saved = Object.fromEntries(names.map(name => [name, process.env[name]]));
+  const dataforseo = keys => {
+    for (const name of names) if (keys.includes(name)) process.env[name] = `${name.toLowerCase()}-fixture-value`; else delete process.env[name];
+    return sourceInfo(config, 'dataforseo').sources[0].readiness;
+  };
+  try {
+    assert.equal(dataforseo(names).status, 'ready');
+    const login = dataforseo(['DATAFORSEO_USERNAME']);
+    assert.equal(login.status, 'setup-required');
+    assert.match(login.message, /^Missing DATAFORSEO_PASSWORD in Dig’s keys\.env\./);
+    const password = dataforseo(['DATAFORSEO_PASSWORD']);
+    assert.equal(password.status, 'setup-required');
+    assert.match(password.message, /^Missing DATAFORSEO_USERNAME in Dig’s keys\.env\./);
+    assert.equal(dataforseo([]).status, 'setup-required');
+  } finally {
+    for (const [name, value] of Object.entries(saved)) if (value === undefined) delete process.env[name]; else process.env[name] = value;
+  }
+});
+
+test('readiness and missing-key messages name the host Dig runs in; Codex keeps its Sources & tools wording', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-keys-host-words-')); await initializeConfig(state);
+  const config = { ...(await loadConfig(state)), sources: { enabled: ['exa', 'x'] } };
+  const saved = { DIG_HOST: process.env.DIG_HOST, DIG_STATE_DIR: process.env.DIG_STATE_DIR, EXA_API_KEY: process.env.EXA_API_KEY, XAI_API_KEY: process.env.XAI_API_KEY };
+  t.after(() => { for (const [name, value] of Object.entries(saved)) if (value === undefined) delete process.env[name]; else process.env[name] = value; });
+  process.env.DIG_STATE_DIR = state; delete process.env.EXA_API_KEY; delete process.env.XAI_API_KEY;
+  const ctx = { sessionID: 'test', directory: state, worktree: state, abort: new AbortController().signal, keep() {} };
+  const words = async host => {
+    if (host) process.env.DIG_HOST = host; else delete process.env.DIG_HOST;
+    return { readiness: sourceInfo(config, 'exa').sources[0].readiness.message, missing: (await providerTools.xsearch.execute({ query: 'agents' }, ctx)).text };
+  };
+  assert.deepEqual(await words(undefined), {
+    readiness: 'Missing EXA_API_KEY in Dig’s keys.env. The user adds it outside chat with Edit keys.env on Dig’s Sources & tools page; Dig reloads keys.env when it is saved.',
+    missing: "ERROR: XAI_API_KEY is not set in Dig's keys.env. The user adds it outside the chat (Dig Settings → Edit keys.env), or copies one Codex's environment already has (Dig Settings → X → Use existing key).",
+  });
+  assert.deepEqual(await words('claude-code'), {
+    readiness: 'Missing EXA_API_KEY in Dig’s keys.env. The user adds it outside chat by editing keys.env directly (/dig:setup gives the exact lines); Dig reloads keys.env when it is saved.',
+    missing: "ERROR: XAI_API_KEY is not set in Dig's keys.env. The user adds it outside the chat by editing keys.env directly (/dig:setup gives the exact line), or copies one Claude Code's environment already has into keys.env by hand.",
+  });
 });
 
 test('credentials come only from keys.env; the starting environment is set aside, and other settings fall back to it', async () => {

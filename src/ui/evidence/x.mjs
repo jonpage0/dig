@@ -9,6 +9,7 @@ import { compact, num, plural, shortDate } from '../format.mjs';
 import { excerpt, failedCall, ITEM_NOUNS, noItems, numv, obj, objs, query, scope, str, strs } from './read.mjs';
 
 const POST_URL = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status\/(\d+)/;
+const ACCOUNT_URL = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/i\/user\/(\d+)/;
 /** X ids are snowflakes: milliseconds since this epoch, shifted left 22 bits. */
 const SNOWFLAKE_EPOCH = 1288834974657;
 const SNOWFLAKE_SHIFT = 22n;
@@ -18,15 +19,17 @@ function postDate(id) {
 }
 
 const DAY_FORMAT = { month: 'short', day: 'numeric', timeZone: 'UTC' };
-/** A date-only argument ("2026-09-01") as "Sep 1"; dates stay in UTC so no timezone moves them. */
-function day(value) {
+/** A date-only argument ("2026-09-01") as "Sep 1", `back` days earlier; dates stay in UTC so no timezone moves them. */
+function day(value, back = 0) {
   const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return undefined;
+  date.setUTCDate(date.getUTCDate() - back);
   return { label: date.toLocaleDateString('en-US', DAY_FORMAT), month: date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }), year: String(date.getUTCFullYear()) };
 }
 /** "Sep 1–27", "Aug 28 – Sep 27", "since Sep 1", "until Sep 27". */
 function dateWindow(from, to) {
-  const a = from ? day(from) : undefined; const b = to ? day(to) : undefined;
+  // An end date with no time of day is exclusive, so the last day shown is the one before it.
+  const a = from ? day(from) : undefined; const b = to ? day(to, /^\d{4}-\d{2}-\d{2}$/.test(to) ? 1 : 0) : undefined;
   if (a && b) {
     if (a.label === b.label) return a.label;
     if (a.month === b.month && a.year === b.year) return `${a.label}–${b.label.slice(a.month.length + 1)}`;
@@ -76,7 +79,8 @@ function readPosts(bodies) {
     const known = cited.get(url);
     if (known) { known.title ??= title; return; }
     const match = POST_URL.exec(url);
-    cited.set(url, { url, title, handle: match?.[1], id: match?.[2], at: [] });
+    // Grok cites most posts as x.com/i/status/<id>: "i" stands in for the author, and is no handle.
+    cited.set(url, { url, title, handle: match?.[1].toLowerCase() === 'i' ? undefined : match?.[1], id: match?.[2], account: ACCOUNT_URL.exec(url)?.[1], at: [] });
   };
   for (const body of bodies) {
     const response = obj(body);
@@ -99,13 +103,14 @@ function readPosts(bodies) {
   const list = [...cited.values()];
   for (const post of list) post.at = mentions(answer, post, anchors.get(post.url) ?? []);
   const posts = list.map(post => {
-    const { url, handle, id } = post;
-    const m = postMetrics(answer, post, list.filter(o => o !== post).flatMap(o => o.at));
+    const { url, handle, id, account } = post;
     // xAI sometimes titles a citation with its index or the URL itself; that is no preview.
     const preview = post.title && !/^\d+$/.test(post.title) && post.title !== url ? post.title : undefined;
+    if (account) return { kind: 'account', key: account, title: preview ?? `Account ${account}`, url, meta: ['account'] };
+    const m = postMetrics(answer, post, list.filter(o => o !== post).flatMap(o => o.at));
     return {
-      kind: 'post', key: handle && id ? `${handle.toLowerCase()}/${id}` : url, title: preview ?? (handle ? `Post by @${handle}` : url.replace(/^https?:\/\//, '')), url,
-      meta: [handle ? `@${handle}` : 'web page', id ? postDate(id) : undefined, m.likes === undefined ? undefined : `${compact(m.likes)} likes (as stated by Grok)`, m.reposts === undefined ? undefined : `${compact(m.reposts)} reposts (as stated by Grok)`, m.views === undefined ? undefined : `${compact(m.views)} views (as stated by Grok)`].filter(Boolean),
+      kind: 'post', key: handle && id ? `${handle.toLowerCase()}/${id}` : id ?? url, title: preview ?? (handle ? `Post by @${handle}` : id ? `Post ${id}` : url.replace(/^https?:\/\//, '')), url,
+      meta: [handle ? `@${handle}` : id ? undefined : 'web page', id ? postDate(id) : undefined, m.likes === undefined ? undefined : `${compact(m.likes)} likes (as stated by Grok)`, m.reposts === undefined ? undefined : `${compact(m.reposts)} reposts (as stated by Grok)`, m.views === undefined ? undefined : `${compact(m.views)} views (as stated by Grok)`].filter(Boolean),
     };
   });
   return { posts, fetched };
@@ -158,7 +163,7 @@ function story(s) {
   const posts = objs(s.cluster_posts_results).flatMap(p => str(p.post_id) ?? []);
   return {
     kind: 'story', key: str(s.id) ?? str(s.name), title: str(s.name) ?? `Story ${str(s.id)}`, excerpt: str(s.hook) ?? str(s.summary),
-    meta: [str(s.category), dated(s.updated_at ?? s.last_updated_at_ms) ? `updated ${dated(s.updated_at ?? s.last_updated_at_ms)}` : undefined, posts.length ? plural(posts.length, 'post') : undefined].filter(Boolean),
+    meta: [str(s.category), dated(s.updated_at) ? `updated ${dated(s.updated_at)}` : undefined, posts.length ? plural(posts.length, 'post') : undefined].filter(Boolean),
     links: posts.slice(0, STORY_LINKS).map((id, i) => ({ label: `Post ${i + 1}`, url: permalink(id) })),
   };
 }

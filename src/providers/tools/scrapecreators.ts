@@ -24,14 +24,14 @@
  * it; a cache hit returns "cached": true and credits_charged 0, a miss bills normally.
  * Metrics the provider omits stay absent: they are never rendered as 0.
  */
+import { USER_AGENT } from "../../version.mjs"
 import { requestJson } from "../http.js"
 import { metered } from "../outcome.js"
 import { knownSecrets, redactText } from "../secrets.js"
-import type { ToolContext, ToolSpec } from "../types.js"
+import type { KeepRaw, ToolContext, ToolSpec } from "../types.js"
 
 const SC_BASE = "https://api.scrapecreators.com"
 const TIMEOUT_MS = 60_000
-const USER_AGENT = "omp-scrapecreators-tool/2.0"
 
 export const CACHE_MAX_AGE_VALUES = ["1d", "3d", "7d", "14d", "30d"] as const
 
@@ -46,7 +46,6 @@ const LINKEDIN_MAX_SEARCH_CURSOR = 11
 const LINKEDIN_MAX_COMPANY_POSTS_PAGE = 7
 const TELEGRAM_KIND_VALUES = ["channel", "posts", "post"] as const
 
-const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 40
 const DEFAULT_TRANSCRIPT_LIMIT = 5
 const MAX_TRANSCRIPT_LIMIT = 10
@@ -67,6 +66,9 @@ export function scrapecreatorsHeaders(): Record<string, string> | null {
 
 export const MISSING_KEY_ERROR = "SCRAPECREATORS_API_KEY not set. Get a key at https://scrapecreators.com"
 
+/** The sentence for a request that ended without a complete response, which is never sent again. */
+export const UNANSWERED_COST = "ScrapeCreators may have received and charged this request, but no complete response arrived; its cost is unknown."
+
 export type QueryParams = Record<string, string | number | boolean | undefined>
 /** What a request needs from the tool call: cancellation and the raw-response capture. */
 export type RequestContext = Pick<ToolContext, "abort" | "keep">
@@ -78,6 +80,22 @@ export type RequestContext = Pick<ToolContext, "abort" | "keep">
 export type ScrapeCreatorsResponse =
   | { ok: true; payload: Record<string, unknown>; status: number }
   | { ok: false; cancelled: boolean; error: string; payload: Record<string, unknown> | null }
+
+/** A response with the credits each attempt reported (null where it reported none), the figures its receipt sums. */
+export type ScrapeCreatorsResult = ScrapeCreatorsResponse & { charges: Array<number | null> }
+
+const creditsOf = (body: unknown) => asNumber(asRecord(body)?.credits_charged)
+
+/** `ctx.keep` that also notes each kept response's reported credits, null for one cut off or without a figure. */
+export function chargeRecorder(ctx: RequestContext): { keep: KeepRaw; charges: Array<number | null> } {
+  const charges: Array<number | null> = []
+  return { charges, keep: (...entry) => { charges.push(entry[4] ? null : creditsOf(entry[2])); ctx.keep(...entry) } }
+}
+
+/** The credits a set of attempts was charged, or null when any attempt's charge is unknown. */
+export function knownCharge(charges: readonly (number | null)[]): number | null {
+  return charges.length && charges.every((charge) => charge !== null) ? charges.reduce<number>((sum, charge) => sum + (charge ?? 0), 0) : null
+}
 
 /** `ERROR:` text for a failed response; cancellations are named as such, never as provider failures. */
 export function failText(response: { cancelled: boolean; error: string }): string {
@@ -108,9 +126,14 @@ export class CreditTally {
   charged = 0
   unreported = 0
   add(payload: Record<string, unknown> | null): void {
-    const credits = payload ? asNumber(payload.credits_charged) : null
-    if (credits === null) this.unreported += 1
-    else this.charged += credits
+    this.addAttempts([payload ? asNumber(payload.credits_charged) : null])
+  }
+  /** Every attempt of one request, so a retried status counts as the receipt counts it. */
+  addAttempts(charges: readonly (number | null)[]): void {
+    for (const credits of charges) {
+      if (credits === null) this.unreported += 1
+      else this.charged += credits
+    }
   }
   describe(): string {
     if (this.unreported === 0) return `Credits charged: ${this.charged}`
@@ -123,13 +146,14 @@ export class CreditTally {
 
 /** A ScrapeCreators tool's receipt cost: `credits_charged` summed over every response it received. */
 export const creditMetered = (spec: ToolSpec): ToolSpec =>
-  metered(spec, "credits", (body) => asNumber(asRecord(body)?.credits_charged))
+  metered(spec, "credits", creditsOf)
 
 /**
  * One GET against ScrapeCreators. Non-200 statuses and `success: false` bodies
  * become explicit errors carrying the provider's own message (with the key
  * redacted); an aborted signal is reported as a cancellation, not a failure.
- * Nothing is retried beyond the shared transient-status policy in http.ts.
+ * Only a retryable HTTP status is retried (http.ts); a request that got no
+ * complete response is never sent again. `charges` lists every attempt's credits.
  */
 export async function scrapecreatorsRequest(
   path: string,
@@ -137,8 +161,19 @@ export async function scrapecreatorsRequest(
   headers: Record<string, string>,
   ctx: RequestContext,
   label: string,
+): Promise<ScrapeCreatorsResult> {
+  const { keep, charges } = chargeRecorder(ctx)
+  return { ...(await scrapecreatorsAttempts(path, params, headers, ctx.abort, keep, label)), charges }
+}
+
+async function scrapecreatorsAttempts(
+  path: string,
+  params: QueryParams,
+  headers: Record<string, string>,
+  signal: AbortSignal,
+  keep: KeepRaw,
+  label: string,
 ): Promise<ScrapeCreatorsResponse> {
-  const signal = ctx.abort
   if (signal.aborted) return { ok: false, cancelled: true, error: `${label} cancelled before the request was sent`, payload: null }
   const url = new URL(path, SC_BASE)
   for (const [key, value] of Object.entries(params)) {
@@ -148,12 +183,12 @@ export async function scrapecreatorsRequest(
   let payload: unknown
   let status: number
   try {
-    const response = await requestJson({ url, headers, signal, timeoutMs: TIMEOUT_MS, provider: "ScrapeCreators", keep: ctx.keep, label })
+    const response = await requestJson({ url, headers, signal, timeoutMs: TIMEOUT_MS, provider: "ScrapeCreators", keep, label })
     payload = response.payload
     status = response.status
   } catch (error) {
     if (signal.aborted) return { ok: false, cancelled: true, error: `${label} cancelled while the request was in flight`, payload: null }
-    return { ok: false, cancelled: false, error: redactText(`${label} request failed: ${error instanceof Error ? error.message : "Unknown error"}`, knownSecrets()), payload: null }
+    return { ok: false, cancelled: false, error: redactText(`${label} request failed: ${error instanceof Error ? error.message : "Unknown error"}. ${UNANSWERED_COST}`, knownSecrets()), payload: null }
   }
   const record = asRecord(payload)
   const rawMessage = record ? (asString(record.error) ?? asString(record.message)) : null
@@ -166,14 +201,23 @@ export async function scrapecreatorsRequest(
   return { ok: true, payload: record, status }
 }
 
-/** Credits/caching provenance for one response, as the provider reported it. */
-export function provenanceLine(payload: Record<string, unknown>): string {
+/**
+ * Credits/caching provenance for one response, as the provider reported it. Given the
+ * request's `charges`, a request sent more than once states every attempt's credits.
+ */
+export function provenanceLine(payload: Record<string, unknown>, charges?: readonly (number | null)[]): string {
   const credits = asNumber(payload.credits_charged)
+  let charged = credits === null ? "Credits charged: not reported" : `Credits charged: ${credits}`
+  if (charges && charges.length > 1) {
+    const tally = new CreditTally()
+    tally.addAttempts(charges)
+    charged = `${tally.describe()} over ${charges.length} attempts (retried after a retryable HTTP status)`
+  }
   if (payload.cached === true) {
     const cachedAt = asString(payload.cached_at)
-    return `Served from ScrapeCreators cache${cachedAt ? ` (scraped ${cachedAt})` : ""}; credits charged: ${credits ?? "not reported"}`
+    return `Served from ScrapeCreators cache${cachedAt ? ` (scraped ${cachedAt})` : ""}; ${charged.charAt(0).toLowerCase()}${charged.slice(1)}`
   }
-  return credits === null ? "Credits charged: not reported" : `Credits charged: ${credits}`
+  return charged
 }
 
 export function validateEnum<T extends string>(name: string, value: unknown, values: readonly T[]): string | null {
@@ -182,6 +226,16 @@ export function validateEnum<T extends string>(name: string, value: unknown, val
     return `${name} must be one of ${values.join(", ")}`
   }
   return null
+}
+
+/** For a page cut by an explicit display limit: the continuation skips what was not shown. */
+export function continuesAfter(shown: number, returned: number, noun: string): string {
+  return shown < returned ? ` (it continues after all ${returned} returned ${noun}, including the ${returned - shown} not shown)` : ""
+}
+
+/** An explicit display limit, or every returned item when there is none: the whole page is already paid for. */
+export function displayLimit(value: unknown, max: number): number {
+  return value === undefined ? Number.POSITIVE_INFINITY : clampInt(value, max, 1, max)
 }
 
 export function clampInt(value: unknown, fallback: number, min: number, max: number): number {
@@ -254,6 +308,10 @@ function capWords(text: string): string {
   return words.length > TRANSCRIPT_WORD_CAP
     ? `[Excerpt: first ${TRANSCRIPT_WORD_CAP} of ${words.length} words. Read this call's original provider response, when retained, for the full returned text.] ${words.slice(0, TRANSCRIPT_WORD_CAP).join(" ")}…`
     : words.join(" ")
+}
+
+function unreadableLine(count: number, kind: string): string {
+  return `Unreadable entries: ${count} returned entr${count === 1 ? "y" : "ies"} lacked a readable ${kind} record and ${count === 1 ? "was" : "were"} skipped.`
 }
 
 function hashtagsIn(text: string): string[] {
@@ -368,7 +426,7 @@ export const tiktok = creditMetered({
     }
     const language = args.transcript_language?.trim().toLowerCase()
     if (language && !/^[a-z]{2}$/.test(language)) return "ERROR: transcript_language must be a two-letter language code such as en."
-    const limit = clampInt(args.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
+    const limit = displayLimit(args.limit, MAX_LIMIT)
     const fetchTranscripts = args.transcripts ?? true
     const transcriptLimit = clampInt(args.transcript_limit, DEFAULT_TRANSCRIPT_LIMIT, 0, MAX_TRANSCRIPT_LIMIT)
     const aiFallback = args.transcript_ai_fallback === true
@@ -412,7 +470,7 @@ export const tiktok = creditMetered({
     const nextCursor = asNumber(search.payload.cursor)
     const hasMore = typeof search.payload.has_more === "boolean" ? search.payload.has_more : null
     const credits = new CreditTally()
-    credits.add(search.payload)
+    credits.addAttempts(search.charges)
     const filters = [
       `date_posted=${args.date_posted ?? "(TikTok default)"}`,
       `sort_by=${args.sort_by ?? "relevance (TikTok default)"}`,
@@ -426,7 +484,7 @@ export const tiktok = creditMetered({
         text: [
           `TikTok keyword search: "${query}"`,
           `Filters: ${filters.join(" | ")}`,
-          provenanceLine(search.payload),
+          provenanceLine(search.payload, search.charges),
           "",
           "TikTok returned an empty result list for this query and filter set.",
         ].join("\n"),
@@ -454,12 +512,12 @@ export const tiktok = creditMetered({
         )
         if (!response.ok) {
           if (response.cancelled) return `ERROR: Cancelled: ${response.error} (${transcriptsFetched} transcripts fetched before cancellation)`
-          credits.add(response.payload)
+          credits.addAttempts(response.charges)
           item.transcriptNote = `transcript failed: ${response.error}`
           transcriptFailures.push(`${item.url}: ${response.error}`)
           continue
         }
-        credits.add(response.payload)
+        credits.addAttempts(response.charges)
         const rawTranscript = response.payload.transcript
         const joined = Array.isArray(rawTranscript) ? rawTranscript.filter((v): v is string => typeof v === "string").join(" ") : asString(rawTranscript)
         const cleaned = joined ? cleanWebVtt(joined) : ""
@@ -493,7 +551,7 @@ export const tiktok = creditMetered({
       `Filters: ${filters.join(" | ")}`,
       "Order: as returned by TikTok for the chosen sort_by; no local re-ranking.",
       nextCursor !== null
-        ? `Next page: pass cursor=${nextCursor}${hasMore === false ? " (provider reports no more results)" : ""}`
+        ? `Next page: pass cursor=${nextCursor}${hasMore === false ? " (provider reports no more results)" : ""}${continuesAfter(items.length, returned.length, "videos")}`
         : "Next page: no cursor returned.",
       `${credits.describe()}${aiFallback ? " (AI fallback enabled; a successful fallback up to 120 seconds costs 1 credit per transcript request, not an extra fee)" : ""}`,
       fetchTranscripts
@@ -556,7 +614,7 @@ interface InstagramReel {
   verified: boolean
   date: string | null
   views: number | null
-  viewsSource: "post lookup" | "search result" | null
+  viewsSource: "post lookup" | null
   likes: number | null
   comments: number | null
   duration: number | null
@@ -622,9 +680,7 @@ async function fetchInstagramTranscript(
   headers: Record<string, string>,
   ctx: RequestContext,
 ): Promise<
-  | { text: string; note: null; payload: Record<string, unknown> }
-  | { text: null; note: string; payload: Record<string, unknown> }
-  | { error: string; cancelled: boolean; payload: Record<string, unknown> | null }
+  ({ text: string; note: null } | { text: null; note: string } | { error: string; cancelled: boolean }) & { charges: Array<number | null> }
 > {
   const response = await scrapecreatorsRequest(
     "/v2/instagram/media/transcript",
@@ -633,14 +689,14 @@ async function fetchInstagramTranscript(
     ctx,
     "ScrapeCreators Instagram transcript",
   )
-  if (!response.ok) return { error: response.error, cancelled: response.cancelled, payload: response.payload }
+  if (!response.ok) return { error: response.error, cancelled: response.cancelled, charges: response.charges }
   const transcripts = response.payload.transcripts
-  if (transcripts === null) return { text: null, note: "provider reported no speech (transcripts: null)", payload: response.payload }
+  if (transcripts === null) return { text: null, note: "provider reported no speech (transcripts: null)", charges: response.charges }
   if (!Array.isArray(transcripts)) {
     return {
       error: `ScrapeCreators Instagram transcript returned an unexpected payload: \`transcripts\` is ${transcripts === undefined ? "missing" : `not an array (${typeof transcripts})`}`,
       cancelled: false,
-      payload: response.payload,
+      charges: response.charges,
     }
   }
   const combined = transcripts
@@ -652,10 +708,10 @@ async function fetchInstagramTranscript(
     return {
       text: null,
       note: transcripts.length === 0 ? "provider returned an empty transcript list" : `provider returned ${transcripts.length} transcript entr${transcripts.length === 1 ? "y" : "ies"} without text`,
-      payload: response.payload,
+      charges: response.charges,
     }
   }
-  return { text: capWords(combined.replace(/\s+/g, " ")), note: null, payload: response.payload }
+  return { text: capWords(combined.replace(/\s+/g, " ")), note: null, charges: response.charges }
 }
 
 function reelLine(item: InstagramReel, index: number): string {
@@ -697,7 +753,7 @@ export const instagram = creditMetered({
       validateEnum("cache_max_age", args.cache_max_age, CACHE_MAX_AGE_VALUES)
     if (invalid) return `ERROR: ${invalid}`
     const mode = (args.mode ?? "reels") as (typeof INSTAGRAM_MODE_VALUES)[number]
-    const limit = clampInt(args.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
+    const limit = displayLimit(args.limit, MAX_LIMIT)
 
     if (mode !== "reels") {
       if (args.date_posted !== undefined) return "ERROR: date_posted applies to mode='reels' only."
@@ -750,7 +806,7 @@ export const instagram = creditMetered({
     }
     const items = returned.slice(0, limit)
     const credits = new CreditTally()
-    credits.add(search.payload)
+    credits.addAttempts(search.charges)
     const filters = [`date_posted=${args.date_posted ?? "(none; Google-indexed default)"}`, `page=${page}`]
     const viewsPolicy = enrichViews
       ? `View counts: not included in search results since ${INSTAGRAM_VIEWS_REMOVED_ON}; looked up via /v1/instagram/post for the first ${Math.min(enrichLimit, items.length)} reel(s).`
@@ -762,7 +818,7 @@ export const instagram = creditMetered({
         text: [
           `Instagram Reels search: "${query}"`,
           `Filters: ${filters.join(" | ")}`,
-          provenanceLine(search.payload),
+          provenanceLine(search.payload, search.charges),
           "",
           "The provider returned an empty reels list. Reels search is Google-indexed and best-effort, so an empty page is thin coverage, not proof of absence on Instagram.",
         ].join("\n"),
@@ -792,12 +848,12 @@ export const instagram = creditMetered({
         )
         if (!response.ok) {
           if (response.cancelled) return `ERROR: Cancelled: ${response.error} (${enrichFetched} view lookups completed before cancellation)`
-          credits.add(response.payload)
+          credits.addAttempts(response.charges)
           item.viewsNote = `post lookup failed: ${response.error}`
           enrichFailures.push(`${item.url}: ${response.error}`)
           continue
         }
-        credits.add(response.payload)
+        credits.addAttempts(response.charges)
         const media = asRecord(asRecord(response.payload.data)?.xdt_shortcode_media)
         if (!media) {
           item.viewsNote = "post lookup returned an unexpected payload (no data.xdt_shortcode_media)"
@@ -832,12 +888,12 @@ export const instagram = creditMetered({
         const result = await fetchInstagramTranscript(item.url, cacheMaxAge, headers, ctx)
         if ("error" in result) {
           if (result.cancelled) return `ERROR: Cancelled: ${result.error} (${transcriptsFetched} transcripts fetched before cancellation)`
-          credits.add(result.payload)
+          credits.addAttempts(result.charges)
           item.transcriptNote = `transcript failed: ${result.error}`
           transcriptFailures.push(`${item.url}: ${result.error}`)
           continue
         }
-        credits.add(result.payload)
+        credits.addAttempts(result.charges)
         if (result.text !== null) {
           item.transcript = result.text
           transcriptsFetched += 1
@@ -854,7 +910,7 @@ export const instagram = creditMetered({
       `Filters: ${filters.join(" | ")}`,
       "Source: Google-indexed reels, best-effort rather than Instagram-native search; order as returned, no local re-ranking.",
       viewsPolicy,
-      `Next page: ${page < INSTAGRAM_MAX_PAGE ? `pass page=${page + 1}` : "page 11 is the provider's last page"}`,
+      `Next page: ${page < INSTAGRAM_MAX_PAGE ? `pass page=${page + 1}${continuesAfter(items.length, returned.length, "reels")}` : "page 11 is the provider's last page"}`,
       credits.describe(),
       enrichViews
         ? `View lookups: ${enrichFetched} with play counts of ${enrichRequested} requested${enrichFailures.length ? `; ${enrichFailures.length} failed` : ""}`
@@ -923,9 +979,11 @@ async function instagramNative(query: string, limit: number, headers: Record<str
   const lines = [
     `Instagram native search: "${query}"`,
     "Source: Instagram's own ranked search (not Google-indexed); one page only; returns accounts, hashtags, places, and keyword suggestions, not posts.",
-    provenanceLine(response.payload),
-    `Returned: ${users.length} users | ${hashtags.length} hashtags | ${places.length} places | ${keywords.length} keywords (showing up to ${limit} per list)`,
+    provenanceLine(response.payload, response.charges),
+    `Returned: ${users.length} users | ${hashtags.length} hashtags | ${places.length} places | ${keywords.length} keywords`,
   ]
+  const shownCount = [users, hashtags, places, keywords].reduce((sum, list) => sum + Math.min(list.length, limit), 0)
+  if (shownCount < readableCount) lines.push(`Shown: ${shownCount} of ${readableCount} returned (at most ${limit} per list)`)
   if (unreadable) lines.push(`Unreadable entries: ${unreadable} returned entr${unreadable === 1 ? "y" : "ies"} lacked a readable search record and ${unreadable === 1 ? "was" : "were"} skipped.`)
   if (users.length) {
     lines.push("", "Users:")
@@ -966,7 +1024,7 @@ async function instagramNative(query: string, limit: number, headers: Record<str
       places: places.length,
       keywords: keywords.length,
       unreadable,
-      credits_charged: asNumber(response.payload.credits_charged),
+      credits_charged: knownCharge(response.charges),
     },
   }
 }
@@ -997,7 +1055,7 @@ async function instagramPopular(
   const nextCursor = asString(payload.cursor)
   const hasMore = typeof payload.has_more === "boolean" ? payload.has_more : null
   const credits = new CreditTally()
-  credits.add(payload)
+  credits.addAttempts(response.charges)
   const description = asRecord(payload.description)
   const suggested = asArray(payload.suggested_terms).filter((v): v is string => typeof v === "string")
   const totalMedia = asNumber(payload.total_media_count)
@@ -1009,7 +1067,7 @@ async function instagramPopular(
     hasMore === false
       ? "Next page: provider reports no more posts"
       : nextCursor
-        ? `Next page: pass cursor="${nextCursor}" with the same query`
+        ? `Next page: pass cursor="${nextCursor}" with the same query${continuesAfter(shown.length, posts.length, "posts")}`
         : "Next page: no cursor returned and has_more not reported; continuation unavailable",
   ]
   if (unreadable) lines.push(`Unreadable entries: ${unreadable} returned entr${unreadable === 1 ? "y" : "ies"} lacked a readable post record and ${unreadable === 1 ? "was" : "were"} skipped.`)
@@ -1037,11 +1095,11 @@ async function instagramPopular(
       const result = await fetchInstagramTranscript(url, cacheMaxAge, headers, ctx)
       if ("error" in result) {
         if (result.cancelled) return `ERROR: Cancelled: ${result.error} (${transcriptsFetched} transcripts fetched before cancellation)`
-        credits.add(result.payload)
+        credits.addAttempts(result.charges)
         transcriptFailures.push(`${url}: ${result.error}`)
         continue
       }
-      credits.add(result.payload)
+      credits.addAttempts(result.charges)
       if (result.text !== null) {
         transcripts.set(index, result.text)
         transcriptsFetched += 1
@@ -1140,7 +1198,7 @@ export const linkedin = creditMetered({
         "ScrapeCreators LinkedIn post search",
       )
       if (!response.ok) return failText(response)
-      return formatLinkedInSearch(response.payload, query, args.date_posted, cursor)
+      return formatLinkedInSearch(response.payload, query, args.date_posted, cursor, response.charges)
     }
 
     if (args.query !== undefined) return "ERROR: query applies to kind='search' only."
@@ -1174,31 +1232,33 @@ export const linkedin = creditMetered({
 
     switch (kind) {
       case "profile":
-        return formatLinkedInProfile(data, url)
+        return formatLinkedInProfile(data, url, response.charges)
       case "company":
-        return formatLinkedInCompany(data, url)
+        return formatLinkedInCompany(data, url, response.charges)
       case "company_posts":
-        return formatLinkedInCompanyPosts(data, url, page)
+        return formatLinkedInCompanyPosts(data, url, page, response.charges)
       case "post":
-        return formatLinkedInPost(data, url)
+        return formatLinkedInPost(data, url, response.charges)
     }
   },
 } satisfies ToolSpec)
 
-function formatLinkedInSearch(data: Record<string, unknown>, query: string, datePosted: string | undefined, cursor: string | undefined) {
+function formatLinkedInSearch(data: Record<string, unknown>, query: string, datePosted: string | undefined, cursor: string | undefined, charges: readonly (number | null)[]) {
   const listed = expectArray(data, "posts", "ScrapeCreators LinkedIn post search")
   if (!listed.ok) return `ERROR: ${listed.error}`
   const posts = listed.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null)
+  const unreadable = listed.items.length - posts.length
   const nextCursor = asString(data.cursor)
   const lines = [
     `LinkedIn public post search: "${query}"`,
     `Filters: date_posted=${datePosted ?? "(none)"} | cursor=${cursor ?? "1 (first page)"}`,
     "Source: Google-indexed public posts and Pulse articles; best-effort, not a complete LinkedIn-native search. Order as returned.",
-    provenanceLine(data),
+    provenanceLine(data, charges),
     nextCursor ? `Next page: pass cursor="${nextCursor}"${Number(nextCursor) > LINKEDIN_MAX_SEARCH_CURSOR ? " (beyond the provider's page-11 cap)" : ""}` : "Next page: no cursor returned",
     `Posts returned: ${posts.length}`,
   ]
-  if (posts.length === 0) lines.push("", "The provider returned an empty post list for this query and window; Google-indexed coverage is thin here, which is not proof that LinkedIn holds nothing.")
+  if (unreadable) lines.push(unreadableLine(unreadable, "post"))
+  if (listed.items.length === 0) lines.push("", "The provider returned an empty post list for this query and window; Google-indexed coverage is thin here, which is not proof that LinkedIn holds nothing.")
   for (const [index, post] of posts.entries()) {
     const author = asRecord(post.author)
     const authorName = cleanText(author?.name)
@@ -1224,6 +1284,7 @@ function formatLinkedInSearch(data: Record<string, unknown>, query: string, date
     if (preview.length) lines.push(`   Comment previews: ${preview.join(" || ")}`)
   }
   return {
+    ...(listed.items.length === 0 ? { status: "empty" as const } : unreadable ? { status: "partial" as const } : {}),
     text: lines.join("\n"),
     details: {
       provider: "scrapecreators",
@@ -1232,13 +1293,14 @@ function formatLinkedInSearch(data: Record<string, unknown>, query: string, date
       date_posted: datePosted ?? null,
       cursor: nextCursor,
       posts: posts.length,
-      credits_charged: asNumber(data.credits_charged),
+      unreadable,
+      credits_charged: knownCharge(charges),
       urls: posts.map((post) => asString(post.url)).filter((value): value is string => value !== null),
     },
   }
 }
 
-function formatLinkedInProfile(data: Record<string, unknown>, sourceUrl: string): string {
+function formatLinkedInProfile(data: Record<string, unknown>, sourceUrl: string, charges: readonly (number | null)[]): string {
   const lines: string[] = []
   const name = cleanText(data.name) || "Unknown profile"
   const followers = asNumber(data.followers)
@@ -1254,7 +1316,7 @@ function formatLinkedInProfile(data: Record<string, unknown>, sourceUrl: string)
 
   lines.push(`LinkedIn profile: ${name}`)
   lines.push(`URL: ${sourceUrl}`)
-  lines.push(provenanceLine(data))
+  lines.push(provenanceLine(data, charges))
   if (cleanText(data.location)) lines.push(`Location: ${cleanText(data.location)}`)
   if (followers !== null) lines.push(`Followers: ${fmtNum(followers)}`)
   if (cleanText(data.connections)) lines.push(`Connections: ${cleanText(data.connections)}`)
@@ -1401,7 +1463,7 @@ function formatLinkedInProfile(data: Record<string, unknown>, sourceUrl: string)
   return lines.join("\n")
 }
 
-function formatLinkedInCompany(data: Record<string, unknown>, sourceUrl: string): string {
+function formatLinkedInCompany(data: Record<string, unknown>, sourceUrl: string, charges: readonly (number | null)[]): string {
   const lines: string[] = []
   const name = cleanText(data.name) || "Unknown company"
   const employeeCount = asNumber(data.employeeCount)
@@ -1414,7 +1476,7 @@ function formatLinkedInCompany(data: Record<string, unknown>, sourceUrl: string)
 
   lines.push(`LinkedIn company page: ${name}`)
   lines.push(`URL: ${sourceUrl}`)
-  lines.push(provenanceLine(data))
+  lines.push(provenanceLine(data, charges))
   if (cleanText(data.website)) lines.push(`Website: ${cleanText(data.website)}`)
   if (cleanText(data.industry)) lines.push(`Industry: ${cleanText(data.industry)}`)
   if (cleanText(data.size)) lines.push(`Size: ${cleanText(data.size)}`)
@@ -1462,29 +1524,29 @@ function formatLinkedInCompany(data: Record<string, unknown>, sourceUrl: string)
   return lines.join("\n")
 }
 
-function formatLinkedInCompanyPosts(data: Record<string, unknown>, sourceUrl: string, page: number): string {
+function formatLinkedInCompanyPosts(data: Record<string, unknown>, sourceUrl: string, page: number, charges: readonly (number | null)[]) {
   const lines: string[] = []
   const listed = expectArray(data, "posts", "ScrapeCreators LinkedIn company posts")
   if (!listed.ok) return `ERROR: ${listed.error}`
-  const posts = listed.items.slice(0, 10)
+  const posts = listed.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null)
+  const unreadable = listed.items.length - posts.length
 
   lines.push(`LinkedIn company posts: ${sourceUrl}`)
   lines.push(`Page: ${page} of at most ${LINKEDIN_MAX_COMPANY_POSTS_PAGE}`)
-  lines.push(provenanceLine(data))
+  lines.push(provenanceLine(data, charges))
 
-  if (posts.length === 0) {
+  if (listed.items.length === 0) {
     lines.push("")
     lines.push("The provider returned an empty post list for this page.")
-    return lines.join("\n")
+    return { status: "empty" as const, text: lines.join("\n") }
   }
 
   lines.push("")
   lines.push(`Posts returned: ${posts.length}`)
+  if (unreadable) lines.push(unreadableLine(unreadable, "post"))
   lines.push("")
 
-  for (const item of posts) {
-    const record = asRecord(item)
-    if (!record) continue
+  for (const record of posts) {
     const text = cleanText(record.text) || "Untitled post"
     lines.push(`- ${truncate(text, 320)}`)
     if (cleanText(record.datePublished)) lines.push(`  Published: ${cleanText(record.datePublished)}`)
@@ -1492,10 +1554,10 @@ function formatLinkedInCompanyPosts(data: Record<string, unknown>, sourceUrl: st
     if (cleanText(record.id)) lines.push(`  Post ID: ${cleanText(record.id)}`)
   }
 
-  return lines.join("\n")
+  return unreadable ? { status: "partial" as const, text: lines.join("\n") } : lines.join("\n")
 }
 
-function formatLinkedInPost(data: Record<string, unknown>, sourceUrl: string): string {
+function formatLinkedInPost(data: Record<string, unknown>, sourceUrl: string, charges: readonly (number | null)[]): string {
   const lines: string[] = []
   const comments = asArray(data.comments).slice(0, 5)
   const moreArticles = asArray(data.moreArticles).slice(0, 3)
@@ -1505,7 +1567,7 @@ function formatLinkedInPost(data: Record<string, unknown>, sourceUrl: string): s
 
   lines.push(`LinkedIn post: ${cleanText(data.name) || cleanText(data.headline) || "Untitled post"}`)
   lines.push(`URL: ${sourceUrl}`)
-  lines.push(provenanceLine(data))
+  lines.push(provenanceLine(data, charges))
   if (cleanText(data.headline)) lines.push(`Headline: ${truncate(cleanText(data.headline), 260)}`)
   if (cleanText(data.datePublished)) lines.push(`Published: ${cleanText(data.datePublished)}`)
   if (likeCount !== null || commentCount !== null) {
@@ -1720,7 +1782,7 @@ export const telegram = creditMetered({
         "ScrapeCreators Telegram post",
       )
       if (!response.ok) return failText(response)
-      const lines = [`Telegram post: ${normalized.url}`, "Source: Telegram public post widget; fields Telegram does not expose are reported as such.", provenanceLine(response.payload), "", ...telegramPostLines(response.payload, null)]
+      const lines = [`Telegram post: ${normalized.url}`, "Source: Telegram public post widget; fields Telegram does not expose are reported as such.", provenanceLine(response.payload, response.charges), "", ...telegramPostLines(response.payload, null)]
       return {
         text: lines.join("\n"),
         details: {
@@ -1730,7 +1792,7 @@ export const telegram = creditMetered({
           post_id: asString(response.payload.id),
           channel_handle: asString(response.payload.channel_handle),
           cached: response.payload.cached === true,
-          credits_charged: asNumber(response.payload.credits_charged),
+          credits_charged: knownCharge(response.charges),
         },
       }
     }
@@ -1751,7 +1813,7 @@ export const telegram = creditMetered({
         "ScrapeCreators Telegram channel",
       )
       if (!response.ok) return failText(response)
-      const lines = [`Telegram channel lookup: @${handle}`, "Source: Telegram public web preview; no logged-in account.", provenanceLine(response.payload), "", ...telegramChannelLines(response.payload)]
+      const lines = [`Telegram channel lookup: @${handle}`, "Source: Telegram public web preview; no logged-in account.", provenanceLine(response.payload, response.charges), "", ...telegramChannelLines(response.payload)]
       return {
         text: lines.join("\n"),
         details: {
@@ -1761,14 +1823,14 @@ export const telegram = creditMetered({
           subscriber_count: asNumber(response.payload.subscriber_count),
           member_count: asNumber(response.payload.member_count),
           cached: response.payload.cached === true,
-          credits_charged: asNumber(response.payload.credits_charged),
+          credits_charged: knownCharge(response.charges),
         },
       }
     }
 
     const cursor = args.cursor?.trim()
     if (cursor && !/^\d+$/.test(cursor)) return "ERROR: cursor must be the numeric cursor returned by the previous posts page."
-    const limit = clampInt(args.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
+    const limit = displayLimit(args.limit, MAX_LIMIT)
     const response = await scrapecreatorsRequest(
       "/v1/telegram/channel/posts",
       { handle, cursor: cursor || undefined, cache_max_age: cacheMaxAge },
@@ -1780,6 +1842,7 @@ export const telegram = creditMetered({
     const listed = expectArray(response.payload, "posts", "ScrapeCreators Telegram channel posts")
     if (!listed.ok) return `ERROR: ${listed.error}`
     const posts = listed.items.map(asRecord).filter((r): r is Record<string, unknown> => r !== null)
+    const unreadable = listed.items.length - posts.length
     // The live page (2026-09-15) arrives in ascending chronology, so the display
     // cap must apply after ordering newest-first; posts without a parseable
     // published_at are kept but listed last, explicitly unranked.
@@ -1798,18 +1861,20 @@ export const telegram = creditMetered({
       `Telegram channel posts: @${handle}${cursor ? ` (page before cursor ${cursor})` : " (latest page)"}`,
       "Source: Telegram public web preview; one page per request; reactions and media URLs are absent when Telegram does not expose them.",
       `Order: newest first by published_at within this page (the provider delivers the page oldest-first)${undated ? `; ${undated} post${undated === 1 ? "" : "s"} without a parseable date listed last, unranked` : ""}.`,
-      provenanceLine(response.payload),
+      provenanceLine(response.payload, response.charges),
       `Posts: ${shown.length} shown of ${posts.length} returned on this page`,
       hasMore === false
         ? "Older posts: provider reports this is the terminal page"
         : nextCursor
-          ? `Older posts: pass cursor="${nextCursor}"${hasMore === null ? " (has_more not reported)" : ""}`
+          ? `Older posts: pass cursor="${nextCursor}"${hasMore === null ? " (has_more not reported)" : ""}${continuesAfter(shown.length, posts.length, "posts")}`
           : "Older posts: no cursor returned and has_more not reported; continuation unavailable",
     ]
+    if (unreadable) lines.push(unreadableLine(unreadable, "post"))
     if (channel) lines.push("", ...telegramChannelLines(channel))
     if (shown.length === 0) lines.push("", "The provider returned an empty post list for this page.")
     for (const [index, post] of shown.entries()) lines.push("", ...telegramPostLines(post, index))
     return {
+      ...(listed.items.length === 0 ? { status: "empty" as const } : unreadable ? { status: "partial" as const } : {}),
       text: lines.join("\n"),
       details: {
         provider: "scrapecreators",
@@ -1817,11 +1882,12 @@ export const telegram = creditMetered({
         handle,
         returned: posts.length,
         shown: shown.length,
+        unreadable,
         undated,
         cursor: hasMore === false ? null : nextCursor,
         has_more: hasMore,
         cached: response.payload.cached === true,
-        credits_charged: asNumber(response.payload.credits_charged),
+        credits_charged: knownCharge(response.charges),
         post_ids: shown.map((post) => asString(post.id) ?? (asNumber(post.id) !== null ? String(post.id) : null)).filter((value): value is string => value !== null),
       },
     }

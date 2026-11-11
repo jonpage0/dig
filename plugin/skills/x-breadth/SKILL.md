@@ -33,7 +33,7 @@ Grok's xAI model, its starting depth and web search come from Dig's `[x]` settin
 
 X's API bills each post and user it returns from the user's X developer credits and reports no charge per call, so Dig records those calls' cost as unknown; never estimate it. Size each pass's `limit` to its angle: a material angle may need 100 or more posts, a narrow one 25.
 
-From September 21, 2026 at 12:00 PM Pacific, [X Search billing](https://docs.x.ai/developers/tools/x-search) for Grok's `xsearch` charges per fetched post/profile rather than per tool call ($5 per 1,000 posts; $10 per 1,000 profiles; model tokens separate). Parent and quoted posts count. Dig records the costs xAI returns; raw responses are retained only when `keep_raw` is enabled and storage succeeds. Name missing originals or `retentionError` as evidence gaps. State the run's total returned cost, name any pass whose cost was unavailable and say how many X API calls ran with unknown cost, never inferring cost from citations. The four-pass Grok limit is a cost rule, not a coverage cut: carry further angles through X's search, and never silently cut passes because of cost. Confirm current pricing before quoting rates in later runs.
+Every `xsearch` pass is paid, and a deeper pass costs more: `max` and `ultra` more than `standard`, `standard` more than `quick`. Dig records the costs xAI returns; raw responses are retained only when `keep_raw` is enabled and storage succeeds. Name missing originals or `retentionError` as evidence gaps. State the run's total returned cost, name any pass whose cost was unavailable and say how many X API calls ran with unknown cost, never inferring cost from citations. The four-pass Grok limit is a cost rule, not a coverage cut: carry further angles through X's search, and never silently cut passes because of cost.
 
 ## Search for width
 
@@ -49,7 +49,7 @@ Before the first call, split the question into distinct reader-relevant angles. 
 - `from:`, `to:`, `url:`, `conversation_id:`, `in_reply_to_tweet_id:` and `quotes_of_tweet_id:` for handles, shared links and reply trees;
 - `min_likes:N`, `min_replies:N` and `min_reposts:N` for noisy topics, with parentheses and `OR` for variants.
 
-Since May 4, 2026, X's search leaves reposts out of keyword matches, though a `from:` search still returns an account's reposts; say so when amplification matters, and use `x_post` with `reposters` for who reposted a post. `x_count_posts` gives each angle's volume by hour or day, which shows where discussion concentrated and which windows to search; report counts as volume, never as posts you read.
+Since May 4, 2026, X's search leaves reposts out of keyword matches, though a `from:` search still returns an account's reposts; say so when amplification matters, and use `x_post` with `reposters` for who reposted a post. `x_count_posts` gives each angle's volume by hour or day (`granularity`; with `archive: true` it needs a `start_time`), which shows where discussion concentrated and which windows to search; report counts as volume, never as posts you read.
 
 **Communities hold discussion search can miss.** When a topic has its own X Communities, find them with `x_explore` (`kind: "communities"`) and read a relevant one's posts with `x_community` (`sort: "recent"` for coverage, `"relevant"` for what carried); give each Community its own labeled pass and name it in `## Coverage`.
 

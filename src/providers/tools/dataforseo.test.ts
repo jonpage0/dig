@@ -96,6 +96,27 @@ test("sandbox requests go to the sandbox host and are labelled as dummy data", a
 	expect(result.details?.cost).toEqual([]);
 });
 
+test("a sandbox call records no charge, even when its envelope reports a cost or no response arrives", async () => {
+	installFetch(() => Response.json(envelope([{ id: "s-2", status_code: 20000, status_message: "Ok.", cost: 0.0101, result_count: 1, result: [{ items_count: 1 }] }], 0.0101)));
+	const reported = await executeSource(request, { path: "serp/google/organic/live/advanced", tasks: [{ keyword: "x" }], sandbox: true }, context);
+	expect(reported.status).toBe("success");
+	expect(reported.details?.cost).toEqual([]);
+	installFetch(() => { throw new TypeError("fetch failed"); });
+	const unanswered = await executeSource(request, { path: "serp/google/organic/live/advanced", tasks: [{ keyword: "x" }], sandbox: true }, context);
+	expect(unanswered.status).toBe("failed");
+	expect(unanswered.details?.cost).toEqual([]);
+	expect(unanswered.text).not.toContain("charged");
+});
+
+test("a live request that got no response is sent once, and its cost is unknown and said to be", async () => {
+	const calls = installFetch(() => { throw new TypeError("fetch failed"); });
+	const result = await executeSource(request, { path: "serp/google/organic/live/advanced", tasks: [{ keyword: "x" }] }, context);
+	expect(calls).toHaveLength(1);
+	expect(result.status).toBe("failed");
+	expect(result.details?.cost).toBeNull();
+	expect(result.text).toContain("DataForSEO may have received and charged this request, but no complete response arrived; its cost is unknown.");
+});
+
 test("documented task codes keep their meaning: 40102 is empty, 40106 is partial, 40602 is not ready yet", async () => {
 	const run = async (task: object) => {
 		installFetch(() => Response.json(envelope([{ id: "t", cost: 0.004, result_count: 0, ...task }], 0.004)));
@@ -187,4 +208,28 @@ test("the docs index filters by section and words and returns readable paths; th
 test("the DataForSEO password is a known secret for redaction; the API login is not", () => {
 	expect(knownSecrets()).toContain(PASSWORD);
 	expect(knownSecrets()).not.toContain(LOGIN);
+});
+
+test("a sandbox URL without sandbox: true and a path with a query string are refused before any request", async () => {
+	const calls = installFetch(() => Response.json(envelope([], 0)));
+	const sandboxUrl = await executeSource(request, { path: "https://sandbox.dataforseo.com/v3/serp/google/organic/live/advanced", tasks: [{ keyword: "x" }] }, context);
+	expect(sandboxUrl.status).toBe("failed");
+	expect(sandboxUrl.text).toContain("sandbox: true");
+	const query = await executeSource(request, { path: "serp/google/locations?country=us" }, context);
+	expect(query.status).toBe("failed");
+	expect(query.text).toContain("query string");
+	expect(calls).toHaveLength(0);
+	await executeSource(request, { path: "https://sandbox.dataforseo.com/v3/serp/google/organic/live/advanced", tasks: [{ keyword: "x" }], sandbox: true }, context);
+	expect(calls.map((call) => new URL(call.url).host)).toEqual(["sandbox.dataforseo.com"]);
+});
+
+test("the docs reader follows at most three same-host redirects", async () => {
+	let hops = 0;
+	const calls = installFetch((call) => (hops++ < 3 ? new Response(null, { status: 301, headers: { location: `${call.url}/` } }) : new Response("# Auth\n\nBody.")));
+	expect((await executeSource(docs_read, { path: "auth" }, context)).status).toBe("success");
+	expect(calls).toHaveLength(4);
+	const endless = installFetch((call) => new Response(null, { status: 301, headers: { location: `${call.url}/` } }));
+	const refused = await executeSource(docs_read, { path: "auth" }, context);
+	expect(refused.status).toBe("failed");
+	expect(endless).toHaveLength(4);
 });

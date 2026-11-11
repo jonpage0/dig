@@ -30,6 +30,7 @@
  *   - TIKHUB_API_KEY (optional; the TikHub reads above)
  *   - TIKHUB_BASE_URL (optional; defaults to https://api.tikhub.io)
  */
+import { hostOf, hostWords } from "../../ui/host.mjs"
 import { abortableDelay, keptText } from "../http.js"
 import { failed, outcome, type OutcomeStatus, type ToolOutcome } from "../outcome.js"
 import { knownSecrets, redactValue } from "../secrets.js"
@@ -37,7 +38,7 @@ import type { ToolContext, ToolSpec } from "../types.js"
 import { oauthHeader, signedQuery, USER_KEY_NAMES, type UserKeys } from "./x_oauth.js"
 
 /** Cancellation plus the raw-response capture of the tool call. */
-type CallContext = Pick<ToolContext, "abort" | "keep">
+type CallContext = Pick<ToolContext, "abort" | "keep"> & { halt?: Halt }
 type Json = Record<string, unknown>
 
 const API_BASE = "https://api.x.com"
@@ -148,7 +149,7 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 const count = (value: number, one: string, many: string) => `${value.toLocaleString("en-US")} ${value === 1 ? one : many}`
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const bearerToken = () => process.env[KEY]?.trim() || null
-const missingKey = `${KEY} is not set in Dig's keys.env. The user creates an app at console.x.com and adds its Bearer Token outside the chat (Dig Settings → Edit keys.env), or copies one Codex's environment already has (Dig Settings → X → Use existing key).`
+const missingKey = () => hostOf(process.env.DIG_HOST) === "codex" ? `${KEY} is not set in Dig's keys.env. The user creates an app at console.x.com and adds its Bearer Token outside the chat (Dig Settings → Edit keys.env), or copies one Codex's environment already has (Dig Settings → X → Use existing key).` : `${KEY} is not set in Dig's keys.env. The user creates an app at console.x.com and adds its Bearer Token outside the chat by editing keys.env directly (${hostWords(process.env.DIG_HOST).skill("setup")} gives the exact line), or copies one ${hostWords(process.env.DIG_HOST).app}'s environment already has into keys.env by hand.`
 /** The four sign-in keys from keys.env, or the names that are missing. */
 function userKeys(): UserKeys | { missing: string[] } {
 	const [consumerKey, consumerSecret, accessToken, accessTokenSecret] = USER_KEY_NAMES.map((name) => process.env[name]?.trim() ?? "")
@@ -191,6 +192,10 @@ function bounded(text: string): string {
 /** Why a request failed. The first five are the X failures x_post's single-post fallback answers. */
 type FailureKind = "auth" | "payment" | "rate" | "server" | "network" | "redirect" | "request"
 const FALLBACK_KINDS: ReadonlySet<FailureKind> = new Set(["auth", "payment", "rate", "server", "network"])
+/** The failures after which a call that reads several things (x_post's extras, x_users' timelines) sends no further reads. */
+const HALT_KINDS: ReadonlySet<FailureKind> = new Set(["auth", "payment", "rate"])
+/** A call's first rate-limit, credit or sign-in failure (`by`), and how many reads it then did not send. */
+type Halt = { by: Failure | null; skipped: number }
 /**
  * A failed request. `resource` holds every problem in the body that names a missing, protected or suspended resource,
  * whatever else is beside it; `problem` names the body's other problems.
@@ -340,6 +345,7 @@ async function xGet(path: string, params: Params, label: string, ctx: CallContex
  */
 async function xRead(path: string, params: Params, label: string, ctx: CallContext, auth: Auth): Promise<Answer | Failure> {
 	const answer = await xGet(path, params, label, ctx, auth)
+	if (!answer.ok && ctx.halt && !ctx.halt.by && HALT_KINDS.has(answer.kind)) ctx.halt.by = answer
 	if (!answer.ok || !answer.resources.length || dataItems(answer.body).length) return answer
 	return { ok: false, kind: "request", status: answer.status, message: `X API ${label} reported ${problemList(answer.resources)}, and returned no data`, problem: null, resource: answer.resources }
 }
@@ -1035,7 +1041,34 @@ async function tikhubFallback(id: string, reason: string, extras: Extras, ctx: C
 // x_post
 // ---------------------------------------------------------------------------
 
-type Section = { lines: string[]; failure: string | null }
+/** One requested read's lines and failure; `skipped` names a read not sent because the call had halted. */
+type Section = { lines: string[]; failure: string | null; skipped?: string }
+
+/** After a call's rate-limit, credit or sign-in failure, records `what` as not attempted and returns true: the read is not sent. */
+function notAttempted(ctx: CallContext, what: string, sections: Section[]): boolean {
+	if (!ctx.halt?.by) return false
+	ctx.halt.skipped += 1
+	sections.push({ lines: [], failure: null, skipped: what })
+	return true
+}
+
+/** A post's or account's sections as block lines: each read with its failure, then one line naming the reads not attempted. */
+function sectionLines(sections: Section[]): string[] {
+	const skipped = sections.flatMap((section) => section.skipped ?? [])
+	return [
+		...sections.filter((section) => !section.skipped).flatMap((section) => ["", ...section.lines, ...(section.failure ? [`Not read: ${section.failure}`] : [])]),
+		...(skipped.length ? ["", `Not attempted: ${skipped.join(", ")}.`] : []),
+	]
+}
+
+/** The call's line saying how many reads it did not send, and why. */
+function haltLines(halt: Halt): string[] {
+	if (!halt.by || !halt.skipped) return []
+	const why = halt.by.kind === "rate" ? "X's rate limit" : halt.by.kind === "payment" ? "X's credit failure" : "X's refusal of the credential"
+	return [`Not attempted: ${count(halt.skipped, "requested read", "requested reads")}. After ${why} above, Dig sent no further reads in this call.`]
+}
+/** Conversation searches one x_post call has read, by endpoint, query, start time and limit: posts in one conversation share them. */
+type Searches = Map<string, SearchPages>
 
 /** When a post was created, in milliseconds: its created_at, else its snowflake id's time. */
 function postTime(post: Json): number | null {
@@ -1044,7 +1077,7 @@ function postTime(post: Json): number | null {
 }
 
 /** The author's thread, replies, quote posts and reposters of one returned post, as requested. */
-async function postNeighbourhood(post: Json, extras: Extras, inc: Includes, ctx: CallContext, token: string, requested: Set<string>): Promise<Section[]> {
+async function postNeighbourhood(post: Json, extras: Extras, inc: Includes, ctx: CallContext, token: string, requested: Set<string>, searches: Searches): Promise<Section[]> {
 	const id = String(post.id)
 	const author = authorOf(post, inc)
 	const from = handleOf(author) ?? str(post.author_id)
@@ -1054,6 +1087,15 @@ async function postNeighbourhood(post: Json, extras: Extras, inc: Includes, ctx:
 	// Full-archive search defaults to the last 30 days; an older conversation is read from its root post on.
 	const start = endpoint === "all" ? conversationStart(root) : undefined
 	const where = endpoint === "recent" ? "recent search" : `full-archive search from ${start}`
+	// A failed search is not shared, so each post's own read names its failure as before.
+	const search = async (query: string, limit: number, label: string): Promise<SearchPages> => {
+		const key = JSON.stringify([endpoint, query, start ?? null, limit])
+		const known = searches.get(key)
+		if (known) return known
+		const result = await searchPages(endpoint, { query, sort_order: "recency", start_time: start }, limit, label, inc, ctx, token)
+		if (!result.error) searches.set(key, result)
+		return result
+	}
 	// Reading on searches again up to the oldest post read. X's end_time is exclusive and to the second, so the search
 	// ends one second after that post's second and may repeat posts from that second.
 	const readOn = (query: string, posts: Json[]) => {
@@ -1071,28 +1113,33 @@ async function postNeighbourhood(post: Json, extras: Extras, inc: Includes, ctx:
 	const sections: Section[] = []
 	const listed = new Set<string>([...requested, root])
 
-	if (extras.thread) {
+	if (extras.thread && !notAttempted(ctx, "thread", sections)) {
 		const query = `conversation_id:${root} from:${from}`
 		const result: SearchPages = from
-			? await searchPages(endpoint, { query, sort_order: "recency", start_time: start }, THREAD_PAGE, `thread of ${id}`, inc, ctx, token)
+			? await search(query, THREAD_PAGE, `thread of ${id}`)
 			: { posts: [], pages: 0, more: false, capped: false, error: `thread of ${id}: X returned no author for this post, so its thread cannot be searched` }
 		const thread = result.posts.filter((item) => !requested.has(String(item.id))).sort(byId)
 		for (const item of thread) listed.add(String(item.id))
 		sections.push({
 			lines: [`Thread: ${count(thread.length, "post", "posts")} by ${from ? `@${from}` : "the author"} in conversation ${root} (${where}), oldest first.${thread.length ? ` ${ZERO_NOTE}` : ""}`, ...coverage(result, "of this thread", query), ...thread.flatMap((item) => formatListPost(item, inc))],
-			failure: shortfall(result, `the thread of ${id}`),
+			// The thread is not the caller's to limit, so Dig's one 100-post read leaving more unread is a shortfall too.
+			failure: shortfall(result, `the thread of ${id}`) ?? (result.more ? `the rest of the thread of ${id}: Dig reads at most ${THREAD_PAGE} of a thread's posts in one call` : null),
 		})
 	}
-	if (extras.replies > 0) {
+	if (extras.replies > 0 && !notAttempted(ctx, "replies", sections)) {
 		const query = `conversation_id:${root}${extras.thread && from ? ` -from:${from}` : ""}`
-		const result = await searchPages(endpoint, { query, sort_order: "recency", start_time: start }, extras.replies, `replies to ${id}`, inc, ctx, token)
-		const replies = result.posts.filter((item) => !listed.has(String(item.id))).slice(0, extras.replies)
+		// The requested post and the root are left out of the replies, so the search asks for two more, but never for a second billed page.
+		const result = await search(query, Math.min(extras.replies + 2, SEARCH_PAGE.max), `replies to ${id}`)
+		const kept = result.posts.filter((item) => !listed.has(String(item.id)))
+		const replies = kept.slice(0, extras.replies)
+		// Replies read past those shown are not lost: coverage says X has more and reads on from the last one shown.
+		const shown = kept.length > replies.length ? { ...result, posts: replies, more: true } : result
 		sections.push({
-			lines: [`Replies: ${count(replies.length, "post", "posts")} from conversation ${root}${extras.thread ? ", besides the author's thread" : ""} (${where}, newest first).${replies.length ? ` ${ZERO_NOTE}` : ""}`, ...coverage(result, "replies in this conversation", query), ...replies.flatMap((item) => formatListPost(item, inc))],
+			lines: [`Replies: ${count(replies.length, "post", "posts")} from conversation ${root}${extras.thread ? ", besides the author's thread" : ""} (${where}, newest first).${replies.length ? ` ${ZERO_NOTE}` : ""}`, ...coverage(shown, "replies in this conversation", query), ...replies.flatMap((item) => formatListPost(item, inc))],
 			failure: shortfall(result, `the replies to ${id}`),
 		})
 	}
-	if (extras.quotes > 0) {
+	if (extras.quotes > 0 && !notAttempted(ctx, "quote posts", sections)) {
 		const answer = await xRead(`/2/tweets/${id}/quote_tweets`, { ...POST_PARAMS, max_results: clamp(extras.quotes, QUOTES_MIN, SEARCH_PAGE.max) }, `quote posts of ${id}`, ctx, token)
 		if (answer.ok) addIncludes(inc, answer.body)
 		const quotes = answer.ok ? dataItems(answer.body).slice(0, extras.quotes) : []
@@ -1101,7 +1148,7 @@ async function postNeighbourhood(post: Json, extras: Extras, inc: Includes, ctx:
 			failure: answer.ok ? answer.problem : answer.message,
 		})
 	}
-	if (extras.reposters > 0) {
+	if (extras.reposters > 0 && !notAttempted(ctx, "reposters", sections)) {
 		const answer = await xRead(`/2/tweets/${id}/retweeted_by`, { ...USER_PARAMS, max_results: extras.reposters }, `reposters of ${id}`, ctx, token)
 		if (answer.ok) addIncludes(inc, answer.body)
 		const users = answer.ok ? dataItems(answer.body).slice(0, extras.reposters) : []
@@ -1135,7 +1182,7 @@ export const post: ToolSpec = {
 		const token = bearerToken()
 		if (!token) {
 			if (ids.length === 1) return tikhubFallback(ids[0], `${KEY} is not set in Dig's keys.env`, extras, context)
-			return failed(`${missingKey} TikHub stands in only for a single post.`)
+			return failed(`${missingKey()} TikHub stands in only for a single post.`)
 		}
 		const lookup = await xGet("/2/tweets", { ...POST_PARAMS, ids: ids.join(",") }, "post lookup", context, token)
 		if (!lookup.ok) {
@@ -1156,10 +1203,12 @@ export const post: ToolSpec = {
 		const requested = new Set(ids)
 		const blocks: string[][] = []
 		const failures: string[] = lookup.problem ? [lookup.problem] : []
+		const searches: Searches = new Map()
+		const halt: Halt = { by: null, skipped: 0 }
 		for (const item of found) {
-			const sections = anyExtras(extras) ? await postNeighbourhood(item, extras, inc, context, token, requested) : []
+			const sections = anyExtras(extras) ? await postNeighbourhood(item, extras, inc, { ...context, halt }, token, requested, searches) : []
 			failures.push(...sections.flatMap((section) => section.failure ?? []))
-			blocks.push([...formatPost(item, inc), ...sections.flatMap((section) => ["", ...section.lines, ...(section.failure ? [`Not read: ${section.failure}`] : [])])])
+			blocks.push([...formatPost(item, inc), ...sectionLines(sections)])
 		}
 		const status = lookupStatus(ids.length - missing.length, missing, lookup.resources, failures.length)
 		const head = `${status === "failed" ? "ERROR: " : ""}X API: ${count(ids.length - missing.length, "post", "posts")} of ${ids.length} requested.`
@@ -1169,6 +1218,7 @@ export const post: ToolSpec = {
 			// X returned nothing without answering for every post; a resource problem it did name still keeps them from TikHub.
 			...(status === "failed" && lookup.resources.length ? [withheld(lookup.resources, ids.length)] : []),
 			...(failures.length ? [`Some requested reads failed: ${failures.join(" | ")}`] : []),
+			...haltLines(halt),
 			...blocks.flatMap((block) => ["", "---", "", ...block]),
 		]
 		return outcome(status, bounded(lines.join("\n")), {
@@ -1197,7 +1247,7 @@ export const search_posts: ToolSpec = {
 		"Pages internally up to limit (default 25, max 500; at most 50 pages), each page kept as its own original response; returns each post with author, time, permalink, nonzero public counts and full text. Requires X_BEARER_TOKEN. X reports no per-call charge, so the cost is recorded as unknown.",
 	async execute(args, context) {
 		const token = bearerToken()
-		if (!token) return failed(missingKey)
+		if (!token) return failed(missingKey())
 		const query = String(args.query ?? "").trim()
 		if (!query) return failed("query is required: X search syntax, as on x.com search.")
 		const archive = args.archive === true
@@ -1231,13 +1281,14 @@ type Granularity = (typeof GRANULARITIES)[number]
 
 export const count_posts: ToolSpec = {
 	description:
-		"Count X posts matching a query (X search syntax) per minute, hour or day (default day), without reading them: archive false counts the last 7 days, true the full archive, from 2006-03-21 unless start_time says otherwise (X's own default there is the last 30 days). Returns each bucket's count and the total. Requires X_BEARER_TOKEN. X reports no per-call charge, so the cost is recorded as unknown.",
+		`Count X posts matching a query (X search syntax) per minute, hour or day (default day), without reading them: archive false counts the last 7 days; true counts the full archive and needs start_time (end_time optional), since a count from the archive's 2006 start can run past the page limit below. Returns each bucket's count and the total. Follows at most ${MAX_COUNT_PAGES} pages of X's buckets; a count that needs more stops there and is partial, so narrow the window with start_time and end_time. Requires X_BEARER_TOKEN. X reports no per-call charge, so the cost is recorded as unknown.`,
 	async execute(args, context) {
 		const token = bearerToken()
-		if (!token) return failed(missingKey)
+		if (!token) return failed(missingKey())
 		const query = String(args.query ?? "").trim()
 		if (!query) return failed("query is required: X search syntax, as on x.com search.")
 		const archive = args.archive === true
+		if (archive && !str(args.start_time)) return failed(`A full-archive count needs start_time (and may take end_time): a count from X's archive start in 2006 can run past the ${MAX_COUNT_PAGES} pages of X's buckets Dig follows and stop with an incomplete total. Pass the window to count; no request was sent.`)
 		const granularity: Granularity = GRANULARITIES.includes(args.granularity) ? args.granularity : "day"
 		const endpoint = archive ? "/2/tweets/counts/all" : "/2/tweets/counts/recent"
 		const start = startTime(args, archive)
@@ -1269,15 +1320,17 @@ export const count_posts: ToolSpec = {
 		} while (pageToken && pages < MAX_COUNT_PAGES)
 		const summed = buckets.reduce((sum, bucket) => sum + bucket.count, 0)
 		const total = reportedTotal ?? summed
-		const details = { endpoint, granularity, pages, buckets: buckets.length, total, more: Boolean(pageToken) }
+		// A count that read no bucket has no total to state.
+		const none = Boolean(error) && !buckets.length
+		const details = { endpoint, granularity, pages, buckets: buckets.length, ...(none ? {} : { total }), more: Boolean(pageToken) }
 		const scope = [archive ? "full archive" : "last 7 days", timeWindow(start, str(args.end_time)), `per ${granularity}`].filter(Boolean).join(", ")
-		const head = `X post counts for "${query}" (${scope}): ${count(total, "post", "posts")} in ${count(buckets.length, "bucket", "buckets")}.`
-		if (error && !buckets.length) return outcome("failed", `ERROR: ${error}\n${head}`, details)
+		const head = `X post counts for "${query}" (${scope})${none ? "" : `: ${count(total, "post", "posts")} in ${count(buckets.length, "bucket", "buckets")}`}.`
+		if (none) return outcome("failed", `ERROR: ${error}\n${head}`, details)
 		const label = (bucketStart: string) => (granularity === "day" ? bucketStart.slice(0, 10) : utc(bucketStart))
 		const lines = [
 			head,
 			...(error ? [`Page ${pages} failed or reported a problem, so later buckets may be missing and the total may be incomplete: ${error}`] : []),
-			...(pageToken && !error ? [`Stopped after ${count(pages, "page", "pages")}; X has more buckets, so the total is incomplete. Narrow the window or count per hour or day.`] : []),
+			...(pageToken && !error ? [`Stopped after ${count(pages, "page", "pages")}; X has more buckets, so the total is incomplete. Narrow the window with start_time and end_time.`] : []),
 			"",
 			...buckets.map((bucket) => `${label(bucket.start)}: ${bucket.count.toLocaleString("en-US")}`),
 		]
@@ -1321,7 +1374,7 @@ export const users: ToolSpec = {
 		const needsToken = handles.length > 0 || posts > 0 || mentions > 0
 		const keys = query ? userKeys() : null
 		if (keys && "missing" in keys) return failed(`${missingUserKeys("People search", keys.missing)}${needsToken && !token ? ` Each account's posts and mentions also need ${KEY}.` : ""}`)
-		if (needsToken && !token) return failed(missingKey)
+		if (needsToken && !token) return failed(missingKey())
 		const wanted = [...new Map(handles.map((handle) => [handle.toLowerCase(), handle])).values()]
 		const answer = keys
 			? await xRead("/2/users/search", { ...USER_PARAMS, query, max_results: PEOPLE_SEARCH_RESULTS }, "people search", context, keys)
@@ -1340,12 +1393,14 @@ export const users: ToolSpec = {
 		const missing = handles.length ? missingOf(wanted, new Set(found.map((user) => String(user.username ?? "").toLowerCase())), answer.resources) : []
 		const failures: string[] = answer.problem ? [answer.problem] : []
 		const blocks: string[][] = []
+		const halt: Halt = { by: null, skipped: 0 }
+		const ctx: CallContext = { ...context, halt }
 		for (const user of found) {
 			const sections: Section[] = []
-			if (posts > 0 && token) sections.push(await userTimeline(user, "tweets", posts, inc, context, token))
-			if (mentions > 0 && token) sections.push(await userTimeline(user, "mentions", mentions, inc, context, token))
+			if (posts > 0 && token && !notAttempted(ctx, "posts", sections)) sections.push(await userTimeline(user, "tweets", posts, inc, ctx, token))
+			if (mentions > 0 && token && !notAttempted(ctx, "mentions", sections)) sections.push(await userTimeline(user, "mentions", mentions, inc, ctx, token))
 			failures.push(...sections.flatMap((section) => section.failure ?? []))
-			blocks.push([...formatUser(user), ...sections.flatMap((section) => ["", ...section.lines, ...(section.failure ? [`Not read: ${section.failure}`] : [])])])
+			blocks.push([...formatUser(user), ...sectionLines(sections)])
 		}
 		const status = handles.length ? lookupStatus(wanted.length - missing.length, missing, answer.resources, failures.length) : !found.length ? "empty" : failures.length ? "partial" : "success"
 		const head = handles.length
@@ -1355,6 +1410,7 @@ export const users: ToolSpec = {
 			head,
 			...missing.map((item) => `Not returned: @${item.id} — ${item.reason}`),
 			...(failures.length ? [`Some requested reads failed: ${failures.join(" | ")}`] : []),
+			...haltLines(halt),
 			...(!found.length && !handles.length ? ["", "X found no accounts for this search."] : []),
 			...blocks.flatMap((block) => ["", "---", "", ...block]),
 		]
@@ -1379,7 +1435,7 @@ function stringLists(value: unknown, path = ""): string[] {
 
 function formatStory(story: Json): string[] {
 	const posts = recs(story.cluster_posts_results).flatMap((item) => str(item.post_id) ?? [])
-	const updated = str(story.updated_at) ?? str(story.last_updated_at_ms)
+	const updated = str(story.updated_at)
 	return [
 		`X News story: ${str(story.name) ?? "(no name)"}`,
 		[`id ${String(story.id ?? "?")}`, str(story.category), updated ? `updated ${updated}` : null].filter(Boolean).join(" · "),
@@ -1403,7 +1459,7 @@ export const news: ToolSpec = {
 		if (id && (args.max_age_hours !== undefined || args.limit !== undefined)) return failed("max_age_hours and limit apply to a News search by query, not to a story id.")
 		if (id && !NUMERIC_ID.test(id)) return failed(`"${id}" is not an X News story id; ids are numeric.`)
 		const token = bearerToken()
-		if (!token) return failed(missingKey)
+		if (!token) return failed(missingKey())
 		const answer = id
 			? await xGet(`/2/news/${id}`, { "news.fields": NEWS_FIELDS.join(",") }, `news story ${id}`, context, token)
 			: await xRead("/2/news/search", { query, max_results: args.limit, max_age_hours: args.max_age_hours, "news.fields": NEWS_FIELDS.join(",") }, "news search", context, token)
@@ -1560,7 +1616,7 @@ export const explore: ToolSpec = {
 			return withProblem(answer.problem, [head, "", ...communities.flatMap(formatCommunity)].join("\n"), { kind, items: communities.length })
 		}
 		const token = bearerToken()
-		if (!token) return failed(missingKey)
+		if (!token) return failed(missingKey())
 
 		if (kind === "trends") {
 			const woeid = Number(args.woeid ?? WORLDWIDE_WOEID)
@@ -1627,7 +1683,7 @@ const LOOKUP_IDS = 100
 const FOLDER_PAGES = 10
 /** The most folders or folder post ids X returns per request. A full page without a next token may not be all there is. */
 const FOLDER_PAGE_MAX = 100
-const OWNED_READS = "X prices reads of the signed-in account's own bookmarks and liked posts as Owned Reads ($0.001 per resource, X changelog 2026-04-16); Dig still records the cost as unknown, because X reports no per-call charge."
+const OWNED_READS = "X bills reads of the signed-in account's own bookmarks and liked posts as Owned Reads; Dig still records the cost as unknown, because X reports no per-call charge."
 
 /**
  * `match`'s words, each as a pattern that matches at the start of a word, case-insensitively: after the start of the
@@ -1691,7 +1747,7 @@ function ownOutcome(read: OwnRead, words: MatchWord[], inc: Includes, details: R
 
 /**
  * The signed-in account's bookmark folders, by X's paging. `full` says the last page held X's per-request maximum with
- * no next token, so the account may have folders X did not list; `problem` names a problem X reported beside the list,
+ * no next token, or the page safety limit stopped with one, so the account may have folders X did not list; `problem` names a problem X reported beside the list,
  * which also ends the reading.
  */
 async function bookmarkFolders(userId: string, keys: UserKeys, ctx: CallContext): Promise<{ ok: true; folders: Json[]; full: boolean; problem: string | null } | Failure> {
@@ -1708,30 +1764,33 @@ async function bookmarkFolders(userId: string, keys: UserKeys, ctx: CallContext)
 		full = !cursor && listed.length >= FOLDER_PAGE_MAX
 		if (!cursor) break
 	}
-	return { ok: true, folders, full, problem: null }
+	// The page safety limit leaving a next token unread also leaves folders X did not list.
+	return { ok: true, folders, full: full || Boolean(cursor), problem: null }
 }
 
 /**
  * A folder's post ids (X lists ids only), newest first as X orders them, up to `limit`. `full` says a page held X's
- * per-request maximum with no next token before `limit` was reached, so the folder may hold more.
+ * per-request maximum with no next token before `limit` was reached, so the folder may hold more; `capped` that the page
+ * safety limit stopped it before `limit`.
  */
-async function folderPostIds(userId: string, folderId: string, limit: number, keys: UserKeys, ctx: CallContext): Promise<{ ids: string[]; pages: number; more: boolean; full: boolean; error: string | null }> {
+async function folderPostIds(userId: string, folderId: string, limit: number, keys: UserKeys, ctx: CallContext): Promise<{ ids: string[]; pages: number; more: boolean; capped: boolean; full: boolean; error: string | null }> {
 	const ids: string[] = []
 	let cursor: string | null = null
 	let pages = 0
 	for (;;) {
 		pages += 1
 		const answer = await xRead(`/2/users/${userId}/bookmarks/folders/${folderId}`, { max_results: FOLDER_PAGE_MAX, pagination_token: cursor ?? undefined }, `bookmark folder ${folderId}${pages > 1 ? `, page ${pages}` : ""}`, ctx, keys)
-		if (!answer.ok) return { ids, pages, more: true, full: false, error: answer.message }
+		if (!answer.ok) return { ids, pages, more: true, capped: false, full: false, error: answer.message }
 		const listed = dataItems(answer.body)
 		for (const item of listed) {
 			const id = str(item.id)
 			if (id && !ids.includes(id)) ids.push(id)
 		}
 		cursor = nextToken(answer.body)
-		if (answer.problem) return { ids: ids.slice(0, limit), pages, more: true, full: false, error: answer.problem }
+		if (answer.problem) return { ids: ids.slice(0, limit), pages, more: true, capped: false, full: false, error: answer.problem }
 		const full = !cursor && listed.length >= FOLDER_PAGE_MAX && ids.length < limit
-		if (!cursor || ids.length >= limit || pages >= MAX_SEARCH_PAGES) return { ids: ids.slice(0, limit), pages, more: Boolean(cursor) || ids.length > limit, full, error: null }
+		if (!cursor || ids.length >= limit) return { ids: ids.slice(0, limit), pages, more: Boolean(cursor) || ids.length > limit, capped: false, full, error: null }
+		if (pages >= MAX_SEARCH_PAGES) return { ids, pages, more: true, capped: true, full, error: null }
 	}
 }
 
@@ -1788,7 +1847,7 @@ export const bookmarks: ToolSpec = {
 		const keys = userKeys()
 		const token = bearerToken()
 		if ("missing" in keys) return failed(`${missingUserKeys(folder ? "Reading a bookmark folder" : "Reading bookmarks", keys.missing)}${folder && !token ? ` A folder's posts are then read through the post lookup, which also needs ${KEY}.` : ""}`)
-		if (folder && !token) return failed(`A bookmark folder lists post ids only, and Dig reads its posts through the post lookup, which needs ${KEY}. ${missingKey}`)
+		if (folder && !token) return failed(`A bookmark folder lists post ids only, and Dig reads its posts through the post lookup, which needs ${KEY}. ${missingKey()}`)
 		const me = await signedInAccount(keys, context)
 		if (!me.ok) return failed(me.message)
 		const who = me.handle ? `@${me.handle}` : `account ${me.id}`
@@ -1820,7 +1879,7 @@ export const bookmarks: ToolSpec = {
 			...(listed.problem ? [`The folder list reported a problem, though it listed this folder: ${listed.problem}`] : []),
 			...(listing.full ? [`X's folder endpoint returned ${FOLDER_PAGE_MAX} post ids, its maximum per request, and no way to read further; the folder may hold more.`] : []),
 		]
-		return ownOutcome({ title, noun: "posts in this folder", posts: looked.posts, more: listing.more, capped: false, pages: listing.pages, error: listing.error, missing: looked.missing, failures: looked.failures, incomplete, lookup: looked.status, also: looked.also }, words, inc, { endpoint: "/2/users/:id/bookmarks/folders/:folder_id", folder: folderId, listed: listing.ids.length })
+		return ownOutcome({ title, noun: "posts in this folder", posts: looked.posts, more: listing.more, capped: listing.capped, pages: listing.pages, error: listing.error, missing: looked.missing, failures: looked.failures, incomplete, lookup: looked.status, also: looked.also }, words, inc, { endpoint: "/2/users/:id/bookmarks/folders/:folder_id", folder: folderId, listed: listing.ids.length })
 	},
 }
 
@@ -1963,8 +2022,8 @@ export const community: ToolSpec = {
 				// TikHub's Recency ranking is not time order (live pages mix days), so recent shows the posts read by their own time.
 				const shown = recent ? result.posts.map((post, index) => ({ post, index, at: Date.parse(post.createdAt ?? "") })).sort((a, b) => (Number.isNaN(b.at) ? -1 : Number.isNaN(a.at) ? 1 : b.at - a.at) || a.index - b.index).map(({ post }) => post) : result.posts
 				const order = recent
-					? `${count(postsRead, "post", "posts")} read through TikHub's Recency ranking, shown newest first${result.more ? "; TikHub has more" : ""}. TikHub's ranking is not strictly by time, so a newer post may sit on a later page.`
-					: `${count(postsRead, "post", "posts")} read in TikHub's Relevance ranking, in its order${result.more ? "; TikHub has more" : ""}.`
+					? `${count(postsRead, "post", "posts")} read through TikHub's Recency ranking, shown newest first${result.more && !result.error ? "; TikHub has more" : ""}. TikHub's ranking is not strictly by time, so a newer post may sit on a later page.`
+					: `${count(postsRead, "post", "posts")} read in TikHub's Relevance ranking, in its order${result.more && !result.error ? "; TikHub has more" : ""}.`
 				postLines = [
 					`Posts via TikHub: ${order}`,
 					...(result.error && postsRead ? [`Page ${result.pages} failed, so later posts may be missing: ${result.error}`] : []),

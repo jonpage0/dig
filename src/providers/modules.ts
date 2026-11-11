@@ -62,7 +62,7 @@ export const MODULES = [
     description: "Developer stories and discussions",
     tools: ["hackernews", "hackernews_read"],
     about: "Hacker News stories and comment threads, searched through Algolia's public Hacker News index, with comment trees read for context. Useful for how developers and founders react to a launch, a tool or an idea.",
-    providers: [{ name: "Algolia Hacker News search", url: "https://hn.algolia.com/api" }, { name: "Hacker News API", url: "https://github.com/HackerNews/API" }],
+    providers: [{ name: "Algolia Hacker News search", url: "https://hn.algolia.com/api" }],
     billing: "Free. No account or key.",
     logo: "ycombinator",
   },
@@ -85,7 +85,7 @@ export const MODULES = [
     description: "Public prediction-market evidence",
     tools: ["polymarket", "polymarket_history", "polymarket_resolution"],
     about: "Prediction-market questions with their current odds, volume and liquidity. Prices show what traders are betting, not what is true.",
-    providers: [{ name: "Polymarket Gamma API", url: "https://docs.polymarket.com" }],
+    providers: [{ name: "Polymarket Gamma API", url: "https://docs.polymarket.com" }, { name: "Polymarket Data API", url: "https://docs.polymarket.com" }],
     billing: "Free. No account or key.",
     logo: "polymarket",
   },
@@ -130,7 +130,7 @@ export const MODULES = [
     credential: "PERPLEXITY_API_KEY",
     about: "Web answers with citations at three depths (a quick answer, a reasoned comparison, multi-step research), plus plain search results without an AI answer.",
     providers: [{ name: "Perplexity API", url: "https://docs.perplexity.ai" }],
-    billing: "Paid per request in US dollars from your Perplexity API account. Dig records the cost Perplexity reports.",
+    billing: "Paid per request in US dollars from your Perplexity API account. Dig records the cost Perplexity reports for Agent calls (ask, reason and research); Search calls report none, so Dig shows their cost as unknown.",
     logo: "perplexity",
   },
   {
@@ -227,10 +227,10 @@ export const MODULES = [
     skills: ["x-judge", "x-breadth", "x-post"],
     env: ["XAI_API_KEY", "X_BEARER_TOKEN", "X_CONSUMER_KEY", "X_CONSUMER_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET", "TIKHUB_API_KEY", "TIKHUB_BASE_URL"],
     keys: ["XAI_API_KEY", "X_BEARER_TOKEN"],
-    credential: "XAI_API_KEY for xsearch; X_BEARER_TOKEN for the X API tools; optional X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET) for people search, Communities search, bookmarks and likes; TIKHUB_API_KEY optional, for x_post's single-post fallback, Communities search without sign-in and a Community's posts",
+    credential: "XAI_API_KEY for xsearch; X_BEARER_TOKEN for the X API tools; optional X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET) for people search, Communities search, bookmarks and likes; TIKHUB_API_KEY optional, for x_post's single-post fallback, Communities search without sign-in and a Community's details and posts",
     about: "Posts and discussion on X, read two ways: X's own API returns the posts, accounts, counts, News stories, trends, Spaces, Communities and Lists themselves, and xAI's Grok searches X live, by keyword and by meaning, watches the videos and reads the images in the posts it finds, and writes up what it finds with links to the posts. Signing in with your own X account adds people and Communities search and reading your bookmarks and likes. Three methods: X judge weighs claims by reach and kind of source; X breadth finds as many distinct posts and angles as it can without judging them; X post reads particular posts exactly, with their thread, reactions, author, spread and origin.",
     providers: [{ name: "X API", url: "https://docs.x.com/x-api/introduction" }, { name: "xAI API", url: "https://x.ai/api" }, TIKHUB],
-    billing: "The X API is pay-per-use from credits in your X developer account; X does not report each call's charge, so Dig shows those calls' cost as unknown. xAI is paid per request in US dollars from your xAI account, and Dig records the cost xAI reports. TikHub, used for a single post the X API cannot read, Communities search without sign-in and a Community's posts, shows as unknown too.",
+    billing: "The X API is pay-per-use from credits in your X developer account; X does not report each call's charge, so Dig shows those calls' cost as unknown. xAI is paid per request in US dollars from your xAI account, and Dig records the cost xAI reports. TikHub, used for a single post the X API cannot read, Communities search without sign-in and a Community's details and posts, shows as unknown too.",
     logo: "x",
   },
   {
@@ -254,7 +254,7 @@ export const MODULES = [
     env: ["TIKHUB_API_KEY", "TIKHUB_BASE_URL"],
     keys: ["TIKHUB_API_KEY"],
     credential: "TIKHUB_API_KEY",
-    about: "Deeper Reddit research: query scouting, subreddit context, full comment trees, public author history and batch enrichment of posts.",
+    about: "Deeper Reddit research: query scouting, subreddit context, a thread's first page of comments with up to 8 collapsed-reply continuations per call, public author history and batch enrichment of posts.",
     providers: [TIKHUB],
     billing: TIKHUB_UNKNOWN,
     logo: "reddit",
@@ -413,7 +413,7 @@ export const MODULES = [
       "DATAFORSEO_USERNAME and DATAFORSEO_PASSWORD: the API login and API password from DataForSEO's API Access page, not the dashboard password",
     about: "Search-market data: Google results pages, keyword volumes, rankings, backlinks, local businesses and AI-search visibility. Dig reads DataForSEO's documentation before calling an endpoint.",
     providers: [{ name: "DataForSEO v3 API", url: "https://dataforseo.com" }],
-    billing: "Paid per request in US dollars from a prepaid DataForSEO account. Dig records the cost each response reports; a free sandbox checks request shapes with dummy data.",
+    billing: "Paid per request in US dollars from a prepaid DataForSEO account. Dig records the cost each live response reports, and unknown when no complete response arrived; the free sandbox checks request shapes with dummy data and records no charge.",
   },
 ] as const satisfies readonly DigModule[];
 export type ModuleId = (typeof MODULES)[number]["id"];
@@ -439,7 +439,7 @@ const UNKNOWN_COST = "Dig shows these calls’ cost as unknown, because the prov
 /** In Sources page order: web, code, papers, video, social, then markets. Every credential name of every source is in exactly one, under its `keys` or `optional`. */
 export const ACCOUNTS = [
   { id: "exa", name: "Exa", signup: "https://dashboard.exa.ai/api-keys", keys: ["EXA_API_KEY"], billing: "Paid per request in US dollars, which Dig records." },
-  { id: "perplexity", name: "Perplexity API", signup: "https://console.perplexity.ai", keys: ["PERPLEXITY_API_KEY"], billing: "Paid per request in US dollars, which Dig records." },
+  { id: "perplexity", name: "Perplexity API", signup: "https://console.perplexity.ai", keys: ["PERPLEXITY_API_KEY"], billing: "Paid per request in US dollars; Dig records Agent calls' reported cost and shows Search calls' cost as unknown." },
   { id: "github", name: "GitHub", signup: "https://github.com/settings/tokens", keys: [["GH_TOKEN", "GITHUB_TOKEN"]], billing: "Free. A token, or an existing gh login, raises GitHub’s anonymous limits." },
   { id: "semantic-scholar", name: "Semantic Scholar", signup: "https://www.semanticscholar.org/product/api#api-key-form", keys: [["SEMANTIC_SCHOLAR_API_KEY", "PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY"]], billing: "Free. A key replaces the shared anonymous pool with a rate limit of your own." },
   { id: "openalex", name: "OpenAlex", signup: "https://openalex.org/settings/api", keys: [["OPENALEX_API_KEY", "PAPER_SEARCH_MCP_OPENALEX_API_KEY"]], billing: "Reports a US-dollar usage cost, which Dig records and its free daily allowance can cover; a key raises the allowance." },

@@ -2,7 +2,8 @@ import React from 'react';
 import { VERSION } from '../../version.mjs';
 import { Badge, Button } from '../shared/components';
 import { Frame, FrameHeader, FrameTitle, FrameDescription, FramePanel } from '../shared/frame';
-import { replacedMessage } from './controller';
+import { replacedMessage, versionMessage } from './controller';
+import { hostWords } from '../../ui/host.mjs';
 import type { DigHost } from '../shared/host';
 
 function StorageRow({ label, description, value, action }: { label: string; description: string; value?: string; action?: React.ReactNode }) {
@@ -15,15 +16,14 @@ function StorageRow({ label, description, value, action }: { label: string; desc
 /** Inspectable installation information and the existing file-opening actions; no provider probes. */
 export function AboutPage({ app, host, hidden }: { app: any; host: DigHost; hidden: boolean }) {
   const snapshot = app.snapshot;
+  const words = hostWords(snapshot.host);
   const info = app.sources;
   const server = typeof snapshot.version === 'string' ? snapshot.version : null;
   const canOpen = !host.preview && host.canOpenFile();
   const configPath = info?.configPath ?? snapshot.configPath;
   const mismatch = Boolean(snapshot.replaced || (server && server !== VERSION));
-  const versionMessage = snapshot.replaced && server ? replacedMessage(snapshot) : server && server !== VERSION
-    ? `Dig ${server} is installed, but this view is ${VERSION}. Right-click Dig in the sidebar and choose Refresh to load the new view.`
-    : `Dig ${VERSION}.`;
-  const open = (path: string) => { void host.openFile(path).catch((error: any) => app.notify(`Codex did not open ${path}: ${error.message}`, true)); };
+  const versionNote = snapshot.replaced && server ? replacedMessage(snapshot) : server && server !== VERSION ? versionMessage(snapshot) : `Dig ${VERSION}.`;
+  const open = (path: string) => { void host.openFile(path).catch((error: any) => app.notify(`${words.app} did not open ${path}: ${error.message}`, true)); };
   return <section id="about" className="installation-page" hidden={hidden}>
     <header className="installation-heading">
       <Button id="about-back" variant="ghost" size="sm" onClick={() => { void app.backAbout(); }}>← Back</Button>
@@ -34,7 +34,7 @@ export function AboutPage({ app, host, hidden }: { app: any; host: DigHost; hidd
         <FrameHeader className="installation-version-heading"><FrameTitle role="heading" aria-level={3}>View &amp; connection</FrameTitle><Badge tone={mismatch ? 'partial' : server ? 'success' : 'muted'}>{mismatch ? 'Refresh needed' : server ? 'Versions match' : 'Connection not read yet'}</Badge></FrameHeader>
         <FramePanel className="installation-version-panel">
           <dl className="installation-versions"><div><dt>This view</dt><dd>{VERSION}</dd></div><div><dt>Running connection</dt><dd>{server || 'Not read yet'}</dd></div><div><dt>Surface</dt><dd>{host.preview ? 'Browser preview' : 'Native plugin'}</dd></div></dl>
-          <p className="installation-version-message" data-attention={mismatch || undefined}>{versionMessage}</p>
+          <p className="installation-version-message" data-attention={mismatch || undefined}>{versionNote}</p>
         </FramePanel>
       </Frame>
 
@@ -53,7 +53,7 @@ export function AboutPage({ app, host, hidden }: { app: any; host: DigHost; hidd
         <section><p className="installation-eyebrow">Usage</p><h3>Reported costs, honest limits</h3><p>Amounts come from retained provider receipts, with their original units. They exclude the host’s model usage and are not a reconciled bill. Unreported cost stays unknown, never free.</p></section>
       </div>
 
-      <div className="installation-help"><div><h3>Put Dig to work</h3><p>Use <code>$dig:setup</code> to choose sources, or <code>$dig:library</code> to find saved research.</p></div><Button variant="outline" size="sm" onClick={() => { void app.go('/guide'); }}>Start here: learn what Dig can do</Button></div>
+      <div className="installation-help"><div><h3>Put Dig to work</h3><p>Use <code>{words.skill('setup')}</code> to choose sources, or <code>{words.skill('library')}</code> to find saved research.</p></div><Button variant="outline" size="sm" onClick={() => { void app.go('/guide'); }}>Start here: learn what Dig can do</Button></div>
 
       <details className="installation-credits"><summary>Credits and licenses</summary><ul>
         <li>Dig by Jon Page, MIT License.</li>

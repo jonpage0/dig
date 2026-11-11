@@ -21,7 +21,7 @@ When an already collected shortlist is burdensome to compare, you may choose the
 
 The source-method skills do not trigger on their own; reach each one through its `skillPath`, as below. A user can still invoke one directly with its plugin-qualified name, and then you run that method: `$dig:reddit` in Codex, `/dig:reddit` in Claude Code. Hosts match plugin skills only by that qualified name, so use the current host's form when you suggest one. Every Dig tool returns its complete result in `structuredContent` and only a one-line summary in `content`: a provider call's results are in `structuredContent.text`, and a read's text is in `structuredContent.text` with `nextOffset`. Claude Code hands you the `structuredContent` object itself as the tool result, so read those fields at its top level.
 
-Use only enabled sources. If the user asks for one that is disabled or not ready, say so and name what is missing; enabling a source is the user's choice in Dig's settings, and credentials are set by the user outside the chat. Never ask for, print or copy a key, and never substitute another source silently. Use `library_search` to locate passages inside full saved reports/answers (or `file` for one report); inspect coverage/fallback warnings and then read full reports with `library_read`. Search scores are discovery aids, not truth. Before paying for fresh research, the `library` skill (`$dig:library`) can show what earlier digs already found.
+Use only enabled sources. If the user asks for one that is disabled or not ready, say so and name what is missing; enabling a source is the user's choice in Dig's settings, and credentials are set by the user outside the chat. Never ask for, print or copy a key, and never substitute another source silently. Use `library_search` to locate passages inside full saved reports/answers (or `file` for one report); inspect coverage/fallback warnings and then read full reports with `library_read`. Search scores are discovery aids, not truth. Before paying for fresh research, the `library` skill (`$dig:library` in Codex, `/dig:library` in Claude Code) can show what earlier digs already found.
 
 ## Show the research alongside the conversation
 
@@ -39,15 +39,15 @@ Pick a source only because it answers a named part of the question; never run ev
 - `deepwiki`: structure and Q&A for one named public GitHub repository.
 - `github`: discover, compare and rank public repositories for a need.
 - `papers`: scholarly literature, citations, related work, full text.
-- `dataforseo`: paid search-market data (SERPs, keywords, rankings, backlinks, local business, AI visibility) from DataForSEO's v3 API.
+- `dataforseo`: paid search-market data (SERPs, keywords, rankings, backlinks, local business, AI visibility) from DataForSEO's v3 API. `dataforseo-ai-visibility`: a brand's mentions and citations in AI answers, compared with competitors and over time, from DataForSEO LLM Mentions.
 - `x-judge`: X discourse weighed by reach and claim type. `x-breadth`: X discourse found as widely as possible, not weighed. `x-post`: particular X posts (a link the user supplied, or a post a report cited) read exactly, with their thread, reactions, author, spread and origin. Independent methods; run one or several. When the question is only "what does this post say", reading it with `x_post` inline is enough; when it turns on what a post's video or images show, use `x-post`, which asks Grok to describe them. The user's own X bookmarks and likes need no method: call `x_bookmarks` or `x_likes` directly (they need the optional X sign-in keys), with `match` for a topic, and answer from what they return. An X Community's details and posts come from `x_community`; `x_explore` with `kind: "communities"` finds Communities by topic.
-- `reddit`: public Reddit threads and comments. `tikhub-reddit`: advanced Reddit scouting, subreddit context, full comment trees, batch enrichment.
+- `reddit`: public Reddit threads and comments. `tikhub-reddit`: advanced Reddit scouting, subreddit context, a thread's first page of comments with up to 8 collapsed-reply continuations per call, batch enrichment.
 - `hackernews`: Hacker News stories, comments, Ask HN, Show HN.
 - `polymarket`: market-implied probabilities, volume, liquidity, movement.
 - `youtube`: discover videos and research transcript-grounded creator claims. `youtube-video`: deeper analysis of supplied public YouTube videos, with Gemini 3.8 Flash as the standard and Argon for harder reasoning; save its own standard YouTube source report. Glimpse remains a separate tool for focused visual inspection.
 - `china-social`: Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat.
 - `commerce`: Amazon products, deals, charts, sellers, reviews, up to 365 days of history.
-- `tiktok`, `instagram`, `linkedin`, `telegram`: public evidence from each platform.
+- `tiktok`, `instagram`, `linkedin`, `telegram`, `threads`: public evidence from each platform.
 - `facebook`: public Facebook profiles, posts, groups, video search and events; supplied post links, comments and available transcripts.
 - `facebook-ads`: Meta Ad Library advertisers, ad creatives, run dates and available transcripts, not inferred performance.
 - `tiktok-ads`: TikTok Creative Center ad analytics and the public Ad Library.

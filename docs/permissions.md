@@ -1,6 +1,6 @@
 # Research permissions
 
-Dig's source selection and Codex's permission policy are separate controls. Enabling a source makes its tools discoverable; Codex still decides whether a caller may invoke them.
+Dig's source selection and the host's permission policy are separate controls. Enabling a source makes its tools discoverable; Codex or Claude Code still decides whether a caller may invoke them.
 
 Local provider tools are marked as contacting external services and retaining local evidence. Their annotations are not changed to avoid approval. Some are keyless, some have metered budgets and some require paid credentials; a keyless request can still require host consent. Source readiness reports presence, not permission, credential validity or an available balance.
 
@@ -12,11 +12,13 @@ Approval policy belongs to Codex, not Dig's TOML settings. Installing this plugi
 
 Official reference: https://learn.chatgpt.com/docs/extend/mcp#plugin-provided-mcp-servers
 
+In Claude Code, Claude Code's own permission settings decide whether a Dig tool may run, in the same way. Installing Dig there adds no permission rule and grants no tool permission.
+
 ## Unattended use and tests
 
-The first native worker test used headless `codex exec`, which rejected a required Hacker News approval under policy `never`. The provider did not receive that call; no search result or raw receipt existed. The failed answer was retained rather than presenting the refusal as a provider outage or empty evidence.
+A host that cannot ask for approval refuses a call its policy does not allow. Headless `codex exec` under approval policy `never` rejects a Dig tool call that needs approval: the provider receives no request, and no search result or raw receipt exists. The worker reports the refusal as a refusal, not as a provider outage or empty evidence.
 
-The desktop-bundled CLI 0.159.0 exposes `--approve-for-me`, described in its local help as routing approval requests through automatic review with workspace-write permissions. That is a supported review route, not a bypass flag. A bounded keyless test passed through it: one ordinary worker searched, saved its report, and the parent read the full report/raw/receipt and saved the answer. An actual reviewer rejection must be honored and reported; it is not permission to switch to bypass flags or to call the same provider through another interface.
+Codex's `--approve-for-me` routes approval requests through automatic review with workspace-write permissions. That is a supported review route, not a bypass flag. A reviewer's rejection must be honored and reported; it is not permission to switch to bypass flags or to call the same provider through another interface.
 
 Another supported unattended option is deliberately configured, narrowly scoped prior permission for the needed tool. Do not install that policy silently. Keep paid provider decisions and unrelated tool permissions independent.
 

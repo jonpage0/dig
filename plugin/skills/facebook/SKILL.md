@@ -33,7 +33,7 @@ If disabled, stop and report that reason; enabling sources belongs to the user. 
 
 Start with the supplied public URL when there is one. Read the profile or group to establish identity, then the relevant posts. For a specific post, read it directly before asking for comments or a transcript. Use video search for video discovery and the event tool for events; do not present either as general full-text Facebook search. If discovery cannot answer the question, say what public URL or different source is needed instead of fabricating one.
 
-Read one page first. Continue with the returned pagination arguments only when the next page can resolve an unanswered part of the question. Keep the request's filters and the pages inspected in the report. Do not crawl a whole profile, group or comment tree merely because a continuation exists. A display limit does not necessarily limit how many results the provider fetched or charged for.
+Read one page first. Continue with the returned pagination arguments only when the next page can resolve an unanswered part of the question. Keep the request's filters and the pages inspected in the report. Do not crawl a whole profile, group or comment tree merely because a continuation exists.
 
 ScrapeCreators documents only three posts per profile/group page and up to ten reels per page. Reels and photos require both the returned `cursor` and `next_page_id` to continue. A small first page is not evidence that the account rarely posts.
 

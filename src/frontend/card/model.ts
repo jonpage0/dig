@@ -1,6 +1,6 @@
 /** Transient view data. Reports and provider receipts remain the research authority. */
-export interface EvidenceReference { file: string; path?: string; label: string; link?: string | null }
-export interface Insight {
+interface EvidenceReference { file: string; path?: string; label: string; link?: string | null }
+interface Insight {
   title: string;
   statement: string;
   details: { label: string; value: string; url?: string }[];
@@ -49,7 +49,7 @@ export interface RetainedRead {
   totalCharacters: number;
 }
 
-export function unwrapResult(result: any): any {
+function unwrapResult(result: any): any {
   if (result?.isError) throw new Error(result.content?.find((part: any) => part.type === 'text')?.text || 'Dig could not read this research.');
   return result?.structuredContent ?? result;
 }

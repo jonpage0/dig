@@ -32,7 +32,7 @@ export function ConversationActivity({ app, hidden }: { app: any; hidden: boolea
         <div><dt>{app.catalog.groupLabel(scope.sources.map(row => row.source))}</dt><dd>{scope.sources.length}</dd></div>
         <div><dt>Reports</dt><dd>{scope.reports}</dd></div>
       </dl>
-      <div className="activity-sources" aria-label="Source activity">
+      <div className="activity-sources" role="group" aria-label="Source activity">
         {shownSources.map(row => <div className="activity-source" key={row.source} data-running={row.active.length > 0 && liveAvailable}>
           <SourceIcon id={row.source} />
           <div className="activity-source-name"><strong>{app.catalog.label(row.source)}</strong>
@@ -48,7 +48,7 @@ export function ConversationActivity({ app, hidden }: { app: any; hidden: boolea
         {scope.sources.length > sourceLimit && <Button size="sm" variant="ghost" className="activity-expand" aria-expanded={allSources} onClick={() => setAllSources(!allSources)}>{allSources ? 'Show fewer sources' : `Show all ${scope.sources.length} sources`}</Button>}
         {!scope.sources.length && <p className="activity-empty">{app.snapshotLoaded ? 'Source activity will appear here when a call starts.' : 'Loading activity…'}</p>}
       </div>
-      {!!scope.digs.length && <div id="panel-digs" className="activity-results" aria-label="Saved research">
+      {!!scope.digs.length && <div id="panel-digs" className="activity-results" role="group" aria-label="Saved research">
         {shownResults.map(item => <button type="button" key={`${item.project}:${item.id}`} className="activity-result" onClick={() => read(item)}>
           <span>{item.displayTitle || item.title}</span><span>{item.answer ? 'Answer' : plural(item.reports?.length ?? 0, 'report')} <span aria-hidden="true">↗</span></span>
         </button>)}

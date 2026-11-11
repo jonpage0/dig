@@ -6,7 +6,7 @@ You set the direction in your normal conversation. Your assistant uses the sourc
 
 ## Your first research question
 
-1. **Ask what matters to you.** Say “Use Dig…” with the question or decision, who or what matters, and any relevant place, time period, or spending limit. You can name a source or let your assistant choose from the enabled sources. Open **Sources & tools** or use the setup skill in the conversation if you need help choosing sources.
+1. **Ask what matters to you.** Say “Use Dig…” with the question or decision, who or what matters, and any relevant place, time period, or spending limit. You can name a source or let your assistant choose from the enabled sources. Open **Sources & tools**, or use the setup skill in the conversation (`$dig:setup` in Codex, `/dig:setup` in Claude Code), if you need help choosing sources.
 2. **Observe what is recorded.** **Overview** shows saved questions, outcomes, source coverage, and provider usage. Select a question to see its recorded findings, uncertainty, and dated activity.
 3. **Steer the next step.** **Steer research** lets you choose a direction and preview an instruction. Place it in your conversation as an unsent draft, or copy it there if drafts are unavailable. Review, adjust, and send it when ready; choosing a direction in Dig does not itself start research.
 
@@ -15,6 +15,16 @@ For example:
 > Use Dig and Hacker News to investigate how people choose a note-taking app. Show me the strongest findings, disagreements, and what is still missing. Save the supporting research, check the original discussions, and suggest a useful next question.
 
 Hacker News needs no provider account; enable it first. DeepWiki and Polymarket are also keyless options. Other sources may need a provider account, key, or local tool. You only need to configure what you want to use.
+
+## In Claude Code
+
+Dig works the same way in Claude Code, with the same settings, keys and research library as Codex. What differs:
+
+- **Install and update** from the terminal: `claude plugin marketplace add jonpage0/dig`, then `claude plugin install dig@dig`. Update with `claude plugin marketplace update dig`, then `claude plugin update dig@dig`. Start a new session and type `/dig:setup`.
+- **Skills** are typed `/dig:<name>`, such as `/dig:dig` or `/dig:hackernews`, where Codex uses `$dig:<name>`.
+- **No Dig pages open.** Overview, Steer research, Sources & tools, Settings, the research trail and the saved-research card are not shown. Research, saved reports, library search and reading all happen in the conversation, and `/dig:setup` turns sources on and off. The library is a folder, by default `~/.local/share/dig/library`.
+- **Keys** go in the same `~/.local/share/dig/keys.env`. Edit it directly, or ask `/dig:setup` for the exact lines to add.
+- **Every research run starts a dig.** Claude Code gives Dig no conversation id, so your assistant calls `dig_start` before its first source call, even for one source, and passes that dig to every call and saved report.
 
 ## Observe the state, then decide what matters
 
@@ -64,11 +74,11 @@ The **Start here** tab includes a directory derived from the installed source ca
 - **Report:** saved findings from a research method, including its evidence and limitations.
 - **Answer:** a saved explanation that brings selected source reports together.
 - **Original response:** the information returned by the provider, retained when enabled. It helps you check what the provider actually returned.
-- **Insight card:** a compact presentation of a finding, comparison or proposed next step, with optional evidence inspection and an unsent discussion draft. It does not add proof to the underlying research.
+- **Saved-research card:** a compact card in a Codex conversation showing what was just saved: its title, outcome, sources, time and provider cost, with one **Open** button. It does not add proof to the underlying research.
 - **Overview:** the human view of saved research across projects, including usage and costs. The underlying **library** is the folder holding those records. **Research trail** shows recorded work associated with the current conversation.
 - **Steering draft:** a proposed instruction for the next question or direction. Preparing it does not run a research tool, send the message, or start research.
 
-Ask, “Use Dig to find what we already researched about [topic],” or invoke `$dig:library`. Reusing a saved report does not make its information current; ask for a refresh when that matters.
+Ask, “Use Dig to find what we already researched about [topic],” or invoke `$dig:library` (`/dig:library` in Claude Code). Reusing a saved report does not make its information current; ask for a refresh when that matters.
 
 ## Optional tools that help with the evidence
 
@@ -87,13 +97,13 @@ Some providers report dollars, some report credits, and some report no price for
 - **Unknown** does not mean free. Call counts still show activity when pricing is unavailable.
 - Figures describe retained provider usage, not a reconciled invoice. They exclude the model usage billed by your chat or coding assistant.
 
-Provider charges are billed by those services, separately from your ChatGPT plan.
+Provider charges are billed by those services, separately from your ChatGPT or Claude plan.
 
 Overview keeps usage and costs visible. A report or card's usage is limited to the receipts associated with it; its reference to another piece of evidence does not automatically include that evidence's cost.
 
 ## Setup and privacy
 
-Your reports, retained responses and settings live in local folders outside the installed plugin package. Your provider keys belong in **keys.env**, opened from **Sources & tools**, rather than in the conversation. An API key is a provider-issued access code that lets Dig use your account with that service.
+Your reports, retained responses and settings live in local folders outside the installed plugin package. Your provider keys belong in **keys.env**, opened from **Sources & tools** (in Claude Code, edit `~/.local/share/dig/keys.env` directly), rather than in the conversation. An API key is a provider-issued access code that lets Dig use your account with that service.
 
 Local storage does not mean all research stays on your computer. Queries and selected inputs go to the services used for the request. Optional video analysis may send selected media to a provider; evidence ranking sends the supplied excerpts. Those services have their own storage and retention behavior.
 

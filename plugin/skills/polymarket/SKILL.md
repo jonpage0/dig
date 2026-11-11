@@ -24,6 +24,8 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 - `source_info` with `source: "polymarket"` for enablement and readiness;
 - `polymarket` for Gamma API event and market search;
+- `polymarket_history` for one page of an outcome token's price history (Data API);
+- `polymarket_resolution` for resolution state by condition, event or UMA question ID (Data API);
 - `research_save` with `source: "polymarket"` and `agent: "polymarket"` for the report.
 
 Pass the absolute `project` on every provider and save call, and `dig` only when your assignment gave you one. Dig uses them to file the evidence; they never reach the provider. Use only this source's provider tools, `source_info`, `library_list`, `library_search`, `library_read`, and `research_save`.

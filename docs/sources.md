@@ -1,15 +1,15 @@
 # Sources and their keys
 
-Turn sources on and off on Dig's **Sources & tools** page. Each source card says whether it is ready, which keys it uses and where to get them; **Setup details** on the card opens the full list. Dig has 22 research sources, 26 methods and 72 provider tools, including the separate shared Video analysis and Evidence ranking tools.
+Turn sources on and off on Dig's **Sources & tools** page. Each source card says whether it is ready, which keys it uses and where to get them; the card's **Setup** fold opens the full list. Claude Code shows no Dig pages: there, run `/dig:setup` to turn sources on and off and to see what each still needs. Dig has 22 research sources, 26 methods and 74 provider tools, including the separate shared Video analysis and Evidence ranking tools. Methods below are named in Codex's form, `$dig:<name>`; in Claude Code, type `/dig:<name>`.
 
-No source requires that you configure every other source. Hacker News, DeepWiki and Polymarket need no account. GitHub public REST reads and direct Papers searches can run without keys, with provider-specific limits. YouTube's keyless path needs a local `yt-dlp`. Other sources use your own provider accounts; API charges are separate from your ChatGPT plan.
+No source requires that you configure every other source. Hacker News, DeepWiki and Polymarket need no account. GitHub public REST reads and direct Papers searches can run without keys, with provider-specific limits. YouTube's keyless path needs a local `yt-dlp`. Other sources use your own provider accounts; API charges are separate from your ChatGPT or Claude plan.
 
 ## Keys
 
-Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.env`), one `NAME=value` per line. **Edit keys.env** on the Sources & tools page creates the file if needed, adds an empty line for each key it is missing, and opens it; fill in the values and save. Dig picks up the change without a restart.
+Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.env`), one `NAME=value` per line. **Edit keys.env** on the Sources & tools page creates the file if needed, adds an empty line for each key it is missing, and opens it; fill in the values and save. In Claude Code, which uses the same file, edit it directly; `/dig:setup` gives the exact lines a source needs. Dig picks up the change without a restart.
 
 - Never paste a key into the chat. Dig never asks for one there.
-- A key already exported in the environment that starts Codex is not used until you copy it in: the source's **Use existing key** button does that.
+- A key already exported in the environment that starts Codex or Claude Code is not used until you copy it in: in Codex, the source's **Use existing key** button does that; in Claude Code, copy it into `keys.env` yourself.
 - If you create the file yourself, keep it private (`chmod 600` on macOS and Linux).
 - "Ready" means the keys are present, not that the service accepted them. The first search shows whether a key works.
 
@@ -23,12 +23,13 @@ Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.en
 | GitHub | Repositories, their activity and source | Optional: `GH_TOKEN` or `GITHUB_TOKEN` | Or a `gh` login |
 | Exa | Web search and page text | `EXA_API_KEY` | |
 | Perplexity | Cited answers on current facts | `PERPLEXITY_API_KEY` | |
-| Papers | Scholarly papers, citations and full text | Optional: `SEMANTIC_SCHOLAR_API_KEY`, `OPENALEX_API_KEY`, `NCBI_API_KEY` and others | The Papers bridge (`git`, `uv`) for federated search, full text and PDFs |
+| Papers | Scholarly papers, citations and full text | Optional: `SEMANTIC_SCHOLAR_API_KEY`, `OPENALEX_API_KEY`, `NCBI_API_KEY` and others | The Papers bridge (`git`, `uv`) for federated search, full text, PDFs and section extraction |
 | YouTube | Video discovery, saved transcripts and Gemini video understanding | Optional by route: `OPENCODE_RESEARCH_GOOGLE_API_KEY`, `SCRAPECREATORS_API_KEY`, `GEMINI_API_KEY` | `yt-dlp` for keyless search/local captions; no local video tools for Gemini |
 | X | Posts, threads, accounts, search, counts, X News, Communities | `XAI_API_KEY` (Grok's X search) and `X_BEARER_TOKEN` (X's API); optional sign-in keys and `TIKHUB_API_KEY` | |
 | Reddit | Threads and comments | `SCRAPECREATORS_API_KEY` | |
-| TikHub Reddit | Full comment trees and subreddit context | `TIKHUB_API_KEY` | |
+| TikHub Reddit | A thread's first page of comments with up to 8 collapsed-reply continuations per call, and subreddit context | `TIKHUB_API_KEY` | |
 | TikTok, Instagram, LinkedIn, Telegram | Public posts and profiles | `SCRAPECREATORS_API_KEY` | |
+| Threads | Public posts, replies and account posts | `SCRAPECREATORS_API_KEY` | |
 | Facebook | Public profiles, posts, groups, videos and events | `SCRAPECREATORS_API_KEY` | |
 | Facebook ads | Meta Ad Library advertisers, ads and transcripts | `SCRAPECREATORS_API_KEY` | |
 | China social | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat | `TIKHUB_API_KEY`; optional `JUSTONE_API_KEY`, used only when the Just One backend is asked for | |
@@ -53,7 +54,7 @@ Choose the route that answers your question; none requires every YouTube option:
 
 | Route | Setup | What it does |
 | --- | --- | --- |
-| Discovery and local captions | Install `yt-dlp`, plus Deno or Node 22+ | Search without a key and save available captions in the library. |
+| Discovery and local captions | Install `yt-dlp`; Dig gives it its own Node as the JavaScript runtime | Search without a key and save each video's English captions in the library: the uploaded captions, or automatic ones when there are none. |
 | YouTube Data API metadata | Optional `OPENCODE_RESEARCH_GOOGLE_API_KEY` from [Google Cloud](https://console.cloud.google.com/apis/credentials) | Adds keyed metadata search; it does not enable Gemini analysis. |
 | Hosted transcripts | Optional `SCRAPECREATORS_API_KEY` | The separate paid `youtube_transcript` tool preserves returned timing and language. It is used explicitly, not as an automatic paid fallback. |
 | Gemini video understanding | Optional `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey) | Analyzes supplied public YouTube videos with Flash or Argon, without local download tools. |
@@ -66,7 +67,7 @@ Some videos' captions need yt-dlp's proof-of-origin token plugin; without it, yt
 
 ## X
 
-X has two ways in. `XAI_API_KEY` lets Grok search X and interpret what it finds. `X_BEARER_TOKEN` reads X's own API: posts by link with their thread, replies, quotes and reposters; recent and full-archive search (back to March 2006) and post counts; accounts with their posts and mentions; X News; trends, Spaces, Communities and Lists. To get the token:
+X has two ways in. `XAI_API_KEY` lets Grok search X and interpret what it finds. `X_BEARER_TOKEN` reads X's own API: posts by link with their thread, replies, quotes and reposters; recent and full-archive search (back to March 2006) and post counts (a full-archive count needs a start time); accounts with their posts and mentions; X News; trends, Spaces, Communities and Lists. To get the token:
 
 1. Create a pay-per-use developer account at [console.x.com](https://console.x.com) and add credits.
 2. Set a spending limit there, because X does not report what each call costs.
@@ -99,7 +100,7 @@ Facebook ads searches advertiser and ad records. Keep the country, filters, date
 
 ## Papers bridge
 
-Semantic Scholar and OpenAlex search work without the bridge. Federated search across more databases, full text and PDF downloads need the Papers bridge, which needs `git` and `uv`. Ask Dig for the installed plugin's path (it is in `source_info`), then run:
+Semantic Scholar and OpenAlex search work without the bridge. Federated search across more databases, full text, PDF downloads and section extraction (`papers_sections`) need the Papers bridge, which needs `git` and `uv`. Ask Dig for the installed plugin's path (it is in `source_info`), then run:
 
 ```sh
 node /path/to/installed/plugin/bridges/papers/setup.mjs
@@ -127,12 +128,12 @@ DataForSEO charges per request from a prepaid account. Set `DATAFORSEO_USERNAME`
 
 ## Shared video analysis
 
-Video analysis is the optional standalone `video_analyze` tool, using Elorian Glimpse. It can run directly in a conversation without a dig or report, or inspect selected media for an appropriate source worker. Enable it under **Sources & tools → Shared tools** and put `ELORIAN_API_KEY` in keys.env, using [Elorian’s key page](https://platform.elorian.ai/settings/keys).
+Video analysis is the optional standalone `video_analyze` tool, using Elorian Glimpse. It can run directly in a conversation without a dig or report, or inspect selected media for an appropriate source worker. Enable it under **Sources & tools → Shared tools** (in Claude Code, through `/dig:setup`) and put `ELORIAN_API_KEY` in keys.env, using [Elorian’s key page](https://platform.elorian.ai/settings/keys).
 
 For broader YouTube analysis, use Flash first and Argon for harder reasoning. Choose Glimpse for a focused visual need or an explicit provider preference. Direct video-file URLs work without local executables; local and YouTube clips need ffmpeg and ffprobe, plus yt-dlp for YouTube. The tool exposes token and media coverage; billed dollars remain unknown when the provider returns no charge. See [Glimpse video inspection](video-analysis.md).
 
 ## Optional evidence ranking
 
-The shared `evidence_rank` tool uses TypeSafe Jev to suggest a reading order for caller-supplied excerpts. Enable **Evidence ranking** under **Sources & tools → Shared tools** and add `TYPESAFE_API_KEY` from the [TypeSafe console](https://console.typesafe.ai/keys) to keys.env. No local executable or separate worker-model setting is needed. It is disabled by default and runs only when an agent chooses the helper within the authorized scope.
+The shared `evidence_rank` tool uses TypeSafe Jev to suggest a reading order for caller-supplied excerpts. Enable **Evidence ranking** under **Sources & tools → Shared tools** (in Claude Code, through `/dig:setup`) and add `TYPESAFE_API_KEY` from the [TypeSafe console](https://console.typesafe.ai/keys) to keys.env. No local executable or separate worker-model setting is needed. It is disabled by default and runs only when an agent chooses the helper within the authorized scope.
 
 The helper sends the selected question, excerpts and optional claim to TypeSafe. It does not retrieve the references, filter out candidates or establish truth. Returned usage is shown when available; provider-reported dollar cost remains unknown. See [evidence ranking](evidence-ranking.md).

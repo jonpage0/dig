@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -17,6 +17,9 @@ const readWhole = async file => {
   do { const part = (await call('library_read', { file, offset })).structuredContent; text += part.text; path = part.path; offset = part.nextOffset; } while (offset !== null);
   return { path, text };
 };
+// A passing run removes its state folder (its evidence summary stays in full-port-live-smoke.json); a failing run keeps
+// the folder and prints its path for inspection.
+let passed = false;
 try {
   await client.connect(transport);
   const response = await call('hackernews', { project: process.cwd(), query: 'local-first', type: 'comment', sort: 'relevance', days: 365, limit: 3 });
@@ -39,4 +42,8 @@ try {
   const evidence = { at: new Date().toISOString(), dig: saved.dig, source: 'hackernews', call: receipt.id, report: saved.path, raw: raw.path, results: hits.length, cost: receipt.cost, completeReportRead: true, completeRawRead: true, mode: item.mode, state };
   await writeFile(join(root, 'full-port-live-smoke.json'), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence, null, 2));
-} finally { await client.close(); }
+  passed = true;
+} finally {
+  await client.close();
+  if (passed) await rm(state, { recursive: true, force: true }); else console.error(`Smoke run failed; its state folder is kept at ${state}`);
+}

@@ -1,14 +1,16 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
 import { loadConfig, loadKeys } from '../src/config.mjs';
-import { listLibrary, libraryFolder, libraryRevision, readLibraryFile } from '../src/library.mjs';
-import { sourceInfo, settingsDocument, environmentPresence } from '../src/catalog.mjs';
-import { packageReplaced, savedResearch, openInDig } from '../src/surfaces.mjs';
-import { VERSION } from '../src/version.mjs';
+import { listLibrary, readLibraryFile } from '../src/library.mjs';
+import { sourceInfo, settingsDocument } from '../src/catalog.mjs';
+import { librarySnapshot, libraryFingerprint, savedResearchCard } from '../src/surfaces.mjs';
+import { createCallActivity } from '../src/call-activity.mjs';
+import { hostOf } from '../src/ui/host.mjs';
 import { presentResearch } from '../src/presentation.mjs';
 const port = Number(process.env.PORT || 43187);
 loadKeys(); // Readiness reflects keys.env exactly as the server sees it.
+// The preview makes no provider calls, so it has no executing calls; the snapshot, fingerprint and card are the server's.
+const activity = createCallActivity(); const host = hostOf(process.env.DIG_HOST);
 const server = createServer(async (req, res) => {
   try {
     if (req.headers.origin && req.headers.origin !== `http://127.0.0.1:${port}`) { res.writeHead(403); res.end('Origin refused'); return; }
@@ -18,12 +20,12 @@ const server = createServer(async (req, res) => {
     if (req.method !== 'POST') { res.writeHead(404); res.end(); return; }
     let body = ''; for await (const chunk of req) { body += chunk; if (body.length > 100000) throw new Error('Request too large'); }
     const args = JSON.parse(body || '{}'); const c = await loadConfig(); let value;
-    if (url.pathname === '/api/library_snapshot') value = { ...(await listLibrary(c)), version: VERSION, replaced: packageReplaced(), library: c.library, libraryFolder: await libraryFolder(c), configPath: c.path, enabledSources: c.sources.enabled, sources: sourceInfo(c).sources.map(({ id, kind, label }) => ({ id, kind, label })), keepRaw: c.keep_raw };
-    else if (url.pathname === '/api/library_revision') value = { revision: createHash('sha256').update(JSON.stringify([VERSION, packageReplaced(), await libraryRevision(c), c.library, await libraryFolder(c), c.keep_raw, c.sources.enabled, c.x, c.workers, environmentPresence()])).digest('hex').slice(0, 24) };
+    if (url.pathname === '/api/library_snapshot') value = await librarySnapshot(c, activity, host);
+    else if (url.pathname === '/api/library_revision') value = { revision: await libraryFingerprint(c, activity) };
     else if (url.pathname === '/api/source_info') value = sourceInfo(c, args.source);
     else if (url.pathname === '/api/settings.read') value = settingsDocument(c);
     else if (url.pathname === '/api/library_read') value = await readLibraryFile(c, args.file, args.offset, args.limit);
-    else if (url.pathname === '/api/saved_research') { const read = await readLibraryFile(c, args.file, 0, Number.MAX_SAFE_INTEGER); value = { ...savedResearch(await listLibrary(c), read.file, read.text), path: read.path, link: openInDig(read.path) }; }
+    else if (url.pathname === '/api/saved_research') value = await savedResearchCard(c, args.file, await librarySnapshot(c, activity, host));
     else if (url.pathname === '/api/show_research') value = await presentResearch(c, await listLibrary(c), args);
     else { res.writeHead(404); res.end(); return; }
     res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value));

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { costAmounts, costShort, costText } from '../src/ui/format.mjs';
+import { callOutcome, costAmounts, costShort, costText } from '../src/ui/format.mjs';
 
 test('mixed provider amounts show USD first and other units alphabetically regardless of arrival order', () => {
   const units = [['Scrape.do credits', 9], ['tokens', 12], ['USD', .111], ['ScrapeCreators credits', 4], ['EUR', 2]];
@@ -21,4 +21,8 @@ test('display ordering preserves separate legacy unit entries and positive amoun
   assert.deepEqual(costAmounts(summary), ['<$0.0001', '3 ScrapeCreators credits', '2 ScrapeCreators credits']);
   assert.equal(costText({ byUnit: {}, unknownCalls: 2 }), 'Provider cost unknown');
   assert.equal(costShort({ byUnit: {}, unknownCalls: 0 }, 0), '');
+});
+
+test('a call receipt’s outcome has one wording on every page', () => {
+  assert.deepEqual(['success', 'partial', 'empty', 'failed', 'cancelled', 'skipped', 'running', undefined].map(callOutcome), ['Succeeded', 'Partial', 'Empty', 'Failed', 'Stopped', 'Skipped', 'Unknown outcome', 'Unknown outcome']);
 });

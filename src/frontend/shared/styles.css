@@ -15,7 +15,6 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -52,13 +51,7 @@
   .dig-button-outline { border-color: var(--border); background: transparent; }
   .dig-button-ghost { background: transparent; }
   .dig-button-size-sm { min-height: 30px; padding: 4px 9px; font-size: 12px; }
-  .dig-button-size-icon { width: 32px; height: 32px; padding: 0; }
-  .dig-card { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); overflow-wrap: anywhere; }
-  .dig-card-header, .dig-card-content, .dig-card-footer { padding: 16px; }
-  .dig-card-header + .dig-card-content { padding-top: 0; }
-  .dig-card-title { font-size: 16px; line-height: 1.4; font-weight: var(--font-weight-medium, 500); }
   .dig-card-description { font-size: 13px; line-height: 1.55; color: var(--muted-foreground); }
-  .dig-card-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-top: 1px solid var(--border); }
   .dig-badge { display: inline-flex; align-items: center; border-radius: 4px; padding: 1px 6px; font-size: 11px; line-height: 18px; color: var(--foreground); background: var(--muted); font-weight: var(--font-weight-medium, 500); }
   .dig-badge[data-tone=success] { background: color-mix(in srgb, var(--foreground) 14%, transparent); }
   .dig-badge[data-tone=partial] { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--foreground) 10%, transparent) 0 1.5px, transparent 1.5px 5px), var(--muted); }

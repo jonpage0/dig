@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { expect } from "expect";
+import { executeSource } from "../outcome.js";
 import type { SourceToolResult, ToolContext } from "../types.js";
 import { detail, library, search, top } from "./tiktok_ads.js";
 
@@ -104,6 +105,20 @@ describe("tiktok ads tools", () => {
 		expect(mock.calls).toHaveLength(0);
 	});
 
+	test("industry names prefer the top-level entry and may contain commas; similar ads climb to the real parent", async () => {
+		const mock = installFetchMock({
+			"/api/v1/tiktok/ads/search_ads": tikhub({ materials: [], pagination: { page: 1, size: 20, total_count: 0, has_more: false } }),
+			"/api/v1/tiktok/ads/get_ads_detail": tikhub({ ...creativeAd, industry_key: "label_14103000000", country_code: ["US"] }),
+			"/api/v1/tiktok/ads/get_recommended_ads": tikhub({ materials: [] }),
+		});
+		restore = mock.restore;
+		await search.execute({ industry: "Beauty & Personal Care" }, context);
+		await search.execute({ industry: " Baby, Kids & Maternity " }, context);
+		expect(mock.calls.map((call) => (call.body as Record<string, unknown>).industry)).toEqual(["14000000000", "12000000000"]);
+		await detail.execute({ ad_id: "7560480306832457735", analytics: false, similar: true }, context);
+		expect(mock.calls.find((call) => call.url.pathname.endsWith("get_recommended_ads"))?.body).toMatchObject({ industry: "14000000000" });
+	});
+
 	test("search surfaces a Creative Center error code instead of an empty result", async () => {
 		const mock = installFetchMock({ "/api/v1/tiktok/ads/search_ads": { code: 200, data: { code: 40001, msg: "invalid period" } } });
 		restore = mock.restore;
@@ -154,6 +169,39 @@ describe("tiktok ads tools", () => {
 		expect(out).toContain("CTR percentile within industry (180d): 50%");
 		expect(out).toContain("Retention curve: unavailable");
 		expect(out).toContain("Note: Retention curve unavailable:");
+		expect((result as { status?: string }).status).toBe("partial");
+	});
+
+	test("detail counts only requests sent and starts similar ads alongside analytics", async () => {
+		let mock = installFetchMock({ "/api/v1/tiktok/ads/get_ads_detail": tikhub({ ...creativeAd, industry_key: undefined, country_code: ["US"] }) });
+		restore = mock.restore;
+		const skipped = await detail.execute({ ad_id: "7560480306832457735", analytics: false, similar: true }, context);
+		expect(mock.calls).toHaveLength(1);
+		expect(details(skipped)).toMatchObject({ requests: 1 });
+		expect((skipped as { status?: string }).status).toBe("partial");
+		mock.restore();
+
+		const originalFetch = globalThis.fetch;
+		let similarStarted: () => void = () => {};
+		const similar = new Promise<void>((resolve) => { similarStarted = resolve; });
+		let similarSent = false;
+		const overlapped: boolean[] = [];
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const path = new URL(String(input)).pathname;
+			if (path.endsWith("get_recommended_ads")) { similarSent = true; similarStarted(); }
+			if (path.endsWith("get_ad_percentile") || path.endsWith("get_ad_keyframe_analysis")) {
+				await Promise.race([similar, new Promise((resolve) => setTimeout(resolve, 50))]);
+				overlapped.push(similarSent);
+			}
+			if (path.endsWith("get_ads_detail")) return Response.json(tikhub({ ...creativeAd, country_code: ["US"] }));
+			if (path.endsWith("get_recommended_ads")) return Response.json(tikhub({ materials: [] }));
+			return Response.json(tikhub({}));
+		}) as typeof fetch;
+		restore = () => { globalThis.fetch = originalFetch; };
+		const both = await detail.execute({ ad_id: "7560480306832457735", similar: true }, context);
+		expect(overlapped).toEqual([true, true]);
+		expect(details(both)).toMatchObject({ requests: 4 });
+		expect((both as { status?: string }).status).toBe("success");
 	});
 
 	test("top explains an empty industry spotlight and points at search", async () => {
@@ -183,6 +231,17 @@ describe("tiktok ads tools", () => {
 		expect(out).toContain("Shown: 2026-08-17 | Audience: 1K-10K | Media: 1 video, 0 images");
 		expect(out).not.toContain("Impressions:");
 		expect(details(result)).toMatchObject({ entityMatched: false, hasMore: true, cursor: "abc", credits_charged: 1 });
+	});
+
+	test("library is partial when some returned ads are unreadable and prints the cursor it asks for", async () => {
+		const mock = installFetchMock({
+			"/v1/tiktok/ad-library/search": { success: true, credits_charged: 1, ads: [{ id: "1000000000000001", name: "example.creator" }, { no_id: true }], has_more: true, cursor: "next-abc" },
+		});
+		restore = mock.restore;
+		const result = await library.execute({ query: "x" }, context);
+		expect((result as { status?: string }).status).toBe("partial");
+		expect(text(result)).toContain("Partial normalization: 1 of 2 returned ads could be read.");
+		expect(text(result)).toContain('pass cursor="next-abc" for the next page');
 	});
 
 	test("library requires exactly one of advertiser_name or query", async () => {
@@ -245,5 +304,60 @@ describe("tiktok ads tools", () => {
 		delete process.env.SCRAPECREATORS_API_KEY;
 		expect((text(await search.execute({ keyword: "x" }, context))).startsWith("ERROR: TIKHUB_API_KEY not set")).toBe(true);
 		expect((text(await library.execute({ query: "x" }, context))).startsWith("ERROR: SCRAPECREATORS_API_KEY not set")).toBe(true);
+	});
+
+	test("a sub-industry name under two parents is refused before any request, naming each parent with its id", async () => {
+		const mock = installFetchMock({ "/api/v1/tiktok/ads/search_ads": tikhub({ materials: [], pagination: { total_count: 0, has_more: false } }) });
+		restore = mock.restore;
+		for (const industry of ["Photography", "Travel, photography"]) {
+			const out = text(await search.execute({ industry }, context));
+			expect(out.startsWith('ERROR: TikTok ad industry "')).toBe(true);
+			expect(out).toContain("Apps > Photography (20103000000)");
+			expect(out).toContain("Life Services > Photography (26101000000)");
+			expect(out).toContain("pass the id");
+		}
+		expect(text(await top.execute({ industry: "Photography" }, context)).startsWith("ERROR:")).toBe(true);
+		expect(mock.calls).toHaveLength(0);
+		await search.execute({ industry: "Bags" }, context);
+		await search.execute({ industry: "26101000000" }, context);
+		expect(mock.calls.map((call) => (call.body as Record<string, unknown>).industry)).toEqual(["22102000000", "26101000000"]);
+	});
+
+	test("library shows the whole paid page with no limit; an explicit limit says what the cursor skips", async () => {
+		const ads = Array.from({ length: 25 }, (_, index) => ({ id: String(1000000000000001 + index), name: `advertiser ${index + 1}` }));
+		const mock = installFetchMock({ "/v1/tiktok/ad-library/search": { success: true, credits_charged: 1, ads, has_more: true, cursor: "next" } });
+		restore = mock.restore;
+		const all = text(await library.execute({ query: "x" }, context));
+		expect(all).toContain('Showing 25; pass cursor="next" for the next page.');
+		expect(all).toContain("advertiser 25 — ad");
+		const cut = text(await library.execute({ query: "x", limit: 5 }, context));
+		expect(cut).toContain('5 shown of 25 returned on this page; pass cursor="next" for the next page (it continues after all 25 returned ads, including the 20 not shown).');
+		expect(cut).not.toContain("advertiser 6 — ad");
+	});
+
+	test("a request that got no response is sent once and says its cost is unknown", async () => {
+		const mock = installFetchMock({
+			"/v1/tiktok/ad-library/search": () => { throw new DOMException("The operation timed out.", "TimeoutError"); },
+			"/api/v1/tiktok/ads/search_ads": () => { throw new TypeError("fetch failed"); },
+		});
+		restore = mock.restore;
+		const adLibrary = await executeSource(library, { query: "x" }, context);
+		expect(adLibrary.status).toBe("failed");
+		expect(adLibrary.text).toContain("ScrapeCreators may have received and charged this request, but no complete response arrived; its cost is unknown.");
+		expect(adLibrary.details?.cost).toBeNull();
+		expect(text(await search.execute({ keyword: "x" }, context))).toContain("TikHub may have received and charged this request, but no complete response arrived; its cost is unknown.");
+		expect(mock.calls).toHaveLength(2);
+	});
+
+	test("library credits after a retried status are the receipt's: unknown when an attempt reported none", async () => {
+		let calls = 0;
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async () => ++calls === 1
+			? new Response(JSON.stringify({ success: false, error: "busy" }), { status: 503, headers: { "retry-after": "0" } })
+			: new Response(JSON.stringify({ success: true, credits_charged: 1, ads: [{ id: "1000000000000001", name: "a" }], has_more: false }), { status: 200 })) as typeof fetch;
+		restore = () => { globalThis.fetch = originalFetch; };
+		const result = await executeSource(library, { query: "x" }, context);
+		expect(calls).toBe(2);
+		expect(result.details).toMatchObject({ credits_charged: null, cost: null, knownCost: [{ amount: 1, unit: "credits" }] });
 	});
 });

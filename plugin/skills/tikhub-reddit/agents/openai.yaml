@@ -1,6 +1,6 @@
 interface:
   display_name: "Dig · TikHub Reddit"
-  short_description: "Reddit scouting, full comment trees and enrichment"
+  short_description: "Reddit scouting, comment pages with collapsed replies and enrichment"
   icon_small: "../../assets/skills/list-tree.svg"
   icon_large: "../../assets/skills/list-tree.svg"
   brand_color: "#2d68aa"

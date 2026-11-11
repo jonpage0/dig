@@ -126,7 +126,7 @@ const CATALOG_NAMES = new Set(MODULES.flatMap(m => m.env ?? []));
 const REQUIRED_NAMES = new Set(MODULES.flatMap(m => (m.keys ?? []).flat()));
 const SECRET_NAME = /_(KEY|TOKEN|SECRET|PASSWORD)$/;
 /** Credentials are secret-shaped names plus the logins a source requires; base URLs, timeouts and contact emails are settings. */
-export const isCredentialName = name => SECRET_NAME.test(name) || REQUIRED_NAMES.has(name);
+const isCredentialName = name => SECRET_NAME.test(name) || REQUIRED_NAMES.has(name);
 // What the environment that started Dig held for each catalog name, set aside on the first load.
 const startingValues = new WeakMap();
 /** The starting environment's values for catalog names. Server-side only: never returned, logged or saved. */

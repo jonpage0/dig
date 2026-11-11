@@ -226,3 +226,160 @@ test("a write-up that cites posts by number is flagged; links, references, code 
 	const linked = await executeSource(search, { query: "linked" }, context);
 	expect(linked.text).not.toContain("Citations by number");
 });
+
+test("an empty query is rejected by the schema", () => {
+	expect(Value.Check(createSchemas(Type).xsearch, { query: "" })).toBe(false);
+	expect(Value.Check(createSchemas(Type).xsearch, { query: "x" })).toBe(true);
+});
+
+test("failures are explicit failed outcomes, and an error body's message is read whether it is a string or an object", async () => {
+	const refused = await search.execute({ query: "q", handles: ["a"], excludeHandles: ["b"] }, context);
+	expect(refused).toEqual({ status: "failed", text: "ERROR: Cannot use both 'handles' and 'excludeHandles' - choose one" });
+	for (const body of [{ code: "invalid-argument", error: "The query is malformed" }, { error: { message: "The query is malformed" } }]) {
+		globalThis.fetch = (async () => Response.json(body, { status: 400 })) as typeof fetch;
+		const result = await executeSource(search, { query: "malformed" }, context);
+		expect(result.status).toBe("failed");
+		expect(result.text).toBe("ERROR: The query is malformed (status 400)");
+	}
+});
+
+test("a paid response without total_tokens keeps its finding", async () => {
+	globalThis.fetch = (async () => Response.json(complete({ usage: { cost_in_usd_ticks: 50000000 } }))) as typeof fetch;
+	const result = await executeSource(search, { query: "no token count" }, context);
+	expect(result.status).toBe("success");
+	expect(result.text).toContain("A readable finding.");
+	expect(result.details?.cost).toEqual([{ amount: 0.005, unit: "USD" }]);
+});
+
+test("a transport failure names its cause and says the pass may still have been charged", async () => {
+	globalThis.fetch = (async () => { throw new TypeError("fetch failed", { cause: Object.assign(new Error("Headers Timeout Error"), { code: "UND_ERR_HEADERS_TIMEOUT" }) }); }) as typeof fetch;
+	const result = await executeSource(search, { query: "a long pass" }, context);
+	expect(result.status).toBe("failed");
+	expect(result.text).toMatch(/^ERROR: fetch failed \(UND_ERR_HEADERS_TIMEOUT\)\. /);
+	expect(result.text).toContain("may still have run and been charged");
+	expect(result.details?.cost).toBeNull();
+});
+
+/** A streamed answer: the given chunks as an event stream. */
+const streamed = (chunks: string[]) => new Response(new ReadableStream({
+	start(controller) { for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk)); controller.close(); },
+}), { headers: { "content-type": "text/event-stream" } });
+const record = (type: string, data: Record<string, unknown>, eol = "\n") => `event: ${type}${eol}data: ${JSON.stringify({ type, ...data })}${eol}${eol}`;
+const deltas = record("response.created", { response: { id: "r-new", status: "in_progress", output: [] } }) + record("response.output_text.delta", { delta: "A readable " }) + record("response.output_text.delta", { delta: "finding." });
+
+test("the request asks for a stream, and the terminal event's response is read and kept as the call's original", async () => {
+	const bodies: any[] = [];
+	const retained: unknown[][] = [];
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		bodies.push(JSON.parse(String(init?.body)));
+		return streamed([deltas, record("response.completed", { response: complete() }), "data: [DONE]\n\n"]);
+	}) as typeof fetch;
+	const result = await executeSource(search, { query: "streamed" }, { ...context, keep: (...args) => { retained.push(args); } });
+	expect(bodies).toHaveLength(1);
+	expect(bodies[0].stream).toBe(true);
+	expect(result.status).toBe("success");
+	expect(result.text).toContain("A readable finding.");
+	expect(result.text).toContain("**response_id:** r-new");
+	expect(result.details?.cost).toEqual([{ amount: 0.005, unit: "USD" }]);
+	expect(retained).toEqual([["x_search", 200, complete()]]);
+});
+
+test("a stream read across chunk boundaries, with CRLF line ends, comments and a [DONE] line, gives the same answer", async () => {
+	const text = ": keep-alive\r\n\r\n" + record("response.output_text.delta", { delta: "A readable finding." }, "\r\n") + record("response.completed", { response: complete() }, "\r\n") + "data: [DONE]\r\n\r\n";
+	for (const size of [1, 2, 7, 64]) {
+		const chunks = Array.from({ length: Math.ceil(text.length / size) }, (_, index) => text.slice(index * size, (index + 1) * size));
+		globalThis.fetch = (async () => streamed(chunks)) as typeof fetch;
+		const result = await executeSource(search, { query: "split" }, context);
+		expect(result.status).toBe("success");
+		expect(result.text).toContain("A readable finding.");
+		expect(result.details?.cost).toEqual([{ amount: 0.005, unit: "USD" }]);
+	}
+});
+
+test("a stream that ends with response.incomplete keeps its readable text as partial", async () => {
+	globalThis.fetch = (async () => streamed([deltas, record("response.incomplete", { response: complete({ status: "incomplete", incomplete_details: { reason: "max_output_tokens" } }) })])) as typeof fetch;
+	const result = await executeSource(search, { query: "incomplete" }, context);
+	expect(result.status).toBe("partial");
+	expect(result.text).toContain("**Incomplete response:** xAI marked this response incomplete (max_output_tokens)");
+	expect(result.details?.cost).toEqual([{ amount: 0.005, unit: "USD" }]);
+});
+
+test("a stream that ends with response.failed fails with the response's error", async () => {
+	globalThis.fetch = (async () => streamed([deltas, record("response.failed", { response: complete({ status: "failed", output: [], error: { code: "server_error", message: "The search failed" } }) })])) as typeof fetch;
+	const result = await executeSource(search, { query: "failed" }, context);
+	expect(result.status).toBe("failed");
+	expect(result.text).toBe("ERROR: The search failed");
+	expect(result.details?.cost).toEqual([{ amount: 0.005, unit: "USD" }]);
+});
+
+test("an error event, or a stream cut before its terminal event, fails once with an unknown cost and keeps what arrived as interrupted", async () => {
+	const error = { type: "error", code: "server_error", message: "The model stopped" };
+	for (const [chunks, said, kept] of [
+		[[deltas, `event: error\ndata: ${JSON.stringify(error)}\n\n`], "xAI's stream reported an error: The model stopped", error],
+		[[deltas], "xAI's stream ended before its final event", { id: "r-new", status: "in_progress", output: [] }],
+		[[deltas.slice(0, 40)], "xAI's stream ended before its final event", ""],
+	] as const) {
+		let calls = 0;
+		const retained: unknown[][] = [];
+		globalThis.fetch = (async () => { calls += 1; return streamed([...chunks]); }) as typeof fetch;
+		const result = await executeSource(search, { query: "cut" }, context);
+		expect(calls).toBe(1);
+		expect(result.status).toBe("failed");
+		expect(result.text).toContain(said);
+		expect(result.text).toContain("the pass may still have run and been charged; its cost is unknown");
+		expect(result.details?.cost).toBeNull();
+		expect(result.details?.knownCost).toBeUndefined();
+		await search.execute({ query: "cut" }, { ...context, keep: (...args) => { retained.push(args); } });
+		expect(retained).toEqual([["x_search", 200, kept, undefined, true]]);
+	}
+});
+
+test("a stream that breaks while being read is not sent again and its cost is unknown", async () => {
+	let calls = 0;
+	globalThis.fetch = (async () => {
+		calls += 1;
+		return new Response(new ReadableStream({
+			start(controller) { controller.enqueue(new TextEncoder().encode(deltas)); controller.error(new TypeError("terminated")); },
+		}), { headers: { "content-type": "text/event-stream" } });
+	}) as typeof fetch;
+	const result = await executeSource(search, { query: "reset" }, context);
+	expect(calls).toBe(1);
+	expect(result.status).toBe("failed");
+	expect(result.text).toContain("xAI's stream broke before its final event (terminated)");
+	expect(result.text).toContain("may still have run and been charged");
+	expect(result.details?.cost).toBeNull();
+});
+
+test("a terminal response without a reported charge leaves the cost unknown, never zero", async () => {
+	globalThis.fetch = (async () => streamed([record("response.completed", { response: complete({ usage: { total_tokens: 12 } }) })])) as typeof fetch;
+	const result = await executeSource(search, { query: "no charge reported" }, context);
+	expect(result.status).toBe("success");
+	expect(result.text).toContain("Provider cost unavailable");
+	expect(result.details?.cost).toBeNull();
+});
+
+test("JSON 400s before a stream still trigger each retry, and the retried request streams", async () => {
+	for (const message of ["Response is too large to store", "reasoning effort is not supported"]) {
+		const bodies: any[] = [];
+		globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+			bodies.push(JSON.parse(String(init?.body)));
+			return bodies.length === 1
+				? Response.json({ error: { message }, usage: { total_tokens: 0, cost_in_usd_ticks: 0 } }, { status: 400 })
+				: streamed([record("response.completed", { response: complete() })]);
+		}) as typeof fetch;
+		const result = await executeSource(search, { query: "retry" }, context);
+		expect(bodies).toHaveLength(2);
+		expect(bodies.map(body => body.stream)).toEqual([true, true]);
+		expect(message.startsWith("Response") ? bodies[1].store : bodies[1].reasoning).toBe(message.startsWith("Response") ? false : undefined);
+		expect(result.status).toBe("success");
+		expect(result.text).toContain("A readable finding.");
+	}
+});
+
+test("a JSON 200 from a server that ignored the stream is read as before", async () => {
+	globalThis.fetch = (async () => Response.json(complete())) as typeof fetch;
+	const result = await executeSource(search, { query: "plain JSON" }, context);
+	expect(result.status).toBe("success");
+	expect(result.text).toContain("A readable finding.");
+	expect(result.details?.cost).toEqual([{ amount: 0.005, unit: "USD" }]);
+});

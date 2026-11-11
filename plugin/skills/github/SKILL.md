@@ -30,7 +30,7 @@ Pass the absolute `project` on every provider and save call, and `dig` only when
 
 Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a token; the user sets one outside the chat in Dig's native `keys.env` beside the `configPath` that `source_info` reports (in Codex, Dig's Sources page can copy one Codex's environment already has). Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
 
-All three tools reach GitHub natively and read public repositories only. They authenticate with `GH_TOKEN`, then `GITHUB_TOKEN`, then a logged-in `gh`; each result names which one it used or says `ANONYMOUS`. Anonymous mode has much lower limits and no collaboration samples; report it as a coverage limit, never as missing evidence about a repository. Search has its own limit of roughly 30 requests per minute; a rate-limit result names the reset time — wait for it or narrow the plan, and record the gap.
+All three tools reach GitHub natively and read public repositories only. They authenticate with `GH_TOKEN`, then `GITHUB_TOKEN`, then a logged-in `gh`; each result names which one it used or says `ANONYMOUS`. Anonymous mode has much lower limits and no collaboration samples (an inspection then says they need a GitHub login and were not fetched, and stays `success`); report it as a coverage limit, never as missing evidence about a repository. An inspection is `partial` only when a section it could fetch failed or was cut short. Search has its own limit of roughly 30 requests per minute; a rate-limit result names the reset time — wait for it or narrow the plan, and record the gap.
 
 ## Frame the request before searching
 
@@ -52,7 +52,7 @@ Recall is the point of this stage. Run at least four `github_search` passes with
 4. **Emerging window** — the concept with `created:>=<date about twelve months ago>` and `sort: "updated"`, so young projects are seen at all.
 5. **Ecosystem pointers** when relevant — searches for curated lists (`awesome`, `comparison`), official organization repositories, successor or fork names discovered in earlier passes.
 
-Read the returned descriptions and topics rather than trusting the order: GitHub's relevance ranking and popularity sorts both surface off-target repositories, and the emerging pass will return zero-star experiments. Use two or three pages when the first page is mostly on target; do not page past what you can review. Deduplicate forks against their parents and mirrors against their canonical repository.
+Read the returned descriptions and topics rather than trusting the order: GitHub's relevance ranking and popularity sorts both surface off-target repositories, and the emerging pass will return zero-star experiments. Use two or three pages when the first page is mostly on target; do not page past what you can review. `perPage` sets results per page (20 by default, at most 100), and `order: "asc"` reverses a stars, forks, help-wanted or updated sort. Deduplicate forks against their parents and mirrors against their canonical repository.
 
 GitHub search is not semantic web search: unquoted terms generally combine as AND, `in:name` scopes all the search terms, and at most five Boolean operators are allowed. Start with short concepts, search synonyms separately, and split long OR lists. When a query returns nothing or unrelated results, remove extra descriptors and retry a shorter formulation before calling the angle exhausted. For a known lead such as `television`, use `television in:name language:Rust`, not `television in:name language:Rust fuzzy`. Recover an obvious named contender before leaving it as a follow-up; a malformed or overspecified query is not negative evidence.
 
@@ -68,7 +68,7 @@ Build the shortlist around the distinct credible alternatives, not a fixed quota
 
 ## Inspect the shortlist with the same window
 
-Call `github_inspect` for every shortlisted repository with the same `days` value (90 by default; 180 or 365 for slow-moving domains). Same window, same units, or the comparison is not one.
+Call `github_inspect` for every shortlisted repository with the same `days` value (90 by default; 180 or 365 for slow-moving domains). Same window, same units, or the comparison is not one. `samples` sets how many merged PRs, open issues and closed issues the collaboration section reads (5 by default, at most 20); keep it the same across candidates too.
 
 Read each section for what it actually says:
 

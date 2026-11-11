@@ -1,4 +1,5 @@
 import { costSummary } from '../../providers/library/cost.ts';
+import { callOutcome } from '../../ui/format.mjs';
 
 const array = (value: any): any[] => Array.isArray(value) ? value : [];
 const names = (values: any[]): string[] => [...new Set(values.filter(value => typeof value === 'string' && value))];
@@ -6,12 +7,14 @@ const time = (value: any) => Number.isFinite(Date.parse(value)) ? Date.parse(val
 const methodLabel = (catalog: any, name: string) => catalog?.methodLabel?.(name) || name.replaceAll('-', ' ');
 const sourceLabel = (catalog: any, name: string) => catalog?.label?.(name) || name;
 
-export const CALL_OUTCOME_LABELS: Record<string, string> = {
-  success: 'Succeeded', partial: 'Partial', empty: 'Empty', failed: 'Failed', cancelled: 'Stopped', skipped: 'Skipped',
-};
 
 /** A saved document state, never a worker/execution state. */
-export function savedStateLabel(item: any): string {
+/** The file a question opens on: its answer, else its newest dated report (undated reports last), else its last listed report. */
+export function primaryFile(item: any): string | undefined {
+  return item.answer ?? [...array(item.reportDetails)].sort((a, b) => time(b.at) - time(a.at))[0]?.file ?? array(item.reports).at(-1);
+}
+
+function savedStateLabel(item: any): string {
   if (item?.answer) return ({ answered: 'Answer saved', 'partly answered': 'Answer has gaps', 'not answered': 'Question not answered' } as Record<string, string>)[item.status] || 'Answer saved';
   return array(item?.reports).length ? 'Source reports saved' : 'Question recorded';
 }
@@ -44,7 +47,7 @@ export function projectRecordedActivity(item: any, catalog?: any) {
   });
   for (const call of array(item?.calls)) events.push({
     id: 'call:' + (call.session || '') + ':' + call.id, kind: 'recorded-call', at: call.at, fileOrCallId: call.id,
-    label: sourceLabel(catalog, call.source) + ' · ' + (CALL_OUTCOME_LABELS[call.status] || 'Unknown outcome'),
+    label: sourceLabel(catalog, call.source) + ' · ' + callOutcome(call.status),
     detail: call.tool + ' · recorded call start' + (Number.isFinite(call.ms) ? ' · ' + call.ms.toLocaleString() + ' ms elapsed' : ''), call,
   });
   if (item?.answer && item?.finishedAt) events.push({ id: 'answer:' + item.answer, kind: 'answer-saved', at: item.finishedAt, fileOrCallId: item.answer, label: savedStateLabel(item), detail: 'Saved answer outcome: ' + (item.status || 'unknown') });

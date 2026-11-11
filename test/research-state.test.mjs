@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { projectResearch, projectMethodCoverage, projectConversation, projectRecordedActivity, steeringPrompt } from '../src/frontend/library/research-state.ts';
+import { projectResearch, projectMethodCoverage, projectConversation, projectRecordedActivity, steeringPrompt, primaryFile } from '../src/frontend/library/research-state.ts';
 
 const report = { file: 'p/digs/a/x-judge.md', source: 'x', method: 'x-judge', at: '2026-10-20T10:00:00Z', status: 'partial' };
 const call = { id: 'same-id', source: 'x', tool: 'x_post', session: 'worker', at: '2026-10-20T09:00:00Z', ms: 500, status: 'partial', cost: null, knownCost: [{ unit: 'USD', amount: .25 }], rawFile: 'p/sessions/worker/raw/a.json' };
@@ -67,4 +67,13 @@ test('steering uses the original question and canonical saved references with an
   assert.match(prompt, /missing report does not establish whether a worker is running/);
   assert.match(prompt, /Reuse existing evidence/);
   assert.doesNotMatch(prompt, /run every source|cancel all|pause the worker/i);
+});
+
+test('a question opens its answer, else its newest dated report with undated reports last, else its last listed report', () => {
+  const at = (file, when) => ({ file, at: when });
+  assert.equal(primaryFile({ answer: 'p/digs/a/answer.md', reports: ['p/digs/a/x.md'], reportDetails: [at('p/digs/a/x.md', '2026-10-20T10:00:00Z')] }), 'p/digs/a/answer.md');
+  assert.equal(primaryFile({ reports: ['p/digs/a/old.md', 'p/digs/a/undated.md', 'p/digs/a/new.md'], reportDetails: [at('p/digs/a/old.md', '2026-10-20T10:00:00Z'), at('p/digs/a/undated.md'), at('p/digs/a/new.md', '2026-10-21T10:00:00Z')] }), 'p/digs/a/new.md');
+  assert.equal(primaryFile({ reports: ['p/digs/a/undated.md', 'p/digs/a/dated.md'], reportDetails: [at('p/digs/a/undated.md', 'not a date'), at('p/digs/a/dated.md', '2026-10-20T10:00:00Z')] }), 'p/digs/a/dated.md');
+  assert.equal(primaryFile({ reports: ['p/digs/a/first.md', 'p/digs/a/last.md'] }), 'p/digs/a/last.md');
+  assert.equal(primaryFile({ reports: [], files: ['p/digs/a/dig.md'] }), undefined);
 });

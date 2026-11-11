@@ -2,13 +2,13 @@
  * Direct HTTP keeps tools available to source-research subagents.
  * Requires PERPLEXITY_API_KEY; PERPLEXITY_TIMEOUT_MS bounds the entire response.
  */
+import { USER_AGENT } from "../../version.mjs"
 import { keptJson, keptText } from "../http.js"
 import { outcome } from "../outcome.js"
 import { knownSecrets, redactText } from "../secrets.js"
 import type { SourceToolResult, ToolContext, ToolSpec } from "../types.js"
 
 const PERPLEXITY_BASE = "https://api.perplexity.ai"
-const VERSION = "0.9.0"
 const RECENCY = ["hour", "day", "week", "month", "year"] as const
 const CONTEXT_SIZES = ["low", "medium", "high"] as const
 const DATE_FILTERS = [
@@ -103,6 +103,8 @@ function searchBudgets(args: Record<string, unknown>): Record<string, unknown> {
   return budgets
 }
 
+const UNANSWERED_COST = "Perplexity may have received and charged this request, but no complete response arrived; its cost is unknown."
+
 function safeMessage(error: unknown): string {
   return redactText(error instanceof Error ? error.message : "Unknown Perplexity error", knownSecrets())
 }
@@ -115,6 +117,8 @@ async function makeApiRequest(endpoint: string, body: Record<string, unknown>, c
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
   const signal = AbortSignal.any([ctx.abort, controller.signal])
+  // Set once a complete response has arrived; until then the provider may have charged a request whose answer never came.
+  let answered = false
   try {
     let response: Response
     try {
@@ -123,7 +127,7 @@ async function makeApiRequest(endpoint: string, body: Record<string, unknown>, c
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${key}`,
-          "User-Agent": `opencode-dig/${VERSION}`,
+          "User-Agent": USER_AGENT,
         },
         body: JSON.stringify(body),
         signal,
@@ -136,15 +140,21 @@ async function makeApiRequest(endpoint: string, body: Record<string, unknown>, c
     if (!response.ok) {
       // keptText returns the body with credentials redacted, so this cut cannot leave part of one.
       const detail = (await keptText(response, ctx.keep, endpoint)).slice(0, 300)
+      answered = true
       throw new Error(`Perplexity API error: HTTP ${response.status}${detail ? ` — ${detail}` : ""}`)
     }
-    const data: unknown = await keptJson(response, ctx.keep, endpoint)
+    const data: unknown = await keptJson(response, ctx.keep, endpoint).catch((error: unknown) => {
+      if (error instanceof SyntaxError) answered = true // the whole body arrived, but it is not JSON
+      throw error
+    })
+    answered = true
     if (signal.aborted) throw new Error("Request interrupted")
     if (!isRecord(data)) throw new Error("Perplexity API returned a malformed response")
     return data
   } catch (error) {
     if (ctx.abort.aborted) throw new Error("Perplexity request cancelled by caller")
-    if (controller.signal.aborted) throw new Error(`Perplexity request timed out after ${timeoutMs}ms; no completed result received`)
+    if (controller.signal.aborted) throw new Error(`Perplexity request timed out after ${timeoutMs}ms; no completed result received${answered ? "" : `. ${UNANSWERED_COST}`}`)
+    if (!answered) throw new Error(`${error instanceof Error ? error.message : "Unknown Perplexity error"}. ${UNANSWERED_COST}`)
     throw error
   } finally {
     clearTimeout(timeoutId)
@@ -212,8 +222,9 @@ function formatAgent(data: Record<string, unknown>, preset: string): string {
   for (const match of answer.matchAll(/\[(?:web:)?(\d+)\]/g)) {
     if (!sourceIds.has(Number(match[1]))) unresolved.add(match[0])
   }
+  const reason = isRecord(data.incomplete_details) ? text(data.incomplete_details.reason) : undefined
   const lines = [
-    ...(data.status === "incomplete" ? ["ERROR: Perplexity Agent returned incomplete output; partial evidence follows."] : []),
+    ...(data.status === "incomplete" ? [`This answer is incomplete: Perplexity stopped before finishing it (${reason ?? "no reason given"}).`] : []),
     `Perplexity Agent preset: ${preset} | Status: ${data.status}${text(data.model) ? ` | Model: ${data.model}` : ""}`,
     "", answer,
   ]
@@ -252,9 +263,11 @@ async function performAgent(value: unknown, preset: "low" | "medium" | "high", c
       tools: [{ type: "web_search", ...(Object.keys(filters).length ? { filters } : {}), ...budgets }],
     }, ctx)
     const output = formatAgent(data, preset)
-    return args.search_context_size !== undefined && BUDGET_FIELDS.every((field) => args[field] === undefined)
+    const result = args.search_context_size !== undefined && BUDGET_FIELDS.every((field) => args[field] === undefined)
       ? `${output}\n\nSearch context note: named size was sent, but the preset's explicit token budgets take precedence. Use max_tokens and max_tokens_per_page to override preset search depth.`
       : output
+    // An answer cut short still carries its text and sources: partial evidence, not a failure.
+    return data.status === "incomplete" ? outcome("partial", result) : result
   } catch (error) {
     return `ERROR: ${safeMessage(error)}`
   }

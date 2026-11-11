@@ -104,6 +104,29 @@ test("DeepWiki answers streamed after progress notifications are successes", asy
   expect(result.details?.status).toBe("success");
   expect(result.content[0].text).toContain("HTMLBundle");
 });
+test("a DeepWiki wiki over 200,000 characters is cut at a page heading, partial, and says where the rest is; the original stays whole", async () => {
+  const page = (n: number) => `# Page: Part ${n}\n\n${"Body text of this page. ".repeat(400)}\n\n`;
+  const wiki = Array.from({ length: 40 }, (_, n) => page(n + 1)).join("");
+  const kept: unknown[] = [];
+  mockFetch(async () => Response.json({ jsonrpc: "2.0", result: { content: [{ type: "text", text: wiki }] } }));
+  const result = await executeSource(providerTools.deepwiki_read_wiki_contents, { repoName: "fixture/repo" }, {
+    sessionID: "test", directory: root, worktree: root, abort: new AbortController().signal, keep: (_label, _status, body) => kept.push(body),
+  });
+  expect(wiki.length).toBeGreaterThan(200_000);
+  expect(result.status).toBe("partial");
+  const [notice, ...rest] = result.text.split("\n\n");
+  const shown = rest.join("\n\n");
+  expect(shown.length).toBeLessThanOrEqual(200_000);
+  expect(wiki.startsWith(shown)).toBe(true);
+  expect(wiki.slice(shown.length).startsWith("# Page: ")).toBe(true);
+  expect(notice).toBe(`Showing the first ${shown.length.toLocaleString("en-US")} of ${wiki.length.toLocaleString("en-US")} characters of this wiki (Dig returns at most 200,000 per call); the retained original holds the whole wiki, and deepwiki_ask_question or the page list from deepwiki_read_wiki_structure reaches a specific page.`);
+  expect((kept[0] as { result: { content: Array<{ text: string }> } }).result.content[0].text).toBe(wiki);
+
+  mockFetch(async () => Response.json({ jsonrpc: "2.0", result: { content: [{ type: "text", text: "# Page: Small\n\nShort wiki." }] } }));
+  const small = await tool("deepwiki_read_wiki_contents", { repoName: "fixture/repo" });
+  expect(small.details?.status).toBe("success");
+  expect(small.content[0].text).toBe("# Page: Small\n\nShort wiki.");
+});
 test("a DeepWiki error excerpt is redacted before it is cut, so no fragment of an echoed key survives", async () => {
   process.env.EXA_API_KEY = `PRIVATE/percent+KEY space-unique-${"7G9w".repeat(20)}`; // gitleaks:allow (synthetic test key)
   const encoded = encodeURIComponent(process.env.EXA_API_KEY).replace(/%[0-9A-F]{2}/g, (escape) => escape.toLowerCase());
@@ -113,6 +136,30 @@ test("a DeepWiki error excerpt is redacted before it is cut, so no fragment of a
   expect(result.details?.status).toBe("failed");
   expect(result.content[0].text).toContain("DeepWiki HTTP 502");
   expect(result.content[0].text).not.toContain("PRIVATE%2f");
+});
+test("the keyless Hacker News, Polymarket and DeepWiki reads bound each request with a timeout", async () => {
+  const timeout = AbortSignal.timeout, seen: number[] = [];
+  AbortSignal.timeout = (ms: number) => { seen.push(ms); return timeout.call(AbortSignal, ms); };
+  try {
+    mockFetch(async () => Response.json({ jsonrpc: "2.0", result: { content: [{ type: "text", text: "ok" }] } }));
+    for (const [name, args, ms] of [
+      ["deepwiki_read_wiki_structure", { repoName: "fixture/repo" }, 60_000],
+      ["deepwiki_read_wiki_contents", { repoName: "fixture/repo" }, 60_000],
+      ["deepwiki_ask_question", { repoName: "fixture/repo", question: "How?" }, 180_000],
+    ] as const) {
+      seen.length = 0;
+      await tool(name, args);
+      expect(seen).toEqual([ms]);
+    }
+    mockFetch(async () => Response.json({ hits: [], nbHits: 0, events: [], id: 1, children: [] }));
+    for (const [name, args] of [["hackernews", { query: "x" }], ["hackernews_read", { item: "1" }], ["polymarket", { query: "x" }]] as const) {
+      seen.length = 0;
+      await tool(name, args);
+      expect(seen).toEqual([60_000]);
+    }
+  } finally {
+    AbortSignal.timeout = timeout;
+  }
 });
 test("explicit successful text is not classified as a failure by its first word", () => {
   expect(
@@ -255,7 +302,9 @@ test("aborting YouTube terminates transcript subprocesses before persistence", a
     { query: "test", transcripts: true },
     controller.signal,
   );
-  for (let i = 0; i < 200 && !existsSync(marker); i++) await sleep(5);
+  let settled = false;
+  pending.then(() => (settled = true), () => (settled = true));
+  while (!settled && !existsSync(marker)) await sleep(5);
   const started = existsSync(marker);
   controller.abort();
   const result = await pending;

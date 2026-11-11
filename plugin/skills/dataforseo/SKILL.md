@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # DataForSEO research
 
-Use DataForSEO for SERPs, keyword volume and ideas, rankings, competitors, backlinks, technical SEO, local business listings, Google Maps data, reviews, domain technologies, brand mentions, Google Trends, merchant or app data, and AI or LLM visibility.
+Use DataForSEO for SERPs, keyword volume and ideas, rankings, competitors, backlinks, technical SEO, local business listings, Google Maps data, reviews, domain technologies, brand mentions, Google Trends, merchant or app data, and AI or LLM visibility. A question only about how AI answers mention or cite a brand and its competitors has its own focused method, `dataforseo-ai-visibility`; when this skill is the one assigned, it covers that question too, through the AI Optimization API below.
 
 Run this skill inline in the thread that needs it, or as an ordinary source worker that the parent thread spawned for this one question. Either way, run it yourself: do not spawn another agent or run a second source. This is research-only: do not edit code or create a second credential path.
 
@@ -81,7 +81,7 @@ Check both the top-level and per-task `status_code`; `20000` means success. `401
 
 Every number remains tied to endpoint, location, language, device, retrieval time, filters, and execution mode. Search volume, difficulty, traffic, and similar metrics are modelled estimates. Rankings and SERP contents are momentary observations. Do not infer causation from correlated rank, volume, backlink, or traffic changes. Preserve uncertain query intent, entity resolution, business matches, sparse coverage, and account or endpoint failures.
 
-For Labs Google estimated traffic volume (`etv`), state the calculation regime. The [September 4, 2026 change](https://dataforseo.com/update/new-etv-calculation-in-dataforseo-labs-api) adds SERP-feature/search-intent CTR and clickstream-normalized volume. Before November 1, accounts registered before September 1 retain the old default unless `use_new_etv: true`; newer accounts use the new method. On November 1 the new method becomes default for all users; historical-metric endpoints are excluded. `estimated_paid_traffic_cost` changes with it. Do not treat a method change as a real traffic trend, and do not silently opt an existing comparison into a different regime.
+For Labs Google estimated traffic volume (`etv`), state the calculation regime. The [September 4, 2026 change](https://dataforseo.com/update/new-etv-calculation-in-dataforseo-labs-api) adds SERP-feature/search-intent CTR and clickstream-normalized volume. Since November 1, 2026 the new method is the default for all users; historical-metric endpoints are excluded. Before that date, accounts registered before September 1 kept the old default unless `use_new_etv: true`, so earlier values from those accounts may use the old method. `estimated_paid_traffic_cost` changes with it. Do not treat a method change as a real traffic trend, and do not silently opt an existing comparison into a different regime.
 
 Google Business Profile inspection can include [service details](https://dataforseo.com/update/service-details-in-google-my-business-info-api) in `google_business_info.services`: category, title, snippet and price where the business supplied them. Missing services or prices mean unavailable, not that the business offers none.
 

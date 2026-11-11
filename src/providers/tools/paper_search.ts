@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stateDirectory } from "../../config.mjs";
 import { loadConfig, paperSearchDirectory, paperSearchEnvFile, paperSearchEnvValues, paperSearchInterpreter } from "../runtime-config.js";
 import { knownSecrets, redactProviderText } from "../secrets.js";
 import { findExecutable } from "../executables.js";
@@ -15,8 +16,9 @@ import { openAlexAmount, openAlexNoCharge } from "./papers.js";
 // instead of speaking stdio-MCP: source workers call these provider tools
 // directly, so the bridge stays behind them rather than becoming its own server.
 // Its OpenAlex-backed search connectors (openalex, ssrn) report OpenAlex's
-// per-request usage cost. The other connectors keep their existing no-charge
-// policy, which this cost reporting did not re-audit.
+// per-request usage cost. A full-text read or PDF download through one of them
+// reports no cost, so it is unknown. The other connectors keep their existing
+// no-charge policy, which this cost reporting did not re-audit.
 
 // Bundled assets ship in plugin/bridges/papers/; these resolve from the
 // bundled server, plugin/dist/server.mjs.
@@ -62,6 +64,29 @@ async function writeOnce(target: string, run: (folder: string) => Promise<string
 		return kept.length ? `${text}\n\nAlready saved, kept unchanged (not replaced): ${kept.join(", ")}` : text;
 	} finally {
 		rmSync(folder, { recursive: true, force: true });
+	}
+}
+
+/** `target` with symbolic links resolved through its deepest existing entry; the folders below that are created later. */
+function realTarget(target: string): string {
+	const missing: string[] = [];
+	let existing = path.resolve(target);
+	while (!lstatSync(existing, { throwIfNoEntry: false }) && path.dirname(existing) !== existing) {
+		missing.unshift(path.basename(existing));
+		existing = path.dirname(existing);
+	}
+	return path.join(realpathSync(existing), ...missing);
+}
+/** Whether `target`, symbolic links resolved, lies inside one of `roots`. An unresolvable link is outside. */
+function confined(target: string, roots: string[]): boolean {
+	try {
+		const file = realTarget(target);
+		return roots.some(root => {
+			const rel = path.relative(realTarget(root), file);
+			return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+		});
+	} catch {
+		return false;
 	}
 }
 
@@ -140,6 +165,11 @@ function multiSearchBilling(response: RetainedResponse, args: { sources?: unknow
 	const known = [...totals].filter(([, amount]) => amount > 0).map(([unit, amount]) => ({ amount, unit }));
 	if (!charges.includes(null)) return { cost: known };
 	return known.length ? { cost: null, knownCost: known } : { cost: null };
+}
+
+/** Free, except through an OpenAlex-backed source, whose read or download may spend OpenAlex budget the bridge does not report. */
+function openAlexUnknown(spec: ToolSpec): ToolSpec {
+	return { ...spec, billing: { charge: () => ({ cost: null }), noCharge: args => !OPENALEX_BACKED_SOURCES.includes(String(args?.source ?? "").trim().toLowerCase()) } };
 }
 
 const MAX_OUTPUT_CHARS = 120_000;
@@ -223,7 +253,12 @@ interface BridgeRun {
 	stderr: string;
 	/** The exit code, or the signal name when the process was killed. */
 	exitCode: number | string;
+	/** Stopped by BRIDGE_TIMEOUT_MS, not by the caller. */
+	timedOut: boolean;
 }
+
+/** A bridge call with no result after this long is stopped and fails. */
+const BRIDGE_TIMEOUT_MS = 5 * 60_000;
 
 /**
  * The bridge reads the Unpaywall contact email as `PAPER_SEARCH_MCP_UNPAYWALL_EMAIL` or plain `UNPAYWALL_EMAIL`, from
@@ -250,7 +285,7 @@ function contactValues(): string[] {
 /**
  * `uv run --no-sync` inside the bridge clone. Settles only once the process
  * has exited, so a cancelled download never races the removal of its scratch
- * folder. Cancellation kills it (SIGTERM) and reports its exit as it was;
+ * folder. Cancellation, or BRIDGE_TIMEOUT_MS without an exit, kills it (SIGTERM) and reports its exit as it was;
  * failing to start rejects. Known credentials and the contact email are
  * scrubbed from both streams before anything reads them, JSON output decoded
  * first (`redactProviderText`), so no JSON escape can hide one and no
@@ -271,25 +306,31 @@ function runBridge(command: string[], signal: AbortSignal): Promise<BridgeRun> {
 		});
 		const stdout: Buffer[] = [];
 		const stderr: Buffer[] = [];
-		let failure: Error | undefined;
+		let failure: Error | undefined, timedOut = false;
+		const timer = setTimeout(() => { timedOut = true; child.kill("SIGTERM"); }, BRIDGE_TIMEOUT_MS);
 		child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
 		child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
 		child.on("error", (error) => {
 			failure ??= error;
 		});
 		child.on("close", (code, killed) => {
+			clearTimeout(timer);
 			if (failure && !signal.aborted) return reject(failure);
 			const scrubbed = [...knownSecrets(), ...contactValues()].sort((a, b) => b.length - a.length);
 			const read = (chunks: Buffer[]) => redactProviderText(Buffer.concat(chunks).toString("utf8"), scrubbed).text;
-			resolve({ stdout: read(stdout), stderr: read(stderr), exitCode: code ?? killed ?? "unknown" });
+			resolve({ stdout: read(stdout), stderr: read(stderr), exitCode: code ?? killed ?? "unknown", timedOut });
 		});
 	});
 }
 
 /** `paper-search <command>`'s trimmed output, or an ERROR line when it exited abnormally or printed nothing. */
 async function runPaperSearch(cliArgs: string[], ctx: BridgeContext): Promise<string> {
-	const { stdout, stderr, exitCode } = await runBridge(["paper-search", ...cliArgs], ctx.abort);
+	const { stdout, stderr, exitCode, timedOut } = await runBridge(["paper-search", ...cliArgs], ctx.abort);
 	const out = stdout.trim();
+	if (timedOut && !ctx.abort.aborted) {
+		keepOutput(ctx.keep, `paper-search ${cliArgs[0]}`, exitCode, redactDiagnostics(out || stderr.trim().split("\n").slice(-5).join("\n")));
+		return `ERROR: paper-search ${cliArgs[0]} produced no result within ${BRIDGE_TIMEOUT_MS / 60_000} minutes and was stopped; this is not evidence of no papers.`;
+	}
 	if (exitCode !== 0) {
 		const detail = redactDiagnostics(out || stderr.trim().split("\n").slice(-5).join("\n"));
 		keepOutput(ctx.keep, `paper-search ${cliArgs[0]}`, exitCode, detail);
@@ -331,7 +372,7 @@ export const multi_search: ToolSpec = {
 	},
 };
 
-export const fulltext_read: ToolSpec = free({
+export const fulltext_read: ToolSpec = openAlexUnknown({
 	description:
 		"Download a paper's PDF from an open source (e.g. arxiv, biorxiv, medrxiv, pmc, europepmc, semantic, zenodo, hal, core) and extract its full text via the local paper-search-mcp CLI. Returns plain text (truncated if very long). Use the paper_id exactly as reported by search results for that source. Note: IACR PDFs are Cloudflare-blocked (search works, read does not); SSRN is metadata-only.",
 	async execute(args, context) {
@@ -347,7 +388,7 @@ export const fulltext_read: ToolSpec = free({
 	},
 });
 
-export const pdf_download: ToolSpec = free({
+export const pdf_download: ToolSpec = openAlexUnknown({
 	description:
 		"Download a paper's PDF to local disk via the local paper-search-mcp CLI and return the saved file path as JSON. Use when the parent orchestrator needs the PDF artifact itself rather than extracted text.",
 	async execute(args, context) {
@@ -355,8 +396,13 @@ export const pdf_download: ToolSpec = free({
 			const source = String(args.source ?? "").trim().toLowerCase();
 			const paperId = String(args.paperId ?? "").trim();
 			if (!source || !paperId) return "ERROR: source and paperId are required";
-			const savePath = String(args.savePath ?? "").trim() || downloadsDir();
-			return await writeOnce(savePath, (folder) => runPaperSearch(["download", source, paperId, "-o", folder], context).then(bounded));
+			const savePath = String(args.savePath ?? "").trim();
+			// A relative savePath belongs to the project the call was made for, never the server's working directory (the installed plugin).
+			if (savePath && !path.isAbsolute(savePath) && !path.isAbsolute(context.directory)) return "ERROR: a relative savePath needs the call's project directory; give an absolute savePath or omit it to use the library";
+			const target = !savePath ? downloadsDir() : path.resolve(context.directory, savePath);
+			const roots = [...(path.isAbsolute(context.directory) ? [context.directory] : []), stateDirectory()];
+			if (savePath && !confined(target, roots)) return `ERROR: savePath must lie inside the project directory (${context.directory}) or Dig's state directory (${stateDirectory()}), symbolic links resolved; omit it to save in the library's papers folder`;
+			return await writeOnce(target, (folder) => runPaperSearch(["download", source, paperId, "-o", folder], context).then(bounded));
 		} catch (error) {
 			if (context.abort.aborted) throw error;
 			return `ERROR: papers_pdf_download failed: ${error instanceof Error ? error.message : "Unknown error"}`;
@@ -374,6 +420,8 @@ export const sections: ToolSpec = free({
       const maxPages=args.maxPages??30,maxCharacters=args.maxCharacters??60000;
       if (!Number.isInteger(maxPages)||maxPages<1||maxPages>100||!Number.isInteger(maxCharacters)||maxCharacters<1||maxCharacters>200000) return "ERROR: maxPages must be 1–100 and maxCharacters 1–200000";
       const out=await runPaperSearch(["tool","extract_sections",file,"--max-pages",String(maxPages),"--max-chars",String(maxCharacters)],context);
+      // A clone from before section extraction rejects the command itself (argparse's "invalid choice").
+      if(out.startsWith("ERROR:")&&/invalid choice: '?(?:tool|extract_sections)\b/.test(out)) return `ERROR: the Papers bridge is out of date: the installed clone has no section extraction. Rerun the Papers bridge setup (node ${BRIDGE_SETUP}) to update the pinned clone and apply the maintained patch, then retry. ${out.slice("ERROR: ".length)}`;
       if(out.startsWith("ERROR:")) return out;
       const value=JSON.parse(out);
       if (!value || !Array.isArray(value.sections) || typeof value.truncated !== "boolean") return "ERROR: paper sections returned a malformed result";

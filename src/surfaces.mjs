@@ -10,7 +10,11 @@ import { firstParagraph, frontMatter, reportParts } from './ui/markdown.mjs';
 import { answerWord, runWord } from './status.mjs';
 import { glyphFor, monochromeSvg, svgDataUri } from './glyphs.mjs';
 import { costSummary } from './providers/library/cost.ts';
-import { displayTitle } from './library.mjs';
+import { displayTitle, listLibrary, libraryFolder, libraryRevision, readLibraryFile } from './library.mjs';
+import { environmentPresence } from './catalog.mjs';
+import { knownSecrets, redactValue } from './providers/secrets.ts';
+import { VERSION } from './version.mjs';
+import { createHash } from 'node:crypto';
 
 export const catalog = createCatalog(MODULES.map(({ id, label }) => ({ id, label })));
 
@@ -144,4 +148,23 @@ export function readinessText(info) {
     disabled.length ? `Disabled: ${disabled.map(s => s.label).join(', ')}.` : null,
     'Checks credential names and local prerequisites only; no provider was called.',
   ].filter(Boolean).join('\n');
+}
+
+// The views' data, built once for the server and the browser preview (scripts/preview.mjs), so the two cannot drift.
+// `activity` is a createCallActivity() instance; `host` is hostOf(DIG_HOST).
+// `version` is the server's; the view compares it with its own to notice when Codex shows an older cached view.
+// `replaced` says this server's package folder was removed by a later install (see packageReplaced).
+// `libraryFolder` lets the Settings page say when the chosen library is not a folder yet.
+export async function librarySnapshot(c, activity, host) {
+  return { ...(await listLibrary(c)), version: VERSION, replaced: packageReplaced(), library: c.library, libraryFolder: await libraryFolder(c), configPath: c.path, enabledSources: c.sources.enabled, sources: MODULES.map(({ id, kind, label }) => ({ id, kind: kind ?? 'source', label })), keepRaw: c.keep_raw, activeCalls: activity.snapshot(c.library), host };
+}
+// The version and a replaced package are part of the fingerprint so a running view polls a fresh snapshot, and
+// notices, after an update.
+export async function libraryFingerprint(c, activity) {
+  return createHash('sha256').update(JSON.stringify([VERSION, packageReplaced(), activity.revision, await libraryRevision(c), c.library, await libraryFolder(c), c.keep_raw, c.sources.enabled, c.x, c.workers, c.search, environmentPresence()])).digest('hex').slice(0, 24);
+}
+/** saved_research's card for one library file, read from `snapshot` (a librarySnapshot), with known credentials redacted. */
+export async function savedResearchCard(c, file, snapshot) {
+  const read = await readLibraryFile(c, file, 0, Number.MAX_SAFE_INTEGER);
+  return redactValue({ ...savedResearch(snapshot, read.file, read.text), path: read.path, link: openInDig(read.path) }, knownSecrets());
 }

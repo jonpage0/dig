@@ -6,16 +6,10 @@ import { Tabs as BaseTabs } from '@base-ui/react/tabs';
 import { cn } from './utils';
 
 export function Button({ className, variant = 'default', size = 'default', ...props }: React.ComponentProps<typeof BaseButton> & {
-  variant?: 'default' | 'outline' | 'ghost'; size?: 'default' | 'sm' | 'icon';
+  variant?: 'default' | 'outline' | 'ghost'; size?: 'default' | 'sm';
 }) {
   return <BaseButton {...props} className={cn('dig-button', `dig-button-${variant}`, `dig-button-size-${size}`, className)} />;
 }
-export function Card({ className, ...props }: React.ComponentProps<'div'>) { return <div {...props} data-slot="card" className={cn('dig-card', className)} />; }
-export function CardHeader({ className, ...props }: React.ComponentProps<'div'>) { return <div {...props} data-slot="card-header" className={cn('dig-card-header', className)} />; }
-export function CardTitle({ className, ...props }: React.ComponentProps<'div'>) { return <div {...props} data-slot="card-title" className={cn('dig-card-title', className)} />; }
-export function CardDescription({ className, ...props }: React.ComponentProps<'div'>) { return <div {...props} data-slot="card-description" className={cn('dig-card-description', className)} />; }
-export function CardContent({ className, ...props }: React.ComponentProps<'div'>) { return <div {...props} data-slot="card-content" className={cn('dig-card-content', className)} />; }
-export function CardFooter({ className, ...props }: React.ComponentProps<'div'>) { return <div {...props} data-slot="card-footer" className={cn('dig-card-footer', className)} />; }
 export function Badge({ tone = 'neutral', className, ...props }: React.ComponentProps<'span'> & { tone?: 'neutral' | 'success' | 'partial' | 'warning' | 'muted' }) {
   return <span {...props} data-tone={tone} className={cn('dig-badge', className)} />;
 }

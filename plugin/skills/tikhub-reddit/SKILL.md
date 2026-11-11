@@ -1,6 +1,6 @@
 ---
 name: tikhub-reddit
-description: Advanced Reddit research through TikHub, with query scouting, subreddit context, full comment trees, public author provenance, feed discovery and batch post enrichment, using the Dig plugin's tools.
+description: Advanced Reddit research through TikHub, with query scouting, subreddit context, a thread's first page of comments with up to 8 collapsed-reply continuations per call, public author provenance, feed discovery and batch post enrichment, using the Dig plugin's tools.
 disable-model-invocation: true
 ---
 
@@ -50,6 +50,8 @@ Read Filter / Coverage Notes before interpreting a slice. Dynamic search applies
 Listing pagination is returned per endpoint/label, separately from collapsed-reply cursors. Reuse a returned `after` only for its own listing and the same query/filter context. A bundle's `after` advances only its post search; use query_scout for a community/comment continuation. For author_context, pair `after` with `afterTarget: "user_posts"` or `"user_comments"` because the two listings have independent cursors. Display caps and bounded reply calls do not establish a complete search or comment tree.
 
 Contextualize one to three important subreddits. Preserve visible descriptions, rules, settings, highlights, activity, and whether each venue is strong, medium, or weak for this question. Do not convert venue quality into truth.
+
+Each call reads one page of a thread's comments plus a bounded number of collapsed-reply continuations: `maxReplyCursors` sets that number (default 3 for `deep_thread`, at most 8; default 2 for `thread_intelligence`, at most 5 per post), and `includeReplies: false` skips them. `maxItems` (default 10, at most 25) caps each evidence section of the output, and Comment Highlights never show more than 12. The optional reads are on by default and each adds requests: `includeSettings`, `includeStyle` and `includeHighlights` for `subreddit_context`, `includeSubredditContext` and `includeBatchEnrich` for `discovery_bundle`, and `includeUserHistory` for `author_context`; turn one off when its context does not serve the question. `needFormat` (default true) asks TikHub for its formatted response shape; leave it on. A request that got no complete response is never sent again and may still have been charged, so its cost is unknown.
 
 For one to five high-value `t3_...` post IDs, use `thread_intelligence` with replies. Use `deep_thread` when the comment tree is the point and `batch_enrich` when only post facts are needed. State whether collapsed replies completed, partially completed, were unavailable, or failed. Use `author_context` sparingly and only for public provenance; it is not identity proof or permission for personal profiling.
 

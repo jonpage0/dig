@@ -103,10 +103,11 @@ export function formatInteraction(value: any, options: { requested?: any; struct
   const sourceUrls = input.filter((p: any) => p?.type === "video").map((p: any) => p.uri);
   const requestedAgentic = input.some((v: any) => v?.processing === "agentic");
   const processingObserved = stepTypes.includes("processing_call") && stepTypes.includes("processing_result");
-  if (value.status === "failed") return outcome("failed", `ERROR: Google analysis failed: ${value.error?.message ?? "No reason returned"}`, { interactionId: value.id, interactionStatus: value.status, usage: value.usage ?? null });
+  const named = value.id === undefined ? "" : ` (interaction ${value.id})`;
+  if (value.status === "failed") return outcome("failed", `ERROR: Google analysis${named} failed: ${value.error?.message ?? "No reason returned"}`, { interactionId: value.id, interactionStatus: value.status, usage: value.usage ?? null });
   if (value.status === "cancelled") return outcome("cancelled", "Google analysis was cancelled; any reported token usage may still be billed.", { interactionId: value.id, interactionStatus: value.status, usage: value.usage ?? null });
-  if (!pending && !TERMINAL.has(value.status)) return failed(`Unknown Google interaction status: ${String(value.status)}`);
-  if (!pending && value.status === "completed" && !answer.trim()) return failed("Google completed the interaction without a text answer");
+  if (!pending && !TERMINAL.has(value.status)) return failed(`Unknown Google interaction status${named}: ${String(value.status)}`);
+  if (!pending && value.status === "completed" && !answer.trim()) return failed(`Google completed the interaction${named} without a text answer`);
   if (pending) warnings.push("Analysis is still running. Use youtube_analysis_status with this interaction ID; do not start the analysis again.");
   if (value.status === "incomplete") warnings.push("Google returned an incomplete answer, for example after an output limit. Do not present it as complete coverage.");
   if (value.status === "requires_action") warnings.push("Google requires additional input. Dig does not execute arbitrary returned function calls.");
@@ -134,12 +135,13 @@ export function formatInteraction(value: any, options: { requested?: any; struct
   ].join("\n"), { interactionId: value.id ?? null, interactionStatus: value.status, model: value.model ?? options.requested?.model ?? null, usage: value.usage ?? null, videoUrls: sourceUrls, stepTypes, processingObserved, warnings, citations: sources, ...(structured !== undefined ? { structuredAnswer: structured } : {}), ...(pending ? { nextTool: "youtube_analysis_status" } : {}) });
 }
 
-async function poll(id: string, value: any, seconds: number, key: string, ctx: ToolContext) {
+async function poll(id: string, value: any, seconds: number, key: string, ctx: ToolContext, seen?: (value: any) => void) {
   const deadline = Date.now() + seconds * 1000;
   while (ACTIVE.has(value.status) && Date.now() < deadline) {
     await abortableDelay(Math.min(2000, Math.max(0, deadline - Date.now())), ctx.abort);
     value = await request(`/${encodeURIComponent(id)}`, key, ctx);
-    if (value.id !== id) throw new Error("Google returned a different interaction from the requested ID");
+    if (value.id !== id) throw new Error(`Google returned a different interaction from the requested ID ${id}`);
+    seen?.(value);
   }
   return value;
 }
@@ -149,18 +151,25 @@ export const youtube_analyze: ToolSpec = {
   async execute(args, originalCtx) {
     const ctx = { ...originalCtx, abort: AbortSignal.any([originalCtx.abort, AbortSignal.timeout(550000)]) };
     const key = process.env.GEMINI_API_KEY?.trim();
-    let id: string | undefined, stopped = false, intentionallyRunning = false;
+    let id: string | undefined, stopped = false, intentionallyRunning = false, body: ReturnType<typeof buildYouTubeRequest> | undefined, last: any;
     try {
-      const body = buildYouTubeRequest(args);
+      body = buildYouTubeRequest(args);
       if (!key) return failed("Set GEMINI_API_KEY in Dig's keys.env for YouTube video understanding; existing search/transcript routes remain available");
       let value = await request("", key, ctx, body, ctx.abort, v => { if (validInteractionId(v?.id)) id = v.id; }, body.store ? 90000 : 540000);
-      id = value.id;
-      if (body.store && !args.background) value = await poll(id!, value, 480, key, ctx);
+      id = value.id; last = value;
+      if (body.store && !args.background) value = await poll(id!, value, 480, key, ctx, v => { last = v; });
       stopped = TERMINAL.has(value.status);
       intentionallyRunning = ACTIVE.has(value.status) && body.store;
       return formatInteraction(value, { requested: body, structured: !!args.responseSchema });
     } catch (error) {
-      return failed(redactText(error instanceof Error ? error.message : "YouTube video analysis failed", knownSecrets()));
+      const message = redactText(error instanceof Error ? error.message : "YouTube video analysis failed", knownSecrets());
+      // Only the caller's own abort cancels a stored job; a failed wait leaves it for youtube_analysis_status.
+      if (!id || !body?.store || originalCtx.abort.aborted) return failed(id ? `${message} (interaction ${id})` : message);
+      intentionallyRunning = true;
+      const resume = `Waiting for the analysis stopped (${message}). Interaction ${id} is still running at Google; read it with youtube_analysis_status (interactionId "${id}") instead of starting the analysis again.`;
+      if (!ACTIVE.has(last?.status)) return failed(resume);
+      const shown = formatInteraction(last, { requested: body, structured: !!args.responseSchema });
+      return outcome("partial", `${resume}\n${shown.text}`, { ...shown.details, interactionId: id, nextTool: "youtube_analysis_status" });
     } finally {
       if (id && !stopped && !intentionallyRunning) {
         try { await request(`/${encodeURIComponent(id)}/cancel`, key ?? "", originalCtx, {}, AbortSignal.timeout(10000)); }

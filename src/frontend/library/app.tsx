@@ -18,7 +18,7 @@ import { useLibraryController } from './controller';
 
 type Controller = ReturnType<typeof useLibraryController>;
 
-/** These small DOM islands retain the audited text-only Markdown/provider renderers during migration.
+/** These small DOM islands hold the audited text-only Markdown/provider renderers.
  * React owns when they render and the surrounding navigation/state; none accepts HTML strings. */
 function Island({ build, deps, as: Tag = 'div', ...props }: any) {
   const ref = useRef<HTMLElement>(null);
@@ -156,7 +156,7 @@ function LibraryShell({ host }: { host: DigHost }) {
     <ResearchOverview app={app} host={host} hidden={view !== '/library'} />
     <Reader app={app} host={host} hidden={view !== '/reader'} />
     <SourcesPage app={app} host={host} hidden={view !== '/sources'} />
-    <GuidePage hidden={view !== '/guide'} onNavigate={path => { void app.go(path); }} />
+    <GuidePage hidden={view !== '/guide'} onNavigate={path => { void app.go(path); }} host={app.snapshot.host} />
     <SettingsPage app={app} host={host} hidden={view !== '/settings'} />
     <AboutPage app={app} host={host} hidden={view !== '/about'} />
     <footer className="foot">

@@ -1,7 +1,7 @@
 import { build } from 'esbuild';
 import { build as viteBuild } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { relative } from 'node:path';
 import { Script } from 'node:vm';
 import { ALL_MODULES, MODULES, moduleEnvironment } from '../src/providers/modules.ts';
@@ -16,8 +16,11 @@ for (const manifest of ['package.json', 'plugin/.codex-plugin/plugin.json', 'plu
 
 await mkdir('plugin/dist', { recursive: true });
 await import('./search-runtime.mjs');
+if (process.platform !== 'darwin' || process.arch !== 'arm64') console.log(`Skipped the packaged search-runtime load check: it runs only on darwin/arm64, not ${process.platform}/${process.arch}.`);
 // Skill icons (agents/openai.yaml icon_small/icon_large) are generated from the one glyph table.
 await mkdir('plugin/assets/skills', { recursive: true });
+// Cleared first, so a glyph removed from the table leaves no stale icon behind.
+for (const file of await readdir('plugin/assets/skills')) if (file.endsWith('.svg')) await rm(`plugin/assets/skills/${file}`);
 for (const name of Object.keys(GLYPHS)) await writeFile(`plugin/assets/skills/${name}.svg`, tileSvg(name));
 // Every package the bundles include, by its node_modules root, so its license travels with the plugin.
 const bundled = new Set();
@@ -32,6 +35,7 @@ for (const m of MODULES) if (m.logo && !logoFiles.includes(`${m.logo}.svg`)) thr
 const sprite = logoSprite(await Promise.all(logoFiles.map(async file => ({ name: file.slice(0, -4), svg: await readFile(`src/logos/${file}`, 'utf8') }))));
 // README logos: each brand logo on the light tile the Sources page uses, so dark logos stay visible in GitHub's dark theme.
 await mkdir('docs/logos', { recursive: true });
+for (const file of await readdir('docs/logos')) if (file.endsWith('.svg')) await rm(`docs/logos/${file}`);
 for (const file of logoFiles) {
   // Exported logos may open with an XML declaration and comments; the tile nests the logo's own <svg>.
   const logo = (await readFile(`src/logos/${file}`, 'utf8')).trim().replace(/^<\?xml[^>]*\?>\s*/, '').replace(/^(?:<!--[\s\S]*?-->\s*)+/, '');
@@ -91,7 +95,7 @@ for (const root of [...bundled].sort()) {
   else throw new Error(`${pkg.name} is bundled but ships no license file; its notice must travel with the plugin`);
   notices.push(`## ${pkg.name} ${pkg.version}\n\nLicense: ${pkg.license ?? 'see below'}\n\n\`\`\`\`text\n${text.replace(/[ \t]+$/gm, '')}\n\`\`\`\`\n`);
 }
-await writeFile('plugin/THIRD_PARTY_NOTICES.md', `# Third-party notices\n\nDig's bundled server and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).\n\nLocal semantic search additionally uses ONNX Runtime Node/Common 1.30.0 (Microsoft, MIT); Search-Runtime-LICENSE and Search-Runtime-ThirdPartyNotices.txt carry its runtime notices. Only the accepted macOS arm64 binding is included.\n\nThe selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.\n\n${notices.join('\n')}`);
+await writeFile('plugin/THIRD_PARTY_NOTICES.md', `# Third-party notices\n\nDig's bundled server and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).\n\nLocal semantic search additionally uses ONNX Runtime Node/Common 1.30.0 (Microsoft, MIT); Search-Runtime-LICENSE and Search-Runtime-ThirdPartyNotices.txt carry its runtime notices. Only the accepted macOS arm64 binding is included.\n\nThe selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.\n\nDig's icon glyphs are Lucide icons (ISC License, Copyright (c) 2026 Lucide Icons and Contributors); their notice ships as Lucide-LICENSE.\n\n${notices.join('\n')}`);
 await writeFile('plugin/.mcp.json', `${JSON.stringify({ mcpServers: { dig: {
   command: 'node', args: ['./dist/server.mjs'], cwd: '.', startup_timeout_sec: 30, tool_timeout_sec: 600,
   env_vars: ['DIG_STATE_DIR', 'PAPER_SEARCH_MCP_ENV_FILE', ...moduleEnvironment(ALL_MODULES)],

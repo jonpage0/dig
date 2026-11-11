@@ -419,7 +419,8 @@ function result(status: OutcomeStatus, lines: string[], details: Fields) {
   const text = lines.join("\n")
   const truncated = text.length > OUTPUT_LIMIT
   return {
-    status,
+    // Text cut by Dig's own limit is part of the answer not delivered: partial, as in the other social tools.
+    status: truncated && status === "success" ? "partial" as const : status,
     text: truncated ? `${text.slice(0, OUTPUT_LIMIT)}\n[Truncated at ${OUTPUT_LIMIT} of ${text.length} characters. ${TRUNCATION_NOTE}]` : text,
     details: { provider: "scrapecreators", ...details, truncated },
   }
@@ -550,7 +551,7 @@ async function adDetail(args: AdLibraryArgs, headers: Record<string, string>, ct
   if (info) lines.push("", ...transparencyLines(info))
   return result("success", lines, {
     kind: "ad",
-    ad_id: returnedId ?? target.id,
+    ad_id: returnedId,
     page_id: idOf(ad.pageID),
     active: typeof ad.isActive === "boolean" ? ad.isActive : null,
     transparency: info !== null,

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { expect } from "expect";
+import { executeSource } from "../outcome.js";
 import type { SourceToolResult, ToolContext } from "../types.js";
 import { search } from "./china_social.js";
 
@@ -262,7 +263,7 @@ describe("china_social_search providers", () => {
 		});
 	});
 
-	test("applies page, cursor, sort, and platform-specific filters", async () => {
+	test("applies cursor, sort, and platform-specific filters", async () => {
 		const mock = installFetchRouter(buildFixtures());
 		restoreFetch = mock.restore;
 		const kuaishou = await search.execute(
@@ -332,6 +333,17 @@ describe("china_social_search providers", () => {
 		const rejected = await search.execute({ query: "猫咪", platforms: ["xiaohongshu"], page: 3 }, ctx);
 		expect((resultText(rejected)).startsWith("ERROR:")).toBe(true);
 		expect(mock.calls).toHaveLength(2);
+	});
+
+	test("an XHS cursor without the page it belongs to is refused before any request", async () => {
+		const mock = installFetchRouter(buildFixtures());
+		restoreFetch = mock.restore;
+		const cursor = { search_id: "search-A", search_session_id: "session-B" };
+		for (const page of [undefined, 1]) {
+			const result = await search.execute({ query: "猫咪", platforms: ["xiaohongshu"], cursor, ...(page ? { page } : {}) }, ctx);
+			expect(resultText(result)).toContain("Xiaohongshu cursor continues a later page; pass page 2 or more with it");
+		}
+		expect(mock.calls).toHaveLength(0);
 	});
 
 	test("Douyin reuses returned offset/backtrace rather than deriving a page offset", async () => {
@@ -410,6 +422,78 @@ describe("china_social_search providers", () => {
 		expect(resultText(result)).toContain("Unsupported month filter");
 		expect(mock.calls[0]?.url.searchParams.get("time_filter")).toBe("不限");
 		expect(JSON.parse(String(mock.calls[1]?.init?.body)).publish_time).toBe("0");
+	});
+
+	test("a Zhihu answer's nested question is not listed as a second result, and the answer keeps its title", async () => {
+		const answer = (id: string, questionId: string) => ({
+			type: "search_result",
+			object: { type: "answer", id, question: { id: questionId, title: `问题 ${questionId}` }, author: { name: "知乎研究员" }, excerpt: "回答摘要" },
+		});
+		const fixtures = buildFixtures();
+		fixtures[PATHS.zhihu] = { code: 200, data: [answer("1", "101"), answer("2", "102"), answer("3", "103")] };
+		const mock = installFetchRouter(fixtures);
+		restoreFetch = mock.restore;
+		const result = await search.execute({ query: "人工智能", platforms: ["zhihu"], limit: 5 }, ctx);
+		const text = resultText(result);
+		expect(typeof result !== "string" && result.details?.totalItems).toBe(3);
+		expect(text).toContain("**问题 101**");
+		expect(text).toContain("URL: https://www.zhihu.com/question/101/answer/1");
+		expect(text).not.toContain("zhihu.com/search?type=content");
+	});
+
+	test("Bilibili's danmaku count is labelled bullet comments; comments come only from the comment count", async () => {
+		const fixtures = buildFixtures();
+		const video = (extra: Record<string, unknown>) => ({ bvid: "BV1TEST00002", title: "弹幕测试", arcurl: "https://www.bilibili.com/video/BV1TEST00002", ...extra });
+		fixtures[PATHS.bilibili] = { code: 200, data: { result: [video({ video_review: 777, review: 12 })] } };
+		let mock = installFetchRouter(fixtures);
+		restoreFetch = mock.restore;
+		expect(resultText(await search.execute({ query: "弹幕", platforms: ["bilibili"] }, ctx))).toContain("Comments 12 | Bullet comments 777");
+
+		mock.restore();
+		fixtures[PATHS.bilibili] = { code: 200, data: { result: [video({ video_review: 777 })] } };
+		mock = installFetchRouter(fixtures);
+		restoreFetch = mock.restore;
+		const text = resultText(await search.execute({ query: "弹幕", platforms: ["bilibili"] }, ctx));
+		expect(text).toContain("Bullet comments 777");
+		expect(text).not.toMatch(/Comments \d/);
+	});
+
+	test("with no limit every normalized item of the response is shown; an explicit limit says what the next page skips", async () => {
+		const fixtures = buildFixtures();
+		fixtures[PATHS.kuaishou] = {
+			code: 200,
+			data: {
+				pcursor: "next-page",
+				mixFeeds: Array.from({ length: 12 }, (_, index) => ({ feed: { photo_id: `ks-${index + 1}`, caption: `快手视频 ${index + 1}` } })),
+			},
+		};
+		const mock = installFetchRouter(fixtures);
+		restoreFetch = mock.restore;
+		const all = resultText(await search.execute({ query: "快手", platforms: ["kuaishou"] }, ctx));
+		expect(all).toContain("Top normalized results: 12\n");
+		expect(all).toContain("快手视频 12");
+		expect(all).toContain("Every normalized item in this response is shown");
+
+		const narrowed = resultText(await search.execute({ query: "快手", platforms: ["kuaishou"], limit: 3 }, ctx));
+		expect(narrowed).toContain("Top normalized results: 3 shown of 12 returned");
+		expect(narrowed).toContain("3 shown of 12 returned (limit); the next cursor or page continues after all 12, including the 9 not shown.");
+		expect(narrowed).toContain("Next cursor: next-page");
+		expect(narrowed).not.toContain("快手视频 4");
+	});
+
+	test("a request that got no response is sent once, says its cost is unknown, and records no cost", async () => {
+		let sent = 0;
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async () => {
+			sent += 1;
+			throw new TypeError("fetch failed");
+		}) as typeof fetch;
+		restoreFetch = () => { globalThis.fetch = originalFetch; };
+		const result = await executeSource(search, { query: "人工智能", platforms: ["zhihu"] }, ctx);
+		expect(sent).toBe(1);
+		expect(result.status).toBe("failed");
+		expect(result.text).toContain("TikHub may have received and charged this request, but no complete response arrived; its cost is unknown.");
+		expect(result.details?.cost).toBeNull();
 	});
 
 	test("provider key echoes are redacted from partial and total failure diagnostics", async () => {

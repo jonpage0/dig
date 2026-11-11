@@ -52,7 +52,7 @@ Use one corrective search only when the first pass is empty, low quality, contra
 - `includeDomains` and `excludeDomains` accept hostnames, paths (`exa.ai/blog`), and subdomain wildcards (`*.substack.com`). Use them instead of `site:` in the query.
 - `category` focuses retrieval: `company`, `publication` (scholarly work; the old `research paper` value), `news`, `personal site`, `financial report`, `people` (the old `linkedin profile` value). `pdf`, `github`, and `tweet` are deprecated upstream. `company` and `people` reject `startPublishedDate`, `endPublishedDate`, and `excludeDomains`; the tool returns Exa's 400 rather than guessing.
 - `startPublishedDate` / `endPublishedDate` filter by publication date. `maxAgeHours` does not: it controls how fresh the extracted page content must be (`0` always refetches, `-1` cache only, `N` refetches when the cached copy is older than N hours). Set it only when a stale page body would be wrong, such as prices, availability, or live status pages. The old `livecrawl` values are gone.
-- `numResults` defaults to 10 and caps at 100; results above 10 bill extra, and the tool reports any cap it applied.
+- `numResults` defaults to 10 and accepts at most 100; a larger value is refused, not capped. Results above 10 bill extra.
 
 ### Historical content
 

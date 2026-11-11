@@ -5,10 +5,10 @@ import { IconTile } from '../shared/icon-tile';
 import { Timeline, TimelineItem, TimelineHeader, TimelineTitle, TimelineDate, TimelineContent, TimelineIndicator, TimelineSeparator } from '../shared/timeline';
 import { MODULES } from '../../providers/modules.ts';
 import { costSummary } from '../../providers/library/cost.ts';
-import { costAmounts, costShort, costTotal, COST_SCOPE, COST_CAVEAT, num, plural, shortDate, clock, basename } from '../../ui/format.mjs';
+import { costAmounts, costShort, costTotal, costScope, COST_CAVEAT, num, plural, shortDate, clock, basename, callOutcome } from '../../ui/format.mjs';
 import { usageOf, outcomeCounts, WINDOWS } from '../../ui/usage.mjs';
 import { callWord, patternOf } from '../../status.mjs';
-import { projectResearch, projectMethodCoverage, projectRecordedActivity, canonicalResearchFile, CALL_OUTCOME_LABELS } from './research-state';
+import { projectResearch, projectMethodCoverage, projectRecordedActivity, canonicalResearchFile, primaryFile } from './research-state';
 import type { DigHost } from '../shared/host';
 
 type ViewProps = { app: any; host: DigHost; hidden: boolean };
@@ -21,7 +21,7 @@ const tone = (word: string) => patternOf(word) === 'warning' ? 'warning' : patte
 import { SourceIcon } from './source-icon';
 
 /** This disclosure is deliberately uncontrolled. Polling updates its text without replacing its node/focus. */
-function ProviderUsage({ cost, total, scope }: { cost: any; total: number; scope: string }) {
+function ProviderUsage({ cost, total, scope, host }: { cost: any; total: number; scope: string; host?: string }) {
   const amounts = costAmounts(cost);
   const heading = amounts.length && cost.unknownCalls ? 'Known provider subtotal' : cost.unknownCalls ? 'Unpriced provider usage' : 'Provider cost';
   return <div className="research-overview-usage-primary" data-incomplete={Boolean(cost.unknownCalls)}>
@@ -29,14 +29,14 @@ function ProviderUsage({ cost, total, scope }: { cost: any; total: number; scope
     <dd><div className="research-overview-amounts">{!total ? <span>No calls recorded</span> : amounts.length ? amounts.map((amount: string) => <span key={amount}>{amount}</span>) : cost.unknownCalls ? <span>{plural(cost.unknownCalls, 'call')}</span> : <span>No charge recorded</span>}</div>
     <details className="research-overview-pricing"><summary data-key={`pricing:${scope}`}>Pricing details</summary>
       <p>{!total ? 'There are no retained retrievals in this scope.' : cost.unknownCalls ? `${num(cost.unknownCalls)} of ${plural(total, 'retrieval')} incompletely priced. Unknown amounts are not zero.` : 'Every retrieval’s cost is known from its receipt.'}</p>
-      <p>{COST_SCOPE}. {COST_CAVEAT} Different provider credits and currencies remain separate.</p>
+      <p>{costScope(host)}. {COST_CAVEAT} Different provider credits and currencies remain separate.</p>
     </details></dd>
   </div>;
 }
 
-function RetainedFigures({ counts, reports, cost, scope }: { counts: any; reports: number; cost: any; scope: string }) {
+function RetainedFigures({ counts, reports, cost, scope, host }: { counts: any; reports: number; cost: any; scope: string; host?: string }) {
   return <dl className="research-overview-figures">
-    <ProviderUsage cost={cost} total={counts.total} scope={scope} />
+    <ProviderUsage cost={cost} total={counts.total} scope={scope} host={host} />
     <div className="research-overview-figure"><dt>Retrievals</dt><dd>{num(counts.total)}<p>{num(counts.results)} success / partial</p></dd></div>
     <div className="research-overview-figure"><dt>Reports saved</dt><dd>{num(reports)}<p>Retained source reports</p></dd></div>
     <div className="research-overview-figure"><dt>Other call outcomes</dt><dd>{num(counts.failed)}<p>Failed, stopped or skipped</p></dd></div>
@@ -122,14 +122,14 @@ function UsageOverview({ app }: { app: any }) {
       </FrameHeader>
       <FramePanel className="research-overview-usage-body">
         {!app.snapshotLoaded ? <p className="research-overview-loading" role="status">Reading retained usage…</p> : <>
-          <RetainedFigures counts={usage.totals} reports={usage.totals.reports} cost={usage.totals.cost} scope="usage" />
+          <RetainedFigures counts={usage.totals} reports={usage.totals.reports} cost={usage.totals.cost} scope="usage" host={app.snapshot.host} />
           {usage.recorded ? <>
             <div className="research-overview-charts"><ActivityChart usage={usage} expanded={expanded} /><SourcesChart rows={usage.sources} catalog={app.catalog} expanded={expanded} /></div>
-            <div className="research-overview-chart-footer"><div className="research-overview-legend" aria-label="Recorded call outcomes">{OUTCOMES.map(outcome => <span key={outcome.id}><i className={`research-overview-swatch research-overview-swatch-${outcome.id}`} aria-hidden="true" />{outcome.label}</span>)}</div><Button size="sm" variant="ghost" data-key="usage-size" aria-pressed={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? 'Compact charts' : 'Expand charts'}</Button></div>
+            <div className="research-overview-chart-footer"><div className="research-overview-legend" role="group" aria-label="Recorded call outcomes">{OUTCOMES.map(outcome => <span key={outcome.id}><i className={`research-overview-swatch research-overview-swatch-${outcome.id}`} aria-hidden="true" />{outcome.label}</span>)}</div><Button size="sm" variant="ghost" data-key="usage-size" aria-pressed={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? 'Compact charts' : 'Expand charts'}</Button></div>
           </> : <p className="research-overview-empty-chart">Provider receipts and dated reports will appear here when research is saved.</p>}
         </>}
       </FramePanel>
-      <FrameFooter className="research-overview-usage-foot">{COST_SCOPE}. {COST_CAVEAT}</FrameFooter>
+      <FrameFooter className="research-overview-usage-foot">{costScope(app.snapshot.host)}. {COST_CAVEAT}</FrameFooter>
     </section>
   </Frame>;
 }
@@ -167,8 +167,7 @@ function ResearchRow({ item, app, host, trail = false }: { item: any; app: any; 
   const sources = state.sourcesWithReports.length ? state.sourcesWithReports : state.sourcesAndToolsCalled;
   const missing = state.methods.filter(method => !method.reports.length);
   const cost = costShort(state.cost, state.callCount);
-  const latestReport = [...(item.reportDetails ?? [])].sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))[0]?.file ?? item.reports?.at(-1);
-  const primaryFile = item.answer ?? latestReport;
+  const primary = primaryFile(item);
   return <article className={`research-overview-row${trail ? ' research-overview-trail-row' : ''}`} aria-label={state.question}>
     <Frame className="research-overview-question-frame" spacing="sm">
       <FramePanel className="research-overview-question-panel">
@@ -194,7 +193,7 @@ function ResearchRow({ item, app, host, trail = false }: { item: any; app: any; 
           {state.callCount > 0 && <p className="research-overview-cost-detail">{costTotal(state.cost, state.callCount)}</p>}
           {trail && item.calls?.length > 0 && <RecordedCalls calls={item.calls} app={app} host={host} item={item} scope="Saved with this question" />}
         </div></details>
-        {primaryFile && <Button className="research-overview-primary-action" size="sm" variant="outline" onClick={() => { void app.showDig(item, primaryFile); }}>{item.answer ? 'View answer' : 'Read latest report'}</Button>}
+        {primary && <Button className="research-overview-primary-action" size="sm" variant="outline" onClick={() => { void app.showDig(item, primary); }}>{item.answer ? 'View answer' : 'Read latest report'}</Button>}
       </FrameFooter>
     </Frame>
   </article>;
@@ -207,7 +206,7 @@ function RecordedCall({ call, app, host, item, scope }: any) {
     if (path) void host.openFile(path).catch((error: any) => app.notify?.(`Unable to open the original response: ${error.message}`, true));
   };
   const canOpen = Boolean(call.rawFile) && (item || (!host.preview && host.canOpenFile?.()));
-  return <li className="research-overview-call"><div className="research-overview-call-head"><SourceIcon id={call.source} /><div><strong>{label(app.catalog, call.source)}</strong><span>{call.tool}</span></div><Badge tone={tone(callWord(call.status))}>Call: {CALL_OUTCOME_LABELS[call.status] ?? 'Unknown outcome'}</Badge></div>
+  return <li className="research-overview-call"><div className="research-overview-call-head"><SourceIcon id={call.source} /><div><strong>{label(app.catalog, call.source)}</strong><span>{call.tool}</span></div><Badge tone={tone(callWord(call.status))}>Call: {callOutcome(call.status)}</Badge></div>
     <p><time dateTime={eventDate(call.at)}>{date(call.at)}</time><span>Recorded call start</span><span>{scope}</span></p>
     {call.error && <p className="research-overview-call-error">Recorded error: {call.error}</p>}
     <div className="research-overview-call-foot"><span>{costShort(costSummary([call]), 1)}</span>{canOpen ? <Button size="sm" variant="ghost" onClick={open}>Open original response</Button> : <span>{call.rawFile ? 'Original response retained' : 'Original response not retained'}</span>}</div>

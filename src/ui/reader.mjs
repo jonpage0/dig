@@ -1,10 +1,10 @@
 // Reading views for one dig's files: the question, source reports (with the source's own card), the answer,
 // and retained original responses as source-shaped evidence with the verbatim JSON always reachable.
-import { answerWord, callWord, runWord } from '../status.mjs';
+import { answerWord, callWord, patternOf, runWord } from '../status.mjs';
 import { attr, button, externalLink, httpUrl, node, tag } from './dom.mjs';
 import { frontMatter, renderMarkdown, reportParts } from './markdown.mjs';
 import { bodies, evidence, hasSourceView, ITEM_NOUNS, sentenceText } from './evidence/index.mjs';
-import { absTime, basename, costText, duration, num, plural } from './format.mjs';
+import { absTime, basename, callOutcome, costText, duration, num, plural } from './format.mjs';
 import { costSummary } from '../providers/library/cost.ts';
 import { fileKind } from './catalog.mjs';
 
@@ -106,7 +106,7 @@ function jsonBlock(text, parsed, open) {
 
 /** One receipt's facts for its original response. Its cost is read through the same summary as dig and conversation totals. */
 function callFacts(call, catalog) {
-  return facts([tag(callWord(call.status)), call.source ? catalog.label(call.source) : null, call.at ? absTime(call.at) : null, typeof call.ms === 'number' ? duration(call.ms) : null, costText(costSummary([call]))]);
+  return facts([tag(callOutcome(call.status), patternOf(callWord(call.status))), call.source ? catalog.label(call.source) : null, call.at ? absTime(call.at) : null, typeof call.ms === 'number' ? duration(call.ms) : null, costText(costSummary([call]))]);
 }
 
 /** A retained original response: what the call did and found, from the raw file itself, then the verbatim JSON. */
@@ -145,6 +145,3 @@ export function rawView(file, text, call, catalog) {
     jsonBlock(text, parsed, !preview?.specialized),
   );
 }
-
-/** A call as a plain sentence from its receipt alone (no result: that needs the raw response). */
-export const callSentence = (call, catalog) => sentenceText(evidence(call, [], catalog));

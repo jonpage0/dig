@@ -32,7 +32,7 @@ Call `source_info` before the first provider call. If this source is disabled, s
 
 Use `library_read` or the host's own full-file reader and file discovery for transcript and summary artifacts, and the host's file writer for the one permitted summary recovery write. Never use shell redirection.
 
-If yt-dlp captions fail, use `youtube_transcript` only within the user’s authorized paid-provider scope. Pass `video`, optional `language`, `originalAudio` and `cacheMaxAge`. Read its exact returned path; hosted variants have provider/language suffixes and do not overwrite earlier transcripts.
+yt-dlp reads a video's uploaded English captions, or YouTube's automatic ones when there are none, and the result says which kind it read. If neither is saved, use `youtube_transcript` only within the user’s authorized paid-provider scope. Pass `video`, optional `language`, `originalAudio` and `cacheMaxAge`. Read its exact returned path; hosted variants have provider/language suffixes and do not overwrite earlier transcripts.
 
 ## Search and reuse transcripts
 

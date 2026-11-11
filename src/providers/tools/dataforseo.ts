@@ -59,6 +59,7 @@ interface DfsEnvelope {
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const UNANSWERED_COST = "DataForSEO may have received and charged this request, but no complete response arrived; its cost is unknown.";
 
 /** Accepts a bare path, `/v3/...`, or a full docs/API URL; returns the path after `/v3/`, or "" for the docs home. */
 function v3Path(value: unknown): string {
@@ -127,7 +128,7 @@ async function fetchDocs(url: string, label: string, context: ToolContext): Prom
 			await response.body?.cancel();
 			const next = new URL(location, target);
 			if (next.protocol !== "https:" || next.host !== DOCS_HOST) throw new Error(`the docs site redirected to another host (${next.host})`);
-			if (hop >= 2) throw new Error("the docs site redirected more than three times");
+			if (hop >= 3) throw new Error("the docs site redirected more than three times");
 			target = next;
 			continue;
 		}
@@ -332,8 +333,13 @@ async function sendOnce(url: string, init: RequestInit, label: string, context: 
 /** DataForSEO reports each request's charge in USD as the envelope's top-level `cost`. */
 export const request: ToolSpec = metered(
 	{
-		description: "Call any DataForSEO v3 endpoint with the documented method and task array. Paid per request: the returned USD cost is recorded. sandbox: true returns free dummy data for checking a request shape.",
+		description: "Call any DataForSEO v3 endpoint with the documented method and task array. Paid per request: the returned USD cost is recorded. sandbox: true returns free dummy data for checking a request shape, and records no charge.",
 		async execute(args, context) {
+			const given = String(args.path ?? "").trim();
+			if (/^https:\/\/sandbox\.dataforseo\.com/i.test(given) && args.sandbox !== true)
+				return failed("path names the sandbox host, but sandbox is not set. Pass sandbox: true for the free sandbox, or give the bare path after /v3/ for the live API.");
+			if (given.includes("?"))
+				return failed("path must not carry a query string: Dig sends only the path after /v3/. Give the endpoint's parameters as the documented path segments, or as tasks in a POST.");
 			let path: string;
 			try { path = v3Path(args.path); } catch (error) { return failed(message(error)); }
 			if (!path) return failed("path is required: the endpoint path after /v3/, as documented");
@@ -368,7 +374,8 @@ export const request: ToolSpec = metered(
 				return describe(response.payload, response.status, { method, path, sandbox });
 			} catch (error) {
 				context.abort.throwIfAborted();
-				return failed(`DataForSEO request failed: ${message(error)}`);
+				// No complete response arrived: a live request may still have been received and charged. The sandbox never charges.
+				return failed(`DataForSEO request failed: ${message(error)}${sandbox ? "" : `. ${UNANSWERED_COST}`}`);
 			}
 		},
 	},
@@ -378,3 +385,5 @@ export const request: ToolSpec = metered(
 		return typeof cost === "number" && Number.isFinite(cost) && cost >= 0 ? cost : null;
 	},
 );
+// DataForSEO does not charge for Sandbox endpoints (docs.dataforseo.com/v3/appendix/sandbox), whatever the envelope's `cost` says.
+request.billing = { ...(request.billing as Exclude<ToolSpec["billing"], "free" | undefined>), noCharge: (args) => args.sandbox === true };

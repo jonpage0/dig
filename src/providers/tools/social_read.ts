@@ -3,7 +3,7 @@ import { keptText } from "../http.js";
 import { outcome, type OutcomeStatus } from "../outcome.js";
 import { knownSecrets, redactText, redactValue } from "../secrets.js";
 import { SOCIAL_CACHE_AGES } from "../social-read-schemas.js";
-import { asRecord, asString, creditMetered, provenanceLine, scrapecreatorsHeaders, MISSING_KEY_ERROR } from "./scrapecreators.js";
+import { asRecord, asString, creditMetered, provenanceLine, scrapecreatorsHeaders, MISSING_KEY_ERROR, UNANSWERED_COST } from "./scrapecreators.js";
 import type { ToolContext, ToolSpec } from "../types.js";
 
 type Platform = "tiktok" | "instagram";
@@ -33,7 +33,8 @@ function required(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${name} is required`);
   return value.trim();
 }
-function targetUrl(value: unknown, platform: Platform): URL {
+/** The one link check for a platform's post: the read tool and the comments tool both refuse what this refuses, before any request. */
+export function targetUrl(value: unknown, platform: Platform): URL {
   const url = new URL(required(value, "url"));
   const hosts = platform === "tiktok" ? ["tiktok.com", "www.tiktok.com", "vm.tiktok.com", "vt.tiktok.com"] : ["instagram.com", "www.instagram.com"];
   if (url.protocol !== "https:" || url.username || url.password || url.port || !hosts.includes(url.hostname)) throw new Error(`Use a public HTTPS ${platform} post URL without credentials or a custom port`);
@@ -147,7 +148,7 @@ function commentFields(record: Record<string, any>) {
     user: profileFields(record.user),
   };
 }
-function project(platform: Platform, args: Args, route: Route, body: Record<string, any>, httpStatus: number) {
+function project(platform: Platform, args: Args, route: Route, body: Record<string, any>, httpStatus: number, handle?: string) {
   let status: OutcomeStatus = "success";
   const notes: string[] = route.note ? [route.note] : [];
   let value: unknown;
@@ -167,7 +168,7 @@ function project(platform: Platform, args: Args, route: Route, body: Record<stri
         if (!record || !id) { malformed++; return []; }
         if (ids.has(id)) { duplicates++; return []; }
         ids.add(id);
-        return [{ ...(args.kind !== "replies" ? { url: postLink(platform, record, args.handle?.replace(/^@/, "")) } : {}), record: args.kind === "replies" ? commentFields(record) : postFields(platform, record) }];
+        return [{ ...(args.kind !== "replies" ? { url: postLink(platform, record, handle) } : {}), record: args.kind === "replies" ? commentFields(record) : postFields(platform, record) }];
       });
       if (malformed) { status = "partial"; notes.push(`${malformed} unrecognized records omitted; inspect the retained original.`); }
       if (malformed && !ids.size) throw new Error(`No identifiable records in the returned ${route.array}; this is not an empty page`);
@@ -200,7 +201,7 @@ function project(platform: Platform, args: Args, route: Route, body: Record<stri
     if (record?.is_private === true || record?.privateAccount === true) { status = "partial"; notes.push("Private profile: only returned public metadata is readable; private posts were not fetched."); }
     if (record && args.kind === "profile") {
       const returned = platform === "tiktok" ? record.uniqueId ?? record.unique_id : record.username;
-      if (typeof returned === "string" && returned.toLowerCase() !== args.handle?.replace(/^@/, "").toLowerCase()) throw new Error("Provider returned a different profile handle");
+      if (typeof returned === "string" && returned.toLowerCase() !== handle?.toLowerCase()) throw new Error("Provider returned a different profile handle");
     }
     value = args.kind === "profile" ? { profile: profileFields(record), ...(platform === "tiktok" ? { stats: body.stats } : {}) } : { url: args.url, record: record ? postFields(platform, record) : null };
   }
@@ -209,7 +210,8 @@ function project(platform: Platform, args: Args, route: Route, body: Record<stri
   if (body.partial === true || body.is_partial === true) { status = "partial"; notes.push("The provider marked this response partial."); }
   const more = [body.has_more, body.more_available, body.has_next_page].filter(value => value !== undefined);
   const hasNext = more.some(value => value === true || value === 1) || (!more.some(value => value === false || value === 0) && [body.cursor, body.max_cursor, body.next_max_id, body.max_id].some(value => value !== undefined && value !== null && value !== "" && value !== 0 && value !== "0"));
-  if (hasNext) { if (status !== "empty") status = "partial"; notes.push("A continuation was returned; this call did not read later pages."); }
+  // Another page is not a shortfall: the continuation is stated, and the status stays what this page delivered.
+  if (hasNext) notes.push("A continuation was returned; this call did not read later pages.");
   return { status, value, continuation, notes };
 }
 
@@ -227,8 +229,16 @@ function reader(platform: Platform): ToolSpec {
       const label = `ScrapeCreators ${platform} ${args.kind}`;
       const url = new URL(route.path, BASE);
       for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
+      let response: Response;
       try {
-        const response = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.any([ctx.abort, AbortSignal.timeout(60_000)]) });
+        response = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.any([ctx.abort, AbortSignal.timeout(60_000)]) });
+      } catch (error) {
+        // Never sent again; the attempt is kept so the receipt records the request with its cost unknown.
+        ctx.keep(label, "error", error instanceof Error ? error.message : String(error));
+        if (ctx.abort.aborted) return outcome("cancelled", "Social read cancelled");
+        return outcome("failed", `ERROR: ${redactText(`${label} got no response: ${error instanceof Error ? error.message : "Unknown error"}`, knownSecrets())}. ${UNANSWERED_COST}`);
+      }
+      try {
         const text = await keptText(response, ctx.keep, label);
         if (ctx.abort.aborted) return outcome("cancelled", "Social read cancelled while reading the response");
         let parsed: unknown;
@@ -237,7 +247,7 @@ function reader(platform: Platform): ToolSpec {
         if (!body) throw new Error(`HTTP ${response.status}: provider response is not an object`);
         const confirmed = platform === "instagram" && ["profile", "posts"].includes(args.kind) && profileState(body, response.status);
         if (!confirmed && (response.status !== 200 || body.success !== true)) throw new Error(`HTTP ${response.status}: ${asString(body.message) ?? asString(body.error) ?? "provider did not confirm a successful response"}`);
-        const result = project(platform, args, route, body, response.status);
+        const result = project(platform, args, route, body, response.status, params.handle as string | undefined);
         const payload = { target: params.url ?? params.handle, ...(params.handle ? { requestedProfileUrl: `https://www.${platform}.com/${platform === "tiktok" ? "@" : ""}${params.handle}/` } : {}), ...(args.commentId ? { parentCommentId: args.commentId } : {}), data: result.value, continuation: result.continuation };
         const json = JSON.stringify(payload, null, 2);
         const truncated = json.length > LIMIT;

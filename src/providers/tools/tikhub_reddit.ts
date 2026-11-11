@@ -11,6 +11,7 @@
  *   - TIKHUB_API_KEY (required)
  *   - TIKHUB_BASE_URL (optional; defaults to https://api.tikhub.io)
  */
+import { USER_AGENT } from "../../version.mjs"
 import { outcome } from "../outcome.js"
 import { knownSecrets, redactProviderText, redactText, redactValue } from "../secrets.js"
 import type { ToolContext, ToolSpec } from "../types.js"
@@ -123,14 +124,10 @@ type QuerySignal = {
 
 function tikhubHeaders(): Record<string, string> {
   const token = process.env.TIKHUB_API_KEY?.trim()
-  if (!token) {
-    throw new Error("TIKHUB_API_KEY not set")
-  }
-
   return {
     Authorization: `Bearer ${token}`,
     Accept: "application/json",
-    "User-Agent": "opencode-tikhub-reddit-tool/1.0",
+    "User-Agent": USER_AGENT,
   }
 }
 
@@ -182,7 +179,9 @@ function firstNumber(...values: unknown[]): number | null {
   for (const value of values) {
     if (typeof value === "number" && Number.isFinite(value)) return value
     if (typeof value === "string") {
-      const parsed = Number(value.replace(/[^\d.-]/g, ""))
+      const cleaned = value.replace(/[^\d.-]/g, "")
+      if (!cleaned) continue
+      const parsed = Number(cleaned)
       if (Number.isFinite(parsed)) return parsed
     }
   }
@@ -200,6 +199,11 @@ function safeJsonSnippet(value: unknown, maxLength = 1600): string {
   } catch {
     return "[unserializable response]"
   }
+}
+
+/** The results under TikHub's response envelope, so its echoed `params` and boilerplate are never read as evidence; the whole value when there is no `data`. */
+function payloadOf(call: TikHubCall): unknown {
+  return asRecord(call.data)?.data ?? call.data
 }
 
 function collectRecords(value: unknown, maxDepth = 6): Record<string, unknown>[] {
@@ -311,7 +315,7 @@ function collectCandidates(calls: TikHubCall[], maxItems: number): Candidate[] {
       }
       continue
     }
-    for (const record of collectRecords(call.data)) {
+    for (const record of collectRecords(payloadOf(call))) {
       const candidate = recordToCandidate(record)
       if (!candidate) continue
       const key = candidate.id || `${candidate.title || ""}:${candidate.subreddit || ""}:${candidate.author || ""}`
@@ -404,7 +408,7 @@ function collectCommentHighlights(calls: TikHubCall[], maxItems: number): Commen
   for (const call of calls) {
     if (call.error) continue
     if (!/(^post comments|collapsed replies|dynamic comment search|user comments)/i.test(call.label)) continue
-    for (const record of collectRecords(call.data, 8)) {
+    for (const record of collectRecords(payloadOf(call), 8)) {
       const comment = recordToCommentHighlight(record)
       if (!comment) continue
       const key = comment.text.toLowerCase().replace(/\s+/g, " ").slice(0, 220)
@@ -464,7 +468,7 @@ function collectCommunitySignals(calls: TikHubCall[], maxItems: number): Communi
 
   for (const call of calls) {
     if (call.error) continue
-    for (const record of collectRecords(call.data, 8)) {
+    for (const record of collectRecords(payloadOf(call), 8)) {
       const community = recordToCommunitySignal(record)
       if (!community) continue
       const key = community.id || community.name?.toLowerCase()
@@ -498,7 +502,7 @@ function collectQuerySignals(calls: TikHubCall[], maxItems: number): QuerySignal
 
   for (const call of calls) {
     if (call.error) continue
-    for (const record of collectRecords(call.data, 8)) {
+    for (const record of collectRecords(payloadOf(call), 8)) {
       const signal = recordToQuerySignal(record)
       if (!signal) continue
       const key = signal.text.toLowerCase()
@@ -561,7 +565,7 @@ function classifyCalls(calls: TikHubCall[]): ClassifiedCall[] {
 function extractSubredditId(calls: TikHubCall[]): string | null {
   for (const call of calls) {
     if (call.error) continue
-    const ids = collectStringsByKey(call.data, /(^id$|subreddit.*id|name)/i, /^t5_[A-Za-z0-9_]+$/)
+    const ids = collectStringsByKey(payloadOf(call), /(^id$|subreddit.*id|name)/i, /^t5_[A-Za-z0-9_]+$/)
     if (ids.length > 0) return ids[0]
   }
   return null
@@ -572,7 +576,7 @@ function extractReplyCursors(calls: TikHubCall[], maxCursors: number): string[] 
   for (const call of calls) {
     if (call.error) continue
     if (!/(^post comments|collapsed replies)/i.test(call.label)) continue
-    for (const cursor of collectStringsByKey(call.data, /cursor/i, /[A-Za-z0-9:_-]{8,}/)) {
+    for (const cursor of collectStringsByKey(payloadOf(call), /cursor/i, /[A-Za-z0-9:_-]{8,}/)) {
       cursors.add(cursor)
       if (cursors.size >= maxCursors) return Array.from(cursors)
     }
@@ -612,15 +616,24 @@ async function tikhubGet(endpoint: string, params: Record<string, unknown>, ctx:
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIKHUB_TIMEOUT_MS)
 
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: tikhubHeaders(),
-      signal: AbortSignal.any([ctx.abort, controller.signal]),
-    })
+    let response: Response
+    let text: string
+    try {
+      response = await fetch(url, {
+        method: "GET",
+        headers: tikhubHeaders(),
+        signal: AbortSignal.any([ctx.abort, controller.signal]),
+      })
+      text = await response.text()
+    } catch (error) {
+      // Never sent again: TikHub may already have received, and charged, it.
+      if (ctx.abort.aborted) throw error
+      throw new Error(`${error instanceof Error ? error.message : "Unknown error"}. TikHub may have received and charged this request, but no complete response arrived; its cost is unknown.`)
+    }
 
     // Redacted as it arrives, JSON decoded first, like every provider body, so later excerpts cannot cut a credential
     // short. Text that is not JSON is kept for diagnostics.
-    const body = redactProviderText(await response.text(), knownSecrets())
+    const body = redactProviderText(text, knownSecrets())
     const data: unknown = body.json ? body.value : body.text || null
     ctx.keep(endpoint, response.status, data)
 
@@ -679,6 +692,11 @@ function need(value: string | undefined, message: string): string {
   return trimmed
 }
 
+/** TikHub's APP API requires the type prefix on post ids. */
+function withPostKind(id: string): string {
+  return /^t3_/i.test(id) ? id : `t3_${id}`
+}
+
 function normalizeSort<T extends readonly string[]>(value: string | undefined, allowed: T, fallback: T[number]): T[number] {
   const normalized = value?.trim().toUpperCase()
   if (normalized && !allowed.includes(normalized)) throw new Error(`Unsupported sort ${value}; expected ${allowed.join(", ")}`)
@@ -702,6 +720,13 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
   const allowNsfw = args.allowNsfw ? 1 : 0
   const calls: TikHubCall[] = []
   const call = (label: string, endpoint: string, params: Record<string, unknown>) => runCall(label, endpoint, params, ctx)
+  // Resolved before the first request, so an unsupported sort never follows paid calls.
+  const sort =
+    args.operation === "discovery_bundle" || args.operation === "query_scout" ? normalizeSearchSort(args.sort)
+    : args.operation === "deep_thread" || args.operation === "thread_intelligence" ? normalizeCommentSort(args.sort)
+    : args.operation === "author_context" && (args.includeUserHistory ?? true) ? normalizeSort(args.sort, ["NEW", "TOP", "HOT", "CONTROVERSIAL"], "NEW")
+    : args.operation === "subreddit_context" || (args.operation === "feed_discovery" && (args.feed ?? "popular") !== "news") ? normalizeFeedSort(args.sort, args.operation === "feed_discovery" && args.feed === "subreddit_channels" ? "HOT" : "BEST")
+    : undefined
 
   if (args.operation === "discovery_bundle") {
     const query = need(args.query, "query is required for discovery_bundle")
@@ -714,7 +739,7 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
     calls.push(await call("dynamic post search", "/api/v1/reddit/app/fetch_dynamic_search", {
       query,
       search_type: "post",
-      sort: normalizeSearchSort(args.sort),
+      sort,
       time_range: args.timeRange ?? "month",
       safe_search: "unset",
       allow_nsfw: allowNsfw,
@@ -724,8 +749,6 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
     calls.push(await call("dynamic community search", "/api/v1/reddit/app/fetch_dynamic_search", {
       query,
       search_type: "community",
-      sort: "RELEVANCE",
-      time_range: args.timeRange ?? "month",
       safe_search: "unset",
       allow_nsfw: allowNsfw,
       need_format: needFormat,
@@ -733,8 +756,7 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
     calls.push(await call("dynamic comment search", "/api/v1/reddit/app/fetch_dynamic_search", {
       query,
       search_type: "comment",
-      sort: normalizeSearchSort(args.sort),
-      time_range: args.timeRange ?? "month",
+      sort,
       safe_search: "unset",
       allow_nsfw: allowNsfw,
       need_format: needFormat,
@@ -759,7 +781,7 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
     }
 
     if (args.includeBatchEnrich ?? true) {
-      const postIds = Array.from(new Set(calls.flatMap((call) => collectStringsByKey(call.data, /(^id$|name|post.*id|thing_id)/i, /^t3_[A-Za-z0-9_]+$/)))).slice(0, 5)
+      const postIds = Array.from(new Set(calls.flatMap((call) => collectStringsByKey(payloadOf(call), /(^id$|name|post.*id|thing_id)/i, /^t3_[A-Za-z0-9_]+$/)))).slice(0, 5)
       if (postIds.length > 0) {
         calls.push(await call("discovery batch post details", "/api/v1/reddit/app/fetch_post_details_batch", {
           post_ids: postIds.join(","),
@@ -779,10 +801,10 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
       allow_nsfw: allowNsfw,
       need_format: needFormat,
     }))
-    calls.push(await call("dynamic search", "/api/v1/reddit/app/fetch_dynamic_search", {
+    calls.push(await call(args.searchType === "comment" ? "dynamic comment search" : "dynamic search", "/api/v1/reddit/app/fetch_dynamic_search", {
       query,
       search_type: args.searchType ?? "post",
-      sort: normalizeSearchSort(args.sort),
+      sort,
       time_range: args.timeRange ?? "month",
       safe_search: "unset",
       allow_nsfw: allowNsfw,
@@ -809,7 +831,7 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
     }
     calls.push(await call("subreddit feed", "/api/v1/reddit/app/fetch_subreddit_feed", {
       subreddit_name: subredditName,
-      sort: normalizeFeedSort(args.sort),
+      sort,
       after: args.after,
       need_format: needFormat,
     }))
@@ -830,8 +852,8 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
   }
 
   if (args.operation === "deep_thread") {
-    const postId = need(args.postId, "postId is required for deep_thread")
-    const sortType = normalizeCommentSort(args.sort)
+    const postId = withPostKind(need(args.postId, "postId is required for deep_thread"))
+    const sortType = sort
     calls.push(await call("post details", "/api/v1/reddit/app/fetch_post_details", {
       post_id: postId,
       need_format: needFormat,
@@ -860,9 +882,9 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
     const postIds = (args.postIds && args.postIds.length > 0 ? args.postIds : args.postId ? [args.postId] : [])
       .map((id) => id.trim())
       .filter(Boolean)
-      .slice(0, 5)
+      .map(withPostKind)
     if (postIds.length === 0) throw new Error("postIds or postId is required for thread_intelligence")
-    const sortType = normalizeCommentSort(args.sort)
+    const sortType = sort
     const maxReplyCursors = Math.min(Math.max(args.maxReplyCursors ?? 2, 0), 5)
 
     for (const postId of postIds) {
@@ -905,13 +927,13 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
     if (args.includeUserHistory ?? true) {
       calls.push(await call("user posts", "/api/v1/reddit/app/fetch_user_posts", {
         username,
-        sort: normalizeSort(args.sort, ["NEW", "TOP", "HOT", "CONTROVERSIAL"], "NEW"),
+        sort,
         after: args.afterTarget === "user_posts" ? args.after : undefined,
         need_format: needFormat,
       }))
       calls.push(await call("user comments", "/api/v1/reddit/app/fetch_user_comments", {
         username,
-        sort: normalizeSort(args.sort, ["NEW", "TOP", "HOT", "CONTROVERSIAL"], "NEW"),
+        sort,
         page_size: 25,
         after: args.afterTarget === "user_comments" ? args.after : undefined,
         need_format: needFormat,
@@ -927,46 +949,43 @@ async function buildCalls(args: ToolArgs, ctx: CallContext): Promise<TikHubCall[
       ? "/api/v1/reddit/app/fetch_post_details_batch_large"
       : "/api/v1/reddit/app/fetch_post_details_batch"
     calls.push(await call(postIds.length > 5 ? "large batch post details" : "batch post details", endpoint, {
-      post_ids: postIds.slice(0, 30).join(","),
+      post_ids: postIds.join(","),
       need_format: needFormat,
     }))
     return calls
   }
 
-  if (args.operation === "feed_discovery") {
-    const feed = args.feed ?? "popular"
-    if (feed === "popular") {
-      calls.push(await call("popular feed", "/api/v1/reddit/app/fetch_popular_feed", {
-        sort: normalizeFeedSort(args.sort),
-        time: args.timeRange?.toUpperCase() ?? "ALL",
-        after: args.after,
-        need_format: needFormat,
-      }))
-    } else if (feed === "news") {
-      calls.push(await call("news feed", "/api/v1/reddit/app/fetch_news_feed", {
-        subtopic_ids: ["all"],
-        after: args.after,
-        need_format: needFormat,
-      }))
-    } else if (feed === "subreddit") {
-      const subredditName = need(args.subredditName, "subredditName is required for subreddit feed discovery").replace(/^r\//, "")
-      calls.push(await call("subreddit feed", "/api/v1/reddit/app/fetch_subreddit_feed", {
-        subreddit_name: subredditName,
-        sort: normalizeFeedSort(args.sort),
-        after: args.after,
-        need_format: needFormat,
-      }))
-    } else {
-      calls.push(await call("subreddit post channels", "/api/v1/reddit/app/fetch_subreddit_post_channels", {
-        subreddit_name: args.subredditName?.replace(/^r\//, ""),
-        sort: normalizeFeedSort(args.sort, "HOT"),
-        range: args.timeRange?.toUpperCase() ?? "DAY",
-        need_format: needFormat,
-      }))
-    }
-    return calls
+  // feed_discovery: execute() admits only the operations handled above and this one.
+  const feed = args.feed ?? "popular"
+  if (feed === "popular") {
+    calls.push(await call("popular feed", "/api/v1/reddit/app/fetch_popular_feed", {
+      sort,
+      time: args.timeRange?.toUpperCase() ?? "ALL",
+      after: args.after,
+      need_format: needFormat,
+    }))
+  } else if (feed === "news") {
+    calls.push(await call("news feed", "/api/v1/reddit/app/fetch_news_feed", {
+      subtopic_ids: ["all"],
+      after: args.after,
+      need_format: needFormat,
+    }))
+  } else if (feed === "subreddit") {
+    const subredditName = need(args.subredditName, "subredditName is required for subreddit feed discovery").replace(/^r\//, "")
+    calls.push(await call("subreddit feed", "/api/v1/reddit/app/fetch_subreddit_feed", {
+      subreddit_name: subredditName,
+      sort,
+      after: args.after,
+      need_format: needFormat,
+    }))
+  } else {
+    calls.push(await call("subreddit post channels", "/api/v1/reddit/app/fetch_subreddit_post_channels", {
+      subreddit_name: need(args.subredditName, "subredditName is required for subreddit channel feed discovery").replace(/^r\//, ""),
+      sort,
+      range: args.timeRange?.toUpperCase() ?? "DAY",
+      need_format: needFormat,
+    }))
   }
-
   return calls
 }
 
@@ -980,8 +999,8 @@ function formatOutput(args: ToolArgs, calls: TikHubCall[]): string {
   const successCount = calls.filter((call) => !call.error).length
   const failed = calls.filter((call) => call.error)
   const thin = classified.filter((call) => !call.error && call.usefulRecords === 0)
-  const postIds = Array.from(new Set(calls.flatMap((call) => collectStringsByKey(call.data, /(^id$|name|post.*id|thing_id)/i, /^t3_[A-Za-z0-9_]+$/)))).slice(0, 20)
-  const subredditIds = Array.from(new Set(calls.flatMap((call) => collectStringsByKey(call.data, /(^id$|name|subreddit.*id)/i, /^t5_[A-Za-z0-9_]+$/)))).slice(0, 12)
+  const postIds = Array.from(new Set(calls.flatMap((call) => collectStringsByKey(payloadOf(call), /(^id$|name|post.*id|thing_id)/i, /^t3_[A-Za-z0-9_]+$/)))).slice(0, 20)
+  const subredditIds = Array.from(new Set(calls.flatMap((call) => collectStringsByKey(payloadOf(call), /(^id$|name|subreddit.*id)/i, /^t5_[A-Za-z0-9_]+$/)))).slice(0, 12)
   const replyCursors = extractReplyCursors(calls, 10)
 
   const lines: string[] = []
@@ -991,7 +1010,7 @@ function formatOutput(args: ToolArgs, calls: TikHubCall[]): string {
   lines.push(`Calls: ${successCount}/${calls.length} succeeded`)
   lines.push(`Useful records: ${classified.reduce((total, call) => total + call.usefulRecords, 0)} extracted (${thin.length} thin successful calls)`)
   lines.push(`TikHub base: ${tikhubBaseUrl()}`)
-  lines.push(`Display cap: ${maxItems} per evidence section; raw excerpts are truncated, not a complete dataset.`)
+  lines.push(`Display cap: ${maxItems} per evidence section, ${Math.min(maxItems, 12)} for Comment Highlights (never more than 12); raw excerpts are truncated, not a complete dataset.`)
   lines.push("")
   const notes = calls.flatMap((call) => (call.notes ?? []).map((note) => `${call.label}: ${note}`))
   if (args.timeRange !== undefined && !calls.some((call) => ["time_range", "time", "range"].some((key) => call.params[key] !== undefined))) notes.push(`Unsupported timeRange for ${args.operation}/${args.feed ?? ""}; not applied.`)
@@ -1088,7 +1107,7 @@ function formatOutput(args: ToolArgs, calls: TikHubCall[]): string {
   for (const call of calls.filter((item) => !item.error).slice(0, 6)) {
     lines.push(`### ${call.label}`)
     lines.push("```json")
-    lines.push(safeJsonSnippet(call.data, 2200))
+    lines.push(safeJsonSnippet(payloadOf(call), 2200))
     lines.push("```")
   }
 

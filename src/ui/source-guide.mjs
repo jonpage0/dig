@@ -1,6 +1,5 @@
 // UI guidance for the existing tools and methods. These examples never execute a provider request.
-import { attr, button, keyed, node } from './dom.mjs';
-import { absTime } from './format.mjs';
+import { absTime, callOutcome } from './format.mjs';
 
 export const SOURCE_GUIDES = {
   exa: { tasks: ['Fast or cache-only web discovery; page text and similar pages.', 'Snapshot reads of stored page content at a chosen date; these do not reconstruct historical rankings.'], example: 'Use Dig and Exa fast search to find primary sources for [question]. Keep the source text and save a report.' },
@@ -14,7 +13,7 @@ export const SOURCE_GUIDES = {
   evidence: { tasks: ['Suggest a reading order when a supplied shortlist is burdensome to compare. A few obvious candidates usually need no extra call.', 'Compare each supplied excerpt with an optional claim; relevant contradictions deserve attention alongside supporting evidence.', 'Send only the selected text to TypeSafe Jev. Every candidate remains available; scores and confidence guide reading and do not establish truth. Full reports and important originals still need reading.'], example: 'Use Dig’s optional Evidence ranking helper to prioritize these supplied excerpts for [question]. Keep every candidate, include contradictions, and explain which originals still need reading.' },
   x: { tasks: ['Weigh claims with X judge, discover broadly with X breadth, or inspect exact posts.', 'Read threads, Communities and available media descriptions; account-only reads need the optional sign-in.'], example: 'Use Dig X judge to examine what practitioners are saying about [topic]. Read the original posts behind the important claims.' },
   reddit: { tasks: ['Find public Reddit discussions.', 'Read thread comments and separate anecdotes from corroborated claims.'], example: 'Use Dig Reddit to investigate firsthand experiences with [topic], including contrary experiences.' },
-  'tikhub-reddit': { tasks: ['Explore subreddit context and advanced Reddit discovery.', 'Enrich selected posts and read available comment trees.'], example: 'Use Dig TikHub Reddit to investigate [topic] in [subreddit] and retain the relevant discussions.' },
+  'tikhub-reddit': { tasks: ['Explore subreddit context and advanced Reddit discovery.', 'Enrich selected posts and read comment pages with collapsed replies.'], example: 'Use Dig TikHub Reddit to investigate [topic] in [subreddit] and retain the relevant discussions.' },
   tiktok: { tasks: ['Search public videos and Top results, including photo posts.', 'Inspect exact videos or photo posts, creator feeds, returned transcripts and selected comment replies.'], example: 'Use Dig TikTok to find public examples of [topic] and inspect comments on the strongest matches.' },
   instagram: { tasks: ['Read exact public Instagram posts, profiles, creator feeds and reels.', 'Inspect available comments, selected replies and short AI speech transcripts; preserve carousel media identities.'], example: 'Use Dig Instagram to inspect [public post URL], its caption and available comments.' },
   facebook: { tasks: ['Read public posts, profiles, groups and events.', 'Search available videos and inspect supported transcripts and comments.'], example: 'Use Dig Facebook to check the latest public notices from [official page] about [topic]. Preserve timestamps and coverage limits.' },
@@ -29,31 +28,6 @@ export const SOURCE_GUIDES = {
   dataforseo: { tasks: ['Research SERPs, keywords, rankings, backlinks and local businesses.', 'Use the AI visibility method to compare brand mentions, citations and historical observations.'], example: 'Use Dig’s DataForSEO AI visibility method to compare [brand] with [competitors] on [platform, market and time window]. Confirm the paid scope before retrieving data.' },
 };
 
-export function sourceGuide(id) {
-  const guide = SOURCE_GUIDES[id];
-  if (!guide) return null;
-  return node('section', 'source-guide', node('h5', '', 'What you can do'), node('ul', '', guide.tasks.map(task => node('li', '', task))));
-}
-
-export function sourceExample(id) {
-  const guide = SOURCE_GUIDES[id];
-  if (!guide) return null;
-  const prompt = node('p', 'prompt-example', guide.example);
-  const status = attr(node('p', 'meta'), 'role', 'status');
-  const copy = button('btn-ghost', 'Copy example', async () => {
-    try {
-      if (!globalThis.navigator?.clipboard?.writeText) throw new Error('Clipboard unavailable');
-      await navigator.clipboard.writeText(guide.example);
-      status.textContent = 'Copied. Paste it into the conversation and replace the bracketed text.';
-    } catch {
-      status.textContent = 'Select the example text and copy it, then paste it into the conversation.';
-    }
-  });
-  return keyed(node('details', 'source-about source-example',
-    node('summary', '', 'Example for the conversation'),
-    node('div', 'source-example-body', prompt, copy, status)), `example:${id}`);
-}
-
 /** Latest observed receipt per source, including calls not yet claimed by a report. No network probe or stored state. */
 export function latestSourceCalls(snapshot) {
   const latest = new Map();
@@ -67,6 +41,5 @@ export function latestSourceCalls(snapshot) {
 
 export function activityNote(call) {
   if (!call) return 'No retained call to show. Configuration alone does not verify provider access.';
-  const outcome = { success: 'completed', partial: 'returned partial results', empty: 'returned no results', failed: 'failed', cancelled: 'was stopped', skipped: 'was skipped' }[call.status] ?? 'has an unknown outcome';
-  return `Last retained call ${outcome} · ${absTime(call.at)} · ${call.tool}. This describes that call, not a current connection check.`;
+  return `Last retained call: ${callOutcome(call.status)} · ${absTime(call.at)} · ${call.tool}. This describes that call, not a current connection check.`;
 }

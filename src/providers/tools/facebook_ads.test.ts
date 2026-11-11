@@ -473,5 +473,6 @@ describe("facebook_ad_library", () => {
 		expect(out).toContain('Next page: pass cursor="AQH-after"');
 		expect(out).toMatch(/\[Truncated at 60000 of \d+ characters\. The complete response is this call's original response when raw retention is on; read it with library_read using the receipt's raw file\.\]$/);
 		expect(details(result)).toMatchObject({ truncated: true, ad_ids: ["615470338018648", "2"] });
+		expect(status(result)).toBe("partial");
 	});
 });

@@ -57,6 +57,8 @@ claude plugin install dig@dig
 
 Start a new session and type **`/dig:setup`**. Run one method directly with `/dig:hackernews`, `/dig:reddit` and so on, or ask a research question with `/dig:dig`. Claude Code and Codex share the same settings, keys and research library. Claude Code shows no Dig views: research, saved reports, library search and reading work through the conversation, and the library is the folder under `~/.local/share/dig`. Update with `claude plugin marketplace update dig` then `claude plugin update dig@dig`; remove with `claude plugin uninstall dig@dig`.
 
+To add keys in Claude Code, edit `~/.local/share/dig/keys.env` directly, or run `/dig:setup` for the exact lines to add.
+
 ## What Dig does
 
 Ask a question in Codex. Your assistant chooses useful enabled sources, reads their reports and important originals, and explains the findings. Dig presents the saved research state for you to observe and steer; full records are available when you want to inspect a particular point.
@@ -70,15 +72,16 @@ Ask a question in Codex. Your assistant chooses useful enabled sources, reads th
 | <img src="docs/logos/github.svg" width="22" height="22" alt=""> | **GitHub** | Repositories, their activity and source code |
 | <img src="plugin/assets/skills/book-open-text.svg" width="22" height="22" alt=""> | **DeepWiki** | Questions about a public codebase |
 | <img src="docs/logos/ycombinator.svg" width="22" height="22" alt=""> | **Hacker&nbsp;News** | Developer stories and discussion |
-| <img src="plugin/assets/skills/graduation-cap.svg" width="22" height="22" alt=""> | **Papers** | Semantic Scholar, OpenAlex and 18 more indexes; full text and PDFs |
+| <img src="plugin/assets/skills/graduation-cap.svg" width="22" height="22" alt=""> | **Papers** | Semantic Scholar, OpenAlex and 18 more indexes; full text, PDFs and section extraction |
 | <img src="docs/logos/youtube.svg" width="22" height="22" alt=""> | **YouTube** | Video discovery, saved transcripts and optional Gemini video understanding |
 | <img src="docs/logos/x.svg" width="22" height="22" alt=""> | **X** | Exact posts, threads and accounts; Grok for search by meaning, images and video |
-| <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **Reddit** | Threads, comments and full comment trees |
+| <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **Reddit** | Threads, comments and collapsed replies |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok** | Videos, captions and transcripts |
 | <img src="docs/logos/instagram.svg" width="22" height="22" alt=""> | **Instagram** | Reels, accounts and transcripts |
 | <img src="plugin/assets/skills/messages-square.svg" width="22" height="22" alt=""> | **Facebook** | Public pages, posts, groups and events |
 | <img src="docs/logos/linkedin.svg" width="22" height="22" alt=""> | **LinkedIn** | Profiles, companies and posts |
 | <img src="docs/logos/telegram.svg" width="22" height="22" alt=""> | **Telegram** | Public channels and posts |
+| <img src="plugin/assets/skills/messages-square.svg" width="22" height="22" alt=""> | **Threads** | Public posts, replies and account posts |
 | <img src="plugin/assets/skills/languages.svg" width="22" height="22" alt=""> | **China&nbsp;social** | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat |
 | <img src="plugin/assets/skills/megaphone.svg" width="22" height="22" alt=""> | **Facebook&nbsp;ads** | Meta Ad Library advertisers and creatives |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok&nbsp;ads** | Creative Center analytics and the Ad Library |
@@ -97,13 +100,13 @@ The interface shows retained observations. A missing report does not mean an age
 
 Good to know:
 
-- **You choose the sources.** Run one directly (`$dig:reddit`) or let Codex combine several.
+- **You choose the sources.** Run one directly (`$dig:reddit` in Codex, `/dig:reddit` in Claude Code) or let Codex combine several.
 - **Public research by default.** Optional X sign-in reads your own bookmarks and likes. Video analysis can upload a local project clip you select. Coverage varies by platform.
 - **X has two ways in.** X's API returns the posts themselves; Grok adds search by meaning and reads images and videos. Three methods use them: X judge weighs claims, X breadth finds as many angles as it can, X post inspects one post.
 
 ## Findings in the conversation
 
-Saved research opens as a compact card that separates the save event from the report author's assessment. It shows **What came back**, scoped provider usage, recorded open questions and a possible next step. **Review next step** previews a conversation instruction without sending it. **Inspect research** and **Findings & evidence** let you look closer when useful. A card helps explain the record; it does not verify the claim merely by displaying it. See [research cards](docs/insight-cards.md).
+In Codex, each save shows a compact card in the conversation: the research's title, its outcome (such as **Report saved** or **Answer has gaps**), its sources, when it was saved and the provider cost recorded for it. Its one **Open** button opens the saved file in Dig, or reads the complete retained file in place when Codex cannot open the link. The card carries no summary or findings: the conversation explains the conclusions, and displaying a card does not verify them. Claude Code shows no card. See [research cards](docs/insight-cards.md).
 
 For website discovery, SEO and GEO questions, Dig's method connects customer intent and search/AI observations to the actual cited or competing page and the owned page, then proposes specific changes and verification. The initiating conversation combines DataForSEO evidence, page reads and any owner-supplied analytics; provider-native history and saved reports support comparisons without a separate tracking system.
 
@@ -111,9 +114,9 @@ For website discovery, SEO and GEO questions, Dig's method connects customer int
 
 Ask **“Use Dig’s YouTube video method to analyze this demo from 35 to 55 seconds. What changes, and does it support the speaker’s claim? Give the video URL and original timestamps for each finding.”**
 
-The optional **YouTube video** method (`$dig:youtube-video`) uses **Gemini 3.8 Flash** for standard deeper analysis. Choose **Gemini 4 Argon** next when the question needs harder reasoning. It can analyze selected intervals, compare up to ten video inputs, follow up on stored context, and return structured findings. Enable YouTube and add `GEMINI_API_KEY` in keys.env; this route needs no local downloader. The key is separate from the optional YouTube Data API key, and transcript research still works without it.
+The optional **YouTube video** method (`$dig:youtube-video` in Codex, `/dig:youtube-video` in Claude Code) uses **Gemini 3.8 Flash** for standard deeper analysis. Choose **Gemini 4 Argon** next when the question needs harder reasoning. It can analyze selected intervals, compare up to ten video inputs, follow up on stored context, and return structured findings. Enable YouTube and add `GEMINI_API_KEY` in keys.env; this route needs no local downloader. The key is separate from the optional YouTube Data API key, and transcript research still works without it.
 
-Use the standalone **Video analysis** tool (`$dig:video-analyze`) with [Elorian Glimpse](https://elorian.ai/) for a focused visual need or when you explicitly choose it. It works directly in the conversation, without a dig or report, and alongside appropriate source research. Enable it under **Sources & tools → Shared tools** and add `ELORIAN_API_KEY`. Direct video-file URLs work; local or YouTube clips need `ffmpeg` and `ffprobe`, plus `yt-dlp` for YouTube, and cover at most two minutes per selected interval.
+Use the standalone **Video analysis** tool (`$dig:video-analyze` in Codex, `/dig:video-analyze` in Claude Code) with [Elorian Glimpse](https://elorian.ai/) for a focused visual need or when you explicitly choose it. It works directly in the conversation, without a dig or report, and alongside appropriate source research. Enable it under **Sources & tools → Shared tools** and add `ELORIAN_API_KEY`. Direct video-file URLs work; local or YouTube clips need `ffmpeg` and `ffprobe`, plus `yt-dlp` for YouTube, and cover at most two minutes per selected interval.
 
 Analysis remains model interpretation. Check exact speech and timestamps against the original; with several videos, require a separate original-video timeline for each. Google’s stored interaction history and Elorian’s uploaded media have their own retention, separate from Dig’s library. Both providers return token usage without a per-call dollar charge, so Dig records cost as unknown. See [YouTube video understanding](docs/youtube-video.md) and [Glimpse video inspection](docs/video-analysis.md) for controls, storage and evidence limits.
 
@@ -140,7 +143,7 @@ Enable **Evidence ranking** under **Sources & tools → Shared tools** and add `
 | [xAI](https://console.x.ai/team/default/api-keys) | **X**: Grok's search by meaning, including images and videos | `XAI_API_KEY` |
 | [X API](https://console.x.com) | **X**: exact posts, threads, replies, accounts, search, counts, News | `X_BEARER_TOKEN` |
 | X sign-in *(optional)* | **X**: your bookmarks and likes; people and Communities search | `X_CONSUMER_KEY`, `X_CONSUMER_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` |
-| [ScrapeCreators](https://app.scrapecreators.com) | **Reddit**, **TikTok**, **Instagram**, **Facebook**, **LinkedIn**, **Telegram**, **Facebook ads**, **TikTok ads** (Ad Library) | `SCRAPECREATORS_API_KEY` |
+| [ScrapeCreators](https://app.scrapecreators.com) | **Reddit**, **TikTok**, **Instagram**, **Facebook**, **LinkedIn**, **Telegram**, **Threads**, **Facebook ads**, **TikTok ads** (Ad Library) | `SCRAPECREATORS_API_KEY` |
 | [TikHub](https://user.tikhub.io/dashboard/api) | **Reddit** (advanced), **China social**, **TikTok ads** (Creative Center), **X** (Communities) | `TIKHUB_API_KEY` |
 | [Just One](https://dashboard.justoneapi.com/en) *(optional)* | **China social**: an alternative backend, used only when asked for | `JUSTONE_API_KEY` |
 | [Scrape.do](https://dashboard.scrape.do/) | **Amazon**: products, search, deals, Best Sellers | `SCRAPE_DO_API_KEY` |
@@ -153,15 +156,15 @@ Enable **Evidence ranking** under **Sources & tools → Shared tools** and add `
 
 Partial setups work. X's API and Grok are independent, and so are Amazon's current data and its history. YouTube discovery, hosted transcripts and Gemini video understanding have separate prerequisites. Dig names what's unavailable instead of quietly swapping in another source.
 
-**Local tools:** YouTube transcripts need [`yt-dlp`](https://github.com/yt-dlp/yt-dlp). Federated paper search, full text and PDFs need the optional Papers bridge (`git` and `uv`).
+**Local tools:** YouTube transcripts need [`yt-dlp`](https://github.com/yt-dlp/yt-dlp). Federated paper search, full text, PDFs and section extraction need the optional Papers bridge (`git` and `uv`).
 
 [Sources and their keys](docs/sources.md) has every option, alias and setup step.
 
 ### Adding keys
 
-Keys never go in the chat. On Dig's **Sources & tools** page, click **Edit keys.env**, paste your keys after the `=` signs and save. Dig picks up the change right away. The file lives at `~/.local/share/dig/keys.env`.
+Keys never go in the chat. On Dig's **Sources & tools** page, click **Edit keys.env**, paste your keys after the `=` signs and save. Dig picks up the change right away. The file lives at `~/.local/share/dig/keys.env`; Claude Code has no Dig pages, so there you edit it directly.
 
-## Use
+## Use in Codex
 
 - **Ask a research question** normally, or name the sources you want.
 - **Run one method:** type `$dig:` and pick one, such as `$dig:x-post` or `$dig:facebook`.
@@ -170,7 +173,7 @@ Keys never go in the chat. On Dig's **Sources & tools** page, click **Edit keys.
 - **Find saved research through the conversation:** ask Dig to locate earlier reports by project, source or topic. The dashboard focuses on the overview and reading.
 - **Reuse past research** by typing `@` in the composer.
 
-## Optional: route Dig from another conversation
+## Optional: route Dig from another conversation (Codex)
 
 The [Dig routing companion](optional/dig-routing/README.md) is a separate, instruction-only plugin that can use the current Dig connection or delegate to an authorized connected computer. Install it only if you want that routing skill:
 
@@ -181,7 +184,7 @@ codex plugin add dig-routing@dig
 
 Its explicit invocation is `$dig-routing:route`; matching requests may select it automatically. Local installation makes it discoverable locally. Cloud-dot discovery and delegation require host support and separate verification.
 
-## Update
+## Update in Codex
 
 ```sh
 codex plugin marketplace upgrade dig

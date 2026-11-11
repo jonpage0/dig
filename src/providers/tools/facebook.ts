@@ -18,9 +18,9 @@
  * - GET /v1/facebook/search/videos (query, cursor; has_more): Facebook's native public video and
  *   Reels search, not text or photo post search.
  * - GET /v1/facebook/post (url, cache_max_age) and /post/transcript (url, cache_max_age; videos
- *   under 2 minutes). The post page's description mentions get_comments and get_transcript, but its
- *   parameter list does not document them, so they are never sent; comments and transcripts are
- *   their own kinds.
+ *   under 2 minutes). The post endpoint also documents get_transcript and allow_long_transcription
+ *   (saved OpenAPI, 2026-10-20), and its description mentions get_comments; none is sent, because
+ *   comments and transcripts are their own kinds.
  * - GET /v1/facebook/post/comments (url or feedback_id, cursor; has_next_page) and
  *   /post/comment/replies (feedback_id and expansion_token of a comment, cursor; has_next_page).
  * - GET /v1/facebook/group (url or group_id) and /group/posts (url or group_id, sort_by, cursor):
@@ -467,6 +467,8 @@ function bounded(result: SourceToolOutput): SourceToolOutput {
   const truncated = result.text.length > OUTPUT_LIMIT
   return {
     ...result,
+    // Text cut by Dig's own limit is part of the answer not delivered: partial, as in the other social tools.
+    status: truncated && result.status === "success" ? "partial" : result.status,
     text: truncated ? `${result.text.slice(0, OUTPUT_LIMIT)}\n[Truncated at ${OUTPUT_LIMIT} of ${result.text.length} characters. ${TRUNCATION_NOTE}]` : result.text,
     details: { ...result.details, truncated },
   }
@@ -505,6 +507,8 @@ function profileResult(response: ScrapeCreatorsResponse, target: string, include
           ? "Only the limited public fields below came back."
           : `No page fields came back${includeGated ? "" : "; include_gated_profile=true asks for the limited public fields Facebook still shows"}.`),
     )
+    // The receipt's error line is the first line of a failed result, so lead with the reason.
+    if (status === "failed") lines.unshift(lines.pop()!)
   } else {
     lines.push(`Access: public${accountStatus ? ` (account_status: ${accountStatus})` : ""}; no login used.`)
   }

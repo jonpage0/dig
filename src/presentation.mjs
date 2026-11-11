@@ -11,7 +11,7 @@ const http = bounded(2048).refine(value => {
 }, 'An absolute HTTP(S) URL without credentials is required');
 const details = z.strictObject({ label: bounded(80), value: bounded(1000), url: http.optional() });
 const nextStep = z.strictObject({ label: bounded(80), prompt: bounded(4000) });
-export const INSIGHT_SCHEMA = z.strictObject({
+const INSIGHT_SCHEMA = z.strictObject({
   title: bounded(180), statement: bounded(1500),
   details: z.array(details).max(4).default([]),
   evidence: z.array(bounded(4096)).min(1).max(4),

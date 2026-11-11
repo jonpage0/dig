@@ -8,8 +8,15 @@ export interface JsonRequestPolicy {
 	body?: unknown;
 	signal: AbortSignal;
 	timeoutMs?: number;
+	/** Further attempts after a retryable HTTP status, whose response arrived and is kept. Default 2. */
 	retries?: number;
 	retryStatuses?: readonly number[];
+	/**
+	 * Also repeat a request that got no response (a timeout, a reset connection, any thrown transport error). Off by
+	 * default, since the provider may have received and charged that request: only for an endpoint that is free and safe
+	 * to repeat.
+	 */
+	retryTransport?: boolean;
 	provider: string;
 	/** Receives every attempt's response (or transport error) for the call's raw file. */
 	keep: KeepRaw;
@@ -166,7 +173,8 @@ export async function requestJson(policy: JsonRequestPolicy): Promise<JsonReques
 			if (!captured) policy.keep(label, "error", error instanceof Error ? error.message : String(error));
 			if (policy.signal.aborted) throw policy.signal.reason ?? error;
 			// The response arrived, and may be charged, but its body did not: propagate, never repeat the request.
-			if (captured) throw error;
+			// No response at all may still have reached the provider and been charged: repeated only when the caller opts in.
+			if (captured || !policy.retryTransport) throw error;
 			lastError = error;
 			if (attempt === retries) throw error;
 		}

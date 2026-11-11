@@ -330,3 +330,36 @@ test("missing credentials and invalid requests never contact Google", async () =
   assert.equal((await run({ ...ARGS, videos: [{ url: "/tmp/local.mp4" }] })).status, "failed");
   assert.equal(calls.length, 0);
 });
+
+test("a failed poll leaves the accepted analysis running at Google and returns partial with its ID and how to resume it", async () => {
+  for (const fail of [() => { throw new TypeError("Network interrupted"); }, () => Response.json({ error: { code: 503, status: "UNAVAILABLE", message: "Busy" } }, { status: 503 })]) {
+    calls = []; retained = [];
+    mockFetch((_url, init) => init.method === "POST" ? Response.json({ id: "interaction_fixture", status: "in_progress", model: "gemini-3.8-flash" }) : fail());
+    const result = await run();
+    assert.equal(result.status, "partial", result.text);
+    assert.equal(result.details?.interactionId, "interaction_fixture");
+    assert.equal(result.details?.nextTool, "youtube_analysis_status");
+    assert.match(result.text, /interaction_fixture is still running at Google; read it with youtube_analysis_status/);
+    assert.deepEqual(calls.map(call => [call.url.split("/interactions")[1], call.init.method]), [["", "POST"], ["/interaction_fixture", "GET"]]);
+  }
+});
+
+test("a caller's abort while waiting still cancels the accepted analysis", async () => {
+  const abort = new AbortController();
+  mockFetch((url, init) => {
+    if (url.endsWith("/cancel")) return Response.json(completed({ status: "cancelled" }));
+    if (init.method === "GET") abort.abort();
+    return Response.json({ id: "interaction_fixture", status: "in_progress" });
+  });
+  const result = await run(ARGS, abort.signal);
+  assert.equal(result.status, "cancelled");
+  assert.ok(calls.at(-1)?.url.endsWith("/interaction_fixture/cancel"));
+});
+
+test("errors about a started analysis name its interaction ID", () => {
+  for (const value of [{ id: "interaction_fixture", status: "failed", error: { message: "Video unavailable" } }, { id: "interaction_fixture", status: "expired" }, completed({ steps: [] })]) {
+    const result = formatInteraction(value);
+    assert.equal(result.status, "failed");
+    assert.match(result.text, /interaction_fixture/);
+  }
+});

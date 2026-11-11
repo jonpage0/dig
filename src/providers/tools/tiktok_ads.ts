@@ -21,12 +21,13 @@
  * TikHub docs' example payload for search_ads describes a different shape than
  * the API returns, so the normalizers here follow the observed shape.
  */
+import { USER_AGENT } from "../../version.mjs"
 import { requestJson } from "../http.js"
 import { outcome } from "../outcome.js"
 import { knownSecrets, redactText } from "../secrets.js"
 import type { ToolContext, ToolSpec } from "../types.js"
-import { TIKTOK_AD_INDUSTRIES } from "./tiktok_ads_industries.js"
-import { creditMetered, type RequestContext } from "./scrapecreators.js"
+import { TIKTOK_AD_INDUSTRIES, type TikTokAdIndustry } from "./tiktok_ads_industries.js"
+import { asArray, asNumber, asRecord, chargeRecorder, continuesAfter, creditMetered, displayLimit, knownCharge, MISSING_KEY_ERROR, UNANSWERED_COST, type RequestContext } from "./scrapecreators.js"
 
 /** Read per request, so a TIKHUB_BASE_URL loaded from keys.env after startup applies. */
 const tikhubBaseUrl = () => process.env.TIKHUB_BASE_URL?.trim() || "https://api.tikhub.io"
@@ -128,26 +129,16 @@ type LibraryAd = {
 // ---------------------------------------------------------------------------
 
 const INDUSTRY_BY_ID = new Map(TIKTOK_AD_INDUSTRIES.map((entry) => [entry.id, entry]))
-const INDUSTRY_BY_NAME = new Map(TIKTOK_AD_INDUSTRIES.map((entry) => [entry.name.toLowerCase(), entry]))
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : []
-}
+const SUB_INDUSTRIES_BY_NAME = TIKTOK_AD_INDUSTRIES.reduce((byName, entry) => {
+  if (entry.parent) byName.set(entry.name.toLowerCase(), [...(byName.get(entry.name.toLowerCase()) ?? []), entry])
+  return byName
+}, new Map<string, TikTokAdIndustry[]>())
+const TOP_INDUSTRY_BY_NAME = new Map(TIKTOK_AD_INDUSTRIES.filter((entry) => !entry.parent).map((entry) => [entry.name.toLowerCase(), entry]))
 
 function asString(value: unknown): string | null {
   if (typeof value !== "string") return null
   const trimmed = value.trim()
   return trimmed || null
-}
-
-function asNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value
-  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value)
-  return null
 }
 
 function fmtNum(value: number | null): string {
@@ -189,17 +180,35 @@ function topLevelIndustryId(id: string | null): string | null {
   const entry = INDUSTRY_BY_ID.get(id)
   if (!entry) return id
   if (!entry.parent) return entry.id
-  return INDUSTRY_BY_NAME.get(entry.parent.toLowerCase())?.id ?? entry.id
+  return TOP_INDUSTRY_BY_NAME.get(entry.parent.toLowerCase())?.id ?? entry.id
+}
+
+/**
+ * A top-level industry wins over a sub-industry of the same name. A sub-industry name that exists
+ * under more than one parent (such as "Photography") names no single industry: it is refused.
+ */
+function industryByName(name: string): { entry?: TikTokAdIndustry; error?: string } {
+  const top = TOP_INDUSTRY_BY_NAME.get(name.toLowerCase())
+  if (top) return { entry: top }
+  const subs = SUB_INDUSTRIES_BY_NAME.get(name.toLowerCase()) ?? []
+  if (subs.length > 1) {
+    return { error: `TikTok ad industry "${name}" exists under more than one parent: ${subs.map((entry) => `${entry.parent} > ${entry.name} (${entry.id})`).join(", ")}. To choose one, pass the id.` }
+  }
+  return { entry: subs[0] }
 }
 
 /**
  * Accepts a comma-separated mix of industry ids and names and returns the
  * comma-separated id list TikHub expects. Names are matched case-insensitively
  * against the published list; an unknown name is an error rather than a silent
- * drop, because a dropped filter changes the meaning of the result.
+ * drop, because a dropped filter changes the meaning of the result. The whole
+ * input is tried as one name first, so names that contain commas can be passed.
  */
 function resolveIndustryIds(input: string | undefined): { ids: string | undefined; error?: string } {
   if (!input?.trim()) return { ids: undefined }
+  const whole = industryByName(input.trim())
+  if (whole.error) return { ids: undefined, error: whole.error }
+  if (whole.entry) return { ids: whole.entry.id }
   const ids: string[] = []
   for (const raw of input.split(",")) {
     const token = raw.trim()
@@ -208,7 +217,8 @@ function resolveIndustryIds(input: string | undefined): { ids: string | undefine
       ids.push(token)
       continue
     }
-    const entry = INDUSTRY_BY_NAME.get(token.toLowerCase())
+    const { entry, error } = industryByName(token)
+    if (error) return { ids: undefined, error }
     if (!entry) {
       return {
         ids: undefined,
@@ -232,14 +242,14 @@ function tikhubHeaders(): Record<string, string> | null {
     Authorization: `Bearer ${token}`,
     Accept: "application/json",
     "Content-Type": "application/json",
-    "User-Agent": "omp-tiktok-ads-tool/1.0",
+    "User-Agent": USER_AGENT,
   }
 }
 
 function scrapecreatorsHeaders(): Record<string, string> | null {
   const key = process.env.SCRAPECREATORS_API_KEY?.trim()
   if (!key) return null
-  return { "x-api-key": key, Accept: "application/json", "User-Agent": "omp-tiktok-ads-tool/1.0" }
+  return { "x-api-key": key, Accept: "application/json", "User-Agent": USER_AGENT }
 }
 
 /**
@@ -253,17 +263,24 @@ async function tikhubPost(
   headers: Record<string, string>,
   ctx: RequestContext,
 ): Promise<{ data: unknown } | { error: string }> {
-  const response = await requestJson({
-    url: new URL(endpoint, tikhubBaseUrl()),
-    method: "POST",
-    headers,
-    body,
-    signal: ctx.abort,
-    timeoutMs: TIMEOUT_MS,
-    provider: "TikHub",
-    keep: ctx.keep,
-    label: endpoint,
-  })
+  let response: Awaited<ReturnType<typeof requestJson>>
+  try {
+    response = await requestJson({
+      url: new URL(endpoint, tikhubBaseUrl()),
+      method: "POST",
+      headers,
+      body,
+      signal: ctx.abort,
+      timeoutMs: TIMEOUT_MS,
+      provider: "TikHub",
+      keep: ctx.keep,
+      label: endpoint,
+    })
+  } catch (error) {
+    // Never sent again: TikHub may already have received, and charged, it.
+    if (ctx.abort.aborted) throw error
+    throw new Error(`${error instanceof Error ? error.message : "Unknown error"}. TikHub may have received and charged this request, but no complete response arrived; its cost is unknown.`)
+  }
   const outer = asRecord(response.payload)
   if (response.status !== 200 || !outer) {
     return { error: `TikHub ${endpoint} returned HTTP ${response.status}` }
@@ -561,34 +578,25 @@ export const detail = {
     const notes: string[] = []
     let percentile: number | null = null
     let retention: Retention | null = null
-    if (withAnalytics) {
-      const [percentileResult, retentionResult] = await Promise.all([
-        tikhubPost("/api/v1/tiktok/ads/get_ad_percentile", { material_id: adId, metric: "ctr_percentile" }, headers, ctx).catch(
-          (error: unknown) => ({ error: redactText(error instanceof Error ? error.message : "request failed", knownSecrets()) }),
-        ),
-        tikhubPost("/api/v1/tiktok/ads/get_ad_keyframe_analysis", { material_id: adId, metric: "retain_ctr" }, headers, ctx).catch(
-          (error: unknown) => ({ error: redactText(error instanceof Error ? error.message : "request failed", knownSecrets()) }),
-        ),
-      ])
-      if ("error" in percentileResult) notes.push(`CTR percentile unavailable: ${percentileResult.error}`)
-      else percentile = asNumber(asRecord(percentileResult.data)?.ctr_percentile)
-      if ("error" in retentionResult) notes.push(`Retention curve unavailable: ${retentionResult.error}`)
-      else retention = normalizeRetention(retentionResult.data)
-    }
-
     let similar: CreativeCenterAd[] = []
+    const failed = (error: unknown) => ({ error: redactText(error instanceof Error ? error.message : "request failed", knownSecrets()) })
+    const sendSimilar = withSimilar && !!ad.industryId
+    const [percentileResult, retentionResult, similarResult] = await Promise.all([
+      withAnalytics ? tikhubPost("/api/v1/tiktok/ads/get_ad_percentile", { material_id: adId, metric: "ctr_percentile" }, headers, ctx).catch(failed) : null,
+      withAnalytics ? tikhubPost("/api/v1/tiktok/ads/get_ad_keyframe_analysis", { material_id: adId, metric: "retain_ctr" }, headers, ctx).catch(failed) : null,
+      sendSimilar ? tikhubPost("/api/v1/tiktok/ads/get_recommended_ads", { material_id: adId, country_code: ad.countries[0] ?? "US", industry: topLevelIndustryId(ad.industryId) }, headers, ctx).catch(failed) : null,
+    ])
+    if (percentileResult && "error" in percentileResult) notes.push(`CTR percentile unavailable: ${percentileResult.error}`)
+    else if (percentileResult) percentile = asNumber(asRecord(percentileResult.data)?.ctr_percentile)
+    if (retentionResult && "error" in retentionResult) notes.push(`Retention curve unavailable: ${retentionResult.error}`)
+    else if (retentionResult) retention = normalizeRetention(retentionResult.data)
+
     if (withSimilar && !ad.industryId) {
       // TikHub substitutes a default (Games) industry when none is sent, which
       // would return unrelated ads; say so instead of guessing.
       notes.push("Similar ads skipped: the ad carries no industry code, and TikHub would default to Games.")
-    } else if (withSimilar) {
-      const body: Record<string, unknown> = { material_id: adId, country_code: ad.countries[0] ?? "US", industry: topLevelIndustryId(ad.industryId) }
-      const similarResult = await tikhubPost("/api/v1/tiktok/ads/get_recommended_ads", body, headers, ctx).catch(
-        (error: unknown) => ({ error: redactText(error instanceof Error ? error.message : "request failed", knownSecrets()) }),
-      )
-      if ("error" in similarResult) notes.push(`Similar ads unavailable: ${similarResult.error}`)
-      else similar = asArray(asRecord(similarResult.data)?.materials).map(normalizeCreativeCenterAd).filter((entry): entry is CreativeCenterAd => entry !== null)
-    }
+    } else if (similarResult && "error" in similarResult) notes.push(`Similar ads unavailable: ${similarResult.error}`)
+    else if (similarResult) similar = asArray(asRecord(similarResult.data)?.materials).map(normalizeCreativeCenterAd).filter((entry): entry is CreativeCenterAd => entry !== null)
 
     const lines: string[] = [`TikTok Creative Center ad ${ad.id}`, "", formatCreativeCenterAd(ad, 0)]
     const extra: string[] = []
@@ -610,20 +618,17 @@ export const detail = {
     }
     if (notes.length) lines.push("", ...notes.map((note) => `Note: ${note}`))
     lines.push("", CREATIVE_CENTER_CAVEAT)
-    return {
-      text: lines.join("\n"),
-      details: {
-        provider: "tikhub",
-        ad_id: ad.id,
-        ctr: ad.ctr,
-        ctr_percentile: percentile,
-        likes: ad.likes,
-        industry: ad.industry,
-        objective: ad.objective,
-        similar: similar.map((entry) => entry.id),
-        requests: 1 + (withAnalytics ? 2 : 0) + (withSimilar ? 1 : 0),
-      },
-    }
+    return outcome(notes.length ? "partial" : "success", lines.join("\n"), {
+      provider: "tikhub",
+      ad_id: ad.id,
+      ctr: ad.ctr,
+      ctr_percentile: percentile,
+      likes: ad.likes,
+      industry: ad.industry,
+      objective: ad.objective,
+      similar: similar.map((entry) => entry.id),
+      requests: 1 + (withAnalytics ? 2 : 0) + (sendSimilar ? 1 : 0),
+    })
   },
 } satisfies ToolSpec
 
@@ -689,14 +694,14 @@ export const library = creditMetered({
     "Requires SCRAPECREATORS_API_KEY. 1 credit per request. No spend or targeting is disclosed for ordinary ads.",
   async execute(args: LibraryArgs, ctx: ToolContext) {
     const headers = scrapecreatorsHeaders()
-    if (!headers) return "ERROR: SCRAPECREATORS_API_KEY not set. Get a key at https://scrapecreators.com"
+    if (!headers) return `ERROR: ${MISSING_KEY_ERROR}`
     const advertiser = args.advertiser_name?.trim()
     const query = args.query?.trim()
     const advertiserIds = args.adv_biz_ids?.trim()
     if (args.adv_biz_ids !== undefined && (!advertiserIds || !advertiser)) return "ERROR: adv_biz_ids requires a nonempty advertiser_name and business ID; ID-only searches are unsupported."
     if (!advertiser && !query) return "ERROR: Provide advertiser_name or query."
     if (advertiser && query) return "ERROR: Provide either advertiser_name or query, not both."
-    const limit = Math.min(Math.max(1, Math.floor(args.limit ?? DEFAULT_LIMIT)), MAX_LIMIT)
+    const limit = displayLimit(args.limit, MAX_LIMIT)
 
     const url = new URL("/v1/tiktok/ad-library/search", SCRAPECREATORS_BASE_URL)
     if (advertiser) url.searchParams.set("advertiser_name", advertiser)
@@ -706,12 +711,13 @@ export const library = creditMetered({
 
     let payload: Record<string, unknown> | null
     let status: number
+    const { keep, charges } = chargeRecorder(ctx)
     try {
-      const response = await requestJson({ url, headers, signal: ctx.abort, timeoutMs: TIMEOUT_MS, provider: "ScrapeCreators", keep: ctx.keep, label: "ad-library/search" })
+      const response = await requestJson({ url, headers, signal: ctx.abort, timeoutMs: TIMEOUT_MS, provider: "ScrapeCreators", keep, label: "ad-library/search" })
       payload = asRecord(response.payload)
       status = response.status
     } catch (error) {
-      return `ERROR: TikTok Ad Library search failed: ${redactText(error instanceof Error ? error.message : "Unknown error", knownSecrets())}`
+      return `ERROR: TikTok Ad Library search failed: ${redactText(error instanceof Error ? error.message : "Unknown error", knownSecrets())}. ${UNANSWERED_COST}`
     }
     if (status !== 200 || !payload) return `ERROR: ScrapeCreators TikTok Ad Library returned HTTP ${status}`
     if (payload.success === false) return `ERROR: ScrapeCreators TikTok Ad Library: ${redactText(asString(payload.error) ?? asString(payload.message) ?? "request not successful", knownSecrets())}`
@@ -732,7 +738,8 @@ export const library = creditMetered({
     const total = asNumber(payload.total)
     const cursor = asString(payload.cursor)
     const hasMore = payload.has_more === true
-    const credits = asNumber(payload.credits_charged)
+    // Every attempt's reported credits, as the receipt sums them; unknown when any attempt reported none.
+    const credits = knownCharge(charges)
 
     const header = advertiser ? `TikTok Ad Library: advertiser "${advertiser}"` : `TikTok Ad Library: query "${query}"`
     const scope: string[] = []
@@ -758,13 +765,14 @@ export const library = creditMetered({
       header,
       ...scope,
       ...(allAds.length < payload.ads.length ? [`Partial normalization: ${allAds.length} of ${payload.ads.length} returned ads could be read.`] : []),
-      `Showing ${ads.length}${allAds.length > ads.length ? ` of ${allAds.length} on this page` : ""}${total !== null ? `; library reports ${fmtNum(total)} total` : ""}${hasMore && cursor ? "; pass cursor for the next page" : ""}.`,
+      `${allAds.length > ads.length ? `${ads.length} shown of ${allAds.length} returned on this page` : `Showing ${ads.length}`}${total !== null ? `; library reports ${fmtNum(total)} total` : ""}${hasMore && cursor ? `; pass cursor="${cursor}" for the next page${continuesAfter(ads.length, allAds.length, "ads")}` : ""}.`,
       "",
       ...ads.map(formatLibraryAd),
       "",
       "Dates and audience bands are TikTok's disclosures; the library shows no spend or targeting for ordinary commercial ads.",
     ].join("\n")
     return {
+      ...(allAds.length < payload.ads.length ? { status: "partial" as const } : {}),
       text,
       details: {
         provider: "scrapecreators",

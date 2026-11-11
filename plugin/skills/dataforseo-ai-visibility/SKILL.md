@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # AI brand visibility research
 
-Use DataForSEO for SERPs, keyword volume and ideas, rankings, competitors, backlinks, technical SEO, local business listings, Google Maps data, reviews, domain technologies, brand mentions, Google Trends, merchant or app data, and AI or LLM visibility.
+Use this method to measure how often AI answers mention or cite a brand and its competitors, and how that changes, through DataForSEO's AI Optimization API (LLM Mentions). Other DataForSEO endpoints serve it only where the method below calls for them.
 
 Run this skill inline in the thread that needs it, or as an ordinary source worker that the parent thread spawned for this one question. Either way, run it yourself: do not spawn another agent or run a second source. This is research-only: do not edit code or create a second credential path.
 
@@ -21,7 +21,7 @@ Frame the brand, its unambiguous aliases, owned domains, competitors, location, 
 5. For historical changes, preserve the provider's observation dates and interval definitions. Separate new/lost citations, changed mention frequency and changes to the dataset itself. Correlation does not establish that a page edit caused a change in AI answers.
 6. End with a prioritized set of evidence-backed opportunities, explicitly pending page verification when the relevant owned/competing pages have not been read: questions where competitors appear, source pages repeatedly cited, and gaps in the brand's own relevant content. Explain the evidence for each; do not promise that publishing content will produce a citation.
 
-Use tables for Brand | Mentions | Citations | Observed answers | Estimated AI search volume | Platform/market/window and for Cited URL | Answer/query | Brand | Evidence. If a requested measure is unavailable, show unavailable rather than zero. Preserve the provider's actual field definitions. No scheduling, crawling, publishing or account changes are part of this method.
+Compare brands in the `## Metrics Table` (its columns are under Save the report), and in `## Findings` use a table of Cited URL | Answer/query | Brand | Evidence. If a requested measure is unavailable, show unavailable rather than zero. Preserve the provider's actual field definitions. No scheduling, crawling, publishing or account changes are part of this method.
 
 ## Your assignment
 
@@ -56,21 +56,16 @@ Use `dataforseo_docs_sections` only when the section is genuinely unclear. Docum
 
 `sandbox: true` sends the same request to DataForSEO's free sandbox, which returns dummy data in the real response shape. Use it only to check an unfamiliar request shape before a paid call. Sandbox output is never evidence and never belongs in findings.
 
-## Route across the whole v3 API
+## Endpoints beyond LLM Mentions
 
-- **SERP API**: Google, Bing, Yahoo, Baidu, and Naver results; organic, local pack, Google Maps, news, images, events, and jobs.
-- **Business Data API**: business listings, Google Business Profile data and updates, reviews, questions, Trustpilot, Tripadvisor, and Yelp.
-- **DataForSEO Labs API**: keyword ideas, suggestions, related terms, ranked keywords, competitors, intersections, traffic estimates, and historical SERPs.
-- **Keywords Data API**: Google Ads volume, CPC, competition, suggestions, and Google Trends.
-- **Backlinks API**: profiles, referring domains and networks, anchors, intersections, and bulk metrics.
-- **OnPage API**: crawls, audits, instant pages, Lighthouse, parsing, and microdata.
-- **Domain Analytics API**: metrics, WHOIS, and technologies.
-- **Content Analysis API**: brand and content mentions, sentiment, and phrase trends.
-- **Merchant API**: Google Shopping and Amazon products and sellers.
-- **App Data API**: App Store and Google Play listings, reviews, and rankings.
-- **AI Optimization API**: LLM mentions and AI visibility.
+The method's evidence comes from the **AI Optimization API** (LLM Mentions and AI visibility). Reach into another v3 API only to fill a gap the method names, and read its documentation first like any other endpoint:
 
-Do not narrow this skill to remembered endpoints.
+- **SERP API**: the current search results for a question where competitors appear in AI answers.
+- **DataForSEO Labs API** and **Keywords Data API**: search demand and rankings for those questions, which are estimates.
+- **Backlinks API** and **Content Analysis API**: links to and mentions of the cited pages or domains on the wider web.
+- **OnPage API**: whether a cited or owned page is reachable and what it contains, within the recipe router's limits below.
+
+Find these and any other endpoint through the documentation index, never from remembered names.
 
 ## Website opportunities and GEO recipes
 
@@ -94,7 +89,7 @@ Check both the top-level and per-task `status_code`; `20000` means success. `401
 
 Every number remains tied to endpoint, location, language, device, retrieval time, filters, and execution mode. Search volume, difficulty, traffic, and similar metrics are modelled estimates. Rankings and SERP contents are momentary observations. Do not infer causation from correlated rank, volume, backlink, or traffic changes. Preserve uncertain query intent, entity resolution, business matches, sparse coverage, and account or endpoint failures.
 
-For Labs Google estimated traffic volume (`etv`), state the calculation regime. The [September 4, 2026 change](https://dataforseo.com/update/new-etv-calculation-in-dataforseo-labs-api) adds SERP-feature/search-intent CTR and clickstream-normalized volume. Before November 1, accounts registered before September 1 retain the old default unless `use_new_etv: true`; newer accounts use the new method. On November 1 the new method becomes default for all users; historical-metric endpoints are excluded. `estimated_paid_traffic_cost` changes with it. Do not treat a method change as a real traffic trend, and do not silently opt an existing comparison into a different regime.
+For Labs Google estimated traffic volume (`etv`), state the calculation regime. The [September 4, 2026 change](https://dataforseo.com/update/new-etv-calculation-in-dataforseo-labs-api) adds SERP-feature/search-intent CTR and clickstream-normalized volume. Since November 1, 2026 the new method is the default for all users; historical-metric endpoints are excluded. Before that date, accounts registered before September 1 kept the old default unless `use_new_etv: true`, so earlier values from those accounts may use the old method. `estimated_paid_traffic_cost` changes with it. Do not treat a method change as a real traffic trend, and do not silently opt an existing comparison into a different regime.
 
 Google Business Profile inspection can include [service details](https://dataforseo.com/update/service-details-in-google-my-business-info-api) in `google_business_info.services`: category, title, snippet and price where the business supplied them. Missing services or prices mean unavailable, not that the business offers none.
 
@@ -136,7 +131,7 @@ source_card:
 
 The following sections are mandatory even when empty:
 
-- `## Metrics Table` with `Metric | Value | Market / Language / Device | Endpoint | Estimate or Observation`;
+- `## Metrics Table` with `Brand | Mentions | Citations | Observed answers | Estimated AI search volume | Platform / Market / Language / Window | Endpoint | Estimate or Observation`, one row per brand and measured universe;
 - `## Method and Cost` with endpoint paths, modes, shaping parameters, call ids, per-call and total returned cost, and UTC retrieval time;
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`;
 - `## Needs Follow-Up` with an exact target or `None.`;

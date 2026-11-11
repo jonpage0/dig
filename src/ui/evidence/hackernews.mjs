@@ -1,13 +1,13 @@
 // Hacker News: an Algolia search plus, for the top stories, item fetches that return the whole comment tree.
 // Adapted from Dig's dashboard/ui/evidence/hackernews.ts (MIT, same author).
 import { hostname, num, plural, shortDate } from '../format.mjs';
-import { excerpt, failedCall, htmlText, noItems, numv, obj, objs, query, scope, str } from './read.mjs';
+import { attempted, excerpt, failedCall, htmlText, noItems, numv, obj, objs, query, scope, str } from './read.mjs';
 
 const ITEM_URL = 'https://news.ycombinator.com/item?id=';
 const COMMENT_EXCERPT = 280;
-const TYPE_LABEL = { story: 'stories', comment: 'comments', ask_hn: 'Ask HN', show_hn: 'Show HN' };
+const TYPE_LABEL = { story: 'stories', comment: 'comments' };
 
-/** Every comment under an item, however deep. */
+/** Every comment under an item, however deep: what a hackernews_read returned. */
 const countComments = item => objs(item.children).reduce((n, child) => n + (str(child.text) ? 1 : 0) + countComments(child), 0);
 
 function story(hit, id) {
@@ -26,8 +26,21 @@ function comment(id, text, author, on, created) {
   return { kind: 'comment', key: id, title: excerpt(htmlText(text), COMMENT_EXCERPT), url: `${ITEM_URL}${id}`, meta: [author, created ? shortDate(created) : undefined, on ? `on “${on}”` : undefined].filter(Boolean) };
 }
 
+/** hackernews_read: one item and its comment tree, read by id. */
+function readItem(call, bodies) {
+  const root = bodies.map(obj).find(b => b && Array.isArray(b.children));
+  const id = str(root?.id) ?? str(call.args.item);
+  const item = !root ? undefined : str(root.title) ? story(root, id).item : str(root.text) ? comment(id, str(root.text), str(root.author), undefined, str(root.created_at)) : undefined;
+  return {
+    action: [attempted(call.status, 'read', 'read'), `Hacker News item ${id ?? '?'}`],
+    result: failedCall(call) ? undefined : root ? plural(countComments(root), 'comment') : noItems(call),
+    items: item ? [item] : [],
+  };
+}
+
 export function readHackerNews(call, bodies) {
-  const stories = new Map(); const comments = new Map(); const threads = new Map(); let matches;
+  if (call.tool === 'hackernews_read') return readItem(call, bodies);
+  const stories = new Map(); const comments = new Map(); const threads = new Set(); let matches;
   for (const body of bodies) {
     const b = obj(body);
     if (!b) continue;
@@ -45,10 +58,10 @@ export function readHackerNews(call, bodies) {
     // An item fetch: a story with its whole comment tree.
     const id = str(b.id);
     if (!id || !Array.isArray(b.children)) continue;
-    threads.set(id, countComments(b));
+    threads.add(id);
     if (!stories.has(id) && str(b.title)) stories.set(id, story(b, id));
   }
-  for (const id of threads.keys()) stories.get(id)?.item.meta.push('thread read');
+  for (const id of threads) stories.get(id)?.item.meta.push('thread read');
   const a = call.args; const type = str(a.type); const days = numv(a.days);
   const found = [...stories.values()].sort((x, y) => y.points - x.points).map(s => s.item);
   const shown = type === 'comment' ? comments.size : stories.size;

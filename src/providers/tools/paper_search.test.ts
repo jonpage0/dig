@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, test } from "node:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { executeSource } from "../outcome.js";
 import { loadConfig, paperSearchDirectory, paperSearchInterpreter } from "../runtime-config.js";
 import { expect } from "expect";
 import type { SourceToolResult, ToolContext } from "../types.js";
-import { multi_search, pdf_download, sections } from "./paper_search.js";
+import { fulltext_read, multi_search, pdf_download, sections } from "./paper_search.js";
 
 const context: ToolContext = { sessionID: "papers-bridge-test", directory: "/tmp", worktree: "/tmp", abort: new AbortController().signal, keep: () => {} };
 const text = (result: SourceToolResult) => (typeof result === "string" ? result : result.text);
@@ -102,6 +102,58 @@ test("cancelling a download stops the bridge process, publishes nothing and repo
 	const result = await pending;
 	expect(result.status).toBe("cancelled");
 	expect(readdirSync(papers)).toEqual([]);
+});
+
+test("a bridge call with no result after five minutes is stopped, publishes nothing and fails saying so", async (t) => {
+	const papers = join(loadConfig().library, "papers");
+	const started = join(root, "bridge-started");
+	process.env.FAKE_PDF_BYTES = "partial-pdf-bytes";
+	process.env.FAKE_PDF_HANG = started;
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const pending = executeSource(pdf_download, { source: "arxiv", paperId: "4567.12345" }, context);
+	while (!existsSync(started)) await new Promise((resolve) => setImmediate(resolve));
+	let settled = false;
+	void pending.then(() => { settled = true; });
+	t.mock.timers.tick(5 * 60_000 - 1);
+	for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+	expect(settled).toBe(false);
+	t.mock.timers.tick(1);
+	const result = await pending;
+	expect(result.status).toBe("failed");
+	expect(result.text).toBe("ERROR: paper-search download produced no result within 5 minutes and was stopped; this is not evidence of no papers.");
+	expect(readdirSync(papers)).toEqual([]);
+});
+
+test("a relative savePath saves into the call's project directory, never the server's working directory", async () => {
+	const project = join(root, "project"), server = join(root, "server"), cwd = process.cwd();
+	mkdirSync(server);
+	process.env.FAKE_PDF_BYTES = "project-pdf-bytes";
+	// The server's working directory is the installed plugin; here it is a scratch folder, so a regression writes nothing outside this test.
+	process.chdir(server);
+	try {
+		const out = text(await pdf_download.execute({ source: "arxiv", paperId: "5678.90123", savePath: "pdfs" }, { ...context, directory: project }));
+		expect(out).toBe(JSON.stringify({ path: join(project, "pdfs", "5678.90123.pdf") }));
+	} finally { process.chdir(cwd); }
+	expect(readFileSync(join(project, "pdfs", "5678.90123.pdf"), "utf8")).toBe("project-pdf-bytes");
+	expect(existsSync(join(server, "pdfs"))).toBe(false);
+});
+
+test("a savePath outside the project and Dig's state directory, symbolic links resolved, is refused before the bridge runs", async () => {
+	const project = join(root, "project"), outside = join(root, "outside"), state = process.env.DIG_STATE_DIR!;
+	mkdirSync(project); mkdirSync(outside);
+	symlinkSync(outside, join(project, "escape"));
+	process.env.FAKE_PDF_BYTES = "pdf-bytes";
+	const download = (savePath: string) => executeSource(pdf_download, { source: "arxiv", paperId: "6789.01234", savePath }, { ...context, directory: project });
+	for (const savePath of [join(outside, "pdfs"), join(project, "escape", "pdfs"), "escape/pdfs", "../outside"]) {
+		const result = await download(savePath);
+		expect(result.status).toBe("failed");
+		expect(result.text).toContain(`savePath must lie inside the project directory (${project}) or Dig's state directory (${state})`);
+	}
+	expect(readdirSync(outside)).toEqual([]);
+	for (const folder of [join(project, "pdfs"), join(state, "pdfs")]) {
+		const result = await download(folder);
+		expect(result.text).toBe(JSON.stringify({ path: join(folder, "6789.01234.pdf") }));
+	}
 });
 
 test("a missing bridge is an actionable failure naming its setup, not an empty result", async () => {
@@ -257,4 +309,43 @@ test("section extraction rejects malformed bridge output and paths outside the l
   expect(text(await sections.execute({file:"../paper.pdf"},context))).toContain("relative PDF filename");
   process.env.FAKE_SEARCH_OUTPUT=JSON.stringify({sections:[{heading:"Methods",text:"Evidence"}],truncated:true});
   expect((await sections.execute({file:"paper.pdf"},context) as any).status).toBe("partial");
+});
+
+test("section extraction on a bridge from before the tool command says the bridge is out of date and names its setup", async () => {
+  process.env.FAKE_SEARCH_FAIL = "usage: paper-search [-h] {search,read,download,sources} ...\npaper-search: error: argument command: invalid choice: 'tool' (choose from 'search', 'read', 'download', 'sources')";
+  const result = text(await sections.execute({file:"paper.pdf"},context));
+  expect(result.startsWith("ERROR:")).toBe(true);
+  expect(result).toContain("Papers bridge is out of date");
+  expect(result).toContain("setup.mjs");
+  delete process.env.FAKE_SEARCH_FAIL;
+  process.env.FAKE_SEARCH_FAIL = "Traceback: connection reset";
+  expect(text(await sections.execute({file:"paper.pdf"},context))).not.toContain("out of date");
+});
+
+test("readiness reports a bridge clone that is not at setup's pinned commit as out of date, without starting it", async () => {
+	const { sourceInfo, packageRoot } = await import("../../catalog.mjs");
+	const pinned = /const UPSTREAM_COMMIT = '([0-9a-f]{40})'/.exec(readFileSync(join(packageRoot, "bridges", "papers", "setup.mjs"), "utf8"))![1];
+	const papers = (head: string) => {
+		mkdirSync(join(paperSearchDirectory(), ".git"), { recursive: true });
+		writeFileSync(join(paperSearchDirectory(), ".git", "HEAD"), `${head}\n`);
+		return (sourceInfo({ sources: { enabled: ["papers"] }, workers: {} }, "papers").sources[0] as any);
+	};
+	const stale = papers("c8b642183bb725f0a7faec89e58b558df09079d1");
+	expect(stale.readiness.status).toBe("partial");
+	expect(stale.readiness.message).toContain("The Papers bridge is out of date");
+	expect(stale.readiness.message).toContain("Rerun the Papers bridge setup (node ");
+	expect(stale.prerequisites.find((p: any) => p.name === "Papers bridge and uv").available).toBe(false);
+	const current = papers(pinned);
+	expect(current.readiness.message).not.toContain("out of date");
+	expect(current.prerequisites.find((p: any) => p.name === "Papers bridge and uv").available).toBe(true);
+});
+
+test("a full-text read or PDF download through an OpenAlex-backed source records an unknown cost; other sources stay free", async () => {
+	for (const tool of [fulltext_read, pdf_download]) {
+		for (const [source, cost] of [["openalex", null], ["SSRN", null], ["arxiv", []]] as const) {
+			const result = await executeSource(tool, { source, paperId: `${source}-${tool === pdf_download ? "pdf" : "read"}` }, context);
+			expect(result.status).toBe("success");
+			expect(result.details?.cost).toEqual(cost);
+		}
+	}
 });

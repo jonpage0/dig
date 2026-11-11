@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { expect } from "expect";
+import { executeSource } from "../outcome.js";
 import type { SourceToolResult, ToolContext } from "../types.js";
 import reddit from "./reddit.js";
+import { UNANSWERED_COST } from "./scrapecreators.js";
 
 type FetchCall = { url: URL };
 type Envelope = { status: number; body: unknown };
@@ -213,6 +215,124 @@ describe("reddit tool (ScrapeCreators provider)", () => {
 		expect(output).toContain("Comments: not requested");
 		expect(output).toContain("Credits charged: 1 reported, plus 1 request that did not report a charge (total unknown)");
 		expect(details(result)).toMatchObject({ shown: 1, credits: { charged: 1, unreported: 1 }, errors: ["ScrapeCreators Reddit r/broken search: subreddit not found"] });
+	});
+
+	test("a search across several subreddits interleaves their results so every subreddit is represented", async () => {
+		const compact = (subreddit: string, n: number) => ({ id: `t3_${subreddit}${n}`, title: `${subreddit} post ${n}`, url: `https://www.reddit.com/r/${subreddit}/comments/${subreddit}${n}/x/`, subreddit: { name: subreddit } });
+		const mock = installFetchMock({
+			"/v1/reddit/subreddit/search": (url: URL) => {
+				const subreddit = url.searchParams.get("subreddit") ?? "";
+				return { success: true, credits_charged: 1, posts: Array.from({ length: subreddit === "Gamma" ? 2 : 25 }, (_, index) => compact(subreddit, index + 1)), comments: [], media: [] };
+			},
+		});
+		restore = mock.restore;
+
+		const result = await reddit.execute({ query: "q", subreddits: ["Alpha", "Beta", "Gamma"], includeComments: false }, context);
+
+		expect(mock.calls).toHaveLength(3);
+		expect(text(result)).toContain("15 threads shown of 52 returned");
+		expect(details(result).thread_ids).toEqual(["Alpha1", "Beta1", "Gamma1", "Alpha2", "Beta2", "Gamma2", "Alpha3", "Beta3", "Alpha4", "Beta4", "Alpha5", "Beta5", "Alpha6", "Beta6", "Alpha7"]);
+	});
+
+	test("one subreddit search shows its posts and its comments, each under its own heading and within limit", async () => {
+		const compact = (n: number) => ({ id: `t3_p${n}`, title: `Post ${n}`, url: `https://www.reddit.com/r/Fitness/comments/p${n}/x/`, subreddit: { name: "Fitness" } });
+		const hit = (n: number) => ({ id: `t1_c${n}`, author: `user${n}`, body: `Comment ${n}`, votes: n, subreddit: { name: "Fitness" } });
+		const mock = installFetchMock({
+			"/v1/reddit/subreddit/search": { success: true, credits_charged: 1, posts: [1, 2, 3].map(compact), comments: [1, 2, 3].map(hit), media: [], cursor: "next1" },
+		});
+		restore = mock.restore;
+
+		const posts = await reddit.execute({ query: "gym", subreddits: ["Fitness"], limit: 2, includeComments: false }, context);
+		const output = text(posts);
+		expect(mock.calls).toHaveLength(1);
+		expect(output).toContain("one request each; each response carries posts and comments together, so both lists below come from the same requests");
+		expect(output).toContain("Results: 2 threads shown of 3 returned");
+		expect(output).toContain("Comments in the same responses: 2 comments shown of 3 returned");
+		expect(output.indexOf("### Posts")).toBeLessThan(output.indexOf("### Comments"));
+		expect(output).toContain("u/user2 in r/Fitness — Comment 2");
+		expect(output).not.toContain("Comment 3");
+		expect(details(posts)).toMatchObject({ returned: 3, shown: 2, thread_ids: ["p1", "p2"] });
+
+		const comments = text(await reddit.execute({ query: "gym", filter: "comments", subreddits: ["Fitness"], limit: 2 }, context));
+		expect(mock.calls).toHaveLength(2);
+		expect(comments).toContain("Results: 2 comments shown of 3 returned");
+		expect(comments).toContain("Posts in the same responses: 2 threads shown of 3 returned");
+		expect(comments.indexOf("### Comments")).toBeLessThan(comments.indexOf("### Posts"));
+	});
+
+	test("after a retried status, the credit line states every attempt, as the receipt does", async () => {
+		const calls: URL[] = [];
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			calls.push(new URL(String(input)));
+			return calls.length === 1
+				? new Response(JSON.stringify({ success: false, error: "busy" }), { status: 503, headers: { "Retry-After": "0" } })
+				: new Response(JSON.stringify({ success: true, credits_charged: 1, posts: [globalPost("1flgwup")] }), { status: 200 });
+		}) as typeof fetch;
+		restore = () => { globalThis.fetch = originalFetch; };
+
+		const result = await executeSource(reddit, { query: "x", includeComments: false }, context);
+		expect(calls).toHaveLength(2);
+		expect(result.text).toContain("Credits charged: 1 reported, plus 1 request that did not report a charge (total unknown)");
+		expect(result.details).toMatchObject({ credits: { charged: 1, unreported: 1 }, cost: null, knownCost: [{ amount: 1, unit: "credits" }] });
+	});
+
+	test("a request that got no response is sent once and its cost is unknown, not free", async () => {
+		let sent = 0;
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async () => {
+			sent += 1;
+			throw new TypeError("fetch failed");
+		}) as typeof fetch;
+		restore = () => { globalThis.fetch = originalFetch; };
+
+		const search = await executeSource(reddit, { query: "x" }, context);
+		expect(sent).toBe(1);
+		expect(search.status).toBe("failed");
+		expect(search.text).toContain(UNANSWERED_COST);
+		expect(search.details).toMatchObject({ cost: null });
+
+		const thread = await executeSource(reddit, { postUrl: "https://www.reddit.com/r/test/comments/abc/title/" }, context);
+		expect(sent).toBe(2);
+		expect(thread.text).toContain(UNANSWERED_COST);
+		expect(thread.details).toMatchObject({ cost: null });
+	});
+
+	test("removed and deleted comments take no quotable slot, are counted, and the text cut is stated", async () => {
+		const long = `${"word ".repeat(90)}end`;
+		const page = {
+			success: true,
+			credits_charged: 1,
+			post: globalPost("1flgwup"),
+			comments: [
+				{ id: "r1", author: "[deleted]", body: "[removed]", score: 1 },
+				{ id: "r2", author: "[deleted]", body: "[deleted]", score: 1 },
+				{ id: "c1", author: "long", body: long, score: 5 },
+				{ id: "c2", author: "fourth", body: "The real fourth comment.", score: 4 },
+			],
+		};
+		const mock = installFetchMock({ "/v1/reddit/search": { success: true, credits_charged: 1, posts: [globalPost("1flgwup")] }, "/v1/reddit/post/comments": page });
+		restore = mock.restore;
+
+		const direct = text(await reddit.execute({ postUrl: "https://www.reddit.com/r/webscraping/comments/1flgwup/thread/", limit: 2 }, context));
+		expect(direct).toContain("Comments: 2 shown of 2 quotable top-level comments (4 returned on this page; stickied/moderator/AutoModerator excluded; 2 removed/deleted skipped)");
+		expect(direct).toContain("comment text cut at 200 characters");
+		expect(direct).toContain("u/fourth (4 pts): The real fourth comment.");
+		expect(direct).not.toContain("[removed]");
+
+		const enriched = text(await reddit.execute({ query: "x", commentThreads: 1 }, context));
+		expect(enriched).toContain("removed/deleted excluded, comment text cut at 200 characters");
+		expect(enriched).toContain("u/fourth (4 pts): The real fourth comment.");
+		expect(enriched).toContain("(first 2 of 4 top-level comments on this page; 2 removed/deleted skipped; more via postUrl=");
+		expect(enriched).not.toContain("[removed]");
+	});
+
+	test("a post-comments page with nothing to show is empty, not success", async () => {
+		const mock = installFetchMock({ "/v1/reddit/post/comments": { success: true, credits_charged: 1, comments: [] } });
+		restore = mock.restore;
+		const result = await reddit.execute({ postUrl: "https://www.reddit.com/r/test/comments/abc/title/" }, context);
+		expect(typeof result === "string" ? undefined : result.status).toBe("empty");
+		expect(text(result)).toContain("The provider returned an empty comment list for this page.");
 	});
 
 	test("comment search uses the comments filter and formats comment hits", async () => {

@@ -5,7 +5,7 @@ import type { Cost, CostAmount, CostSummary, ReceiptCost } from "./types.js";
  * whole observation unknown. Valid zero entries are omitted; duplicate units
  * are combined without converting them.
  */
-export function parseCost(value: unknown): Cost {
+function parseCost(value: unknown): Cost {
 	if (!Array.isArray(value)) return null;
 	const valid = value.every(
 		(item: Partial<CostAmount> | null) =>

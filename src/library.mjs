@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { MODULES, moduleAgents, ALL_MODULES, reportSources } from './providers/modules.ts';
 import { receiptCost } from './providers/library/cost.ts';
 import { ANSWER_STATUSES, digWord } from './status.mjs';
-import { reportParts } from './ui/markdown.mjs';
+import { reportParts, frontMatter as readFrontMatter } from './ui/markdown.mjs';
 
 const methods = moduleAgents(ALL_MODULES).filter(m => !m.helper);
 const sourceLabels = Object.fromEntries(MODULES.map(m => [m.id, m.label]));
@@ -35,14 +35,9 @@ export function safeSegment(value, fallback) {
   const cleaned = typeof value === 'string' ? value.trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').slice(0, 120) : '';
   return cleaned || fallback;
 }
-export function frontMatter(text) {
-  const values = {};
-  for (const line of (/^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '').split('\n')) {
-    const match = /^([a-z_]+): (.+)$/.exec(line);
-    if (match) { try { values[match[1]] = JSON.parse(match[2]); } catch { values[match[1]] = match[2]; } }
-  }
-  return values;
-}
+// The library, search and the views read front matter with one parser (ui/markdown.mjs), which accepts CRLF.
+export const frontMatter = text => readFrontMatter(text).meta;
+const withoutFrontMatter = text => readFrontMatter(text).body;
 function within(base, target) {
   const path = relative(base, target);
   if (path === '..' || path.startsWith(`..${sep}`) || isAbsolute(path)) throw new Error('Path is outside the library');
@@ -68,7 +63,7 @@ export function projectFolder(project) {
   const root = resolve(project);
   return `${slug(basename(root))}-${createHash('sha256').update(root).digest('hex').slice(0, 6)}`;
 }
-export function digPath(config, project, dig) {
+function digPath(config, project, dig) {
   if (!token(dig)) throw new Error('Invalid dig id');
   return join(config.library, projectFolder(project), 'digs', dig);
 }
@@ -97,14 +92,14 @@ export async function assertDig(config, project, dig) {
   return path;
 }
 // A receipt names the dig its call named, so the call counts toward that dig even if no report is ever saved with it.
-export async function recordCall(config, project, dig, { tool, source, args, at, ms, status, cost, knownCost, responses, error, session = SESSION_UNAVAILABLE, callId }) {
+export async function recordCall(config, project, dig, { tool, source, args, declared = [], at, ms, status, cost, knownCost, responses, error, session = SESSION_UNAVAILABLE, callId }) {
   const pricing = receiptCost({ cost, knownCost });
   if (dig) await assertDig(config, project, dig);
   const generated = () => `c-${at.replace(/[-:.TZ]/g, '')}-${randomUUID().slice(0, 8)}`;
   let id = callId ? safeSegment(callId, generated()) : generated();
   const sessionFolder = safeSegment(session, SESSION_UNAVAILABLE);
   const folder = await directory(config, [projectFolder(project), 'sessions', sessionFolder]);
-  const receipt = { id, at, ms, tool, source, status, ...(dig ? { dig } : {}), args: withoutSecrets(args), ...pricing, ...(responses.length ? { attempts: responses.length } : {}), ...(error ? { error } : {}) };
+  const receipt = { id, at, ms, tool, source, status, ...(dig ? { dig } : {}), args: withoutSecrets(args, declared), ...pricing, ...(responses.length ? { attempts: responses.length } : {}), ...(error ? { error } : {}) };
   if (config.keep_raw && responses.length) {
     await directory(config, [projectFolder(project), 'sessions', sessionFolder, 'raw']);
     const raw = JSON.stringify({ tool, at, responses: responses.map(({ label, status, body, headers }) => ({
@@ -188,6 +183,25 @@ export async function finishDig(config, { project, dig, answer, status, reports 
 async function entries(config, path) {
   try { return await readdir(await contained(config, path), { withFileTypes: true }); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
 }
+// Each library file's parse, kept in memory by path and checked against its size and modification time, so a
+// refresh reads and parses only files that changed. Nothing is written; a file that changes, appears or disappears
+// shows on the next refresh, and entries for files a listing no longer finds are dropped.
+const parsedFiles = new Map();
+async function parsed(path, parse, seen) {
+  const { size, mtimeMs } = await stat(path); seen.add(path);
+  const hit = parsedFiles.get(path);
+  if (hit?.parse === parse && hit.size === size && hit.mtimeMs === mtimeMs) return hit.value;
+  const value = parse(await readFile(path, 'utf8'));
+  parsedFiles.set(path, { parse, size, mtimeMs, value });
+  return value;
+}
+const parseReport = text => {
+  const head = frontMatter(text); const parts = reportParts(withoutFrontMatter(text));
+  return { summary: parts.summary.trim().slice(0, 280), title: head.title, topic: head.topic, source: head.source ?? null, method: head.agent ?? null, supersedes: head.supersedes ?? null, at: head.generated_at ?? null, session: typeof head.session === 'string' ? head.session : null, status: parts.card?.fields?.status };
+};
+const parseAnswer = text => ({ meta: frontMatter(text), snippet: withoutFrontMatter(text).trim().slice(0, 280), title: reportParts(withoutFrontMatter(text)).headings.find(h => h.depth === 1)?.text });
+// A line that does not parse (a write cut short by a crash or a full disk) is skipped, not fatal to every view.
+const parseReceipts = text => text.trim().split('\n').filter(Boolean).flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
 // Calls belong to research by two rules. A receipt that names its dig (0.2.20 onward) belongs to that dig, whichever
 // conversation made it. A receipt without one follows the approved session rule: within one session it belongs to the
 // first later save point's dig; a report's dig takes it, and a composed dig takes it only when made after the dig
@@ -199,7 +213,7 @@ async function entries(config, path) {
 export async function listLibrary(config) {
   let projects;
   try { projects = await readdir(config.library, { withFileTypes: true }); } catch (e) { if (['ENOENT', 'ENOTDIR'].includes(e.code)) return { items: [], live: [] }; throw e; }
-  const items = []; const live = [];
+  const items = []; const live = []; const seen = new Set();
   for (const project of projects) {
     if (!project.isDirectory() || project.isSymbolicLink()) continue;
     const points = new Map(); const digs = new Map();
@@ -208,28 +222,25 @@ export async function listLibrary(config) {
       if (!dir.isDirectory() || dir.isSymbolicLink()) continue;
       const prefix = `${project.name}/digs/${dir.name}`;
       const folder = await contained(config, join(config.library, prefix));
-      const meta = frontMatter(await readFile(await contained(config, join(folder, 'dig.md')), 'utf8'));
+      // A dig folder without its dig.md (a crash between mkdir and write, or a dig_start still writing) is skipped.
+      let meta; try { meta = await parsed(await contained(config, join(folder, 'dig.md')), frontMatter, seen); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
       const names = (await readdir(folder)).filter(f => f.endsWith('.md'));
       const reports = [];
       for (const name of names.filter(f => f !== 'dig.md' && f !== 'answer.md')) {
-        const text = await readFile(await contained(config, join(folder, name)), 'utf8');
-        const head = frontMatter(text);
-        const parts = reportParts(text.replace(/^---\n[\s\S]*?\n---\n/, ''));
-        const summary = parts.summary.trim().slice(0, 280);
-        reports.push({ name, text, summary, title: head.title, topic: head.topic, source: head.source ?? null, method: head.agent ?? null, supersedes: head.supersedes ?? null, at: head.generated_at ?? null, session: typeof head.session === 'string' ? head.session : null, status: parts.card?.fields?.status });
+        reports.push({ name, ...await parsed(await contained(config, join(folder, name)), parseReport, seen) });
       }
       reports.sort((a, b) => (time(a.at) ?? 0) - (time(b.at) ?? 0) || a.name.localeCompare(b.name, undefined, { numeric: true }));
       const answer = names.includes('answer.md') ? `${prefix}/answer.md` : null;
-      const answerText = answer ? await readFile(await contained(config, join(config.library, answer)), 'utf8') : '';
-      const answerMeta = frontMatter(answerText);
-      const snippet = reports[0]?.summary || (answerText ? answerText.replace(/^---\n[\s\S]*?\n---\n/, '').trim().slice(0, 280) : 'Research started; no report saved yet.');
+      const answered = answer ? await parsed(await contained(config, join(config.library, answer)), parseAnswer, seen) : null;
+      const answerMeta = answered?.meta ?? {};
+      const snippet = reports[0]?.summary || (answered ? answered.snippet : 'Research started; no report saved yet.');
       const files = [...(names.includes('dig.md') ? ['dig.md'] : []), ...reports.map(r => r.name), ...(answer ? ['answer.md'] : [])];
       const item = { id: dir.name, project: typeof meta.project === 'string' ? meta.project : project.name, title: typeof meta.question === 'string' ? meta.question : dir.name, snippet, answer, session: typeof meta.session === 'string' ? meta.session : null, startedAt: meta.started_at ?? null, finishedAt: answerMeta.finished_at ?? null, files: files.map(file => `${prefix}/${file}`), reports: reports.map(r => `${prefix}/${r.name}`), calls: [], status: digWord(answerMeta.status, { answer, reports: reports.length }) };
       item.sources = [...new Set(reports.map(r => r.source).filter(Boolean))];
       item.methods = [...new Set(reports.map(r => r.method).filter(Boolean))];
       item.mode = meta.mode;
-      item.displayTitle = displayTitle(item.title, item.mode, reports, reportParts(answerText.replace(/^---\n[\s\S]*?\n---\n/, '')).headings.find(h => h.depth === 1)?.text);
-      item.planned = Array.isArray(meta.planned) ? meta.planned : [];
+      item.displayTitle = displayTitle(item.title, item.mode, reports, answered?.title);
+      item.planned = Array.isArray(meta.planned) ? [...meta.planned] : [];
       item.refreshes = meta.refreshes ?? null;
       // `status` is the report's own source-card run status as its worker wrote it.
       item.reportDetails = reports.map(r => ({ file: `${prefix}/${r.name}`, source: r.source, method: r.method, supersedes: r.supersedes, summary: r.summary, at: r.at, status: typeof r.status === 'string' ? r.status : null }));
@@ -240,7 +251,7 @@ export async function listLibrary(config) {
     for (const dir of await entries(config, join(config.library, project.name, 'sessions'))) {
       if (!dir.isDirectory() || dir.isSymbolicLink()) continue;
       const callsPath = `${project.name}/sessions/${dir.name}/calls.jsonl`;
-      let receipts = []; try { receipts = (await readFile(await contained(config, join(config.library, callsPath)), 'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+      let receipts = []; try { receipts = await parsed(await contained(config, join(config.library, callsPath)), parseReceipts, seen); } catch (e) { if (e.code !== 'ENOENT') throw e; }
       // Unfinished digs share an infinite endpoint; the newest-started dig wins that tie, matching the approved reader.
       const saves = (points.get(dir.name) ?? []).sort((a, b) => a.at - b.at || (time(b.item.startedAt) ?? 0) - (time(a.item.startedAt) ?? 0) || (a.item.id < b.item.id ? 1 : a.item.id > b.item.id ? -1 : 0));
       const claimant = (item, call, at, named) => {
@@ -264,6 +275,7 @@ export async function listLibrary(config) {
       }
     }
   }
+  for (const path of parsedFiles.keys()) if (!seen.has(path)) parsedFiles.delete(path);
   const byTime = (a, b) => (time(a.at) ?? 0) - (time(b.at) ?? 0);
   for (const item of items) item.calls.sort(byTime);
   return { items: items.sort((a, b) => b.id.localeCompare(a.id)), live: live.sort(byTime).reverse() };
@@ -311,10 +323,13 @@ export async function readLibraryFile(config, file, offset = 0, limit = 60000) {
 }
 
 const SECRET_NAME_PARTS = new Set(['key', 'apikey', 'token', 'secret', 'password', 'passwd', 'credential', 'credentials', 'authorization', 'auth', 'cookie']);
-function withoutSecrets(value) {
-  if (Array.isArray(value)) return value.map(withoutSecrets);
+// Known credential values are already redacted from args by value. By name, an argument the tool's own input schema
+// declares (`declared`: Polymarket's token_id, paging tokens) is kept whatever it is called; undeclared names and every
+// nested name that looks like a credential are dropped.
+function withoutSecrets(value, declared = []) {
+  if (Array.isArray(value)) return value.map(item => withoutSecrets(item));
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value)
-    .filter(([name]) => !name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some(part => SECRET_NAME_PARTS.has(part)))
+    .filter(([name]) => declared.includes(name) || !name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some(part => SECRET_NAME_PARTS.has(part)))
     .map(([name, item]) => [name, withoutSecrets(item)]));
 }

@@ -15,7 +15,7 @@
  */
 import { keptText } from "../http.js"
 import { knownSecrets, redactText, redactValue } from "../secrets.js"
-import { asRecord, asString, type QueryParams, type RequestContext, type ScrapeCreatorsResponse } from "./scrapecreators.js"
+import { asRecord, asString, UNANSWERED_COST, type QueryParams, type RequestContext, type ScrapeCreatorsResponse } from "./scrapecreators.js"
 
 const SC_BASE = "https://api.scrapecreators.com"
 const FACEBOOK_PATH_PREFIX = "/v1/facebook/"
@@ -56,14 +56,14 @@ export async function facebookRequest(
   } catch (error) {
     ctx.keep(label, "error", errorText(error))
     if (signal.aborted) return cancelledInFlight
-    return { ok: false, cancelled: false, error: redactText(`${label} request failed: ${errorText(error)}`, secrets), payload: null }
+    return { ok: false, cancelled: false, error: `${redactText(`${label} request failed: ${errorText(error)}`, secrets)}. ${UNANSWERED_COST}`, payload: null }
   }
   let text: string
   try {
     text = await keptText(response, ctx.keep, label)
   } catch (error) {
     if (signal.aborted) return cancelledInFlight
-    return { ok: false, cancelled: false, error: redactText(`${label} broke off while answering: ${errorText(error)}`, secrets), payload: null }
+    return { ok: false, cancelled: false, error: `${redactText(`${label} broke off while answering: ${errorText(error)}`, secrets)}. ${UNANSWERED_COST}`, payload: null }
   }
   if (signal.aborted) return cancelledInFlight
 

@@ -1,9 +1,10 @@
 // Papers: the federated bridge (with per-connector health), Semantic Scholar, OpenAlex, and full-text reads and downloads.
 // Adapted from Dig's dashboard/ui/evidence/papers.ts (MIT, same author).
 import { num, plural } from '../format.mjs';
-import { arr, attempted, failedCall, noItems, numv, obj, objs, query, scope, str } from './read.mjs';
+import { arr, attempted, failedCall, noItems, numv, obj, objs, query, scope, str, strs } from './read.mjs';
 
-const READS = new Set(['papers_fulltext_read', 'papers_pdf_download']);
+/** Calls that read one named paper or file: what was done, and the verb for one that did not work. */
+const READS = { papers_fulltext_read: ['read the full text of', 'read the full text of'], papers_pdf_download: ['downloaded the PDF of', 'download the PDF of'], papers_openalex_content: ['read the OpenAlex cached content of', 'read the OpenAlex cached content of'], papers_sections: ['extracted the sections of', 'extract the sections of'] };
 const INDEX = { papers_semantic_scholar_search: 'Semantic Scholar', papers_openalex_search: 'OpenAlex' };
 const SORT = { citationCount: 'most cited', cited_by_count: 'most cited', publicationDate: 'newest first' };
 
@@ -18,8 +19,8 @@ function readPapers(b) {
     const title = str(p.title);
     if (title) papers.push({ title, authors: authorList((str(p.authors) ?? '').split(';').map(x => x.trim()).filter(Boolean)), year: str(p.published_date)?.slice(0, 4), citations: numv(p.citations), url: str(p.url) ?? doiUrl(str(p.doi)), pdf: str(p.pdf_url) });
   }
-  // Semantic Scholar search and recommendations
-  for (const p of [...objs(b.data), ...objs(b.recommendedPapers)]) {
+  // Semantic Scholar search, relations (each paper inside its citing or cited wrapper) and recommendations
+  for (const p of [...objs(b.data).map(x => obj(x.citingPaper) ?? obj(x.citedPaper) ?? x), ...objs(b.recommendedPapers)]) {
     const title = str(p.title);
     if (title && 'paperId' in p) papers.push({ title, authors: authorList(objs(p.authors).flatMap(x => str(x.name) ?? [])), year: str(p.year), citations: numv(p.citationCount), url: str(p.url) ?? doiUrl(str(obj(p.externalIds)?.DOI)), pdf: str(obj(p.openAccessPdf)?.url) });
   }
@@ -43,17 +44,18 @@ function readText(bodies) {
   for (const body of bodies) {
     if (typeof body === 'string') return `${num(body.length)} characters of text`;
     const b = obj(body);
-    if (b && str(b.path)) return `saved ${str(b.path)}`;
+    if (b && Array.isArray(b.sections)) return plural(b.sections.length, 'section');
+    if (b && (str(b.path) ?? str(b.file))) return `saved ${str(b.path) ?? str(b.file)}`;
   }
   return undefined;
 }
 
 export function readPapersCall(call, bodies) {
   const a = call.args; const failed = failedCall(call);
-  if (READS.has(call.tool)) {
-    const what = [str(a.source), str(a.paperId) ?? str(a.doi) ?? str(a.url)].filter(Boolean).join(' ');
-    const verb = call.tool === 'papers_fulltext_read' ? 'read the full text of' : 'downloaded the PDF of';
-    return { action: [attempted(call.status, verb, call.tool === 'papers_fulltext_read' ? verb : 'download the PDF of'), what || 'a paper'], result: failed ? undefined : readText(bodies), items: [] };
+  if (Object.hasOwn(READS, call.tool)) {
+    const what = [str(a.source), str(a.paperId), str(a.workId), str(a.file)].filter(Boolean).join(' ');
+    const [verb, tried] = READS[call.tool];
+    return { action: [attempted(call.status, verb, tried), what || 'a paper'], result: failed ? undefined : readText(bodies), items: [] };
   }
   const byKey = new Map(); let matches; let health;
   for (const body of bodies) {
@@ -67,7 +69,8 @@ export function readPapersCall(call, bodies) {
   const found = matches !== undefined && matches > papers.length ? `${num(papers.length)} of ${plural(matches, 'paper')}` : papers.length ? plural(papers.length, 'paper') : noItems(call);
   const index = INDEX[call.tool];
   const action = call.tool === 'papers_multi_search' ? ['searched', health ? `${num(health.asked)} paper indexes for` : 'the paper indexes for', ...query(str(a.query))]
-    : call.tool === 'papers_semantic_scholar_recommendations' ? ['asked Semantic Scholar for papers like', str(a.paperId) ?? 'a paper']
+    : call.tool === 'papers_semantic_scholar_recommendations' ? ['asked Semantic Scholar for papers like', strs(a.positivePaperIds).join(', ') || 'a paper']
+      : call.tool === 'papers_semantic_scholar_relations' ? [str(a.direction) === 'references' ? 'read the references of' : 'read the papers citing', str(a.paperId) ?? 'a paper']
       : [index ? `searched ${index} for` : 'searched for papers on', ...query(str(a.query))];
   return {
     action: [...action, ...scope([numv(a.yearFrom) ? `since ${a.yearFrom}` : undefined, SORT[str(a.sort) ?? '']])],

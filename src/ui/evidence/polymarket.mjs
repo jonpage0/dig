@@ -1,7 +1,7 @@
 // Polymarket: the events a search found, each with its likeliest outcomes, volume and recent move.
 // Adapted from Dig's dashboard/ui/evidence/polymarket.ts (MIT, same author).
 import { compact, plural, shortDate } from '../format.mjs';
-import { failedCall, noItems, numv, obj, objs, query, str } from './read.mjs';
+import { attempted, failedCall, noItems, numv, obj, objs, query, str } from './read.mjs';
 
 const EVENT_URL = 'https://polymarket.com/event/';
 
@@ -25,7 +25,22 @@ function readOutcomes(event) {
   return rows.sort((a, b) => b.probability - a.probability);
 }
 
+/** polymarket_history and polymarket_resolution: one page of a token's prices, or the resolution state of the markets named. */
+function readMarketData(call, bodies) {
+  const a = call.args; const failed = failedCall(call);
+  const pages = bodies.map(obj).filter(b => b && Array.isArray(b.data));
+  const rows = pages.flatMap(b => objs(b.data));
+  if (call.tool === 'polymarket_history') {
+    const more = pages.some(b => obj(b.pagination)?.has_more === true);
+    return { action: [attempted(call.status, 'read', 'read'), `Polymarket price history for outcome token ${str(a.token_id) ?? '?'}`], result: failed ? undefined : pages.length ? `${plural(rows.length, 'price point')}${more ? ', more pages available' : ''}` : noItems(call), items: [] };
+  }
+  const selector = str(a.condition) ? `condition ${str(a.condition)}` : str(a.event_id) ? `event ${str(a.event_id)}` : str(a.question_id) ? `question ${str(a.question_id)}` : 'the markets named';
+  const statuses = [...new Set(rows.flatMap(r => str(r.status) ?? []))];
+  return { action: [attempted(call.status, 'read', 'read'), `Polymarket resolution state for ${selector}`], result: failed ? undefined : pages.length ? `${plural(rows.length, 'resolution record')}${statuses.length ? ` (${statuses.join(', ')})` : ''}` : noItems(call), items: [] };
+}
+
 export function readPolymarket(call, bodies) {
+  if (call.tool === 'polymarket_history' || call.tool === 'polymarket_resolution') return readMarketData(call, bodies);
   const events = new Map();
   for (const body of bodies) for (const e of objs(obj(body)?.events)) {
     const id = str(e.id) ?? str(e.slug) ?? str(e.title);

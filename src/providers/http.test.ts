@@ -128,6 +128,48 @@ describe("source-research requestJson", () => {
 		expect(kept).toEqual([["search", 503, "", { "scrape.do-request-cost": "3" }, true]]);
 	});
 
+	test("never repeats a request that got no response, since the provider may have received and charged it", async () => {
+		for (const thrown of [new DOMException("The operation timed out.", "TimeoutError"), new TypeError("fetch failed")]) {
+			let calls = 0;
+			globalThis.fetch = Object.assign(async () => {
+				calls++;
+				throw thrown;
+			}, { preconnect: originalFetch.preconnect });
+			const kept: unknown[][] = [];
+			await expect(requestJson({
+				url: "https://example.test/paid",
+				signal: new AbortController().signal,
+				provider: "Test provider",
+				label: "search",
+				retries: 2,
+				keep: (...entry) => kept.push(entry),
+			})).rejects.toThrow(thrown.message);
+			expect(calls).toBe(1);
+			expect(kept).toEqual([["search", "error", thrown.message]]);
+		}
+	});
+
+	test("retryTransport repeats a transport failure for a free endpoint, keeping each attempt", async () => {
+		let calls = 0;
+		globalThis.fetch = Object.assign(async () => {
+			calls++;
+			if (calls === 1) throw new TypeError("fetch failed");
+			return new Response(JSON.stringify({ ok: true }), { status: 200 });
+		}, { preconnect: originalFetch.preconnect });
+		const kept: unknown[][] = [];
+		const result = await requestJson({
+			url: "https://example.test/free",
+			signal: new AbortController().signal,
+			provider: "Test provider",
+			label: "free",
+			retryTransport: true,
+			keep: (...entry) => kept.push(entry),
+		});
+		expect(calls).toBe(2);
+		expect(result.attempts).toBe(2);
+		expect(kept).toEqual([["free", "error", "fetch failed"], ["free", 200, { ok: true }]]);
+	});
+
 	test("keeps every attempt's response for the raw file, text when it is not JSON", async () => {
 		let calls = 0;
 		globalThis.fetch = Object.assign(async () => {

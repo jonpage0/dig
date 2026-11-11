@@ -1,4 +1,5 @@
 import { Lexer } from 'marked';
+import { frontMatter } from '../ui/markdown.mjs';
 import { Tokenizer } from '@huggingface/tokenizers';
 import tokenizerData from './assets/tokenizer.json' with {type:'json'};
 import tokenizerConfig from './assets/tokenizer_config.json' with {type:'json'};
@@ -17,7 +18,7 @@ export function embeddingText(title,heading,text){
  return context+'\n'+text;
 }
 export function passages(text,title){
- let start=/^---\r?\n/.test(text)?(text.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0].length??0):0;
+ let start=text.length-frontMatter(text).body.length;
  let position=start; const headings=[]; for(const block of Lexer.lex(text.slice(start))){if(block.type==='heading')headings.push({at:position,label:block.text});position+=block.raw.length;}
  const result=[];
  while(start<text.length){

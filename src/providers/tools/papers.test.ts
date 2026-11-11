@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, mock, test } from "node:test";
 import { expect } from "expect";
+import { Type } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import { executeSource } from "../outcome.js";
+import { createSchemas } from "../schemas.js";
 import type { SourceToolResult, ToolContext } from "../types.js";
 import { openalex_search, semantic_scholar_search, semantic_scholar_recommendations } from "./papers.js";
 
@@ -135,4 +138,29 @@ describe("papers provider outcomes", () => {
 		});
 		await expect(openalex_search.execute({ query: "test" }, { ...context, abort: controller.signal })).rejects.toThrow();
 	});
+});
+
+test("the direct paper tools accept only whole-number limits and pages within the ranges they enforce", () => {
+	const schemas = createSchemas(Type);
+	const cases: [string, Record<string, unknown>, Record<string, unknown>[], Record<string, unknown>[]][] = [
+		["papers_semantic_scholar_search", { query: "x" }, [{ limit: 1 }, { limit: 20 }], [{ limit: 0 }, { limit: -3 }, { limit: 2.5 }, { limit: 21 }]],
+		["papers_semantic_scholar_recommendations", { positivePaperIds: ["p"] }, [{ limit: 1 }, { limit: 20 }], [{ limit: 0 }, { limit: 2.5 }, { limit: 21 }]],
+		["papers_openalex_search", { query: "x" }, [{ limit: 25, page: 1 }, { page: 40 }], [{ limit: 0 }, { limit: 26 }, { limit: 2.5 }, { page: 0 }, { page: 1.5 }]],
+	];
+	for (const [name, base, good, bad] of cases) {
+		for (const extra of good) expect(Value.Check(schemas[name], { ...base, ...extra })).toBe(true);
+		for (const extra of bad) expect([name, extra, Value.Check(schemas[name], { ...base, ...extra })]).toEqual([name, extra, false]);
+	}
+});
+
+test("a sorted Semantic Scholar search refuses a token before any request, and an unsorted search keeps its token", async () => {
+	mockFetch(async () => Response.json({ data: [{ paperId: "1", title: "Paper" }], token: "more" }));
+	const refused = await executeSource(semantic_scholar_search, { query: "robot", sort: "publicationDate", token: "t" }, context);
+	expect(refused.status).toBe("failed");
+	expect(refused.text).toMatch(/token cannot be combined with sort "publicationDate".*Narrow the sorted search/);
+	expect(fetchMock.mock.callCount()).toBe(0);
+	const unsorted = await executeSource(semantic_scholar_search, { query: "robot", token: "t" }, context);
+	expect(unsorted.status).toBe("success");
+	expect(unsorted.text).toContain("Next token: more. Use the same query and filters to continue.");
+	expect(fetchMock.mock.callCount()).toBe(1);
 });

@@ -1,5 +1,6 @@
 // Display formatting for the Dig reader. Adapted from Dig's dashboard/ui/format.ts (MIT, same author);
 // only the helpers the native reader uses are kept.
+import { hostWords } from './host.mjs';
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -57,9 +58,12 @@ export function hostname(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
 export const basename = path => String(path ?? '').split('/').filter(Boolean).at(-1) ?? '';
+const CALL_OUTCOMES = { success: 'Succeeded', partial: 'Partial', empty: 'Empty', failed: 'Failed', cancelled: 'Stopped', skipped: 'Skipped' };
+/** A call receipt's outcome in words, the same on every page. */
+export const callOutcome = status => CALL_OUTCOMES[status] ?? 'Unknown outcome';
 
-// Provider costs come from retained call receipts alone; they are never Codex model usage or a reconciled bill.
-export const COST_SCOPE = 'Provider costs · retained calls only · excludes Codex model costs';
+// Provider costs come from retained call receipts alone; they are never the host's model usage or a reconciled bill.
+export const costScope = host => `Provider costs · retained calls only · excludes ${hostWords(host).app} model costs`;
 export const COST_CAVEAT = 'Provider-reported usage, not a reconciled invoice.';
 // Receipts before provider-named credit units recorded ScrapeCreators' credits as bare "credits".
 const LEGACY_CREDITS = 'credits';

@@ -12,8 +12,9 @@ async function read(path: string, params: Record<string, unknown>, ctx: ToolCont
   if (history && body.data.some((row: any) => !row || !Number.isFinite(row.price) || row.price < 0 || row.price > 1 || !Number.isSafeInteger(row.timestamp))) throw new Error("Price history returned an invalid price or epoch timestamp")
   if (!history && body.data.some((row: any) => !row || typeof row.status !== "string")) throw new Error("Resolution response omitted its status")
   if (history && body.pagination.has_more && (typeof body.pagination.next_cursor !== "string" || !body.pagination.next_cursor)) throw new Error("Price history claims more pages but provides no cursor")
-  const json = JSON.stringify(body, null, 2), truncated = json.length > 60000
-  return outcome(body.pagination?.has_more || truncated ? "partial" : body.data.length ? "success" : "empty", `${history ? "Prices are market observations in USDC per share; timestamps are epoch seconds. An empty requested resolution does not prove no trading occurred." : "Resolution status and payout evidence; expected settlement times are estimates, not deadlines."}\n${truncated ? "Output shortened; read the retained original.\n" : ""}${json.slice(0, 60000)}`)
+  const json = JSON.stringify(body), truncated = json.length > 60000
+  const paging = history ? { has_more: body.pagination.has_more, next_cursor: body.pagination.has_more ? body.pagination.next_cursor : null } : undefined
+  return outcome(truncated ? "partial" : body.data.length ? "success" : "empty", `${paging ? `Pagination: has_more: ${paging.has_more}; next_cursor: ${paging.next_cursor ?? "none"}\n` : ""}${history ? "Prices are market observations in USDC per share; timestamps are epoch seconds. An empty requested resolution does not prove no trading occurred." : "Resolution status and payout evidence; expected settlement times are estimates, not deadlines."}\n${truncated ? "Output shortened; read the retained original.\n" : ""}${json.slice(0, 60000)}`, paging)
 }
 function tool(description: string, action: ToolSpec["execute"]): ToolSpec {
   return free({ description, async execute(args, ctx) { try { return await action(args, ctx) } catch (error) { ctx.abort.throwIfAborted(); return `ERROR: ${error instanceof Error ? error.message : "Polymarket read failed"}` } } })
@@ -35,7 +36,7 @@ export const resolution = tool("Read current Polymarket resolution state by exac
   if (fields.length !== 1) throw new Error("Choose exactly one of condition, event_id or question_id")
   const field = fields[0], value = args[field]
   if (typeof value !== "string") throw new Error("The selector must be a string")
-  const ids = [...new Set(value.split(","))]
+  const ids = [...new Set(value.split(",").map(id => id.trim()))]
   if (!ids.length || ids.length > (field === "question_id" ? 1 : 20) || ids.some(id => field === "event_id" ? !/^[1-9]\d*$/.test(id) : !/^0x[0-9a-f]{64}$/i.test(id))) throw new Error("Invalid selector IDs")
   return read("resolutions", { [field]: ids.join(",") }, ctx)
 })

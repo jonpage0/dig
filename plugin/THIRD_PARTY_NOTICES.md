@@ -6,6 +6,8 @@ Local semantic search additionally uses ONNX Runtime Node/Common 1.30.0 (Microso
 
 The selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.
 
+Dig's icon glyphs are Lucide icons (ISC License, Copyright (c) 2026 Lucide Icons and Contributors); their notice ships as Lucide-LICENSE.
+
 ## @base-ui/react 1.9.0
 
 License: MIT

@@ -556,6 +556,25 @@ describe("scrapecreators tools", () => {
 		expect(text(postResult)).toContain("Telegram post: https://t.me/durov/543");
 	});
 
+	test("linkedin and telegram report an empty post array as empty, and company posts show the whole paid page", async () => {
+		const companyPosts = Array.from({ length: 14 }, (_, index) => ({ text: `Post ${index + 1}`, url: `https://www.linkedin.com/posts/${index + 1}` }));
+		let company: unknown[] = [];
+		const mock = installFetchMock({
+			"/v1/linkedin/search/posts": { success: true, credits_charged: 1, posts: [] },
+			"/v1/linkedin/company/posts": () => ({ success: true, credits_charged: 1, posts: company }),
+			"/v1/telegram/channel/posts": { success: true, credits_charged: 1, posts: [] },
+		});
+		restore = mock.restore;
+		expect((await executeSource(linkedin, { kind: "search", query: "x" }, context)).status).toBe("empty");
+		expect((await executeSource(linkedin, { kind: "company_posts", url: "https://www.linkedin.com/company/example" }, context)).status).toBe("empty");
+		expect((await executeSource(telegram, { kind: "posts", handle: "durov" }, context)).status).toBe("empty");
+		company = companyPosts;
+		const shown = await executeSource(linkedin, { kind: "company_posts", url: "https://www.linkedin.com/company/example" }, context);
+		expect(shown.status).toBe("success");
+		expect(shown.text).toContain("Posts returned: 14");
+		expect(shown.text).toContain("Post 14");
+	});
+
 	test("telegram refuses private, invite-only, and numeric targets without a request", async () => {
 		const mock = installFetchMock({});
 		restore = mock.restore;
@@ -579,5 +598,90 @@ describe("scrapecreators tools", () => {
 		restore = undefined;
 		delete process.env.SCRAPECREATORS_API_KEY;
 		expect(await telegram.execute({ kind: "channel", handle: "durov" }, context)).toBe("ERROR: SCRAPECREATORS_API_KEY not set. Get a key at https://scrapecreators.com");
+	});
+
+	test("a request that got no response is sent once, and its text and receipt both leave the cost unknown", async () => {
+		const mock = installFetchMock({
+			"/v1/telegram/channel": () => { throw new DOMException("The operation timed out.", "TimeoutError"); },
+			"/v1/tiktok/search/keyword": { success: true, credits_charged: 1, search_item_list: [tiktokFixture("1", 5)] },
+			"/v1/tiktok/video/transcript": () => { throw new TypeError("fetch failed"); },
+		});
+		restore = mock.restore;
+
+		const channel = await executeSource(telegram, { kind: "channel", handle: "durov" }, context);
+		expect(mock.calls).toHaveLength(1);
+		expect(channel.status).toBe("failed");
+		expect(channel.text).toContain("ScrapeCreators may have received and charged this request, but no complete response arrived; its cost is unknown.");
+		expect(details(channel).cost).toBeNull();
+
+		const search = await executeSource(tiktok, { query: "x", transcript_limit: 1 }, context);
+		expect(mock.calls.filter((call) => call.url.pathname === "/v1/tiktok/video/transcript")).toHaveLength(1);
+		expect(search.text).toContain("Credits charged: 1 reported, plus 1 request that did not report a charge (total unknown)");
+		expect(search.text).toContain("its cost is unknown");
+		expect(details(search).cost).toBeNull();
+		expect(details(search).knownCost).toEqual([{ amount: 1, unit: "credits" }]);
+	});
+
+	test("after a retried status, the credit line states every attempt, as the receipt does", async () => {
+		let searches = 0;
+		let channels = 0;
+		const mock = installFetchMock({
+			"/v1/tiktok/search/keyword": () => ++searches === 1 ? { status: 500, body: { success: false, error: "busy" } } : { success: true, credits_charged: 1, search_item_list: [tiktokFixture("1", 5)] },
+			"/v1/telegram/channel": () => ++channels === 1 ? { status: 503, body: { success: false, credits_charged: 0 } } : { success: true, credits_charged: 1, handle: "durov", name: "Pavel Durov" },
+		});
+		restore = mock.restore;
+
+		const search = await executeSource(tiktok, { query: "x", transcripts: false }, context);
+		expect(searches).toBe(2);
+		expect(search.text).toContain("Credits charged: 1 reported, plus 1 request that did not report a charge (total unknown)");
+		expect(details(search)).toMatchObject({ credits: { charged: 1, unreported: 1 }, cost: null, knownCost: [{ amount: 1, unit: "credits" }] });
+
+		const channel = await executeSource(telegram, { kind: "channel", handle: "durov" }, context);
+		expect(channels).toBe(2);
+		expect(channel.text).toContain("Credits charged: 1 over 2 attempts (retried after a retryable HTTP status)");
+		expect(details(channel)).toMatchObject({ credits_charged: 1, cost: [{ amount: 1, unit: "credits" }] });
+	});
+
+	test("with no limit every paid item is shown; an explicit limit says what the cursor skips", async () => {
+		const videos = Array.from({ length: 25 }, (_, index) => tiktokFixture(String(index + 1), 5));
+		const reels = Array.from({ length: 25 }, (_, index) => ({ ...reelFixture, id: `r${index + 1}`, shortcode: `code${index + 1}`, url: `https://www.instagram.com/reel/code${index + 1}/` }));
+		const posts = Array.from({ length: 25 }, (_, index) => ({ id: String(index + 1), url: `https://t.me/durov/${index + 1}`, text: `Post ${index + 1}`, published_at: `2026-08-${String(index + 1).padStart(2, "0")}T10:00:00+00:00` }));
+		const mock = installFetchMock({
+			"/v1/tiktok/search/keyword": { success: true, credits_charged: 1, search_item_list: videos, cursor: 25, has_more: true },
+			"/v2/instagram/reels/search": { success: true, credits_charged: 1, reels },
+			"/v1/telegram/channel/posts": { success: true, credits_charged: 1, posts, cursor: "1", has_more: true },
+		});
+		restore = mock.restore;
+
+		const all = await executeSource(tiktok, { query: "x", transcripts: false }, context);
+		expect(all.status).toBe("success");
+		expect(all.text).toContain("25 shown of 25 unique returned");
+		expect(all.text).toContain("Next page: pass cursor=25\n");
+		const cut = await executeSource(tiktok, { query: "x", transcripts: false, limit: 5 }, context);
+		expect(cut.text).toContain("5 shown of 25 unique returned");
+		expect(cut.text).toContain("Next page: pass cursor=25 (it continues after all 25 returned videos, including the 20 not shown)");
+
+		expect((await executeSource(instagram, { query: "dogs", transcripts: false }, context)).text).toContain("25 shown of 25 returned on page 1");
+		expect((await executeSource(instagram, { query: "dogs", transcripts: false, limit: 3 }, context)).text).toContain("Next page: pass page=2 (it continues after all 25 returned reels, including the 22 not shown)");
+
+		const channel = await executeSource(telegram, { kind: "posts", handle: "durov" }, context);
+		expect(channel.status).toBe("success");
+		expect(channel.text).toContain("Posts: 25 shown of 25 returned on this page");
+		expect(channel.text).toContain("Post 1\n");
+		expect((await executeSource(telegram, { kind: "posts", handle: "durov", limit: 10 }, context)).text).toContain('Older posts: pass cursor="1" (it continues after all 25 returned posts, including the 15 not shown)');
+	});
+
+	test("linkedin and telegram pages with unreadable entries are partial and say so", async () => {
+		const mock = installFetchMock({
+			"/v1/linkedin/search/posts": { success: true, credits_charged: 1, posts: [{ url: "https://www.linkedin.com/posts/1" }, "junk"], cursor: "2" },
+			"/v1/linkedin/company/posts": { success: true, credits_charged: 1, posts: [{ text: "Post 1" }, 7] },
+			"/v1/telegram/channel/posts": { success: true, credits_charged: 1, posts: [{ id: "1", text: "Post 1" }, null] },
+		});
+		restore = mock.restore;
+		for (const [tool, args] of [[linkedin, { kind: "search", query: "x" }], [linkedin, { kind: "company_posts", url: "https://www.linkedin.com/company/example" }], [telegram, { kind: "posts", handle: "durov" }]] as const) {
+			const result = await executeSource(tool, args, context);
+			expect(result.status).toBe("partial");
+			expect(result.text).toContain("Unreadable entries: 1 returned entry lacked a readable post record and was skipped.");
+		}
 	});
 });

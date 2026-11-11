@@ -19,6 +19,7 @@
  *   - JUSTONE_API_KEY (required only when provider=justone)
  *   - JUSTONE_BASE_URL (optional; defaults to https://api.justoneapi.com)
  */
+import { USER_AGENT } from "../../version.mjs"
 import { requestJson } from "../http.js"
 import { knownSecrets, redactText, redactValue } from "../secrets.js"
 import type { KeepRaw, ToolSpec } from "../types.js"
@@ -57,6 +58,8 @@ type SearchItem = {
   views: number | null
   likes: number | null
   comments: number | null
+  /** Bilibili's bullet-comment (danmaku) count, kept apart from its comment count. */
+  bulletComments?: number | null
   shares: number | null
   saves: number | null
   tags: string[]
@@ -67,6 +70,8 @@ type PlatformSearchResult = {
   provider: ActiveChinaSocialProviderId
   endpoint: string
   items: SearchItem[]
+  /** Normalized items in the provider's response, before an explicit limit narrowed what is shown. */
+  returned: number
   notes: string[]
   rawCount: number | null
   rawFallback: string | null
@@ -95,7 +100,10 @@ type ProviderJsonResult = {
 type ProviderSearchArgs = {
   query: string
   platform: ChinaSocialPlatform
+  /** Request size where the endpoint takes one (Bilibili page_size, Zhihu limit and offset). */
   limit: number
+  /** Items shown: every normalized item unless the caller passed limit. */
+  show: number
   page: number
   cursor: SearchCursor | null
   justoneStart?: string
@@ -111,7 +119,6 @@ type ProviderSearchArgs = {
 interface ChinaSocialProvider {
   id: ActiveChinaSocialProviderId
   label: string
-  supports(platform: ChinaSocialPlatform): boolean
   search(args: ProviderSearchArgs): Promise<PlatformSearchResult>
 }
 
@@ -119,6 +126,7 @@ interface ChinaSocialProvider {
 const tikhubBaseUrl = () => process.env.TIKHUB_BASE_URL?.trim() || "https://api.tikhub.io"
 const justoneBaseUrl = () => process.env.JUSTONE_BASE_URL?.trim() || "https://api.justoneapi.com"
 const DEFAULT_PLATFORM_SLICE: ChinaSocialPlatform[] = ["xiaohongshu", "bilibili", "douyin"]
+/** Request size for Bilibili and Zhihu when limit is omitted; what is shown is then the whole response. */
 const DEFAULT_LIMIT = 5
 const MAX_LIMIT = 8
 const DEFAULT_TIKHUB_TIMEOUT_MS = 60_000
@@ -133,7 +141,7 @@ function tikhubHeaders(): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
     Accept: "application/json",
-    "User-Agent": "opencode-china-social-tool/1.0",
+    "User-Agent": USER_AGENT,
   }
 }
 
@@ -341,6 +349,9 @@ function collectRecords(value: unknown, maxDepth = 6): Record<string, unknown>[]
   return records
 }
 
+/** The sentence for a request that ended without a complete response, which is never sent again: it may still have been charged. */
+const unansweredCost = (provider: string) => `${provider} may have received and charged this request, but no complete response arrived; its cost is unknown.`
+
 async function fetchTikHubJson(args: {
   endpoint: string
   method?: "GET" | "POST"
@@ -370,6 +381,10 @@ async function fetchTikHubJson(args: {
     keep: args.keep,
     label: args.endpoint,
     parseJson: parseProviderJson,
+  }).catch((error: unknown) => {
+    // Never sent again: TikHub may already have received, and charged, it.
+    if (args.signal.aborted) throw error
+    throw new Error(`${error instanceof Error ? error.message : "Unknown error"}. ${unansweredCost("TikHub")}`)
   })
   const record = asRecord(response.payload)
   if (response.status < 200 || response.status >= 300) {
@@ -466,7 +481,9 @@ function normalizeBilibiliItems(payload: Record<string, unknown>, limit: number)
         publishedAt: toIsoDate(record.pubdate ?? record.created),
         views: firstNumber(record.play, record.view),
         likes: firstNumber(record.like),
-        comments: firstNumber(record.video_review, record.review, record.comment),
+        // In Bilibili search results `video_review` counts bullet comments (danmaku); `review` counts comments.
+        comments: firstNumber(record.review),
+        bulletComments: firstNumber(record.video_review),
         shares: firstNumber(record.share),
         saves: firstNumber(record.favorite, record.favorites),
         tags: uniqStrings([
@@ -611,8 +628,13 @@ function normalizeZhihuItems(payload: Record<string, unknown>, limit: number): S
   const data = payload.data ?? payload
   const records = collectRecords(data)
   const supportedTypes = new Set(["answer", "article", "question", "zvideo"])
+  // A hit's own `question` record names the question it answers; it is not a second result.
+  const nestedQuestions = new Set(
+    records.flatMap((record) => [record, asRecord(record.object), asRecord(record.target)].map((holder) => asRecord(holder?.question)).filter((question) => question !== null))
+  )
 
   const items = records.flatMap((record): SearchItem[] => {
+    if (nestedQuestions.has(record)) return []
     const target = asRecord(record.object) || asRecord(record.target) || record
     const question = asRecord(target.question) || asRecord(record.question)
     const author = asRecord(target.author) || asRecord(record.author)
@@ -857,14 +879,20 @@ function platformResult(args: {
   notes: string[]
 }): PlatformSearchResult {
   const data = asRecord(args.response.payload.data)
-  let items = args.provider === "justone"
-    ? normalizeCommonItems(args.response.payload, args.search.platform, args.search.limit)
-    : normalizePlatformItems(args.response.payload, args.search.platform, args.search.limit)
+  let returned = args.provider === "justone"
+    ? normalizeCommonItems(args.response.payload, args.search.platform, Number.POSITIVE_INFINITY)
+    : normalizePlatformItems(args.response.payload, args.search.platform, Number.POSITIVE_INFINITY)
   if (args.provider === "tikhub" && args.search.platform === "weibo" && ["user", "topic"].includes(args.search.weiboSearchType)) {
-    items = normalizeCommonItems(args.response.payload, "weibo", args.search.limit)
+    returned = normalizeCommonItems(args.response.payload, "weibo", Number.POSITIVE_INFINITY)
   }
+  const items = returned.slice(0, args.search.show)
   const nextCursor = extractNextCursor(args.response.payload, args.search, args.provider)
-  const notes = [...args.notes, `Output capped at ${args.search.limit} normalized items; this is not a complete result census.`]
+  const notes = [
+    ...args.notes,
+    items.length < returned.length
+      ? `${items.length} shown of ${returned.length} returned (limit); the next cursor or page continues after all ${returned.length}, including the ${returned.length - items.length} not shown.`
+      : "Every normalized item in this response is shown; one page is not a complete result census.",
+  ]
   if (!items.length && !data?.no_more && extractRawCount(args.response.payload) !== 0) {
     notes.push("No items normalized; response-shape coverage is uncertain, not evidence of no matching content. See raw excerpt.")
   }
@@ -878,6 +906,7 @@ function platformResult(args: {
     provider: args.provider,
     endpoint: args.endpoint,
     items,
+    returned: returned.length,
     notes,
     rawCount: extractRawCount(args.response.payload),
     rawFallback: safeJsonSnippet(args.response.payload.data ?? args.response.payload),
@@ -935,7 +964,7 @@ async function fetchJustOneJson(args: ProviderSearchArgs): Promise<ProviderJsonR
     parseJson: parseProviderJson,
   }).catch(() => {
     if (args.signal.aborted) throw new Error("Just One API request cancelled")
-    throw new Error("Just One API transport failed (token-bearing diagnostics withheld)")
+    throw new Error(`Just One API transport failed (token-bearing diagnostics withheld). ${unansweredCost("Just One API")}`)
   })
   const record = asRecord(response.payload)
   if (response.status < 200 || response.status >= 300) {
@@ -961,9 +990,6 @@ async function fetchJustOneJson(args: ProviderSearchArgs): Promise<ProviderJsonR
 const tikHubProvider: ChinaSocialProvider = {
   id: "tikhub",
   label: "TikHub",
-  supports(platform) {
-    return CHINA_SOCIAL_PLATFORM_VALUES.includes(platform)
-  },
   async search(args) {
     switch (args.platform) {
       case "xiaohongshu": {
@@ -973,6 +999,7 @@ const tikHubProvider: ChinaSocialProvider = {
           throw new Error("Xiaohongshu cursor must contain search_id and search_session_id from the first response.")
         }
         if (args.page > 1 && !state) throw new Error("Xiaohongshu page > 1 requires the returned cursor object; session IDs cannot be guessed.")
+        if (state && args.page === 1) throw new Error("Xiaohongshu cursor continues a later page; pass page 2 or more with it (page 2 for the cursor from the first response).")
         const response = await fetchTikHubJson({
           endpoint,
           query: {
@@ -1223,9 +1250,6 @@ const tikHubProvider: ChinaSocialProvider = {
 const justOneProvider: ChinaSocialProvider = {
   id: "justone",
   label: "Just One API",
-  supports(platform) {
-    return CHINA_SOCIAL_PLATFORM_VALUES.includes(platform)
-  },
   async search(args) {
     const endpoint = "/api/search/v1"
     const response = await fetchJustOneJson(args)
@@ -1248,17 +1272,8 @@ const PROVIDERS: Record<ActiveChinaSocialProviderId, ChinaSocialProvider> = {
   justone: justOneProvider,
 }
 
-function resolveProvider(
-  requestedProvider: ChinaSocialProviderId,
-  platform: ChinaSocialPlatform
-): ChinaSocialProvider {
-  const provider = requestedProvider === "auto" ? PROVIDERS.tikhub : PROVIDERS[requestedProvider]
-
-  if (!provider.supports(platform)) {
-    throw new Error(`${provider.label} does not support platform '${platform}'.`)
-  }
-
-  return provider
+function resolveProvider(requestedProvider: ChinaSocialProviderId): ChinaSocialProvider {
+  return requestedProvider === "auto" ? PROVIDERS.tikhub : PROVIDERS[requestedProvider]
 }
 
 function formatPlatformResult(result: PlatformSearchResult): string {
@@ -1297,7 +1312,7 @@ function formatPlatformResult(result: PlatformSearchResult): string {
     return lines.join("\n")
   }
 
-  lines.push(`Top normalized results: ${result.items.length}`)
+  lines.push(`Top normalized results: ${result.items.length}${result.returned > result.items.length ? ` shown of ${result.returned} returned` : ""}`)
   lines.push("")
 
   for (const item of result.items) {
@@ -1305,6 +1320,7 @@ function formatPlatformResult(result: PlatformSearchResult): string {
       item.views !== null ? `Views ${formatNumber(item.views)}` : null,
       item.likes !== null ? `Likes ${formatNumber(item.likes)}` : null,
       item.comments !== null ? `Comments ${formatNumber(item.comments)}` : null,
+      item.bulletComments != null ? `Bullet comments ${formatNumber(item.bulletComments)}` : null,
       item.shares !== null ? `Shares ${formatNumber(item.shares)}` : null,
       item.saves !== null ? `Saves ${formatNumber(item.saves)}` : null,
     ].filter(Boolean)
@@ -1364,6 +1380,8 @@ export const search = {
       ? Array.from(new Set(args.platforms)) as ChinaSocialPlatform[]
       : DEFAULT_PLATFORM_SLICE
     const limit = Math.min(Math.max(args.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
+    // With no limit, every item of the paid response is shown.
+    const show = args.limit === undefined ? Number.POSITIVE_INFINITY : limit
     const providerChoice: ChinaSocialProviderId = args.provider ?? "auto"
     const requestedProvider: ActiveChinaSocialProviderId =
       providerChoice === "auto" ? "tikhub" : providerChoice
@@ -1397,12 +1415,13 @@ export const search = {
       for (const platform of platforms) {
         let provider: ChinaSocialProvider | null = null
         try {
-          provider = resolveProvider(providerChoice, platform)
+          provider = resolveProvider(providerChoice)
           results.push(
             await provider.search({
               query: args.query,
               platform,
               limit,
+              show,
               page: Math.max(args.page ?? DEFAULT_PAGE, 1),
               cursor: args.cursor ?? null,
               justoneStart: args.justone_start,
@@ -1427,11 +1446,9 @@ export const search = {
 
       if (results.length === 0) {
         throw new Error(
-          failures.length > 0
-            ? `All requested platforms failed: ${failures
-                .map((failure) => `${platformLabel(failure.platform)} (${providerLabel(failure.provider)}): ${failure.message}`)
-                .join("; ")}`
-            : "No platform requests completed successfully"
+          `All requested platforms failed: ${failures
+            .map((failure) => `${platformLabel(failure.platform)} (${providerLabel(failure.provider)}): ${failure.message}`)
+            .join("; ")}`
         )
       }
 

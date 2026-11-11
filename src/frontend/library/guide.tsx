@@ -4,10 +4,13 @@ import { Frame, FrameHeader, FramePanel, FrameFooter } from '../shared/frame';
 import { IconTile } from '../shared/icon-tile';
 import { Timeline, TimelineContent, TimelineHeader, TimelineIndicator, TimelineItem, TimelineSeparator, TimelineTitle } from '../shared/timeline';
 import { GLYPHS, glyphFor } from '../../glyphs.mjs';
-import { MODULES, SOURCE_GROUPS } from '../../providers/modules.ts';
+import { MODULES } from '../../providers/modules.ts';
 import { SOURCE_GUIDES } from '../../ui/source-guide.mjs';
+import { hostWords } from '../../ui/host.mjs';
+import { glyphShapes } from './source-icon';
+import { groupSourceModules } from './sources';
 
-type GuidePageProps = { hidden: boolean; onNavigate: (path: string) => unknown };
+type GuidePageProps = { hidden: boolean; onNavigate: (path: string) => unknown; host?: string };
 type UseCase = { id: string; icon: string; title: string; description: string; sources: string[]; prompt: string };
 
 const STARTER = 'Use Dig and Hacker News to investigate how people choose a note-taking app. Show me the strongest findings, disagreements, and what is still missing. Save the supporting research, check the original discussions, and suggest a useful next question.';
@@ -40,10 +43,7 @@ const WORKFLOW = [
 function Glyph({ name }: { name: string }) {
   const shapes = (GLYPHS as Record<string, any[]>)[name] ?? GLYPHS.shovel;
   return <svg className="guide-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    {shapes.map(([tag, attributes], index) => React.createElement(tag, {
-      key: index,
-      ...Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase()), value])),
-    }))}
+    {glyphShapes(shapes)}
   </svg>;
 }
 
@@ -102,26 +102,13 @@ function WorkedExample() {
 }
 
 function Catalog({ onNavigate }: Pick<GuidePageProps, 'onNavigate'>) {
-  const modules: readonly any[] = MODULES;
-  const placed = new Set<string>();
-  const groups: { id: string; label: string; modules: any[] }[] = SOURCE_GROUPS.map(group => ({
-    id: group.id, label: group.label,
-    modules: group.sources.flatMap(id => {
-      const module = modules.find(entry => entry.id === id);
-      if (!module || module.extends) return [];
-      placed.add(module.id);
-      return [module];
-    }),
-  }));
-  const other = modules.filter(module => !module.extends && !placed.has(module.id));
-  if (other.length) groups.push({ id: 'other', label: 'Other sources and tools', modules: other });
+  const groups = groupSourceModules(MODULES);
   return <Disclosure title="Every source and tool" className="guide-catalog">
     <p className="guide-muted">This is the catalog included with this edition. What you can use depends on the sources you enable, the accounts you connect, and the provider’s coverage.</p>
-    <div className="guide-catalog-groups">{groups.filter(group => group.modules.length).map(group => <section key={group.id} aria-labelledby={`guide-catalog-${group.id}`}>
+    <div className="guide-catalog-groups">{groups.map(group => <section key={group.id} aria-labelledby={`guide-catalog-${group.id}`}>
       <h4 id={`guide-catalog-${group.id}`}>{group.label}</h4>
-      <ul>{group.modules.map(module => {
+      <ul>{group.members.map(({ module, addOns }: { module: any; addOns: any[] }) => {
         const guide = (SOURCE_GUIDES as Record<string, any>)[module.id];
-        const addOns = modules.filter(entry => entry.extends === module.id);
         return <li key={module.id} data-guide-source={module.id}>
           <span className="guide-catalog-icon"><Glyph name={glyphFor(module.id)} /></span>
           <div><strong>{module.label}</strong>{module.kind === 'tool' && <span className="guide-catalog-kind">Optional helper</span>}
@@ -136,7 +123,8 @@ function Catalog({ onNavigate }: Pick<GuidePageProps, 'onNavigate'>) {
   </Disclosure>;
 }
 
-export function GuidePage({ hidden, onNavigate }: GuidePageProps) {
+export function GuidePage({ hidden, onNavigate, host }: GuidePageProps) {
+  const words = hostWords(host);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (hidden) return;
@@ -157,7 +145,7 @@ export function GuidePage({ hidden, onNavigate }: GuidePageProps) {
         <FrameHeader><span className="guide-eyebrow">Your first dig</span><h3>Ask, observe, then steer</h3></FrameHeader>
         <FramePanel>
           <ol className="guide-start-steps">
-            <li><span>1</span><div><strong>Ask what matters to you</strong><p>Say “Use Dig…” with your question and any limits. Choose enabled sources, or ask <code>$dig:setup</code> for help getting started.</p></div></li>
+            <li><span>1</span><div><strong>Ask what matters to you</strong><p>Say “Use Dig…” with your question and any limits. Choose enabled sources, or ask <code>{words.skill('setup')}</code> for help getting started.</p></div></li>
             <li><span>2</span><div><strong>Observe what is recorded</strong><p>Overview shows saved outcomes, source coverage, and usage. Open a question to see its findings, uncertainties, and dated activity.</p></div></li>
             <li><span>3</span><div><strong>Steer the next step</strong><p>Choose Steer research to prepare a direction. Review the unsent draft in your conversation, or copy it there, then send when ready.</p></div></li>
           </ol>
@@ -222,7 +210,7 @@ export function GuidePage({ hidden, onNavigate }: GuidePageProps) {
             <div><dt>Credits</dt><dd>Some services report their own credits. Those stay in their original units; credits from different services are not added together.</dd></div>
             <div><dt>Calls and unknown costs</dt><dd>Calls count uses of Dig’s research tools. One use may make several provider requests. Dig can count the activity even when its price is unknown. Unknown never means free.</dd></div>
           </dl>
-          <p className="guide-practical-note">Provider services bill separately from your ChatGPT or Codex plan. Dig’s overview shows reported provider usage, not a reconciled invoice or your assistant’s model costs.</p>
+          <p className="guide-practical-note">Provider services bill separately from your {words.plans} plan. Dig’s overview shows reported provider usage, not a reconciled invoice or your assistant’s model costs.</p>
         </FramePanel>
       </Frame>
       <Frame className="guide-practical" spacing="sm">

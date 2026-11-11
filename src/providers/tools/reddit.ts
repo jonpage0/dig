@@ -12,7 +12,8 @@
  *   relevance|new|top|comment_count (comments: relevance|new|top only);
  *   timeframe all|day|week|month|year (posts only); `after` token pagination.
  * - GET /v1/reddit/subreddit/search: one subreddit; sort relevance|hot|top|new|
- *   comments (comments: relevance|top|new); timeframe adds `hour`; opaque cursor.
+ *   comments (comments: relevance|top|new); timeframe adds `hour`; opaque cursor;
+ *   no filter: one response carries `posts` and `comments` together.
  * - GET /v1/reddit/post/comments: post + top-level comments with nested replies;
  *   `more.cursor` (top level) and `replies.more.cursor` (per comment) are the
  *   opaque continuation tokens, passed back one at a time as `cursor`.
@@ -60,6 +61,8 @@ const MAX_SUBREDDITS = 5
 const DEFAULT_COMMENT_THREADS = 5
 const MAX_COMMENT_THREADS = 10
 const COMMENTS_PER_THREAD = 3
+const COMMENT_CUT = 200
+const COMMENT_HIT_CUT = 300
 const REDDIT_ORIGIN = "https://www.reddit.com"
 const POST_COMMENTS_LABEL = "ScrapeCreators Reddit post comments"
 
@@ -171,19 +174,21 @@ function normalizeCommentHit(raw: Record<string, unknown>): CommentHit | null {
 /**
  * Splits a comment list three ways so an entry the adapter cannot read is never
  * described as moderation: `unreadable` entries are not records or carry no body
- * text; `quotable` entries are readable and neither stickied, moderator-
- * distinguished, nor posted by AutoModerator.
+ * text; `removed` counts readable entries whose body is only `[removed]` or
+ * `[deleted]`; `quotable` entries are readable, not removed, and neither
+ * stickied, moderator-distinguished, nor posted by AutoModerator.
  */
-function partitionComments(comments: unknown[]): { unreadable: number; quotable: Record<string, unknown>[] } {
+function partitionComments(comments: unknown[]): { unreadable: number; removed: number; quotable: Record<string, unknown>[] } {
   const readable = comments
     .map(asRecord)
     .filter((record): record is Record<string, unknown> => record !== null && cleanText(record.body) !== null)
-  const quotable = readable.filter((record) => record.stickied !== true && record.distinguished !== "moderator" && asString(record.author) !== "AutoModerator")
-  return { unreadable: comments.length - readable.length, quotable }
+  const isRemoved = (record: Record<string, unknown>) => /^\[(?:removed|deleted)\]$/.test(cleanText(record.body) ?? "")
+  const quotable = readable.filter((record) => !isRemoved(record) && record.stickied !== true && record.distinguished !== "moderator" && asString(record.author) !== "AutoModerator")
+  return { unreadable: comments.length - readable.length, removed: readable.filter(isRemoved).length, quotable }
 }
 
 function commentLine(record: Record<string, unknown>, indent: string): string {
-  const body = truncate(cleanText(record.body), 200)
+  const body = truncate(cleanText(record.body), COMMENT_CUT)
   const score = asNumber(record.score) ?? asNumber(record.ups)
   const author = asString(record.author) ?? "[unavailable]"
   return `${indent}u/${author} (${score !== null ? `${score} pts` : "score n/a"}): ${body}`
@@ -215,7 +220,7 @@ function formatThread(thread: Thread, index: number): string {
 
 function formatCommentHit(hit: CommentHit, index: number): string {
   const lines: string[] = []
-  lines.push(`${index + 1}. ${hit.author ? `u/${hit.author}` : "(author not returned)"}${hit.subreddit ? ` in r/${hit.subreddit}` : ""} — ${truncate(hit.body, 300)}`)
+  lines.push(`${index + 1}. ${hit.author ? `u/${hit.author}` : "(author not returned)"}${hit.subreddit ? ` in r/${hit.subreddit}` : ""} — ${truncate(hit.body, COMMENT_HIT_CUT)}`)
   lines.push(`   Score: ${fmtMetric(hit.score)} | Date: ${hit.date ?? "unknown"}${hit.postTitle ? ` | Thread: ${truncate(hit.postTitle, 120)}` : ""}`)
   if (hit.url) lines.push(`   URL: ${hit.url}`)
   else if (hit.postUrl) lines.push(`   Thread URL: ${hit.postUrl}`)
@@ -246,10 +251,10 @@ async function postComments(
   const listed = expectArray(response.payload, "comments", POST_COMMENTS_LABEL)
   if (!listed.ok) return `ERROR: ${listed.error}`
   const credits = new CreditTally()
-  credits.add(response.payload)
+  credits.addAttempts(response.charges)
   const post = asRecord(response.payload.post)
   const thread = post ? normalizePost(post) : null
-  const { unreadable, quotable } = partitionComments(listed.items)
+  const { unreadable, removed, quotable } = partitionComments(listed.items)
   const all = listed.items.length
   const shown = quotable.slice(0, limit)
   const more = asRecord(response.payload.more)
@@ -269,7 +274,7 @@ async function postComments(
         ? "Post: not repeated on continuation pages"
         : "Post: provider returned no post record",
     credits.describe(),
-    `Comments: ${shown.length} shown of ${quotable.length} quotable top-level comments (${all} returned on this page; stickied/moderator/AutoModerator excluded${unreadable ? `; ${unreadable} without a readable body skipped` : ""}); provider order, no local re-ranking`,
+    `Comments: ${shown.length} shown of ${quotable.length} quotable top-level comments (${all} returned on this page; stickied/moderator/AutoModerator excluded${removed ? `; ${removed} removed/deleted skipped` : ""}${unreadable ? `; ${unreadable} without a readable body skipped` : ""}); provider order, no local re-ranking; comment text cut at ${COMMENT_CUT} characters`,
     more?.has_more === true
       ? nextCursor
         ? `More top-level comments: pass postUrl with cursor="${nextCursor}"`
@@ -302,11 +307,12 @@ async function postComments(
         ? "The provider returned an empty comment list for this page."
         : unreadable === all
           ? `None of the ${all} returned comment${all === 1 ? "" : "s"} carried a readable body; this page is unreadable, not moderated or empty.`
-          : "Every returned comment with a readable body was stickied, a moderator notice, or AutoModerator.",
+          : "Every returned comment with a readable body was stickied, a moderator notice, AutoModerator, or removed/deleted.",
     )
   }
 
   return {
+    status: outcomeStatus([], shown.length),
     text: [header.join("\n"), ...body].join("\n\n"),
     details: {
       provider: "scrapecreators",
@@ -328,7 +334,7 @@ async function postComments(
 /** Search Reddit threads or comments, enrich threads with their first top-level comments, or page a thread's comments directly */
 export default creditMetered({
   description:
-    "Public Reddit via ScrapeCreators. Search mode (query): /v1/reddit/search across Reddit or /v1/reddit/subreddit/search inside named subreddits, posts or comment text, with Reddit's own sort/timeframe and pagination tokens. " +
+    "Public Reddit via ScrapeCreators. Search mode (query): /v1/reddit/search across Reddit or /v1/reddit/subreddit/search inside named subreddits, posts or comment text, with Reddit's own sort/timeframe and pagination tokens; inside subreddits one request returns posts and comments together, and both are shown. " +
     "Post-comments mode (postUrl): one page of a thread's comments from /v1/reddit/post/comments with the provider's continuation cursors for more top-level comments and collapsed replies. " +
     "Requires SCRAPECREATORS_API_KEY; 1 credit per request (search page, comment page, or enriched thread). Results keep Reddit's order. For TikHub-only Reddit surfaces use tikhub_reddit.",
   async execute(args: RedditArgs, ctx: ToolContext) {
@@ -385,19 +391,22 @@ export default creditMetered({
     const rawPosts: Record<string, unknown>[] = []
     const rawComments: Record<string, unknown>[] = []
     const bucketKey = filter === "comments" ? "comments" : "posts"
+    const otherKey = filter === "comments" ? "posts" : "comments"
+    // A subreddit search answers with posts and comments together, so one request serves both lists.
+    const perSubreddit: Record<"posts" | "comments", Record<string, unknown>[][]> = { posts: [], comments: [] }
+    const otherMissing: string[] = []
 
     if (scoped) {
       for (const subreddit of subreddits) {
         if (ctx.abort.aborted) return `ERROR: Cancelled: Reddit subreddit search stopped before r/${subreddit}.`
         const label = `ScrapeCreators Reddit r/${subreddit} search`
         const response = await scrapecreatorsRequest("/v1/reddit/subreddit/search", { subreddit, query, sort, timeframe, cursor }, headers, ctx, label)
+        credits.addAttempts(response.charges)
         if (!response.ok) {
           if (response.cancelled) return failText(response)
-          credits.add(response.payload)
           requestErrors.push(response.error)
           continue
         }
-        credits.add(response.payload)
         const listed = expectArray(response.payload, bucketKey, label)
         if (!listed.ok) {
           requestErrors.push(listed.error)
@@ -405,12 +414,19 @@ export default creditMetered({
         }
         const next = asString(response.payload.cursor)
         if (next) nextTokens.push(`r/${subreddit}: cursor="${next}"`)
-        for (const entry of listed.items) {
-          const record = asRecord(entry)
-          if (record) (filter === "comments" ? rawComments : rawPosts).push(record)
-        }
+        const records = (items: unknown[]) => items.map(asRecord).filter((record): record is Record<string, unknown> => record !== null)
+        perSubreddit[bucketKey].push(records(listed.items))
+        const other = response.payload[otherKey]
+        if (Array.isArray(other)) perSubreddit[otherKey].push(records(other))
+        else otherMissing.push(`r/${subreddit}`)
       }
       if (requestErrors.length === subreddits.length) return `ERROR: Reddit search failed: ${requestErrors.join("; ")}`
+      // Round-robin across subreddits, each in its own order, so the limit cut keeps every subreddit represented.
+      for (const [lists, into] of [[perSubreddit.posts, rawPosts], [perSubreddit.comments, rawComments]] as const) {
+        for (let index = 0; lists.some((records) => index < records.length); index += 1) {
+          for (const records of lists) if (index < records.length) into.push(records[index])
+        }
+      }
     } else {
       const label = "ScrapeCreators Reddit search"
       const response = await scrapecreatorsRequest(
@@ -421,7 +437,7 @@ export default creditMetered({
         label,
       )
       if (!response.ok) return response.cancelled ? failText(response) : `ERROR: Reddit search failed: ${response.error}`
-      credits.add(response.payload)
+      credits.addAttempts(response.charges)
       // The docs name `posts` for post results; the comment-result array key is
       // not shown in the docs example, so accept `comments` and fall back to
       // `posts`, but never treat an absent array as an empty result.
@@ -436,38 +452,45 @@ export default creditMetered({
       }
     }
 
-    const scopeLine = scoped ? `Scope: ${subreddits.map((s) => `r/${s}`).join(", ")} (one request each)` : "Scope: all of Reddit"
-    const filterLine = `Filters: filter=${filter} | sort=${sort}${!scoped && sort === "comments" ? " (sent as comment_count)" : ""} | timeframe=${timeframe ?? "all (provider default)"}${cursor ? ` | cursor=${cursor}` : ""}`
+    const scopeLine = scoped
+      ? `Scope: ${subreddits.map((s) => `r/${s}`).join(", ")} (one request each; each response carries posts and comments together, so both lists below come from the same requests)`
+      : "Scope: all of Reddit"
+    const filterLine = `Filters: filter=${filter}${scoped ? " (listed first; no filter is sent inside subreddits)" : ""} | sort=${sort}${!scoped && sort === "comments" ? " (sent as comment_count)" : ""} | timeframe=${timeframe ?? "all (provider default)"}${cursor ? ` | cursor=${cursor}` : ""}`
     const pagingLine = nextTokens.length ? `Next page: pass cursor with ${nextTokens.join("; ")}` : "Next page: no pagination token returned"
-    const orderLine = `Order: as returned by Reddit for sort=${sort}; no local re-ranking${scoped && subreddits.length > 1 ? " (subreddit results listed in the order requested)" : ""}.`
+    const orderLine = `Order: as returned by Reddit for sort=${sort}; no local re-ranking${scoped && subreddits.length > 1 ? " (subreddit results interleaved one at a time in the order requested, each subreddit in its own order)" : ""}.`
+    const answered = subreddits.length - requestErrors.length
+    const missingNote = !otherMissing.length ? "" : otherMissing.length === answered ? ` (no response carried a ${otherKey} list)` : ` (${otherMissing.join(", ")} carried no ${otherKey} list)`
 
-    if (filter === "comments") {
-      const seen = new Set<string>()
-      const hits: CommentHit[] = []
-      for (const raw of rawComments) {
-        const hit = normalizeCommentHit(raw)
-        if (!hit) continue
-        const key = hit.id ?? hit.url ?? `${hit.author}:${hit.body}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        hits.push(hit)
-      }
-      const shown = hits.slice(0, limit)
+    const seenHits = new Set<string>()
+    const hits: CommentHit[] = []
+    for (const raw of rawComments) {
+      const hit = normalizeCommentHit(raw)
+      if (!hit) continue
+      const key = hit.id ?? hit.url ?? `${hit.author}:${hit.body}`
+      if (seenHits.has(key)) continue
+      seenHits.add(key)
+      hits.push(hit)
+    }
+    const shownHits = hits.slice(0, limit)
+    const hitsLine = `${filter === "comments" ? "Results" : "Comments in the same responses"}: ${shownHits.length} comments shown of ${hits.length} returned${rawComments.length > hits.length ? ` (${rawComments.length - hits.length} returned entries had no readable body or were duplicates)` : ""}; comment text cut at ${COMMENT_HIT_CUT} characters${filter === "comments" ? "" : missingNote}`
+    const hitsBody = shownHits.length
+      ? shownHits.map(formatCommentHit)
+      : [filter === "posts" && otherMissing.length === answered ? "The provider's responses carried no comment list." : "The provider returned an empty comment list for this query and filter set."]
+
+    if (filter === "comments" && !scoped) {
       const header = [
         `Reddit comment search via ScrapeCreators: "${query}"`,
         scopeLine,
         filterLine,
         orderLine,
-        `Results: ${shown.length} comments shown of ${hits.length} returned${rawComments.length > hits.length ? ` (${rawComments.length - hits.length} returned entries had no readable body or were duplicates)` : ""}`,
+        hitsLine,
         pagingLine,
         credits.describe(),
       ]
-      if (requestErrors.length) header.push(`Partial: ${requestErrors.join("; ")}`)
       if (args.includeComments !== undefined || args.commentThreads !== undefined) header.push("includeComments/commentThreads apply to post searches; comment results are already comments.")
-      const body = shown.length ? shown.map(formatCommentHit) : ["The provider returned an empty comment list for this query and filter set."]
       return {
-        status: outcomeStatus(requestErrors, shown.length),
-        text: [header.join("\n"), ...body].join("\n\n"),
+        status: outcomeStatus([], shownHits.length),
+        text: [header.join("\n"), ...hitsBody].join("\n\n"),
         details: {
           provider: "scrapecreators",
           mode: "search",
@@ -475,7 +498,7 @@ export default creditMetered({
           query,
           subreddits,
           returned: hits.length,
-          shown: shown.length,
+          shown: shownHits.length,
           next_tokens: nextTokens,
           credits: credits.details(),
           errors: requestErrors,
@@ -506,7 +529,7 @@ export default creditMetered({
     let commentsFetched = 0
     let commentsRequested = 0
     const commentFailures: string[] = []
-    if (includeComments && commentThreads > 0) {
+    if (filter === "posts" && includeComments && commentThreads > 0) {
       for (const thread of shown.slice(0, commentThreads)) {
         if (ctx.abort.aborted) return `ERROR: Cancelled: Reddit comment enrichment stopped after ${commentsFetched} of ${commentsRequested} threads; the search itself completed.`
         if (!thread.url) {
@@ -517,12 +540,12 @@ export default creditMetered({
         const response = await scrapecreatorsRequest("/v1/reddit/post/comments", { url: thread.url }, headers, ctx, POST_COMMENTS_LABEL)
         if (!response.ok) {
           if (response.cancelled) return `ERROR: Cancelled: ${response.error} (${commentsFetched} threads enriched before cancellation)`
-          credits.add(response.payload)
+          credits.addAttempts(response.charges)
           thread.commentNote = `fetch failed: ${response.error}`
           commentFailures.push(`${thread.url}: ${response.error}`)
           continue
         }
-        credits.add(response.payload)
+        credits.addAttempts(response.charges)
         const listed = expectArray(response.payload, "comments", POST_COMMENTS_LABEL)
         if (!listed.ok) {
           thread.commentNote = `unreadable: ${listed.error}`
@@ -530,7 +553,7 @@ export default creditMetered({
           continue
         }
         commentsFetched += 1
-        const { unreadable, quotable } = partitionComments(listed.items)
+        const { unreadable, removed, quotable } = partitionComments(listed.items)
         const total = listed.items.length
         thread.comments = quotable.slice(0, COMMENTS_PER_THREAD).map((record) => commentLine(record, "     "))
         const more = asRecord(response.payload.more)
@@ -541,35 +564,45 @@ export default creditMetered({
               ? "provider returned an empty comment list"
               : unreadable === total
                 ? `${total} returned, none with a readable body (unreadable page, not moderation)`
-                : `${total} returned, none quotable after excluding stickied/moderator/AutoModerator${unreadable ? ` (${unreadable} without a readable body)` : ""}`
+                : `${total} returned, none quotable after excluding stickied/moderator/AutoModerator/removed/deleted${removed ? ` (${removed} removed/deleted)` : ""}${unreadable ? ` (${unreadable} without a readable body)` : ""}`
         } else if (moreCursor || total > thread.comments.length) {
           thread.comments.push(
-            `     (first ${thread.comments.length} of ${total} top-level comments on this page${moreCursor ? `; continue with postUrl="${thread.url}" cursor="${moreCursor}"` : `; more via postUrl="${thread.url}"`})`,
+            `     (first ${thread.comments.length} of ${total} top-level comments on this page${removed ? `; ${removed} removed/deleted skipped` : ""}${moreCursor ? `; continue with postUrl="${thread.url}" cursor="${moreCursor}"` : `; more via postUrl="${thread.url}"`})`,
           )
         }
       }
     }
 
+    const postsLine = `${filter === "posts" ? "Results" : "Posts in the same responses"}: ${shown.length} threads shown of ${threads.length} returned${nsfwExcluded ? ` (${nsfwExcluded} NSFW excluded; pass allowNsfw=true to include)` : ""}${unreadable ? ` (${unreadable} returned entries lacked an id or title and were skipped)` : ""}${filter === "posts" ? "" : missingNote}`
     const header = [
-      `Reddit post search via ScrapeCreators: "${query}"`,
+      `Reddit ${filter === "posts" ? "post" : "comment"} search via ScrapeCreators: "${query}"`,
       scopeLine,
       filterLine,
       orderLine,
-      `Results: ${shown.length} threads shown of ${threads.length} returned${nsfwExcluded ? ` (${nsfwExcluded} NSFW excluded; pass allowNsfw=true to include)` : ""}${unreadable ? ` (${unreadable} returned entries lacked an id or title and were skipped)` : ""}`,
+      ...(filter === "posts" ? [postsLine, ...(scoped ? [hitsLine] : [])] : [hitsLine, postsLine]),
       pagingLine,
       credits.describe(),
-      includeComments
-        ? `Comments: fetched for ${commentsFetched} of ${commentsRequested} requested threads (first ${COMMENTS_PER_THREAD} top-level comments as returned, stickied/moderator/AutoModerator excluded)${commentFailures.length ? `; ${commentFailures.length} failed` : ""}`
-        : "Comments: not requested",
+      ...(filter === "comments"
+        ? []
+        : [includeComments
+          ? `Comments: fetched for ${commentsFetched} of ${commentsRequested} requested threads (first ${COMMENTS_PER_THREAD} top-level comments as returned, stickied/moderator/AutoModerator and removed/deleted excluded, comment text cut at ${COMMENT_CUT} characters)${commentFailures.length ? `; ${commentFailures.length} failed` : ""}`
+          : "Comments: not requested"]),
     ]
     if (requestErrors.length) header.push(`Partial: ${requestErrors.join("; ")}`)
     if (commentFailures.length) header.push(`Comment failures: ${commentFailures.join("; ")}`)
-    const body = shown.length
+    if (filter === "comments" && (args.includeComments !== undefined || args.commentThreads !== undefined)) header.push("includeComments/commentThreads apply to post searches; comment results are already comments.")
+    const postsBody = shown.length
       ? shown.map(formatThread)
-      : [`The provider returned an empty post list for this query and filter set${nsfwExcluded ? " after NSFW exclusion" : ""}.`]
+      : [filter === "comments" && otherMissing.length === answered ? "The provider's responses carried no post list." : `The provider returned an empty post list for this query and filter set${nsfwExcluded ? " after NSFW exclusion" : ""}.`]
+    // Inside subreddits both lists are shown, each under its own heading, the filter's own list first.
+    const body = !scoped
+      ? postsBody
+      : filter === "posts"
+        ? ["### Posts", ...postsBody, "### Comments", ...hitsBody]
+        : ["### Comments", ...hitsBody, "### Posts", ...postsBody]
 
     return {
-      status: outcomeStatus([...requestErrors, ...commentFailures], shown.length),
+      status: outcomeStatus([...requestErrors, ...commentFailures], shown.length + (scoped ? shownHits.length : 0)),
       text: [header.join("\n"), ...body].join("\n\n"),
       details: {
         provider: "scrapecreators",
@@ -577,8 +610,8 @@ export default creditMetered({
         filter,
         query,
         subreddits,
-        returned: threads.length,
-        shown: shown.length,
+        returned: filter === "posts" ? threads.length : hits.length,
+        shown: filter === "posts" ? shown.length : shownHits.length,
         nsfw_excluded: nsfwExcluded,
         unreadable,
         next_tokens: nextTokens,

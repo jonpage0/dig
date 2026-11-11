@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import { MODULES, ALL_MODULES, moduleAgents } from './providers/modules.ts';
 import { WORKER_DEFAULTS, WORKER_EFFORTS, WORKER_TABLES, environmentValues, keysPath, loadKeys, sourceSetting, stateDirectory, workerGuidance, workerSetting } from './config.mjs';
 import { findExecutable } from './providers/executables.ts';
 import { paperSearchDirectory, paperSearchEnvValues, paperSearchInterpreter } from './providers/runtime-config.ts';
+import { hostOf, hostWords } from './ui/host.mjs';
 
 export const packageRoot = fileURLToPath(new URL(existsSync(new URL('../skills', import.meta.url)) ? '../' : '../plugin/', import.meta.url));
 const executable = name => !!findExecutable(name);
@@ -33,6 +34,15 @@ function credentialNames(m) {
  */
 const bridgeHas = name => paperSearchEnvValues(name).length > 0;
 const PAPERS_SETTINGS = (MODULES.find(m => m.id === 'papers')?.envSettings ?? []).map(s => s.name);
+/**
+ * How the user supplies missing credentials, in the host's words. Codex shows Dig's Sources & tools page; Claude Code
+ * shows no views, so there the user edits keys.env directly, as README's Claude Code section says.
+ */
+function keysAdvice(missing, unused) {
+  const { app, skill } = hostWords(process.env.DIG_HOST);
+  if (hostOf(process.env.DIG_HOST) === 'codex') return unused.length ? `${app}’s environment has ${unused.join(' and ')}; Use existing key on Dig’s Sources & tools page copies ${unused.length > 1 ? 'them' : 'it'} into keys.env.` : `The user adds ${missing.length > 1 ? 'them' : 'it'} outside chat with Edit keys.env on Dig’s Sources & tools page; Dig reloads keys.env when it is saved.`;
+  return unused.length ? `${app}’s environment has ${unused.join(' and ')}; Dig uses ${unused.length > 1 ? 'them' : 'it'} only once the user copies ${unused.length > 1 ? 'them' : 'it'} into keys.env by hand.` : `The user adds ${missing.length > 1 ? 'them' : 'it'} outside chat by editing keys.env directly (${skill('setup')} gives the exact lines); Dig reloads keys.env when it is saved.`;
+}
 export function sourceInfo(config, source) {
   const allMethods = moduleAgents(ALL_MODULES);
   const sources = MODULES.filter(m => !source || m.id === source).map(m => {
@@ -43,13 +53,20 @@ export function sourceInfo(config, source) {
     const groups = (m.keys ?? []).map(k => typeof k === 'string' ? [k] : k);
     const missing = groups.filter(names => !names.some(has));
     const unused = missing.flat().filter(name => environmentState(name) === 'unused');
-    if (missing.length) { status = missing.length < groups.length ? 'partial' : 'setup-required'; message = `Missing ${missing.map(names => names.join(' or ')).join('; ')} in Dig’s keys.env. ${unused.length ? `Codex’s environment has ${unused.join(' and ')}; Use existing key on Dig’s Sources & tools page copies ${unused.length > 1 ? 'them' : 'it'} into keys.env.` : `The user adds ${missing.length > 1 ? 'them' : 'it'} outside chat with Edit keys.env on Dig’s Sources & tools page; Dig reloads keys.env when it is saved.`}`; }
+    if (missing.length) { status = missing.length < groups.length ? 'partial' : 'setup-required'; message = `Missing ${missing.map(names => names.join(' or ')).join('; ')} in Dig’s keys.env. ${keysAdvice(missing, unused)}`; }
+    // DataForSEO's login and password are one credential: with only one of them nothing works, so it is not partly ready.
+    if (m.id === 'dataforseo' && missing.length) status = 'setup-required';
     if (m.id === 'github' && missing.length) { status = 'partial'; message = executable('gh') ? 'Public REST tools work anonymously or through an existing gh login. No token in keys.env; gh authentication has not been probed. GraphQL requires a valid login.' : 'Public REST discovery/read works at anonymous limits. GraphQL collaboration evidence requires a GitHub token in keys.env or a gh login.'; }
     if (m.id === 'papers') {
-      const bridge = paperSearchDirectory();
-      const available = existsSync(paperSearchInterpreter()) && executable('uv');
-      prerequisites.push({ name: 'Papers bridge and uv', available, detail: `Independent bridge at ${bridge}. Setup: node ${join(packageRoot, 'bridges', 'papers', 'setup.mjs')} --email <your contact address>. Run --help before installation.` });
-      if (!available) { status = 'partial'; message = 'Direct Semantic Scholar/OpenAlex discovery is available; federated search and full text require uv and the optional Papers bridge.'; }
+      const bridge = paperSearchDirectory(), setup = join(packageRoot, 'bridges', 'papers', 'setup.mjs');
+      const installed = existsSync(paperSearchInterpreter()), available = installed && executable('uv');
+      // Setup checks the clone out at its pinned commit, detached, with that commit's patch; two small file reads, no bridge start.
+      const read = file => { try { return readFileSync(file, 'utf8'); } catch { return ''; } };
+      const pinned = /const UPSTREAM_COMMIT = '([0-9a-f]{40})'/.exec(read(setup))?.[1];
+      const stale = installed && !!pinned && read(join(bridge, '.git', 'HEAD')).trim() !== pinned;
+      prerequisites.push({ name: 'Papers bridge and uv', available: available && !stale, detail: `Independent bridge at ${bridge}. Setup: node ${setup} --email <your contact address>. Run --help before installation.` });
+      if (stale) { status = 'partial'; message = `The Papers bridge is out of date: the installed clone is not at the pinned commit with the maintained patch. Rerun the Papers bridge setup (node ${setup}) to update the pinned clone and apply the maintained patch. Direct Semantic Scholar/OpenAlex discovery is available meanwhile.`; }
+      else if (!available) { status = 'partial'; message = 'Direct Semantic Scholar/OpenAlex discovery is available; federated search and full text require uv and the optional Papers bridge.'; }
       // Setup clones the bridge, so git is needed to install or update it; searches never run it, so it leaves readiness alone.
       prerequisites.push({ name: 'git', available: executable('git'), detail: 'Needed to install or update the Papers bridge, whose setup clones it; searches don’t use it.' });
     }
@@ -156,7 +173,7 @@ export function copyEnvironmentKeys(source, state = stateDirectory(), env = proc
     const appended = [];
     for (const name of names) {
       const value = environmentValues(env).get(name);
-      if (/[\r\n]/.test(value)) throw new Error(`${name} in Codex’s environment spans several lines; copy it into keys.env by hand`);
+      if (/[\r\n]/.test(value)) throw new Error(`${name} in ${hostWords(process.env.DIG_HOST).app}’s environment spans several lines; copy it into keys.env by hand`);
       const line = new RegExp(`^[ \\t]*(?:export[ \\t]+)?${name}[ \\t]*=.*$`, 'm');
       if (line.test(text)) text = text.replace(line, () => `${name}=${value}`);
       else appended.push(`${name}=${value}`);

@@ -5,22 +5,24 @@ import { Badge, Button } from '../shared/components';
 import { Frame, FrameHeader, FrameTitle, FrameDescription, FramePanel, FrameFooter } from '../shared/frame';
 import { IconTile } from '../shared/icon-tile';
 import { SourceSetting, AccountsPanel } from './source-controls';
+import { glyphShapes } from './source-icon';
 import { GLYPHS, glyphFor } from '../../glyphs.mjs';
 import { MODULES, SOURCE_GROUPS, moduleAgents } from '../../providers/modules.ts';
 import { SOURCE_GUIDES, activityNote, latestSourceCalls } from '../../ui/source-guide.mjs';
 import { enabledField, ownerOf, settingsGroups } from '../../ui/settings.mjs';
-import { clock, shortDate, costAmounts, num, plural } from '../../ui/format.mjs';
+import { clock, shortDate, costAmounts, num, plural, callOutcome } from '../../ui/format.mjs';
 import { usageOf } from '../../ui/usage.mjs';
-import { READ_ONLY, SCHEMA_MISSING } from './controller';
+import { hostWords } from '../../ui/host.mjs';
+import { readOnly, SCHEMA_MISSING } from './controller';
 import type { DigHost } from '../shared/host';
 
 const STATE_WORDS: Record<string, string> = {
   ready: 'Configured', partial: 'Partly configured', 'setup-required': 'Needs setup', disabled: 'Off', unknown: 'Unknown',
 };
 const KEY_WORDS: Record<string, string> = { set: 'Set', missing: 'Missing', unset: 'Not set' };
-const ENVIRONMENT_NOTES: Record<string, string> = {
-  unused: 'Codex’s environment has a key that Dig isn’t using.',
-  different: 'Codex’s environment has a different key.',
+const ENVIRONMENT_NOTES: Record<string, (app: string) => string> = {
+  unused: app => `${app}’s environment has a key that Dig isn’t using.`,
+  different: app => `${app}’s environment has a different key.`,
 };
 const GROUP_DESCRIPTIONS: Record<string, string> = {
   web: 'Discover and read the web.',
@@ -32,7 +34,7 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
   tools: 'Optional analysis for evidence already in hand.',
 };
 const WORKERS_NOTE = 'The conversation chooses each worker’s model and effort and may choose others. A method without a suggestion of its own follows Source workers on the Settings page.';
-const KEYS_NOTE = 'Edit keys.env opens the file in Codex and adds empty lines for missing names. Fill in values there and save. Dig checks whether a key is present; it does not test whether the provider accepts it.';
+const keysNote = (app: string) => `Edit keys.env opens the file in ${app} and adds empty lines for missing names. Fill in values there and save. Dig checks whether a key is present; it does not test whether the provider accepts it.`;
 const WORKER_FIELD = /_worker_(model|effort)$/;
 const workerKey = (method: string, field: string) => `${method.replaceAll('-', '_')}_worker_${field}`;
 const list = new Intl.ListFormat('en', { type: 'conjunction' });
@@ -64,10 +66,7 @@ function SourceMark({ module }: { module: any }) {
   return <IconTile className="source-page-mark">
     {module.logo ? <svg aria-hidden="true" focusable="false" className="source-page-logo"><use href={`#logo-${module.logo}`} /></svg>
       : <svg aria-hidden="true" focusable="false" className="source-page-glyph" viewBox="0 0 24 24">
-        {GLYPHS[glyphFor(module.id)].map(([name, attributes]: [string, Record<string, string>], index: number) => React.createElement(name, {
-          key: index,
-          ...Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key.replace(/-([a-z])/g, (_: string, letter: string) => letter.toUpperCase()), value])),
-        }))}
+        {glyphShapes(GLYPHS[glyphFor(module.id)])}
       </svg>}
   </IconTile>;
 }
@@ -154,15 +153,16 @@ function Credentials({ module, source, modules, app, preview }: any) {
   const replacing = copyable.some((credential: any) => credential.environment === 'different');
   const plural = copyable.length > 1 ? 's' : '';
   const share = sharedKeys(module, modules);
+  const { app: hostApp } = hostWords(app.snapshot?.host);
   if (!credentials.length && !envSettings.length && !guidance) return null;
   return <section className="source-page-setup-section" aria-label={`${module.label} keys`}>
-    <div className="source-page-section-heading"><h5>Keys</h5><HelpNote label={`About ${module.label}’s keys`}>{KEYS_NOTE}</HelpNote></div>
+    <div className="source-page-section-heading"><h5>Keys</h5><HelpNote label={`About ${module.label}’s keys`}>{keysNote(hostApp)}</HelpNote></div>
     {guidance && !credentials.some((credential: any) => credential.name === guidance) && <p className="source-page-note-text">{guidance}</p>}
     {(credentials.length > 0 || envSettings.length > 0) && <>
       <ul className="source-page-presence-list">
         {credentials.map((credential: any) => <PresenceRow key={credential.name} name={credential.name}
           state={credential.available ? 'set' : credential.required === false ? 'unset' : 'missing'} optional={credential.required === false}>
-          {ENVIRONMENT_NOTES[credential.environment]}
+          {ENVIRONMENT_NOTES[credential.environment]?.(hostApp)}
         </PresenceRow>)}
         {envSettings.map((setting: any) => <PresenceRow key={setting.name} name={setting.name} state={setting.available || setting.bridge ? 'set' : 'unset'} optional>
           {setting.bridge && 'Set in the Papers bridge’s .env. '}{setting.label}. {setting.purpose}
@@ -176,8 +176,8 @@ function Credentials({ module, source, modules, app, preview }: any) {
         </ActionButton>}
       </div>
       {copyable.length > 0 && <p className="source-page-note-text">{replacing
-        ? `Update key${plural} from env replaces the keys.env value${plural} with the one${plural} in Codex’s environment.`
-        : `Use existing key${plural} copies the key${plural} from Codex’s environment into keys.env.`}</p>}
+        ? `Update key${plural} from env replaces the keys.env value${plural} with the one${plural} in ${hostApp}’s environment.`
+        : `Use existing key${plural} copies the key${plural} from ${hostApp}’s environment into keys.env.`}</p>}
     </>}
   </section>;
 }
@@ -221,8 +221,7 @@ function Example({ id, example }: { id: string; example: string }) {
 
 function activityBrief(call: any) {
   if (!call) return 'No retained calls';
-  const outcome: Record<string, string> = { success: 'Completed', partial: 'Partial results', empty: 'No results', failed: 'Failed', cancelled: 'Stopped', skipped: 'Skipped' };
-  return `${outcome[call.status] ?? 'Unknown outcome'} · ${shortDate(call.at)} · ${clock(call.at)}`;
+  return `${callOutcome(call.status)} · ${shortDate(call.at)} · ${clock(call.at)}`;
 }
 
 function RecordedUse({ usage, recent }: { usage: any; recent: any }) {
@@ -321,14 +320,7 @@ export function SourcesPage({ app, host, hidden }: { app: any; host: DigHost; hi
     section?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
     section?.querySelector<HTMLElement>('h3')?.focus({ preventScroll: true });
   };
-  const navigateLink = (event: React.MouseEvent) => {
-    const anchor = (event.target as Element)?.closest<HTMLAnchorElement>('a[data-external]');
-    if (!anchor || host.preview || event.defaultPrevented) return;
-    event.preventDefault(); event.stopPropagation();
-    const url = safeUrl(anchor.href);
-    if (url) void host.openLink(url).catch((error: any) => app.notify?.(`Unable to open ${url}: ${error.message}`, true));
-  };
-  return <section id="sources" className="source-page" hidden={hidden} onClick={navigateLink}>
+  return <section id="sources" className="source-page" hidden={hidden}>
     <header className="source-page-header">
       <div><p className="source-page-eyebrow">Your research toolkit</p><h2>Sources &amp; tools</h2><p>See what is configured, what has been used, and what needs setup.</p></div>
       {sources.length > 0 && <dl className="source-page-overview" aria-label="Source configuration">
@@ -339,7 +331,7 @@ export function SourcesPage({ app, host, hidden }: { app: any; host: DigHost; hi
     </header>
     <p className="source-page-scope" id="sources-summary">{sources.length > 0 && <>{on.length} of {sources.length} sources and tools on. </>}Configured means local prerequisites are present. Recent calls describe past activity, not a connection test.</p>
     <AccountsPanel sources={sources} keysPath={app.sources?.keysPath} editKeys={host.preview ? undefined : app.editKeys} preview={host.preview} />
-    <p id="sources-status" className="source-page-status" role="status" aria-live="polite">{error || (app.sourcesError ? `Source readiness is unavailable: ${app.sourcesError.message}` : !read || !app.sources ? 'Reading sources and tools…' : host.preview ? READ_ONLY : '')}</p>
+    <p id="sources-status" className="source-page-status" role="status" aria-live="polite">{error || (app.sourcesError ? `Source readiness is unavailable: ${app.sourcesError.message}` : !read || !app.sources ? 'Reading sources and tools…' : host.preview ? readOnly(app.snapshot) : '')}</p>
     <nav id="sources-toc" className="source-page-categories" aria-label="Source categories">
       {groups.map(group => <Button key={group.id} variant="ghost" size="sm" onClick={() => jump(group.id)} data-key={`category:${group.id}`}><span>{group.label}</span><span className="source-page-category-count">{group.members.length}</span></Button>)}
     </nav>

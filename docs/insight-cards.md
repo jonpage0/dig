@@ -1,22 +1,21 @@
 # Research cards in the conversation
 
-Dig's cards make the saved state of research legible beside the conversation. Your assistant remains responsible for reading full reports and important originals; you can inspect a particular finding and choose what to ask next.
+Dig's cards show, beside the conversation, what was just saved and open it on request. Your assistant remains responsible for reading full reports and important originals and for explaining the findings.
 
-A card separates three different kinds of information:
+A card shows one row of identity and one action:
 
-- **The saved event:** Report saved or Answer saved identifies a retained document and its saved time.
-- **The assessment:** a report's status, confidence and evidence grade are labeled as its author's judgment. An answer's outcome remains the saved answer's status.
-- **The recorded activity:** retained calls and provider usage are scoped to that report or dig. Known amounts keep their original units, and unpriced calls remain explicit. Shared-tool evidence does not silently change report cost ownership.
+- **Title:** the first supplied insight's title from `show_research`, otherwise the saved report's or answer's title, shortened to 96 characters. Hovering over it shows the original question.
+- **Outcome:** **Report saved**, **Report saved · partial** or **Report saved · failed search** for a source report, as its author recorded the run; **Answer saved**, **Answer has gaps** or **Question unanswered** for a composed answer.
+- **Sources:** the report's source, or the sources an answer cites (the first two by name, then a count).
+- **Saved time and provider cost:** the cost covers only the calls that report claims, or the whole dig for an answer. Known amounts keep their original units, unpriced calls stay unknown, a save with no calls makes no zero-cost claim, and model usage is excluded.
 
-The first layer shows the saved title, **What came back**, any displayed recorded limitation or follow-up, and a **Possible next step**. The summary comes from the saved research, or from the initiating thread's explicit presentation. It is not a live progress indicator or an independently verified conclusion.
+**Open** follows the exact Dig link to the saved file. When the host cannot open that link, the card asks for fullscreen and reads the complete retained file into a dialog, page by page; a read that stops early says the file could not be read completely.
 
-**Review next step** opens an inert instruction preview. When an explicit insight supplies a proposal, that proposal is shown. Otherwise, a card with a canonical saved-file reference can offer to have the assistant review coverage, conflicting evidence and the next useful investigation. That default is a request to assess the records, not an inferred finding or an automatic research decision. Only a separate explicit action places an unsent draft in the native composer or copies the text. Host refusal offers a copy/manual fallback; it never retries by sending the message.
+The card shows no summary, findings, evidence list or next step. The conversation carries the conclusions and the library carries the full retained research. A card is not a live progress indicator, and displaying it neither verifies the research nor shows that the assistant read it. A newer result replaces the card and discards late reads; a failed refresh keeps earlier details only when they belong to the same saved file. A failed save shows a short error, with no saved claim and no **Open** button.
 
-**Findings & evidence** expands the original question, reported or presented findings, ordered details and limitations. **Read evidence** opens the selected retained text; full pagination and canonical-path checks remain in force, and an incomplete or failed read says so. **Inspect research** opens the exact saved record in Dig, with an inline retained-file reader when no valid host deep link is available. Native file opening is offered within evidence inspection when supported.
+Claude Code renders no card. There, the assistant cites the saved report's path and reads it through the conversation.
 
-A failed refresh may leave previously loaded details visible only when they belong to the same canonical saved file. New results and closed or replaced dialogs invalidate late reads, draft/copy acknowledgments and focus callbacks. These guards preserve the view's identity; closing the UI does not claim to cancel a host request that was already issued.
-
-For a conclusion that benefits from a richer explanation, the initiating conversation can call `show_research` after reading the report or answer and its load-bearing originals. Its bounded findings can express a query → competing page → owned page comparison, timestamped video observations, or supporting and conflicting accounts. Fixed components render all supplied text as data. Validation of references and input shape does not establish truth, and opening a card is not evidence that the assistant read the report.
+For a conclusion that benefits from a richer explanation, the initiating conversation can call `show_research` after reading the report or answer and its load-bearing originals. Its bounded findings can express a query → competing page → owned page comparison, timestamped video observations, or supporting and conflicting accounts. The card shows only the first finding's title; the findings themselves stay in the tool result for the conversation to explain. Validation of references and input shape does not establish truth, and showing a card is not evidence that the assistant read the report.
 
 ## Tool input
 
@@ -29,7 +28,7 @@ For a conclusion that benefits from a richer explanation, the initiating convers
 | `details` | Up to 4 ordered items with `label`, `value` and optional HTTP(S) `url`. |
 | `evidence` | One to 4 existing library file references. Use actual report/original references returned by Dig. |
 | `limits` | Up to 4 material limitations. |
-| `nextStep` | Optional `label` and proposed `prompt`, presented as an unsent draft. |
+| `nextStep` | Optional `label` and proposed `prompt`, kept in the tool result; the card does not show it. |
 
 Identity, report status and provider costs cannot be supplied by the model; the server derives them. Evidence must belong to the selected dig. Composed answers may reference only the reports they named. Entire session receipt files and unrelated shared transcript files are not accepted as card evidence because their dig ownership is not established by the current records. A report can still explain and link its transcript through ordinary library reading.
 

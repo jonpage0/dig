@@ -1,18 +1,21 @@
 /**
  * X.com Search Tool via xAI Agent Tools API
  *
- * Self-contained xsearch tool for the dig plugin. Ported from opencode-xsearch.
+ * Self-contained xsearch tool for the dig plugin.
  * Uses the xAI Responses API with x_search agent tool for real-time X.com data.
  * Model and depth come from the [x] table in Dig's native config.toml; reasoning
  * effort is sent when the model supports it, and dropped if the API rejects it.
+ * The answer is streamed, so a long pass is not cut off waiting for response headers.
  * Supports handle filtering, date ranges, image/video understanding,
- * multi-turn chaining via previous_response_id, and prompt caching.
+ * and multi-turn chaining via previous_response_id.
  */
+import { hostOf, hostWords } from "../../ui/host.mjs"
 import { Lexer, type Token, type Tokens } from "marked"
 import type { KeepRaw, ToolSpec } from "../types.js"
 import { loadConfig } from "../runtime-config.js"
 import { keptJson, keptText } from "../http.js"
-import { metered, outcome } from "../outcome.js"
+import { knownSecrets, redactProviderText } from "../secrets.js"
+import { failed, metered, outcome } from "../outcome.js"
 
 const API_BASE = "https://api.x.ai/v1"
 /** xAI reports cost in ticks of 1e-10 USD. */
@@ -55,6 +58,7 @@ interface ResponsesRequest {
     effort: ReasoningEffort
   }
   previous_response_id?: string
+  stream?: boolean
 }
 
 interface MessageOutput {
@@ -88,7 +92,7 @@ interface ResponsesResponse {
     output_tokens_details?: {
       reasoning_tokens?: number
     }
-    total_tokens: number
+    total_tokens?: number
     cost_in_usd_ticks?: number
     num_sources_used?: number
     num_server_side_tools_used?: number
@@ -155,7 +159,9 @@ Never fabricate posts. If search returns empty, say so clearly.`
 function parseError(status: number, errorText: string): string {
   try {
     const errorJson = JSON.parse(errorText)
-    if (errorJson.error?.message) return errorJson.error.message
+    // xAI's error is either an object with a message or, in a flat body, the message itself.
+    const message = typeof errorJson.error === "string" ? errorJson.error : errorJson.error?.message
+    if (typeof message === "string" && message) return message
   } catch {}
 
   if (status === 401 || status === 403) return `AUTH_ERROR: ${errorText || "Authentication failed - check XAI_API_KEY"}`
@@ -261,9 +267,90 @@ async function callResponsesApi(apiKey: string, requestBody: ResponsesRequest, s
     })
   } catch (error) {
     // An issued request that never answered may still be billed: record it as an unknown-charge observation.
-    keep(RAW_LABEL, "error", error instanceof Error ? error.message : String(error))
-    throw error
+    const message = error instanceof Error ? error.message : String(error)
+    keep(RAW_LABEL, "error", message)
+    // Node's fetch keeps why it failed (a headers timeout, a reset connection) in `cause`.
+    const cause = error instanceof Error ? (error.cause as { code?: unknown; message?: unknown } | undefined) : undefined
+    const why = typeof cause?.code === "string" ? cause.code : typeof cause?.message === "string" ? cause.message : null
+    throw new Error(`${message}${why ? ` (${why})` : ""}. xAI may have received the request, so the pass may still have run and been charged; its cost is unknown.`, { cause: error })
   }
+}
+
+/** Events that end a Responses stream; each carries the finished `response`. */
+const TERMINAL_EVENTS = new Set(["response.completed", "response.incomplete", "response.failed"])
+
+/**
+ * The answer of a `POST /responses` sent with `stream: true`, read by OpenAI's Responses event protocol, which xAI
+ * follows: records separated by a blank line, of `event:` and `data:` lines, ended by a terminal event whose `response`
+ * is the object an unstreamed call returns as its body. Only that object is kept for the raw file, so a retained
+ * original has the same shape either way; the deltas are read past. A stream that reports an error, breaks or ends
+ * without a terminal event keeps what arrived (the error event, else the last `response` snapshot) as interrupted, so
+ * its charge is unknown, and throws: it is never sent again. A JSON body (a server that ignored `stream`) is read as before.
+ */
+async function answerBody(response: Response, keep: KeepRaw): Promise<unknown> {
+  if (!response.body || !/^text\/event-stream\b/i.test(response.headers.get("content-type") ?? "")) return keptJson(response, keep, RAW_LABEL)
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  const secrets = knownSecrets()
+  let buffer = ""
+  let event = ""
+  let data: string[] = []
+  let seen: unknown = ""
+  let answer: object | undefined
+  let error: { message?: unknown } | undefined
+  const dispatch = () => {
+    const text = data.join("\n")
+    const named = event
+    event = ""
+    data = []
+    if (!text || text === "[DONE]") return
+    // Each record is redacted by what it means before anything reads it, as keptJson does for a whole body.
+    const record = redactProviderText(text, secrets)
+    if (!record.json || !record.value || typeof record.value !== "object") return
+    const value = record.value as { type?: unknown; response?: unknown; message?: unknown }
+    const type = typeof value.type === "string" ? value.type : named
+    const snapshot = value.response && typeof value.response === "object" ? value.response : undefined
+    if (snapshot) seen = snapshot
+    if (snapshot && TERMINAL_EVENTS.has(type)) answer = snapshot
+    else if (type === "error") seen = error = value
+  }
+  const line = (text: string) => {
+    if (!text) return dispatch()
+    if (text.startsWith(":")) return
+    const colon = text.indexOf(":")
+    const field = colon < 0 ? text : text.slice(0, colon)
+    const value = colon < 0 ? "" : text.slice(colon + 1).replace(/^ /, "")
+    if (field === "event") event = value
+    else if (field === "data") data.push(value)
+  }
+  const cut = (why: string, cause?: unknown): never => {
+    keep(RAW_LABEL, response.status, seen, undefined, true)
+    throw new Error(`${why}. xAI accepted the request, so the pass may still have run and been charged; its cost is unknown.`, cause === undefined ? undefined : { cause })
+  }
+  try {
+    while (!answer && !error) {
+      const { done, value } = await reader.read()
+      if (done) {
+        if (buffer) line(buffer)
+        dispatch()
+        break
+      }
+      buffer += value
+      // A lone `\r` at the end may be the first half of a `\r\n` split across chunks: wait for the next one.
+      for (let match; !answer && !error && (match = /\r\n|\n|\r/.exec(buffer)) && !(match[0] === "\r" && match.index === buffer.length - 1);) {
+        line(buffer.slice(0, match.index))
+        buffer = buffer.slice(match.index + match[0].length)
+      }
+    }
+  } catch (failure) {
+    const cause = failure instanceof Error ? (failure.cause as { code?: unknown } | undefined)?.code : undefined
+    const why = [failure instanceof Error ? failure.message : String(failure), typeof cause === "string" ? cause : ""].filter(Boolean).join(": ")
+    cut(`xAI's stream broke before its final event${why ? ` (${why})` : ""}`, failure)
+  }
+  reader.cancel().catch(() => {})
+  if (error) cut(`xAI's stream reported an error: ${typeof error.message === "string" && error.message ? error.message : "no message"}`)
+  if (!answer) cut("xAI's stream ended before its final event")
+  keep(RAW_LABEL, response.status, answer)
+  return answer
 }
 
 function shouldRetryWithoutStorage(status: number, errorText: string): boolean {
@@ -318,34 +405,35 @@ export const search = metered({
     let attempts = 0
     let ticks = 0
     let unreported = 0
-    const keep: KeepRaw = (label, status, body) => {
+    const keep: KeepRaw = (label, status, body, headers, interrupted) => {
       attempts += 1
-      const charged = reportedTicks(body)
+      const charged = interrupted ? null : reportedTicks(body)
       if (charged === null) unreported += 1
       else ticks += charged
-      context.keep(label, status, body)
+      if (interrupted) context.keep(label, status, body, headers, true)
+      else context.keep(label, status, body)
     }
     const passUsd = () => (attempts && !unreported ? ticks / USD_TICKS_PER_DOLLAR : null)
-    const fail = (message: string) => `ERROR: ${message}`
+    const fail = (message: string) => failed(`ERROR: ${message}`)
 
     const apiKey = process.env.XAI_API_KEY
     if (!apiKey) {
-      return "ERROR: XAI_API_KEY is not set in Dig's keys.env. The user adds it outside the chat (Dig Settings → Edit keys.env), or copies one Codex's environment already has (Dig Settings → X → Use existing key)."
+      return failed(hostOf(process.env.DIG_HOST) === "codex" ? "ERROR: XAI_API_KEY is not set in Dig's keys.env. The user adds it outside the chat (Dig Settings → Edit keys.env), or copies one Codex's environment already has (Dig Settings → X → Use existing key)." : `ERROR: XAI_API_KEY is not set in Dig's keys.env. The user adds it outside the chat by editing keys.env directly (${hostWords(process.env.DIG_HOST).skill("setup")} gives the exact line), or copies one ${hostWords(process.env.DIG_HOST).app}'s environment already has into keys.env by hand.`)
     }
 
     if (args.handles?.length && args.excludeHandles?.length) {
-      return "ERROR: Cannot use both 'handles' and 'excludeHandles' - choose one"
+      return failed("ERROR: Cannot use both 'handles' and 'excludeHandles' - choose one")
     }
     if (args.handles?.length > 20 || args.excludeHandles?.length > 20) {
-      return "ERROR: Each handle filter accepts at most 20 handles. Split a larger scope into explicit searches; no handles were silently omitted."
+      return failed("ERROR: Each handle filter accepts at most 20 handles. Split a larger scope into explicit searches; no handles were silently omitted.")
     }
     for (const name of ["fromDate", "toDate"]) {
       if (args[name] !== undefined && !validDate(args[name])) {
-        return `ERROR: ${name} must be a valid YYYY-MM-DD date. Date-time values are not applied by X Search.`
+        return failed(`ERROR: ${name} must be a valid YYYY-MM-DD date. Date-time values are not applied by X Search.`)
       }
     }
     if (args.fromDate && args.toDate && args.fromDate >= args.toDate) {
-      return "ERROR: toDate must be after fromDate. toDate is exclusive at 00:00 UTC; to search one day, use the following date."
+      return failed("ERROR: toDate must be after fromDate. toDate is exclusive at 00:00 UTC; to search one day, use the following date.")
     }
 
     // Build tools array
@@ -393,6 +481,7 @@ export const search = metered({
       input,
       tools,
       store: true,
+      stream: true,
     }
     if (supportsReasoningEffort(selectedModel)) {
       requestBody.reasoning = { effort: reasoningEffortForDepth(depth) }
@@ -413,12 +502,10 @@ export const search = metered({
           const retryBody: ResponsesRequest = {
             ...requestBody,
             store: false,
-            previous_response_id: undefined,
           }
           response = await callResponsesApi(apiKey, retryBody, context.abort, keep)
           if (response.ok) {
             requestBody.store = false
-            requestBody.previous_response_id = undefined
           } else {
             const retryErrorText = await keptText(response, keep, RAW_LABEL)
             return fail(`${parseError(response.status, retryErrorText)} (status ${response.status})`)
@@ -437,7 +524,7 @@ export const search = metered({
         }
       }
 
-      const data = (await keptJson(response, keep, RAW_LABEL)) as ResponsesResponse
+      const data = (await answerBody(response, keep)) as ResponsesResponse
       if (data.error) return fail(data.error.message)
 
       const { text, sources } = extractContent(data)
@@ -466,7 +553,7 @@ export const search = metered({
       result += `- Query: ${args.query}\n`
       result += `- Model: ${selectedModel}\n`
       result += `- Depth: ${depth}${requestBody.reasoning ? ` (requested effort: ${requestBody.reasoning.effort})` : " (effort not sent; provider default applies)"}\n`
-      result += "- X Search billing: from 2026-09-21 12:00 PM Pacific, $5 per 1,000 fetched posts and $10 per 1,000 fetched profiles replace $5 per 1,000 tool calls. Parent and quoted posts count; model-token charges are separate. See https://docs.x.ai/developers/tools/x-search.\n"
+      result += "- Billing: every pass is paid, and a deeper pass costs more; the receipt records the charge xAI reported.\n"
       result += `- Tools: ${activeTools}\n`
       result += `- Store: ${requestBody.store === false ? "false" : "true"}\n`
       result += `- Handles: ${handleList}\n`
@@ -495,7 +582,7 @@ export const search = metered({
         const reasoningStr = reasoningTokens != null
           ? ` | Reasoning: ${reasoningTokens.toLocaleString()}`
           : ""
-        result += `*Tokens: ${data.usage.total_tokens.toLocaleString()}${reasoningStr}${costStr}*`
+        result += `*Tokens: ${data.usage.total_tokens?.toLocaleString() ?? "not reported"}${reasoningStr}${costStr}*`
         if (data.usage.num_sources_used != null || data.usage.num_server_side_tools_used != null) {
           const sourceStr = data.usage.num_sources_used != null
             ? `Sources used: ${data.usage.num_sources_used.toLocaleString()}`

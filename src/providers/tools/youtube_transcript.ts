@@ -44,7 +44,7 @@ export const transcript = creditMetered({
       })
       const directory = join(loadConfig().library, "youtube-transcripts")
       mkdirSync(directory, { recursive: true })
-      const file = join(directory, `${id}-scrapecreators-${args.originalAudio ? "original" : language ?? "auto"}.md`)
+      const file = join(directory, `${id}-scrapecreators-${args.originalAudio ? `original${language ? `-${language}` : ""}` : language ?? "auto"}.md`)
       const content = [`# YouTube transcript ${id}`, `Source: https://www.youtube.com/watch?v=${id}`, "Provider: ScrapeCreators", `Language: ${body.language ?? "not reported"}`, `Requested language: ${language ?? "automatic"}; original audio only: ${args.originalAudio === true}`, `Retrieved: ${new Date().toISOString()}`, "", "## Full Transcript", "", ...segments].join("\n\n")
       const reused = !saveTranscript(file, content, 0o600)
       if (reused && !lstatSync(file).isFile()) throw new Error("Existing transcript is not a regular file")

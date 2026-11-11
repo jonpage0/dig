@@ -151,6 +151,7 @@ describe("facebook tools", () => {
 
 		const gated = await facebook.execute({ kind: "profile", url: "https://www.facebook.com/adultsonly" }, context);
 		expect(status(gated)).toBe("failed");
+		expect(text(gated).split("\n")[0]).toMatch(/^Access: gated \(account_status: age-restricted/);
 		expect(text(gated)).toContain("Access: gated (account_status: age-restricted; isPrivate: true). Facebook shows an 18+ content gate");
 		expect(text(gated)).toContain("include_gated_profile=true asks for the limited public fields");
 		expect(text(gated)).not.toContain("Likes:");
@@ -577,5 +578,16 @@ describe("facebook tools", () => {
 		expect(output).toContain('Next page: pass cursor="Cg8-after-long"');
 		expect(output).toMatch(/\[Truncated at 60000 of \d+ characters\. The complete response is this call's original response when raw retention is on; read it with library_read using the receipt's raw file\.\]$/);
 		expect(details(result)).toMatchObject({ truncated: true, cursor: "Cg8-after-long" });
+		expect(status(result)).toBe("partial");
+	});
+
+	test("a request that got no response is sent once, and its text and receipt both leave the cost unknown", async () => {
+		const mock = installFetchMock({ "/v1/facebook/profile": () => { throw new DOMException("The operation timed out.", "TimeoutError"); } });
+		restore = mock.restore;
+		const result = await executeSource(facebook, { kind: "profile", url: PAGE_URL }, context);
+		expect(mock.calls).toHaveLength(1);
+		expect(result.status).toBe("failed");
+		expect(result.text).toContain("ScrapeCreators may have received and charged this request, but no complete response arrived; its cost is unknown.");
+		expect(details(result).cost).toBeNull();
 	});
 });

@@ -36,7 +36,7 @@ The default first call uses:
 
 - `platforms: ["xiaohongshu", "bilibili", "douyin"]`;
 - `provider: "auto"`;
-- `limit: 5`;
+- no `limit`, so every item of each paid response is shown (Bilibili and Zhihu then request 5 per page); pass `limit` only to narrow what is shown, never what is bought;
 - `sort: "relevance"`;
 - `time_range: "all"`.
 
@@ -57,7 +57,7 @@ Run at most one focused second pass unless the caller explicitly requests deeper
 
 ## Treat run evidence as current health
 
-Every result can report endpoint, HTTP status, attempts, latency, normalized count, request ID, and next cursor. That returned run health overrides stale prose about a platform's health. Never carry a frozen stable/degraded table into the report. A provider failure does not prove that the platform disappeared.
+Every result can report endpoint, HTTP status, attempts, latency, normalized count, request ID, and next cursor. Bilibili's "Bullet comments" are danmaku overlaid on the video, not its comments; "Comments" appears only when the response carries the comment count. A request that got no complete response is never sent again and may still have been charged, so its cost is unknown. That returned run health overrides stale prose about a platform's health. Never carry a frozen stable/degraded table into the report. A provider failure does not prove that the platform disappeared.
 
 Keep important Chinese names and phrases, then add concise English glosses. Do not over-translate slang. Separate platform-native signal from cross-platform interpretation. Repetition across Xiaohongshu and Douyin can strengthen creator or consumer signal; Weibo amplification is public buzz rather than automatic conviction; Zhihu can add a higher-context layer. Preserve divergence and silence.
 

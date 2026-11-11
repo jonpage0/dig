@@ -125,6 +125,7 @@ export function videoCoverage(value: any) {
   if (p?.trace_truncated === true) warnings.push("The provider reports a truncated inspection trace.");
   const asr = p?.asr;
   if (asr?.status === "skipped" && asr?.reason === "silence") warnings.push("Audio transcription was skipped as silence; this is a provider assessment, not proof that every sound was absent.");
+  else if (asr?.status === "skipped" && asr?.reason === "no_audio") warnings.push("Audio transcription was skipped because the provider found no audio in the clip; the answer rests on the visuals alone.");
   else if (!asr || asr.status !== "ok" || p?.audio_processed === false) warnings.push(`Audio was not fully transcribed (${asr?.status ?? "not reported"}${asr?.reason ? `: ${asr.reason}` : ""}); do not use the visual answer as a speech transcript.`);
   if (value?.choices?.[0]?.finish_reason !== "stop") warnings.push(`The answer did not finish normally (${value?.choices?.[0]?.finish_reason ?? "not reported"}).`);
   const partial = !p || !Number.isFinite(p.frames) || p.frames < 1 || !Number.isFinite(p.video_seconds) || p.video_seconds <= 0 || p.truncated === true || p.trace_truncated === true || (!asr || (asr.status !== "ok" && !(asr.status === "skipped" && ["silence", "no_audio"].includes(asr.reason)))) || p.audio_processed === false || value?.choices?.[0]?.finish_reason !== "stop";
@@ -151,7 +152,7 @@ export const video_analyze: ToolSpec = {
         let input: string, duration: number, title: string | undefined;
         if (id) {
           const downloader = executable("yt-dlp"), url = `https://www.youtube.com/watch?v=${id}`;
-          const common = ["--ignore-config", "--no-playlist", "--no-warnings", "--socket-timeout", "15", "--retries", "0", "--extractor-retries", "0", "--fragment-retries", "0"];
+          const common = ["--ignore-config", "--js-runtimes", `node:${process.execPath}`, "--no-playlist", "--socket-timeout", "15", "--retries", "0", "--extractor-retries", "0", "--fragment-retries", "0"];
           const metadata = await runVideoProcess(downloader, [...common, "--skip-download", "--print", '{"id":%(id)j,"title":%(title)j,"duration":%(duration)j,"is_live":%(is_live)j}', url], ctx);
           const info = JSON.parse(metadata.stdout.trim());
           ctx.keep("YouTube video metadata via yt-dlp", 200, info);

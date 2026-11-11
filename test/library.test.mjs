@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, writeFile, symlink, mkdir, rename, rm, realpath } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, symlink, mkdir, rename, rm, realpath, stat, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { loadConfig, updateConfig } from '../src/config.mjs';
-import { startDig, recordCall, saveReport, finishDig, listLibrary, readLibraryFile, projectFolder } from '../src/library.mjs';
+import { startDig, recordCall, saveReport, finishDig, listLibrary, readLibraryFile, projectFolder, frontMatter as libraryFrontMatter } from '../src/library.mjs';
+import { passages } from '../src/search/engine.mjs';
 import { savedResearch } from '../src/surfaces.mjs';
 import { frontMatter, reportParts } from '../src/ui/markdown.mjs';
 
@@ -296,6 +297,71 @@ test('discovery and every write path refuse symlinks outside the chosen library'
   const safe = await startDig(config, state, 'Safe dig with redirected sessions');
   await symlink(outside, join(config.library, projectFolder(state), 'sessions'));
   await assert.rejects(recordCall(config, state, safe.dig, { tool: 'hackernews', source: 'hackernews', cost: [], responses: [{ label: 'search', status: 200, body: { hits: [] } }], at: new Date().toISOString(), ms: 1, args: {}, status: 'empty' }), /outside the library/);
+});
+
+test('a truncated receipt line or a dig folder without dig.md is skipped instead of breaking the library', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-library-damaged-')); t.after(() => rm(state, { recursive: true, force: true }));
+  const config = await loadConfig(state); const dig = await startDig(config, state, 'Damaged library');
+  const call = await recordCall(config, state, dig.dig, { tool: 'hackernews', source: 'hackernews', cost: [], responses: [], at: new Date().toISOString(), ms: 1, args: { query: 'kept' }, status: 'empty' });
+  await writeFile(join(config.library, projectFolder(state), 'sessions', 'session-unavailable', 'calls.jsonl'), '{"id":"c-trunc","at":"2026', { flag: 'a' });
+  await mkdir(join(config.library, projectFolder(state), 'digs', '2026-11-10-0000-half-started'));
+  const { items, live } = await listLibrary(config);
+  assert.deepEqual(items.map(item => item.id), [dig.dig]);
+  assert.deepEqual(items[0].calls.map(c => c.id), [call.id]);
+  assert.deepEqual(live, []);
+});
+
+test('a receipt keeps the arguments the tool’s schema declares whatever their names, and drops undeclared and nested credential names', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-receipt-names-')); t.after(() => rm(state, { recursive: true, force: true }));
+  const config = await loadConfig(state);
+  const args = { token_id: '123', token: 'next-page', expansion_token: 'x-1', interval: '1d', api_key: 'undeclared-value', options: { access_token: 'nested-value', depth: 2 } };
+  const receipt = await recordCall(config, state, undefined, { tool: 'polymarket_history', source: 'polymarket', cost: [], responses: [], at: new Date().toISOString(), ms: 1, args, declared: ['token_id', 'token', 'expansion_token', 'interval', 'options'], status: 'empty' });
+  assert.deepEqual(receipt.args, { token_id: '123', token: 'next-page', expansion_token: 'x-1', interval: '1d', options: { depth: 2 } });
+  const stored = JSON.parse((await readFile(join(config.library, projectFolder(state), 'sessions', 'session-unavailable', 'calls.jsonl'), 'utf8')).trim());
+  assert.deepEqual(stored.args, receipt.args);
+  assert.deepEqual((await recordCall(config, state, undefined, { tool: 'polymarket_history', source: 'polymarket', cost: [], responses: [], at: new Date().toISOString(), ms: 1, args, status: 'empty' })).args, { interval: '1d', options: { depth: 2 } }, 'Without declared names, removal by name applies to every argument');
+});
+
+test('one report with Windows line endings has the same front matter for the library, the views and search', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-library-crlf-')); t.after(() => rm(state, { recursive: true, force: true }));
+  const config = await loadConfig(state); const dig = await startDig(config, state, 'A question saved from Windows');
+  const head = ['---', 'title: "Windows report"', `dig: ${JSON.stringify(dig.dig)}`, 'source: hackernews', 'agent: hackernews', 'planned: ["hackernews"]', 'generated_at: "2026-11-10T00:00:00.000Z"', '---', ''].join('\r\n');
+  const text = head + report.replaceAll('\n', '\r\n');
+  const fields = { title: 'Windows report', dig: dig.dig, source: 'hackernews', agent: 'hackernews', planned: ['hackernews'], generated_at: '2026-11-10T00:00:00.000Z' };
+  assert.deepEqual(libraryFrontMatter(text), fields);
+  assert.deepEqual(frontMatter(text).meta, fields);
+  assert.equal(frontMatter(text).body, text.slice(head.length));
+  assert.equal(passages(text, 'Windows report')[0].start, head.length, 'Search passages begin where the front matter ends');
+  await writeFile(join(dig.path, 'hackernews.md'), text);
+  const [detail] = (await listLibrary(config)).items[0].reportDetails;
+  assert.deepEqual([detail.source, detail.method, detail.at], ['hackernews', 'hackernews', '2026-11-10T00:00:00.000Z']);
+  assert.ok(detail.summary.length, 'The report body is read past its front matter');
+});
+
+test('a refresh parses only library files whose size or modification time changed, and shows new and removed files', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-library-refresh-')); t.after(() => rm(state, { recursive: true, force: true }));
+  const config = await loadConfig(state);
+  const saved = await saveReport(config, { project: state, source: 'hackernews', content: report.replace('A small inspected sample', 'First summary AAAA'), question: 'Refresh cache' });
+  const summary = async () => (await listLibrary(config)).items[0]?.reportDetails.map(r => r.summary) ?? [];
+  const pinned = 1_800_000_000; await utimes(saved.path, pinned, pinned);
+  assert.match((await summary())[0], /First summary AAAA/);
+  // Same size and modification time: the cached parse stands, so the file was not read again.
+  await writeFile(saved.path, (await readFile(saved.path, 'utf8')).replace('First summary AAAA', 'First summary BBBB')); await utimes(saved.path, pinned, pinned);
+  assert.equal((await stat(saved.path)).mtimeMs, pinned * 1000);
+  assert.match((await summary())[0], /First summary AAAA/);
+  // A changed size is read again.
+  await writeFile(saved.path, (await readFile(saved.path, 'utf8')).replace('First summary BBBB', 'Changed summary text'));
+  assert.match((await summary())[0], /Changed summary text/);
+  const second = await saveReport(config, { project: state, dig: saved.dig, source: 'hackernews', content: report.replace('A small inspected sample', 'Second report appears') });
+  assert.equal((await summary()).length, 2);
+  assert.ok((await summary()).some(text => /Second report appears/.test(text)));
+  await rm(second.path);
+  assert.deepEqual((await summary()).map(text => /Changed summary text/.test(text)), [true]);
+  // A receipt appended to calls.jsonl shows at once.
+  await recordCall(config, state, saved.dig, { tool: 'hackernews', source: 'hackernews', cost: [], responses: [], at: new Date().toISOString(), ms: 1, args: {}, status: 'empty' });
+  assert.equal((await listLibrary(config)).items[0].calls.length, 1);
+  await rm(join(config.library, projectFolder(state), 'sessions'), { recursive: true });
+  assert.equal((await listLibrary(config)).items[0].calls.length, 0);
 });
 
 test('library reads return only Dig research files, even after the library is pointed at another folder', async () => {

@@ -185,6 +185,13 @@ test("a documented silent clip remains a complete visual result with an explicit
   assert.match(coverage.warnings.join("\n"), /provider assessment, not proof/);
 });
 
+test("a clip with no audio is a complete visual result with its own note, not an incomplete transcription", () => {
+  const coverage = videoCoverage(completion({ usage: { elorian: { ...provenance(), asr: { status: "skipped", reason: "no_audio" } } } }));
+  assert.equal(coverage.partial, false);
+  assert.doesNotMatch(coverage.warnings.join("\n"), /not fully transcribed/);
+  assert.match(coverage.warnings.join("\n"), /no audio/);
+});
+
 test("cancelling a queued run requests remote cancellation once without another analysis request", async () => {
   const abort = new AbortController();
   mockFetch(url => {
@@ -370,4 +377,18 @@ test("invalid direct inputs and missing credentials fail before provider request
   assert.equal(result.status, "failed");
   assert.match(result.text, /ELORIAN_API_KEY/);
   assert.equal(calls.length, 0);
+});
+
+test("YouTube clips give yt-dlp Dig's own Node as its JavaScript runtime and do not suppress its warnings", { skip: process.platform === "win32" }, async () => {
+  const bin = join(root, "bin"); await mkdir(bin);
+  const argv = join(root, "yt-dlp-args.json");
+  await writeFile(join(bin, "yt-dlp"), `#!${process.execPath}\nrequire("node:fs").writeFileSync(${JSON.stringify(argv)}, JSON.stringify(process.argv.slice(2)));\nprocess.exit(1);\n`, { mode: 0o700 });
+  for (const name of ["ffmpeg", "ffprobe"]) await writeFile(join(bin, name), "#!/bin/sh\nexit 99\n", { mode: 0o700 });
+  process.env.PATH = bin;
+  mockFetch(() => { throw new Error("A failed preparation must not contact Elorian"); });
+  const result = await run({ ...ARGS, video: "https://www.youtube.com/watch?v=aB_cD-eF123" });
+  assert.equal(result.status, "failed");
+  const args = JSON.parse(await readFile(argv, "utf8")) as string[];
+  assert.equal(args[args.indexOf("--js-runtimes") + 1], `node:${process.execPath}`);
+  assert.ok(!args.includes("--no-warnings"));
 });

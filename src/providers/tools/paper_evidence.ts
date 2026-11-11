@@ -22,7 +22,7 @@ async function get(path: string, params: Record<string, string | number | undefi
 function show(body: any, label: string) {
   const raw = JSON.stringify(body, null, 2), truncated = raw.length > 60000
   const more = body.next !== undefined && body.next !== null
-  return outcome(truncated || more ? "partial" : body.data.length ? "success" : "empty", `${label}\n${more ? `Next offset: ${body.next}.` : ""}${truncated ? " Output shortened; read the retained original." : ""}\n\n${raw.slice(0, 60000)}`)
+  return outcome(truncated ? "partial" : body.data.length ? "success" : "empty", `${label}\n${more ? `Next offset: ${body.next}.` : ""}${truncated ? " Output shortened; read the retained original." : ""}\n\n${raw.slice(0, 60000)}`)
 }
 export const snippets = tool("Find Semantic Scholar passages matching a question, optionally restricted to known papers. Returns snippet text, section, offsets and paper identity. Snippets are partial paper evidence, not full text.", async (args, ctx) => {
   if (args.paperIds !== undefined && (!Array.isArray(args.paperIds) || args.paperIds.length > 100 || args.paperIds.some((id: unknown) => typeof id !== "string" || !id.trim() || id.includes(",")))) throw new Error("paperIds must contain at most 100 nonempty IDs")

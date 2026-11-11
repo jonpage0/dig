@@ -4,13 +4,12 @@
  * Hybrid approach:
  *   - Search: Algolia HN Search API (full-text search, filters, fast)
  *   - Comment trees: Algolia Items API (full recursive thread in one call)
- *   - Live feeds: Firebase HN API (top/new/best/show/ask stories)
  *
  * All free, public, no auth required.
  *
  * Algolia: https://hn.algolia.com/api — 10,000 req/hr/IP
- * Firebase: https://hacker-news.firebaseio.com/v0/ — no documented rate limits
  */
+import { USER_AGENT } from "../../version.mjs"
 import { keptJson, keptText } from "../http.js"
 import { free, outcome } from "../outcome.js"
 
@@ -66,6 +65,7 @@ export default free({
     "Search Hacker News for stories, Show HN posts, Ask HN threads, and comments. " +
     "Uses the Algolia HN Search API (free, no auth). " +
     "Returns results with points, comment counts, authors, and URLs. " +
+    "Story searches return only stories with more than 2 points. All-type searches apply no points filter, because comments carry no points and the filter would remove every one; comment searches are unfiltered. " +
     "Can fetch full comment trees for top stories (recursive, single API call). " +
     "Best for tech community sentiment, startup news, and developer sentiment.",
   async execute(args, context) {
@@ -92,8 +92,8 @@ export default free({
         ? "https://hn.algolia.com/api/v1/search_by_date"
         : "https://hn.algolia.com/api/v1/search"
 
-    // points>2 filters out low-engagement noise
-    const pointsFilter = type === "comment" ? "" : ",points>2"
+    // points>2 filters low-engagement stories. Comments carry no points (null), so the filter would drop every comment: story searches only.
+    const pointsFilter = type === "story" ? ",points>2" : ""
 
     const url =
       `${endpoint}?query=${encodeURIComponent(args.query)}` +
@@ -103,8 +103,8 @@ export default free({
 
     try {
       const response = await fetch(url, {
-        signal: context.abort,
-        headers: { "User-Agent": "opencode-hackernews-tool/1.0" },
+        signal: AbortSignal.any([context.abort, AbortSignal.timeout(60_000)]),
+        headers: { "User-Agent": USER_AGENT },
       })
 
       if (!response.ok) {
@@ -122,11 +122,13 @@ export default free({
       // For story results with high engagement, fetch full comment trees
       // via Algolia Items API (returns entire thread in one call)
       const commentTrees = new Map<string, HNItem>()
+      let treeAttempts = 0, treeFailures = 0
       if (type === "story" || type === "all") {
         const highEngagement = data.hits
           .filter((h) => h._tags?.includes("story") && (h.num_comments ?? 0) >= 5)
           .sort((a, b) => (b.num_comments ?? 0) - (a.num_comments ?? 0))
           .slice(0, 5) // Fetch comment trees for top 5 most-discussed stories
+        treeAttempts = highEngagement.length
 
         // Fetch in parallel
         const treePromises = highEngagement.map(async (hit) => {
@@ -134,17 +136,21 @@ export default free({
             const itemResp = await fetch(
               `https://hn.algolia.com/api/v1/items/${hit.objectID}`,
               {
-                signal: context.abort,
-                headers: { "User-Agent": "opencode-hackernews-tool/1.0" },
+                signal: AbortSignal.any([context.abort, AbortSignal.timeout(60_000)]),
+                headers: { "User-Agent": USER_AGENT },
               }
             )
             if (itemResp.ok) {
               const item = (await keptJson(itemResp, context.keep, `item ${hit.objectID}`)) as HNItem
               commentTrees.set(hit.objectID, item)
-            } else await keptText(itemResp, context.keep, `item ${hit.objectID}`)
+            } else {
+              treeFailures++
+              await keptText(itemResp, context.keep, `item ${hit.objectID}`)
+            }
           } catch {
             context.abort.throwIfAborted()
-            // Skip failed fetches — we still have the search results
+            // Count failed fetches — we still have the search results
+            treeFailures++
           }
         })
         await Promise.all(treePromises)
@@ -156,11 +162,11 @@ export default free({
 
         if (isComment) {
           const text = hit.comment_text
-            ? stripHtml(hit.comment_text).slice(0, 300)
+            ? excerpt(hit.comment_text, 300)
             : "(no text)"
           return [
             `**${hit.objectID}** (comment) by ${hit.author} on "${hit.story_title || "unknown"}"`,
-            `  ${text}${hit.comment_text && stripHtml(hit.comment_text).length > 300 ? "..." : ""}`,
+            `  ${text}`,
             hit.story_url ? `  Story: ${hit.story_url}` : null,
             `  HN: https://news.ycombinator.com/item?id=${hit.objectID}`,
             `  Date: ${hit.created_at.split("T")[0]}`,
@@ -180,7 +186,7 @@ export default free({
           hit.url ? `  URL: ${hit.url}` : null,
           `  HN: https://news.ycombinator.com/item?id=${hit.objectID}`,
           `  Date: ${hit.created_at.split("T")[0]}`,
-          hit.story_text ? `  Text: ${stripHtml(hit.story_text).slice(0, 200)}...` : null,
+          hit.story_text ? `  Text: ${excerpt(hit.story_text, 200)}` : null,
         ]
 
         // Append top comments from the full comment tree (if fetched)
@@ -195,11 +201,10 @@ export default free({
             .slice(0, 5)
 
           for (const comment of topComments) {
-            const text = stripHtml(comment.text || "").slice(0, 250)
+            const text = excerpt(comment.text || "", 250)
             const replyCount = comment.children?.length ?? 0
-            const truncated = (comment.text || "").length > 250 ? "..." : ""
             lines.push(
-              `    💬 ${comment.author} (${replyCount} replies): ${text}${truncated}`
+              `    💬 ${comment.author} (${replyCount} replies): ${text}`
             )
           }
         }
@@ -209,13 +214,15 @@ export default free({
 
       const enrichedCount = commentTrees.size
       const header = [
-        `Hacker News results for "${args.query}" (last ${days} days, ${data.nbHits} total matches):`,
+        `Hacker News results for "${args.query}" (last ${days} days, ${data.nbHits} total matches${pointsFilter ? " with more than 2 points" : ""}):`,
         `Showing ${data.hits.length} results sorted by ${sortBy}.` +
-          (enrichedCount > 0 ? ` Comment trees fetched for ${enrichedCount} top stories.` : ""),
+          (pointsFilter ? " Only items with more than 2 points were searched." : type === "all" ? " No points filter: comments carry no points, so items of every score are searched." : "") +
+          (enrichedCount > 0 ? ` Comment trees fetched for ${enrichedCount} top stories.` : "") +
+          (treeFailures > 0 ? ` ${treeFailures} of ${treeAttempts} comment-tree fetches failed.` : ""),
         "",
       ].join("\n")
 
-      return header + results.join("\n\n")
+      return outcome(treeFailures > 0 ? "partial" : "success", header + results.join("\n\n"))
     } catch (err) {
       context.abort.throwIfAborted()
       return `ERROR: Failed to search Hacker News: ${err instanceof Error ? err.message : "Unknown error"}`
@@ -227,16 +234,23 @@ export default free({
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Strip HTML tags from a string */
-function stripHtml(html: string): string {
+/** HN's HTML as text: paragraphs and line breaks become newlines, a link becomes its target, other tags are dropped, and &amp; is decoded last so escaped entities stay literal. */
+export function hnText(html: string): string {
   return html
+    .replace(/<\s*(?:p|br)\b[^>]*>/gi, "\n")
+    .replace(/<a\b[^>]*?\bhref\s*=\s*"([^"]*)"[^>]*>[\s\S]*?<\/a\s*>/gi, "$1")
     .replace(/<[^>]*>/g, "")
-    .replace(/&amp;/g, "&")
+    .replace(/&#(x[0-9a-f]+|\d+);/gi, (_, n) => String.fromCodePoint(n[0].toLowerCase() === "x" ? parseInt(n.slice(1), 16) : Number(n)))
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, "/")
-    .replace(/\s+/g, " ")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
     .trim()
+}
+
+/** One line of HN text, cut to max characters with an ellipsis only when something was cut */
+function excerpt(html: string, max: number): string {
+  const text = hnText(html).replace(/\s+/g, " ")
+  return text.length > max ? `${text.slice(0, max)}...` : text
 }

@@ -26,7 +26,8 @@ test('direct social reads use existing source enablement, native receipt ownersh
     const a = await call('tiktok_read', { project: root, kind: 'post', url: 'https://www.tiktok.com/@fixture/photo/12345' });
     const b = await call('instagram_read', { project: root, kind: 'posts', handle: 'fixture' });
     assert.equal(a.isError, undefined); assert.equal(a.structuredContent.status, 'success');
-    assert.equal(b.isError, undefined); assert.equal(b.structuredContent.status, 'partial');
+    // Another page of posts is success, with the cursor stated: partial is kept for something that failed.
+    assert.equal(b.isError, undefined); assert.equal(b.structuredContent.status, 'success');
     const live = (await call('library_list', { project: root })).structuredContent.live;
     for (const result of [a, b]) {
       assert.deepEqual(result.structuredContent.call.cost, [{ amount: 1, unit: 'credits' }]);

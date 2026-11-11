@@ -1,3 +1,4 @@
+import { hostWords } from "../../ui/host.mjs"
 import type { KeepRaw, ToolSpec } from "../types.js";
 import { failed, free, outcome } from "../outcome.js";
 import { keptJson, keptText } from "../http.js";
@@ -32,6 +33,8 @@ interface YouTubeVideo {
   description: string;
   transcriptFile: string | null;
   transcriptWords: number;
+  /** Which captions this call read, where yt-dlp's info lets Dig know; null for a reused file. */
+  captions: string | null;
 }
 interface SearchResult {
   videos: YouTubeVideo[];
@@ -52,8 +55,15 @@ function emptyVideo(id: string): YouTubeVideo {
     description: "",
     transcriptFile: null,
     transcriptWords: 0,
+    captions: null,
   };
 }
+/** Dig's own Node, enabled for yt-dlp beside its default Deno, which it still prefers when installed. */
+const JS_RUNTIME = ["--js-runtimes", `node:${process.execPath}`];
+/** English caption tracks asked of yt-dlp: the plain code and the regional codes uploaders use. */
+const CAPTION_LANGS = "en,en-US,en-GB,en-CA,en-AU";
+/** At most this many yt-dlp processes run at once. */
+const YTDLP_CONCURRENCY = 3;
 function metric(value: unknown): number | null {
   if ((typeof value !== "string" && typeof value !== "number") || value === "")
     return null;
@@ -126,25 +136,33 @@ export default free({
         const executable = findExecutable("yt-dlp");
         if (needFetch.length && !executable)
           warnings.push(
-            "yt-dlp is unavailable; new transcripts were not fetched. Install yt-dlp (https://github.com/yt-dlp/yt-dlp) where Codex can find it, such as /opt/homebrew/bin, /usr/local/bin or ~/.local/bin.",
+            `yt-dlp is unavailable; new transcripts were not fetched. Install yt-dlp (https://github.com/yt-dlp/yt-dlp) where ${hostWords(process.env.DIG_HOST).app} can find it, such as /opt/homebrew/bin, /usr/local/bin or ~/.local/bin.`,
           );
         else if (needFetch.length && executable) {
           signal.throwIfAborted();
           const tempDir = mkdtempSync(join(tmpdir(), "dig-youtube-"));
           try {
-            // Wait for every cancelled child to exit before deleting its scratch directory.
-            const fetched = await Promise.allSettled(
-              needFetch.map((v) =>
-                fetchTranscript(executable, v.id, tempDir, signal, context.keep),
-              ),
+            // Wait for every cancelled child to exit before deleting its scratch directory. No new child starts after an abort.
+            const fetched: PromiseSettledResult<Caption | null>[] = [];
+            let next = 0;
+            await Promise.all(
+              Array.from({ length: Math.min(YTDLP_CONCURRENCY, needFetch.length) }, async () => {
+                while (next < needFetch.length && !signal.aborted) {
+                  const i = next++;
+                  fetched[i] = await fetchTranscript(executable, needFetch[i].id, tempDir, signal, context.keep).then(
+                    (value) => ({ status: "fulfilled", value }) as const,
+                    (reason) => ({ status: "rejected", reason }) as const,
+                  );
+                }
+              }),
             );
             signal.throwIfAborted();
             for (let i = 0; i < needFetch.length; i++) {
               signal.throwIfAborted();
               const video = needFetch[i];
               const result = fetched[i];
-              const text = result.status === "fulfilled" ? result.value : null;
-              if (!text) {
+              const caption = result?.status === "fulfilled" ? result.value : null;
+              if (!caption?.text) {
                 warnings.push(
                   `Transcript unavailable for ${video.id}; no claim about why captions are missing.`,
                 );
@@ -163,13 +181,14 @@ export default free({
                 "",
                 "## Full Transcript",
                 "",
-                text,
+                caption.text,
               ].join("\n");
               signal.throwIfAborted();
               mkdirSync(transcriptDir, { recursive: true });
               const file = join(transcriptDir, `${video.id}.md`);
               saveTranscript(file, content);
               video.transcriptFile = file;
+              video.captions = caption.kind;
               video.transcriptWords = readFileSync(file, "utf8").split(
                 /\s+/,
               ).length;
@@ -192,7 +211,7 @@ export default free({
             `  Channel: ${v.channel} | Views: ${formatNumber(v.views)} | Likes: ${formatNumber(v.likes)}${v.date ? ` | Date: ${v.date}` : ""}${v.duration ? ` | Duration: ${formatDuration(v.duration)}` : ""}`,
             `  URL: ${v.url}`,
             v.transcriptFile
-              ? `  Transcript: ${v.transcriptFile} (${v.transcriptWords} words)`
+              ? `  Transcript: ${v.transcriptFile} (${v.transcriptWords} words${v.captions ? `, from ${v.captions}` : ""})`
               : null,
           ]
             .filter(Boolean)
@@ -363,7 +382,7 @@ async function searchViaYtdlp(
   const executable = findExecutable("yt-dlp");
   if (!executable)
     throw new Error(
-      "yt-dlp is required for keyless YouTube search. Install yt-dlp (https://github.com/yt-dlp/yt-dlp) where Codex can find it, such as /opt/homebrew/bin, /usr/local/bin or ~/.local/bin.",
+      `yt-dlp is required for keyless YouTube search. Install yt-dlp (https://github.com/yt-dlp/yt-dlp) where ${hostWords(process.env.DIG_HOST).app} can find it, such as /opt/homebrew/bin, /usr/local/bin or ~/.local/bin.`,
     );
   signal.throwIfAborted();
   let stdout: string;
@@ -375,9 +394,9 @@ async function searchViaYtdlp(
       [
         "--ignore-config",
         "--no-cookies-from-browser",
+        ...JS_RUNTIME,
         `ytsearch${limit}:${query}`,
         "--dump-json",
-        "--no-warnings",
         "--no-download",
       ],
       { signal, timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
@@ -451,13 +470,18 @@ async function searchViaYtdlp(
     warnings,
   };
 }
+interface Caption {
+  text: string;
+  /** "uploaded English captions (en-US)", "automatic English captions (en)" or, when yt-dlp's info is unreadable, "English captions (en)". */
+  kind: string;
+}
 async function fetchTranscript(
   executable: string,
   videoId: string,
   tempDir: string,
   signal: AbortSignal,
   keep: KeepRaw,
-): Promise<string | null> {
+): Promise<Caption | null> {
   signal.throwIfAborted();
   try {
     await execFile(
@@ -465,13 +489,18 @@ async function fetchTranscript(
       [
         "--ignore-config",
         "--no-cookies-from-browser",
+        ...JS_RUNTIME,
+        // Uploaded and automatic English tracks; for a language with both, yt-dlp takes the uploaded one.
+        // Named codes, never `en.*`: that also matches YouTube's machine translations (`en-de-DE`, `en-ja`, …), one
+        // request each, and a rate limit on any of them fails the whole call.
+        "--write-subs",
         "--write-auto-subs",
-        "--sub-lang",
-        "en",
+        "--sub-langs",
+        CAPTION_LANGS,
         "--sub-format",
         "vtt",
+        "--write-info-json",
         "--skip-download",
-        "--no-warnings",
         "-o",
         join(tempDir, "%(id)s"),
         `https://www.youtube.com/watch?v=${videoId}`,
@@ -483,13 +512,27 @@ async function fetchTranscript(
     return null;
   }
   signal.throwIfAborted();
-  const file = readdirSync(tempDir).find(
-    (f) => f.startsWith(videoId + ".") && f.endsWith(".vtt"),
-  );
-  if (!file) return null;
-  const vtt = readFileSync(join(tempDir, file), "utf8");
+  // The info's `subtitles` lists the uploaded tracks; any other track yt-dlp wrote is automatic.
+  let uploaded: Set<string> | null = null;
+  try {
+    const subtitles = JSON.parse(readFileSync(join(tempDir, `${videoId}.info.json`), "utf8"))?.subtitles;
+    if (subtitles && typeof subtitles === "object") uploaded = new Set(Object.keys(subtitles));
+  } catch {
+    uploaded = null;
+  }
+  const rank = (lang: string) => (uploaded?.has(lang) ? 0 : 2) + (lang === "en" ? 0 : 1);
+  const tracks = readdirSync(tempDir)
+    .filter((f) => f.startsWith(videoId + ".") && f.endsWith(".vtt"))
+    .map((f) => ({ f, lang: f.slice(videoId.length + 1, -4) }))
+    .sort((a, b) => rank(a.lang) - rank(b.lang) || a.lang.localeCompare(b.lang));
+  const track = tracks[0];
+  if (!track) return null;
+  const vtt = readFileSync(join(tempDir, track.f), "utf8");
   keep(`yt-dlp subtitles ${videoId}`, 0, vtt);
-  return cleanVtt(vtt);
+  return {
+    text: cleanVtt(vtt),
+    kind: `${uploaded ? (uploaded.has(track.lang) ? "uploaded " : "automatic ") : ""}English captions (${track.lang})`,
+  };
 }
 /** Convert VTT subtitle format to clean plaintext — preserves FULL transcript, no truncation */
 export function cleanVtt(vtt: string): string {

@@ -196,6 +196,122 @@ test('deep-link activation refreshes hidden data, resolves the exact file, and d
   assert.ok(host.calls.filter(call => call.name === 'library_snapshot').length >= 2);
 });
 
+test('deep-link activation during an older in-flight snapshot waits for a snapshot that includes the saved report', async t => {
+  let held = null;
+  const host = scriptedHost(snapshotOf([]), { call: name => { if (name === 'library_snapshot' && held) { const pending = held; held = null; return pending.promise; } } });
+  await mount(t, host);
+  const older = deferred(); held = older; host.setSnapshot(snapshotOf([]));
+  await React.act(async () => document.dispatchEvent(new Event('visibilitychange')));
+  host.setSnapshot(snapshotOf([item('A')]));
+  await React.act(async () => host.activate(`/read?file=${encodeURIComponent('/library/' + report('A'))}`));
+  await React.act(async () => older.resolve(snapshotOf([]))); await settle();
+  assert.doesNotMatch($('notice').textContent, /not part of a dig/);
+  assert.ok(host.reads.has(`${report('A')}:0`), 'Activation resolved the file against the snapshot fetched after the link arrived');
+});
+
+test('the update poll waits for the host connection', async t => {
+  let connected = false; const connecting = deferred();
+  const host = scriptedHost(snapshotOf([item('A')]), {
+    call: () => { if (!connected) throw new Error('Not connected'); },
+    host: { start: async () => { await connecting.promise; connected = true; } },
+  });
+  const view = await mount(t, host);
+  await view.poll();
+  assert.doesNotMatch($('notice').textContent, /Automatic updates paused/);
+  assert.equal(host.calls.length, 0, 'No request is sent before the host connects');
+  await React.act(async () => connecting.resolve()); await settle();
+  assert.ok(byKey('dig:/project/A:A'));
+});
+
+test('a failed host connection keeps its error through the next update poll', async t => {
+  const refused = scriptedHost(snapshotOf([]), { call: () => { throw new Error('Not connected'); }, host: { start: async () => { throw new Error('The host refused the connection.'); } } });
+  const failed = await mount(t, refused);
+  assert.equal($('notice').textContent, 'The host refused the connection.');
+  await failed.poll();
+  assert.equal($('notice').textContent, 'The host refused the connection.');
+});
+
+test('a newer installed Dig is named with the same words in the notice and on About', async t => {
+  const host = scriptedHost({ ...snapshotOf([]), version: '9.9.9' });
+  await mount(t, host);
+  const expected = `Dig 9.9.9 is installed, but Codex is still showing the ${VERSION} view. Right-click Dig in the sidebar and choose Refresh to load the new one.`;
+  assert.equal($('notice').textContent, expected);
+  await click($('nav-about'));
+  assert.equal(document.querySelector('.installation-version-message').textContent, expected);
+});
+
+function keysHost(canOpen, snapshot = {}) {
+  let environment = 'unused'; const opened = [];
+  const host = scriptedHost({ ...snapshotOf([]), ...snapshot }, {
+    call(name) {
+      if (name === 'source_info') return { keysPath: '/state/keys.env', configPath: '/state/config.toml', sources: [{ id: 'hackernews', label: 'Hacker News', enabled: true, readiness: { status: 'ready' }, credentials: [{ name: 'HN_TOKEN', required: true, available: environment === 'same', environment }], prerequisites: [] }] };
+      if (name === 'prepare_keys_file') return { path: '/state/keys.env', added: ['HN_TOKEN'], created: true };
+      if (name === 'use_environment_keys') { environment = 'same'; return { path: '/state/keys.env', copied: ['HN_TOKEN'] }; }
+    },
+    host: { canOpenFile: () => canOpen, openFile: async path => { opened.push(path); } },
+  });
+  return { host, opened };
+}
+
+test('Edit keys.env prepares and opens the file, and copying an environment key refreshes readiness', async t => {
+  const { host, opened } = keysHost(true);
+  await mount(t, host);
+  await click($('nav-sources'));
+  await click(byKey('keys:hackernews'));
+  assert.deepEqual(host.calls.filter(call => call.name === 'prepare_keys_file').map(call => call.args), [{ source: 'hackernews' }]);
+  assert.deepEqual(opened, ['/state/keys.env']);
+  assert.equal($('notice').textContent, 'Opened keys.env. Added empty lines for HN_TOKEN. Fill in the values and save; Dig reloads the file and updates readiness here.');
+  assert.equal(byKey('env:hackernews').textContent, 'Use existing key');
+  const reads = host.calls.filter(call => call.name === 'source_info').length;
+  await click(byKey('env:hackernews'));
+  assert.deepEqual(host.calls.filter(call => call.name === 'use_environment_keys').map(call => call.args), [{ source: 'hackernews' }]);
+  assert.equal($('notice').textContent, 'Copied HN_TOKEN from Codex’s environment into keys.env.');
+  assert.ok(host.calls.filter(call => call.name === 'source_info').length > reads, 'Copying re-reads source readiness');
+  assert.equal(byKey('env:hackernews'), undefined, 'Once keys.env matches the environment there is nothing to copy');
+});
+
+test('Edit keys.env on a host without a file opener names the prepared path instead', async t => {
+  const { host, opened } = keysHost(false);
+  await mount(t, host);
+  await click($('nav-sources'));
+  await click(byKey('keys:hackernews'));
+  assert.deepEqual(host.calls.filter(call => call.name === 'prepare_keys_file').map(call => call.args), [{ source: 'hackernews' }]);
+  assert.deepEqual(opened, []);
+  assert.equal($('notice').textContent, 'Codex cannot open files from this view. Open /state/keys.env in a text editor, fill in the values and save. Added empty lines for HN_TOKEN.');
+});
+
+test('in Claude Code the notices, keys messages and About name Claude Code and its /dig: skills', async t => {
+  const { host } = keysHost(false, { host: 'claude-code', version: '9.9.9' });
+  await mount(t, host);
+  assert.equal($('notice').textContent, `Dig 9.9.9 is installed, but Claude Code is still showing the ${VERSION} view. Right-click Dig in the sidebar and choose Refresh to load the new one.`);
+  await click($('nav-sources'));
+  assert.match($('sources').textContent, /Claude Code’s environment has a key that Dig isn’t using\./);
+  await click(byKey('keys:hackernews'));
+  assert.equal($('notice').textContent, 'Claude Code cannot open files from this view. Open /state/keys.env in a text editor, fill in the values and save. Added empty lines for HN_TOKEN.');
+  await click(byKey('env:hackernews'));
+  assert.equal($('notice').textContent, 'Copied HN_TOKEN from Claude Code’s environment into keys.env.');
+  await click($('nav-about'));
+  assert.match($('about-body').textContent, /Use \/dig:setup to choose sources, or \/dig:library to find saved research\./);
+  assert.match($('usage').textContent, /excludes Claude Code model costs/);
+  assert.doesNotMatch(document.body.textContent, /Codex|ChatGPT|\$dig:/);
+  const { replacedMessage } = await import('../src/frontend/library/controller.ts');
+  assert.equal(replacedMessage({ version: '1.0.0', replaced: { version: '2.0.0' }, host: 'claude-code' }), 'Dig 2.0.0 was installed while Claude Code was running. Refresh Dig’s plugin connection, then refresh this view. If the connection still reports Dig 1.0.0, quit and reopen Claude Code as a fallback. This view currently uses Dig 1.0.0.');
+  assert.equal(replacedMessage({ version: '1.0.0', replaced: { version: '2.0.0' } }), 'Dig 2.0.0 was installed while Codex was running. Refresh Dig’s plugin connection, then refresh this view. If the connection still reports Dig 1.0.0, quit and reopen Codex as a fallback. This view currently uses Dig 1.0.0.');
+});
+
+test('every Sources link, including those in the accounts fold, opens through the host', async t => {
+  const opened = [];
+  const host = scriptedHost(snapshotOf([]), { host: { openLink: async url => { opened.push(url); } } });
+  await mount(t, host);
+  await click($('nav-sources'));
+  await click(byKey('accounts'));
+  const links = [...$('sources').querySelectorAll('a[data-external]')];
+  assert.ok(links.some(link => link.closest('.source-page-providers')) && links.some(link => link.closest('.source-accounts-directory')));
+  for (const link of links) await click(link);
+  assert.deepEqual(opened, links.map(link => link.href));
+  assert.equal($('notice').textContent, '');
+});
+
 test('conversation trail scopes cost and source setup shares settings without starting research', async t => {
   const mine = item('A', { calls: [{ ...rawCall, cost: [{ unit: 'USD', amount: 0.42 }] }] });
   const host = scriptedHost({ ...snapshotOf([mine, item('B', { session: 'elsewhere' })]), live: [{ ...rawCall, id: 'elsewhere', session: 'elsewhere', cost: [{ unit: 'USD', amount: 100 }] }] });

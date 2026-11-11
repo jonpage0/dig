@@ -296,4 +296,44 @@ describe("exa tools", () => {
 		expect(result.details?.cost).toBeNull();
 		expect(result.details?.knownCost).toEqual([{ amount: 0.007, unit: "USD" }]);
 	});
+
+	test("a deep-mode search is never re-issued after a transport failure", async () => {
+		const originalFetch = globalThis.fetch;
+		let calls = 0;
+		globalThis.fetch = (async () => { calls++; const error = new Error("The operation timed out"); error.name = "TimeoutError"; throw error; }) as typeof fetch;
+		restore = () => { globalThis.fetch = originalFetch; };
+		for (const type of ["deep-lite", "deep", "deep-reasoning"]) {
+			calls = 0;
+			const result = await executeSource(search, { query: "x", type }, context);
+			expect(calls).toBe(1);
+			expect(result.status).toBe("failed");
+		}
+	});
+
+	test("a request that got no response is sent once by every Exa tool; its cost is unknown and said to be", async () => {
+		const originalFetch = globalThis.fetch;
+		let calls = 0;
+		globalThis.fetch = (async () => { calls++; throw new TypeError("fetch failed"); }) as typeof fetch;
+		restore = () => { globalThis.fetch = originalFetch; };
+		const runs: Array<[typeof search, Record<string, unknown>]> = [[search, { query: "x" }], [contents, { urls: [page.url] }], [similar, { url: page.url }], [research, { query: "x" }]];
+		for (const [tool, args] of runs) {
+			calls = 0;
+			const result = await executeSource(tool, args, context);
+			expect(calls).toBe(1);
+			expect(result.status).toBe("failed");
+			expect(result.details?.cost).toBeNull();
+			expect(result.text).toContain("Exa may have received and charged this request, but no complete response arrived; its cost is unknown.");
+		}
+	});
+
+	test("contents is empty with no pages and partial when any URL failed or went unaccounted; research with nothing is empty", async () => {
+		let payload: Record<string, unknown> = { requestId: "c-3", results: [], statuses: [{ id: "https://a.example/", status: "error", error: { tag: "CRAWL_NOT_FOUND", httpStatusCode: 404 } }], costDollars: { total: 0.001 } };
+		const mock = installFetchMock({ "/contents": () => ({ payload }), "/search": { payload: { requestId: "r-3", results: [] } } });
+		restore = mock.restore;
+		expect((await executeSource(contents, { urls: ["https://a.example/"] }, context)).status).toBe("empty");
+		payload = { requestId: "c-4", results: [{ ...page, text: "Text." }], statuses: [{ id: page.url, status: "success" }], costDollars: { total: 0.001 } };
+		expect((await executeSource(contents, { urls: [page.url, "https://example.com/silent"] }, context)).status).toBe("partial");
+		expect((await executeSource(contents, { urls: [page.url] }, context)).status).toBe("success");
+		expect((await executeSource(research, { query: "x" }, context)).status).toBe("empty");
+	});
 });

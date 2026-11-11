@@ -9,7 +9,7 @@ The import of `cn` is changed to Dig's local shadcn-style `clsx` /
 The MIT license is retained in `ReUI-LICENSE.md` and ships in the plugin.
 No ReUI Pro component, template, subscription or runtime service is used.
 
-The compact Button, Card, Badge, Disclosure, Dialog and Tabs wrappers follow
+The compact Button, Badge, Disclosure, Dialog and Tabs wrappers follow
 shadcn's source-owned component convention, with Base UI primitives for
 interaction. Their CSS maps semantic tokens to the host MCP stylesheet.
 The wrappers are Dig code rather than downloaded shadcn registry files.

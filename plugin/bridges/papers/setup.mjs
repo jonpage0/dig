@@ -2,8 +2,7 @@
 /**
  * Installs Dig's optional Papers bridge: openags/paper-search-mcp (MIT) at a
  * tested upstream commit plus the maintained compatibility patch beside this
- * file, inside Dig's native state directory. Ported from the existing Dig
- * edition's papers/setup-paper-search-mcp.ts. It never reads, copies or prints
+ * file, inside Dig's native state directory. It never reads, copies or prints
  * credentials, and it makes no research request unless --live-smoke is given.
  */
 import { spawn } from 'node:child_process';
@@ -21,8 +20,8 @@ const PATCH_PATH = fileURLToPath(new URL('paper-search-mcp.patch', import.meta.u
 // recognize and replace it. SHA-256:
 // 236e7e3ce6bf8b52d2c84a4fce768c91f5158b3e7cf58f36e3d142ac7cb1c183
 const PREVIOUS_PATCH_PATH = fileURLToPath(new URL('paper-search-mcp.previous.patch', import.meta.url));
-/** The only patches setup removes, current first; any other change is refused. */
 const LEGACY_PATCH_PATH = fileURLToPath(new URL('paper-search-mcp.0.2.32.patch', import.meta.url));
+/** The only patches setup removes, current first; any other change is refused. */
 const RECOGNIZED_PATCHES = [{ path: PATCH_PATH, commit: UPSTREAM_COMMIT }, { path: LEGACY_PATCH_PATH, commit: PREVIOUS_COMMIT }, { path: PREVIOUS_PATCH_PATH, commit: PREVIOUS_COMMIT }];
 const EMAIL_KEY = 'PAPER_SEARCH_MCP_UNPAYWALL_EMAIL';
 // src/config.mjs stateDirectory() applies this rule; the server looks for the bridge here.
@@ -89,6 +88,7 @@ function parseOptions(argv) {
 		if (arg !== '--email') fail(`unknown option: ${arg}`);
 		const value = argv[index + 1];
 		if (!value) fail(`${arg} requires a value`);
+		if (value.startsWith('-')) fail(`${arg} requires an address, not the option ${value}; give it as --email <address>`);
 		index += 1;
 		options.email = value.trim();
 	}

@@ -7,6 +7,7 @@ import { MODULES } from "../modules.js";
 import { executeSource } from "../outcome.js";
 import { providerTools } from "../index.js";
 import { tiktok_read, instagram_read } from "./social_read.js";
+import { instagram_comments, tiktok_comments, tiktok_top } from "./social_evidence.js";
 import type { RetainedResponse, ToolContext, ToolSpec } from "../types.js";
 
 const tik = "https://www.tiktok.com/@fixture/video/1234567890123456789";
@@ -135,6 +136,33 @@ describe("direct social reads", () => {
     assert.equal((await run(instagram_read, { kind: "posts", handle: "fixture" })).status, "partial");
   });
 
+  test("a handle with surrounding whitespace matches its own returned profile and post links", async () => {
+    for (const handle of [" @nasa", "nasa "]) {
+      mock({ success: true, credits_charged: 1, data: { user: { id: "1", username: "nasa" } } });
+      assert.equal((await run(instagram_read, { kind: "profile", handle })).status, "success");
+      mock({ success: true, credits_charged: 1, aweme_list: [{ aweme_id: "1" }] });
+      assert.match((await run(tiktok_read, { kind: "posts", handle })).text, /"url": "https:\/\/www\.tiktok\.com\/@nasa\/video\/1"/);
+    }
+  });
+
+  test("comment pages honour an explicit last-page flag over a leftover cursor, and another page is stated, not partial", async () => {
+    for (const end of [{ has_more: 0 }, { has_more: false }, { end_of_pagination: true }]) {
+      mock({ success: true, credits_charged: 1, comments: [{ cid: "1", text: "Hi" }], cursor: 40, ...end });
+      const result = await run(tiktok_comments, { url: tik });
+      assert.equal(result.status, "success", JSON.stringify(end)); assert.doesNotMatch(result.text, /More data may exist/);
+    }
+    mock({ success: true, credits_charged: 1, comments: [{ cid: "1", text: "Hi" }], cursor: 40 });
+    const more = await run(tiktok_comments, { url: tik });
+    assert.equal(more.status, "success"); assert.match(more.text, /More data may exist; use the returned continuation/);
+  });
+
+  test("Top search upper-cases a lower-case region as the sibling TikTok tools do", async () => {
+    mock({ success: true, credits_charged: 1, items: [{ id: "1" }] });
+    assert.equal((await run(tiktok_top, { query: "robot", region: "us" })).status, "success");
+    assert.equal(calls[0].url.searchParams.get("region"), "US");
+    assert.equal((await run(tiktok_top, { query: "robot", region: "usa" })).status, "failed"); assert.equal(calls.length, 1);
+  });
+
   test("invalid targets and incompatible arguments fail before any paid request", async () => {
     mock(post);
     for (const args of [
@@ -187,5 +215,34 @@ describe("direct social reads", () => {
     context.keep = (label, status, body) => { responses.push({ label, status, body }); controller.abort(); };
     mock(post); const stopped = await run(tiktok_read, { kind: "post", url: tik });
     assert.equal(stopped.status, "cancelled"); assert.equal(stopped.details?.cost, null); assert.deepEqual(stopped.details?.knownCost, [{ amount: 1, unit: "credits" }]);
+  });
+
+  test("a request that got no response is sent once, kept for the receipt, and its cost is stated as unknown", async () => {
+    for (const [spec, args] of [[tiktok_read, { kind: "post", url: tik }], [tiktok_comments, { url: tik }]] as const) {
+      calls = []; responses = [];
+      globalThis.fetch = (async (input: any, init: any) => { calls.push({ url: new URL(String(input)), init }); throw new DOMException("The operation timed out.", "TimeoutError"); }) as typeof fetch;
+      const result = await run(spec, args);
+      assert.equal(result.status, "failed"); assert.equal(calls.length, 1);
+      assert.match(result.text, /ScrapeCreators may have received and charged this request, but no complete response arrived; its cost is unknown\./);
+      assert.equal(result.details?.cost, null);
+      assert.deepEqual(responses.map(r => r.status), ["error"]);
+    }
+  });
+
+  test("a full feed page with a continuation is success, and the continuation is stated", async () => {
+    mock({ success: true, credits_charged: 1, items: [{ id: "1" }], more_available: true, next_max_id: "next" });
+    const result = await run(instagram_read, { kind: "posts", handle: "fixture" });
+    assert.equal(result.status, "success"); assert.match(result.text, /A continuation was returned/); assert.match(result.text, /"next_max_id": "next"/);
+  });
+
+  test("instagram_comments refuses, before any request, every link instagram_read refuses", async () => {
+    mock({ success: true, credits_charged: 1, comments: [{ id: "1", text: "Hi" }] });
+    for (const url of ["https://www.instagram.com/reels/Fixture_123/", "https://www.instagram.com/fixture/reel/Fixture_123/", "https://www.instagram.com/fixture/"]) {
+      assert.equal((await run(instagram_comments, { url })).status, "failed", url);
+      assert.equal((await run(instagram_read, { kind: "replies", url, commentId: "1" })).status, "failed", url);
+    }
+    assert.equal(calls.length, 0);
+    assert.equal((await run(instagram_comments, { url: ig })).status, "success");
+    assert.equal((await run(instagram_comments, { url: "https://www.instagram.com/reel/Fixture_123/" })).status, "success");
   });
 });

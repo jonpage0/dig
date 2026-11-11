@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.0 — 2026-11-10
+
+- Never send a paid request again when it got no response; record its cost as unknown. Stream Grok searches, so a long pass is no longer cut off at 300 seconds.
+- Show the whole paid page by default in the social, Commerce and China social tools. Send one request for a subreddit-scoped Reddit search and show its posts and comments. Keep a paid Commerce product page when only its offers request fails.
+- Give `partial` one meaning: part of what was asked for failed or was cut short. Another page is `success`, with its cursor stated.
+- Refuse before any request: a full-archive X count without `start_time`, a Semantic Scholar token combined with a sort, a TikTok ads sub-industry name that exists under two parents, and a paper `savePath` outside the project and Dig's own folder. Stop a call's remaining X reads after a rate-limit, credit or sign-in failure.
+- YouTube: read uploaded captions before automatic ones, give yt-dlp Dig's own Node as its JavaScript runtime, and run at most three yt-dlp processes at once. Keep a Gemini video analysis running when one status check fails, and return its ID.
+- Keep the arguments a tool's schema declares, such as `token_id`, in receipts. Start with every source disabled when `config.toml` is malformed, where the server used not to start. Skip an unreadable receipt line where it used to break every library view.
+- Let a Hacker News `all` search return comments. Record an incomplete Perplexity answer as partial. Cut DeepWiki contents at 200,000 characters. Record DataForSEO sandbox calls as free. Make a GitHub inspection's recorded status agree with its text.
+- Name the host in the views and in key and readiness messages. Send `dig/<version>` as the User-Agent. Report an out-of-date Papers bridge. Stop a library refresh and a search from reading unchanged files again.
+- Remove the pre-React app and its styles. Bring the documentation in line with the compact saved-research card and with Claude Code.
+- Fix about a hundred smaller defects found in a review of the whole repository: parsing, labels, counts, error wording and timing-dependent tests.
+
 ## 0.11.0 — 2026-10-30
 
 - Add Claude Code support from the same package: a Claude plugin manifest launches the existing server from the plugin root, and a Claude marketplace names it `dig@dig`. Settings, keys and the research library are shared with Codex.

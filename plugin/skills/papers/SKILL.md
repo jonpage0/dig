@@ -10,7 +10,7 @@ Use this as the canonical path for papers, literature reviews, seminal work, sch
 
 Run this skill inline in the thread that needs it, or as an ordinary source worker that the parent thread spawned for this one question. Either way, run it yourself: do not spawn another agent, run a second source, or edit code.
 
-Additional direct tools: `papers_semantic_scholar_snippets` finds passages; `papers_semantic_scholar_relations` follows citations or references with explicit paging; non-relevance Semantic Scholar sorting uses provider bulk search and exposes a continuation token. `papers_openalex_search` supports `mode: semantic` for descriptions up to 2000 characters. `papers_openalex_content` fetches a cached PDF or TEI XML for a W-prefixed work ID, using an existing key and reported-cost rules. XML is machine extraction; inspect it before quoting, and distinguish a snippet from a full paper. Saved paper files are never overwritten.
+Additional direct tools: `papers_semantic_scholar_snippets` finds passages; `papers_semantic_scholar_relations` follows citations or references with explicit paging; non-relevance Semantic Scholar sorting uses provider bulk search and shows the first `limit` papers of the provider's batch with no continuation, so reach more by narrowing years, fields of study or the query; a `token` is accepted only without such a sort. `papers_openalex_search` supports `mode: semantic` for descriptions up to 2000 characters. `papers_openalex_content` fetches a cached PDF or TEI XML for a W-prefixed work ID, using an existing key and reported-cost rules. XML is machine extraction; inspect it before quoting, and distinguish a snippet from a full paper. Saved paper files are never overwritten.
 
 OpenReview is now available through `papers_multi_search` with sources `["openreview"]`. Use `papers_sections` with a relative filename already under the paper library to inspect bounded PDF sections; headings are heuristic and truncated results must remain partial.
 
@@ -33,7 +33,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 5. `papers_fulltext_read` — download and extract an open-access paper for methods, results, claims, and limitations.
 6. `papers_pdf_download` — save an open-access PDF artifact when requested.
 
-Federated search, full text and PDF download run through the optional papers bridge, a separate environment that Dig's setup installs beneath its own native state directory and that needs `uv`. When `source_info` shows the bridge is not ready, those three tools report it as an actionable prerequisite failure; Semantic Scholar and OpenAlex still work. A missing bridge is a coverage limit, never evidence that literature is absent. Downloaded PDFs are kept in the library's `papers/` folder.
+Federated search, full text, PDF download and section extraction (`papers_sections`) run through the optional papers bridge, a separate environment that Dig's setup installs beneath its own native state directory and that needs `uv`. When `source_info` shows the bridge is not ready, those four tools report it as an actionable prerequisite failure; Semantic Scholar and OpenAlex still work. A missing bridge is a coverage limit, never evidence that literature is absent. Downloaded PDFs are kept in the library's `papers/` folder.
 
 Use `research_save` with `source: "papers"` and `agent: "papers"` to save the report.
 

@@ -107,8 +107,6 @@ const REVIEW_DOMAIN_VALUES = [
 ] as const
 
 const COMMERCE_PROVIDER_VALUES = ["auto", "scrape-do"] as const
-const COMMERCE_HISTORY_PROVIDER_VALUES = ["auto", "nexscope"] as const
-const COMMERCE_REVIEW_PROVIDER_VALUES = ["auto", "nexscope"] as const
 const COMMERCE_HISTORY_SERIES_VALUES = [
   "market_price",
   "buy_box",
@@ -311,7 +309,6 @@ type AmazonMarketplaceProfile = {
 }
 
 const DEFAULT_AMAZON_DOMAIN: AmazonDomain = "amazon.com"
-const DEFAULT_SEARCH_LIMIT = 5
 const MAX_SEARCH_LIMIT = 10
 const DEFAULT_DISCOVER_LIMIT = 20
 const MAX_DISCOVER_LIMIT = 50
@@ -418,6 +415,19 @@ function nexscopeApiKey(): string {
  * The Scrape.do token travels in the query string, so an error can carry the request URL. Provider bodies already
  * arrive redacted (requestJson); an error message is redacted the same way before it reaches tool output.
  */
+/** The sentence for a request that ended without a complete response, which is never sent again: it may still have been charged. */
+const unansweredCost = (provider: string) => `${provider} may have received and charged this request, but no complete response arrived; its cost is unknown.`
+
+/** `requestJson`, with a failure that left no complete response saying its cost is unknown. */
+async function answeredJson(policy: Parameters<typeof requestJson>[0]): ReturnType<typeof requestJson> {
+  try {
+    return await requestJson(policy)
+  } catch (error) {
+    if (policy.signal.aborted) throw error
+    throw new Error(`${error instanceof Error ? error.message : "Unknown error"}. ${unansweredCost(policy.provider)}`)
+  }
+}
+
 function errorMessage(error: unknown): string {
   return redactText(error instanceof Error ? error.message : "Unknown error", knownSecrets())
 }
@@ -840,7 +850,7 @@ async function nexscopeRequest(
   signal: AbortSignal,
   keep: KeepRaw
 ): Promise<Record<string, unknown>> {
-  const response = await requestJson({
+  const response = await answeredJson({
     url,
     method: "POST",
     headers: {
@@ -874,7 +884,7 @@ async function nexscopeRequest(
 }
 
 async function fetchJson(url: URL, signal: AbortSignal, keep: KeepRaw, label: string): Promise<Record<string, unknown>> {
-  const response = await requestJson({
+  const response = await answeredJson({
     url,
     headers: { Accept: "application/json" },
     signal,
@@ -1143,8 +1153,7 @@ function normalizeScrapeDoProduct(payload: Record<string, unknown>): ScrapeDoPro
     technicalDetails,
     moreBuyingChoices: moreBuyingChoices
       ? firstString(
-          `${firstString(moreBuyingChoices.heading) || "More Buying Choices"}: ${firstString(moreBuyingChoices.offer_text) || "Available"}`,
-          firstString(moreBuyingChoices.offer_text)
+          `${firstString(moreBuyingChoices.heading) || "More Buying Choices"}: ${firstString(moreBuyingChoices.offer_text) || "Available"}`
         )
       : null,
   }
@@ -1428,6 +1437,11 @@ async function resolveProductTarget(args: {
   keep: KeepRaw
 }): Promise<{ asin: string; amazonDomain: AmazonDomain; resolutionNotes: string[] }> {
   const resolutionNotes: string[] = []
+  if (args.url && args.amazonDomain == null && !inferAmazonDomainFromUrl(args.url)) {
+    let host = args.url
+    try { host = new URL(args.url).hostname } catch {}
+    throw new Error(`url host ${host} is not a listed Amazon marketplace; pass amazon_domain to choose one (${AMAZON_DOMAIN_VALUES.join(", ")})`)
+  }
   const amazonDomain = requireMarketplace(
     args.amazonDomain ?? (args.url ? inferAmazonDomainFromUrl(args.url) : null) ?? DEFAULT_AMAZON_DOMAIN,
     AMAZON_DOMAIN_VALUES,
@@ -1464,7 +1478,8 @@ async function resolveProductTarget(args: {
     keep: args.keep,
   })
 
-  const match = normalizeScrapeDoSearchItems(requireArray(payload, "products", "Scrape.do search")).find((item) => item.asin)
+  const candidates = normalizeScrapeDoSearchItems(requireArray(payload, "products", "Scrape.do search")).filter((item) => item.asin)
+  const match = candidates.find((item) => item.sponsored !== true) ?? candidates[0]
 
   if (!match?.asin) {
     throw new Error(`Could not resolve GTIN ${args.gtin} to an Amazon ASIN with the current Scrape.do slice`)
@@ -1473,6 +1488,7 @@ async function resolveProductTarget(args: {
   resolutionNotes.push(
     `Resolved GTIN ${args.gtin} to ASIN ${match.asin} using Amazon search results. Verify the match if the product family has close duplicates.`
   )
+  if (match.sponsored === true) resolutionNotes.push("The search returned only sponsored results, so the first sponsored result was used; verify that it is the product the GTIN names.")
 
   return {
     asin: match.asin,
@@ -1496,7 +1512,8 @@ export const search = scrapeDoMetered({
 
     try {
       const amazonDomain = requireMarketplace(args.amazon_domain ?? DEFAULT_AMAZON_DOMAIN, AMAZON_DOMAIN_VALUES, "Scrape.do")
-      const limit = optionalInteger(args.limit, "limit", 1, MAX_SEARCH_LIMIT, DEFAULT_SEARCH_LIMIT)
+      // With no limit, every result of the paid page is shown.
+      const limit = optionalInteger(args.limit, "limit", 1, MAX_SEARCH_LIMIT, Number.POSITIVE_INFINITY)
       const page = optionalInteger(args.page, "page", 1, Number.POSITIVE_INFINITY, 1)
       if (!query && !seller) {
         throw new Error("Provide a query, a seller id, or both")
@@ -1549,7 +1566,7 @@ export const search = scrapeDoMetered({
       if (totalResultsExtracted !== null) {
         lines.push(`Largest integer parsed from that text by the provider: ${formatCount(totalResultsExtracted)}`)
       }
-      lines.push(`Normalized results: ${results.length}${allResults.length > results.length ? ` (of ${allResults.length} on this page)` : ""}`)
+      lines.push(`Normalized results: ${results.length}${allResults.length > results.length ? ` shown of ${allResults.length} returned; page ${page + 1} continues after all ${allResults.length}, including the ${allResults.length - results.length} not shown` : ""}`)
       lines.push(locationNote(amazonDomain))
       lines.push("")
       lines.push(scopeNote())
@@ -1565,7 +1582,7 @@ export const search = scrapeDoMetered({
           lines.push(excerpt)
           lines.push("```")
         }
-        return lines.join("\n")
+        return outcome("empty", lines.join("\n"))
       }
 
       lines.push("## Results")
@@ -1626,21 +1643,29 @@ export const product = scrapeDoMetered({
         signal: context.abort,
         keep: context.keep,
       })
-      const offersPayload = await scrapeDoRequest({
-        endpoint: "offer-listing",
-        amazonDomain: target.amazonDomain,
-        params: { asin: target.asin },
-        signal: context.abort,
-        keep: context.keep,
-      })
-
       if (!firstString(productPayload.asin, productPayload.name, productPayload.title)) {
         throw new Error("Scrape.do returned a PDP response without the documented `asin`/`name` fields")
       }
+      // A failed offer listing does not discard the paid product page: the product is returned as partial.
+      let offers: ScrapeDoOffer[] = []
+      let offersError: string | null = null
+      try {
+        const offersPayload = await scrapeDoRequest({
+          endpoint: "offer-listing",
+          amazonDomain: target.amazonDomain,
+          params: { asin: target.asin },
+          signal: context.abort,
+          keep: context.keep,
+        })
+        offers = requireArray(offersPayload, "offers", "Scrape.do offer-listing")
+          .map(normalizeScrapeDoOffer)
+          .filter((item): item is ScrapeDoOffer => item !== null)
+      } catch (error) {
+        if (context.abort.aborted) throw error
+        offersError = errorMessage(error)
+      }
+
       const product = normalizeScrapeDoProduct(productPayload)
-      const offers = requireArray(offersPayload, "offers", "Scrape.do offer-listing")
-        .map(normalizeScrapeDoOffer)
-        .filter((item): item is ScrapeDoOffer => item !== null)
       const buyBoxOffer = offers.find((offer) => offer.isBuyBoxWinner === true) ?? null
 
       const lines: string[] = []
@@ -1653,6 +1678,11 @@ export const product = scrapeDoMetered({
       lines.push("")
       lines.push(scopeNote())
       lines.push("")
+
+      if (offersError) {
+        lines.push(`Offers: the offer-listing request failed (${offersError}), so no Buy Box or seller offers are shown.`)
+        lines.push("")
+      }
 
       if (target.resolutionNotes.length > 0) {
         lines.push("## Resolution Notes")
@@ -1759,7 +1789,7 @@ export const product = scrapeDoMetered({
         }
       }
 
-      return lines.join("\n")
+      return offersError ? outcome("partial", lines.join("\n")) : lines.join("\n")
     } catch (error) {
       return `ERROR: Commerce product lookup failed: ${errorMessage(error)}`
     }
@@ -2139,7 +2169,7 @@ async function discoverChart(args: {
   })
   const ranking = normalizeScrapeDoChart(requireArray(payload, "ranking", "Scrape.do bestsellers"))
   const products = normalizeScrapeDoSearchItems(requireArray(payload, "products", "Scrape.do bestsellers"))
-  const productAsins = new Set(products.map((product) => product.asin).filter((asin): asin is string => asin !== null))
+  const productAsins = new Set(products.slice(0, args.limit).map((product) => product.asin).filter((asin): asin is string => asin !== null))
   const cardlessEntries = ranking.filter((entry) => !entry.asin || !productAsins.has(entry.asin))
   const rankingCount = firstNumber(payload.ranking_count) ?? ranking.length
   const productsCount = firstNumber(payload.products_count) ?? products.length

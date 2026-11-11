@@ -115,14 +115,13 @@ test('setup exposes presence, optional names, historical activity and explicit k
   assert.match(card.textContent, /CONTACT_EMAIL/);
   assert.match(card.textContent, /Papers bridge’s \.env/);
   assert.match(card.textContent, /fixture executableNot installed/);
-  assert.match(card.querySelector('.source-page-activity').textContent, /Last retained callPartial results/);
+  assert.match(card.querySelector('.source-page-activity').textContent, /Last retained callPartial · /);
   assert.match(card.querySelector('.source-page-activity-detail').textContent, /not a current connection check/);
   await click(keyed('env:exa')); await click(keyed('keys:exa'));
   assert.deepEqual(calls, [['environment', 'exa'], ['keys', 'exa']]);
   assert.match(card.textContent, /replaces the keys.env values/);
-  const provider = card.querySelector('.source-page-providers a');
-  await click(provider);
-  assert.deepEqual(calls.at(-1), ['link', provider.href]);
+  // The shell's handler opens marked links through the host (react-library covers the click).
+  assert.equal(card.querySelector('.source-page-providers a').dataset.external, '');
 });
 
 test('example copying never submits a conversation; preview keeps source actions disabled', async t => {
@@ -180,4 +179,16 @@ test('source recorded use preserves every scoped receipt, separates reported uni
   assert.match(empty.textContent, /No retained calls yet/);
   assert.doesNotMatch(empty.textContent, /Free|\$0|No charge recorded/);
   assert.deepEqual(calls, []);
+});
+
+test('in Claude Code the key notes name Claude Code’s environment and the file it opens', async t => {
+  const { app, host } = fixture(); app.snapshot = { ...app.snapshot, host: 'claude-code' };
+  await mount(t, { app, host, hidden: false });
+  await click(keyed('setup:exa'));
+  const card = $('source-exa');
+  assert.match(card.textContent, /Claude Code’s environment has a different key\./);
+  assert.match(card.textContent, /replaces the keys\.env values with the ones in Claude Code’s environment\./);
+  await click(card.querySelector('[aria-label="About Exa’s keys"]'));
+  assert.match(document.body.textContent, /Edit keys\.env opens the file in Claude Code and adds empty lines for missing names\./);
+  assert.doesNotMatch(document.body.textContent, /Codex/);
 });

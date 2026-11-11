@@ -237,6 +237,43 @@ describe("x_post", () => {
 		expect(result.text).toContain("Replies: 1 post from conversation");
 		expect(result.text).toContain("- @someone (Some One) · 2026-10-05 19:30 UTC · 2 likes · 40 impressions");
 	});
+
+	test("posts of one conversation share its thread and replies searches, each still showing both", async () => {
+		const now = BigInt(Date.now() - 1288834974657) << 22n;
+		const rootId = String(now);
+		const asked = [rootId, String(now + 1n), String(now + 2n)];
+		const at = new Date().toISOString();
+		installFetch((url) => {
+			if (url.pathname === "/2/tweets") return json({ data: asked.map((id) => ({ ...apiPost, id, conversation_id: rootId, created_at: at, referenced_posts: undefined })), includes });
+			const query = url.searchParams.get("query") ?? "";
+			if (query === `conversation_id:${rootId} from:jack`) return json({ data: [{ id: String(now + 3n), text: "More of the thread", author_id: AUTHOR_ID, conversation_id: rootId, created_at: at }], includes: { users: [author] } });
+			if (query === `conversation_id:${rootId} -from:jack`) return json({ data: [{ id: String(now + 4n), text: "A reply", author_id: "9", conversation_id: rootId, created_at: at }], includes: { users: [{ id: "9", username: "someone", name: "Some One" }] } });
+			return json({}, 404);
+		});
+		const result = await executeSource(post, { posts: asked, thread: true, replies: 10 }, context());
+		expect(xCalls().filter((call) => call.url.pathname.startsWith("/2/tweets/search/"))).toHaveLength(2);
+		expect(result.status).toBe("success");
+		expect(result.text.match(/Thread: 1 post by @jack/g)).toHaveLength(3);
+		expect(result.text.match(/Replies: 1 post from conversation/g)).toHaveLength(3);
+	});
+
+	test("replies to a post that is not the root leave out the post and the root without coming up short", async () => {
+		const now = BigInt(Date.now() - 1288834974657) << 22n;
+		const rootId = String(now);
+		const askedId = String(now + 50n);
+		const at = new Date().toISOString();
+		const others = Array.from({ length: 12 }, (_, i) => ({ id: String(now + 100n - BigInt(i)), text: `Reply ${i}`, author_id: "9", conversation_id: rootId, created_at: at }));
+		// Newest first, as X returns them: a reply, the requested post, the other replies, then the root.
+		const convo = [others[0], { ...apiPost, id: askedId, conversation_id: rootId, created_at: at }, ...others.slice(1), { ...apiPost, id: rootId, conversation_id: rootId, created_at: at }];
+		installFetch((url) => {
+			if (url.pathname === "/2/tweets") return json({ data: [{ ...apiPost, id: askedId, conversation_id: rootId, created_at: at, referenced_posts: undefined }], includes });
+			return json({ data: convo.slice(0, Number(url.searchParams.get("max_results"))), includes: { users: [author, { id: "9", username: "someone", name: "Some One" }] } });
+		});
+		const result = await executeSource(post, { posts: [askedId], replies: 10 }, context());
+		expect(result.text).toContain("Replies: 10 posts from conversation");
+		// A reply read past the ten shown is not lost: the result says X has more and reads on from the last one shown.
+		expect(result.text).toContain("Coverage incomplete: X has more replies in this conversation than the 10 posts read here");
+	});
 });
 
 describe("x_search_posts", () => {
@@ -314,6 +351,38 @@ test("x_count_posts returns each bucket and X's total, per day by default", asyn
 	expect(result.details).toMatchObject({ total: 150, cost: null });
 });
 
+test("x_count_posts that read no bucket states no total", async () => {
+	installFetch(() => json({ errors: [{ type: "https://api.x.com/2/problems/internal-error", title: "Internal Server Error", detail: "An internal error has occurred.", status: 500 }] }));
+	const result = await executeSource(count_posts, { query: "dig" }, context());
+	expect(result.status).toBe("failed");
+	expect(result.text.split("\n")[1]).toBe('X post counts for "dig" (last 7 days, per day).');
+	expect(result.text).not.toContain("0 posts");
+	expect(result.details).not.toHaveProperty("total");
+});
+
+test("a full-archive count without start_time is refused before any request, saying it needs one and why", async () => {
+	const result = await executeSource(count_posts, { query: "dig", archive: true, end_time: "2026-01-01T00:00:00Z" }, context());
+	expect(calls).toHaveLength(0);
+	expect(result.status).toBe("failed");
+	expect(result.text).toContain("A full-archive count needs start_time (and may take end_time)");
+	expect(result.text).toContain("10 pages");
+	expect(count_posts.description).toContain("needs start_time");
+});
+
+test("x_count_posts stops after the 10 pages its description names, and advises narrowing the window", async () => {
+	let n = 0;
+	installFetch(() => {
+		n += 1;
+		const start = new Date(Date.UTC(2020, 0, n)).toISOString();
+		return json({ data: [{ start, end: start, post_count: 1 }], meta: { total_post_count: 1, next_token: `c${n}` } });
+	});
+	const result = await executeSource(count_posts, { query: "dig", archive: true, start_time: "2020-01-01T00:00:00Z" }, context());
+	expect(xCalls()).toHaveLength(10);
+	expect(result.status).toBe("partial");
+	expect(result.text).toContain("Stopped after 10 pages; X has more buckets, so the total is incomplete. Narrow the window with start_time and end_time.");
+	expect(count_posts.description).toContain("10 pages");
+});
+
 test("x_users looks handles up, names the ones X reports missing, and reads each account's recent posts", async () => {
 	installFetch((url) => {
 		if (url.pathname === "/2/users/by") return json({ data: [{ ...author, description: "Bio text", location: "Earth", created_at: "2006-03-21T20:50:14.000Z", pinned_post_id: POST_ID }], errors: [{ value: "ghost_account", parameter: "usernames", resource_type: "user", title: "Not Found Error", detail: "Could not find user with usernames: [ghost_account]." }] });
@@ -332,6 +401,57 @@ test("x_users looks handles up, names the ones X reports missing, and reads each
 	expect(result.text).toContain("6,500,000 followers · 4,000 following · 29,000 posts · 30,000 lists");
 	expect(result.text).toContain("A recent post");
 	expect(result.details?.cost).toBeNull();
+});
+
+describe("a rate-limit, credit or sign-in failure stops the call's further reads", () => {
+	const failures = [
+		["rate limit", json({ title: "Too Many Requests", detail: "Too Many Requests" }, 429), "X's rate limit"],
+		["credit failure", json({ title: "Payment Required", detail: "Out of credits" }, 402), "X's credit failure"],
+		["sign-in refusal", json({ title: "Unauthorized", detail: "Unauthorized" }, 401), "X's refusal of the credential"],
+		["usage-capped problem without data", json({ errors: [{ type: "https://api.x.com/2/problems/usage-capped", title: "Usage capped", detail: "Usage cap exceeded" }] }), "X's credit failure"],
+	] as const;
+
+	for (const [name, reply, why] of failures) test(`x_post sends no read after a ${name}, says how many were not attempted, and keeps what it read as partial`, async () => {
+		// Conversations started now, so recent search covers them without the archive's pacing.
+		const now = BigInt(Date.now() - 1288834974657) << 22n;
+		const ids = [String(now), String(now + 1n)];
+		installFetch((url) => {
+			if (url.pathname === "/2/tweets") return json({ data: ids.map((id) => ({ ...apiPost, id, conversation_id: id })), includes });
+			if (url.pathname.startsWith("/2/tweets/search/")) return reply.clone();
+			throw new Error(`unexpected request to ${url}`);
+		});
+		const result = await executeSource(post, { posts: ids, thread: true, replies: 5, quotes: 10, reposters: 10 }, context());
+		expect(xCalls()).toHaveLength(2);
+		expect(result.status).toBe("partial");
+		expect(result.text).toContain(`Not attempted: 7 requested reads. After ${why} above, Dig sent no further reads in this call.`);
+		expect(result.text.match(/Not attempted: replies, quote posts, reposters\./g)).toHaveLength(1);
+		expect(result.text.match(/Not attempted: thread, replies, quote posts, reposters\./g)).toHaveLength(1);
+		expect(result.details?.failures).toHaveLength(1);
+		expect(result.text).toContain("The quoted post.");
+	});
+
+	test("x_users sends no timeline read after a credit failure, and a server failure does not stop the call", async () => {
+		const accounts = [author, { ...quotedAuthor, public_metrics: author.public_metrics }];
+		let status = 402;
+		installFetch((url) => {
+			if (url.pathname === "/2/users/by") return json({ data: accounts });
+			if (url.pathname === `/2/users/${AUTHOR_ID}/tweets`) return json({ title: "Failure", detail: "Failure" }, status);
+			return json({ data: [{ id: "77", text: "A recent post", author_id: url.pathname.split("/")[3] }] });
+		});
+		const stopped = await executeSource(users, { handles: ["jack", "X"], posts: 3, mentions: 3 }, context());
+		expect(xCalls()).toHaveLength(2);
+		expect(stopped.status).toBe("partial");
+		expect(stopped.text).toContain("Not attempted: 3 requested reads. After X's credit failure above, Dig sent no further reads in this call.");
+		expect(stopped.text).toContain("Not attempted: mentions.");
+		expect(stopped.text).toContain("Not attempted: posts, mentions.");
+
+		calls = [];
+		status = 503;
+		const kept = await executeSource(users, { handles: ["jack", "X"], posts: 3, mentions: 3 }, context());
+		expect(xCalls()).toHaveLength(5);
+		expect(kept.status).toBe("partial");
+		expect(kept.text).not.toContain("Not attempted");
+	});
 });
 
 test("x_news and x_explore refuse arguments that do not fit before any request, and explore reads trends by WOEID", async () => {
@@ -436,17 +556,17 @@ describe("full-archive time window and pacing", () => {
 		expect(pre.text).toContain("full-archive search from 2006-03-21T00:00:00Z");
 	});
 
-	test("archive searches and counts without a start time reach back to 2006; a given start time and recent search are left as asked", async () => {
+	test("archive searches without a start time reach back to 2006; a given start time and recent search are left as asked", async () => {
 		installFetch(() => json({ meta: { result_count: 0 } }));
 		await executeSource(search_posts, { query: "dig", archive: true }, context());
 		await executeSource(search_posts, { query: "dig", archive: true, start_time: "2020-01-01T00:00:00Z" }, context());
 		await executeSource(search_posts, { query: "dig" }, context());
-		await executeSource(count_posts, { query: "dig", archive: true }, context());
+		await executeSource(count_posts, { query: "dig", archive: true, start_time: "2020-01-01T00:00:00Z" }, context());
 		expect(xCalls().map((call) => [call.url.pathname, call.url.searchParams.get("start_time")])).toEqual([
 			["/2/tweets/search/all", "2006-03-21T00:00:00Z"],
 			["/2/tweets/search/all", "2020-01-01T00:00:00Z"],
 			["/2/tweets/search/recent", null],
-			["/2/tweets/counts/all", "2006-03-21T00:00:00Z"],
+			["/2/tweets/counts/all", "2020-01-01T00:00:00Z"],
 		]);
 	});
 
@@ -494,7 +614,10 @@ describe("where a reading stopped", () => {
 			return json({ data: matches.slice(offset, offset + size), includes: { users: [author] }, meta: offset + size < matches.length ? { next_token: String(offset + size) } : {} });
 		});
 		const first = await executeSource(post, { posts: [rootId], thread: true }, context());
-		const said = first.text.match(/(?:read on|read the rest) with x_search_posts with (.+?)(?:; it may repeat|\.$)/m)?.[1] ?? "";
+		// Dig's own 100-post thread read cut the thread short: partial, naming it, with the call that reads on.
+		expect(first.status).toBe("partial");
+		expect(first.text).toContain(`Not read: the rest of the thread of ${rootId}: Dig reads at most 100 of a thread's posts in one call`);
+		const said = first.text.match(/read on with x_search_posts with (.+?)(?:; it may repeat|\.$)/m)?.[1] ?? "";
 		const args: Record<string, unknown> = { query: said.match(/query "([^"]+)"/)?.[1] };
 		for (const [, name, value] of said.matchAll(/(archive|start_time|end_time|limit) (\S+?)(?=,| and |$)/g)) args[name] = name === "limit" ? Number(value) : name === "archive" ? value === "true" : value;
 		const next = await executeSource(search_posts, args, context());
@@ -905,6 +1028,26 @@ describe("X sign-in", () => {
 		expect(absent.text).toBe('ERROR: Dig could not tell whether @dig_tester has a bookmark folder named or numbered "Recipes": the folder list was incomplete (X API bookmark folders reported Internal Server Error: An internal error has occurred.). X listed 1 folder: "Reading".');
 	});
 
+	test("the page safety limit stopping a folder's ids is partial, and stopping the folder list keeps a missing folder from being called absent", async () => {
+		signIn();
+		let n = 0;
+		installFetch((url) => {
+			if (url.pathname === "/2/users/me") return json({ data: ME });
+			if (url.pathname.endsWith("/bookmarks/folders")) return json({ data: [{ id: String(1700000000000000100n + BigInt(++n)), name: n === 1 ? "Tools" : `Folder ${n}` }], meta: { next_token: `f${n}` } });
+			if (url.pathname.includes("/bookmarks/folders/")) return json({ data: [{ id: String(1800000000000000000n + BigInt(++n)) }], meta: { next_token: `p${n}` } });
+			return json({ data: (url.searchParams.get("ids") ?? "").split(",").map((id) => tweet(id, `Saved ${id}`)), includes: { users: [maker] } });
+		});
+		const capped = await executeSource(bookmarks, { folder: "Tools", limit: 800 }, context());
+		expect(xCalls().filter((call) => call.url.pathname.includes("/bookmarks/folders/"))).toHaveLength(50);
+		expect(capped.status).toBe("partial");
+		expect(capped.text).toContain("Stopped at the 50-page safety limit with 50 posts read.");
+
+		n = 0;
+		const absent = await executeSource(bookmarks, { folder: "Recipes" }, context());
+		expect(absent.status).toBe("failed");
+		expect(absent.text).toMatch(/^ERROR: Dig could not tell whether @dig_tester has a bookmark folder named or numbered "Recipes": the folder list was incomplete/);
+	});
+
 	test("likes page the signed-in account's liked posts, asking X for at least the five it allows", async () => {
 		const keys = signIn();
 		installFetch((url) => (url.pathname === "/2/users/me"
@@ -1046,6 +1189,14 @@ describe("X Communities", () => {
 		expect(sorted(at(relevant.text, ["1", "2", "3", "4"]))).toBe(true);
 		expect(relevant.text).toContain("Posts via TikHub: 4 posts read in TikHub's Relevance ranking, in its order.");
 		expect(relevant.text).not.toContain("newest first");
+	});
+
+	test("a TikHub posts page that fails never says TikHub has more", async () => {
+		installFetch((url) => (url.host === "api.x.com" ? json({ data: { id: COMMUNITY, name: "Shovel Makers", member_count: 1200 } }) : json({ code: 400, message: "Bad request" }, 400)));
+		const result = await executeSource(community, { community: COMMUNITY, posts: 5 }, context());
+		expect(result.status).toBe("partial");
+		expect(result.text).toContain("Posts via TikHub: 0 posts read through TikHub's Recency ranking, shown newest first. ");
+		expect(result.text).not.toContain("TikHub has more");
 	});
 
 	test("x_community without TIKHUB_API_KEY returns X's details and says the posts need it", async () => {

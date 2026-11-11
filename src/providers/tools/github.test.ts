@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, test } from "node:test";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect } from "expect";
+import { executeSource } from "../outcome.js";
 import type { SourceToolResult, ToolContext } from "../types.js";
 import { inspect, read, search } from "./github.js";
 
@@ -374,9 +378,10 @@ describe("github tools", () => {
 			}));
 			restore = mock.restore;
 
-			const result = await inspect.execute({ repo: "acme/widget", days: 365 }, context);
+			const result = await executeSource(inspect, { repo: "acme/widget", days: 365 }, context);
 			const out = text(result);
 			expect((out).startsWith("ERROR:")).toBe(false);
+			expect(result.status).toBe("partial");
 			expect(out).toContain("Status: partial — 3 section(s) unavailable or truncated");
 			expect(out).toContain(`PARTIAL: star history truncated after page 1: GitHub core rate limit reached while fetching star history page 2; remaining 0 (resets ${RESET_ISO})`);
 			expect(out).toContain("Window (29 of 53 complete weeks,");
@@ -390,11 +395,46 @@ describe("github tools", () => {
 			expect(mock.calls.filter((call) => call.url.pathname === "/graphql")).toHaveLength(2);
 		});
 
+		test("without a GitHub login the collaboration samples are a stated limit, not a failure: the inspection stays success", async () => {
+			// A gh on PATH that is not logged in, found before any installed gh; no token is cached before the github_read tests.
+			const dir = mkdtempSync(join(tmpdir(), "dig-gh-"));
+			const savedPath = process.env.PATH;
+			writeFileSync(join(dir, "gh"), "#!/bin/sh\nexit 1\n");
+			chmodSync(join(dir, "gh"), 0o755);
+			delete process.env.GH_TOKEN;
+			process.env.PATH = `${dir}:${savedPath}`;
+			try {
+				const mock = installFetchMock(repoRoutes());
+				restore = mock.restore;
+				const result = await executeSource(inspect, { repo: "acme/widget", days: 14 }, context);
+				const out = text(result);
+				expect(out).toContain("ANONYMOUS");
+				expect(result.status).toBe("success");
+				expect(out).toContain("Status: complete — every section returned except the collaboration samples, which need a GitHub login");
+				expect(out).toContain("  needs a GitHub login; not fetched");
+				expect(out).not.toContain("Status: partial");
+				expect(details(result)).toMatchObject({ partial: false, failures: [], collaboration: null });
+				expect(mock.calls.filter((call) => call.url.pathname === "/graphql")).toHaveLength(0);
+
+				restore();
+				restore = installFetchMock(repoRoutes({ "/repos/acme/widget/releases": json({ message: "Forbidden" }, { status: 403 }) })).restore;
+				const failed = await executeSource(inspect, { repo: "acme/widget", days: 14 }, context);
+				expect(failed.status).toBe("partial");
+				expect(text(failed)).toContain("Status: partial — 1 section(s) unavailable or truncated");
+				expect(details(failed).failures).toHaveLength(1);
+			} finally {
+				process.env.PATH = savedPath;
+				rmSync(dir, { recursive: true, force: true });
+			}
+		});
+
 		test("withholds GraphQL evidence on partial errors or malformed connections instead of showing empty samples", async () => {
 			const withErrors = { errors: [{ message: "Something went wrong while executing your query." }], data: { repository: { ...graphql.data.repository, openIssues: null } } };
 			const mock = installFetchMock(repoRoutes({ "/graphql": withErrors }));
 			restore = mock.restore;
-			const out = text(await inspect.execute({ repo: "acme/widget", days: 14 }, context));
+			const withheld = await executeSource(inspect, { repo: "acme/widget", days: 14 }, context);
+			const out = text(withheld);
+			expect(withheld.status).toBe("partial");
 			expect(out).toContain("Status: partial — 1 section(s)");
 			expect(out).toContain("unavailable: GitHub GraphQL reported 1 error(s): Something went wrong while executing your query.");
 			expect(out).not.toContain("Open issues (0");
@@ -478,7 +518,9 @@ describe("github tools", () => {
 			const mock = installFetchMock(readRoutes({ type: "file", encoding: "base64", size: 49, sha: "blob123", content: body }));
 			restore = mock.restore;
 
-			const result = await read.execute({ repo: "acme/widget", path: "/src/index.ts", ref: "v2.0.0", startLine: 2, maxLines: 2 }, context);
+			const result = await executeSource(read, { repo: "acme/widget", path: "/src/index.ts", ref: "v2.0.0", startLine: 2, maxLines: 2 }, context);
+			// More lines to read is a continuation, not a shortfall.
+			expect(result.status).toBe("success");
 			const out = text(result);
 			expect(out).toContain(`GitHub file: src/index.ts — acme/widget @ v2.0.0 → commit ${commitSha} (2026-09-05)`);
 			expect(out).toContain("Blob: blob123 | Size: 49 bytes | Lines: 5 | Showing 2–3 | Continue with startLine: 4");
@@ -542,6 +584,50 @@ describe("github tools", () => {
 				"/repos/acme/widget/commits/%40effect%2Fplatform%400.1.0",
 				"/repos/acme/widget/commits/_maintenance",
 			]);
+		});
+
+		test("cuts an over-long line at the character limit, says so and is partial, since the rest of the line cannot be read", async () => {
+			const long = "x".repeat(250_000);
+			const mock = installFetchMock(readRoutes({ type: "file", encoding: "base64", size: long.length + 6, sha: "long1", content: Buffer.from(`${long}\nnext\n`).toString("base64") }));
+			restore = mock.restore;
+			const result = await executeSource(read, { repo: "acme/widget", path: "src/index.ts" }, context);
+			expect(result.status).toBe("partial");
+			const out = text(result);
+			expect(out.length).toBeLessThan(201_000);
+			expect(out).toContain("Line 1 is 250,000 characters; only the first 200,000 are shown");
+			expect(out).toContain("Continue with startLine: 2");
+		});
+
+		test("names the credential it used, like the other GitHub tools", async () => {
+			const mock = installFetchMock(readRoutes({ type: "file", encoding: "base64", size: 3, sha: "blob1", content: Buffer.from("ok\n").toString("base64") }));
+			restore = mock.restore;
+			expect(text(await read.execute({ repo: "acme/widget", path: "src/index.ts" }, context))).toContain("authenticated via GH_TOKEN");
+		});
+
+		test("asks gh again for its token after GitHub refuses the cached one", async () => {
+			const dir = mkdtempSync(join(tmpdir(), "dig-gh-"));
+			const savedPath = process.env.PATH;
+			writeFileSync(join(dir, "count"), "0");
+			writeFileSync(join(dir, "gh"), `#!/bin/sh\nn=$(($(cat "${dir}/count") + 1))\necho $n > "${dir}/count"\necho gho_fixture_$n\n`);
+			chmodSync(join(dir, "gh"), 0o755);
+			delete process.env.GH_TOKEN;
+			process.env.PATH = `${dir}:${savedPath}`;
+			try {
+				const seen: string[] = [];
+				const mock = installFetchMock({
+					"/repos/acme/widget": (call: FetchCall) => {
+						seen.push(call.headers.get("authorization") ?? "");
+						return seen.length === 1 ? json({ message: "Bad credentials" }, { status: 401 }) : publicRepo;
+					},
+				});
+				restore = mock.restore;
+				await read.execute({ repo: "acme/widget" }, context);
+				await read.execute({ repo: "acme/widget" }, context);
+				expect(seen).toEqual(["Bearer gho_fixture_1", "Bearer gho_fixture_2"]);
+			} finally {
+				process.env.PATH = savedPath;
+				rmSync(dir, { recursive: true, force: true });
+			}
 		});
 
 		test("refuses private repositories and unknown refs", async () => {

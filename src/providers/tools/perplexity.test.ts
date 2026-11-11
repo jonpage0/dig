@@ -82,12 +82,27 @@ describe("Perplexity Agent and Search contracts", () => {
     expect(result).not.toContain("[web:99]")
   })
 
+  test("a request that got no response is sent once; its cost is unknown and said to be", async () => {
+    let calls = 0
+    globalThis.fetch = Object.assign(async () => { calls++; throw new TypeError("fetch failed") }, { preconnect: globalThis.fetch.preconnect })
+    for (const [tool, args] of [[ask, { messages }], [search, { query: "term" }]] as const) {
+      calls = 0
+      const result = await executeSource(tool, args, context)
+      expect(calls).toBe(1)
+      expect(result.status).toBe("failed")
+      expect(result.details?.cost).toBeNull()
+      expect(result.text).toContain("Perplexity may have received and charged this request, but no complete response arrived; its cost is unknown.")
+    }
+  })
+
   test("keeps incomplete, failed, empty and malformed responses distinct", async () => {
-    installFetch(agentFixture("incomplete"))
-    const partial = text(await research.execute({ messages }, context))
-    expect(partial.startsWith("ERROR:")).toBe(true)
-    expect(partial).toContain("partial evidence")
-    expect(partial).toContain(sourceUrl)
+    installFetch({ ...agentFixture("incomplete"), incomplete_details: { reason: "max_output_tokens" } })
+    const partial = await executeSource(research, { messages }, context)
+    expect(partial.status).toBe("partial")
+    expect(partial.text.startsWith("ERROR:")).toBe(false)
+    expect(partial.text).toContain("This answer is incomplete: Perplexity stopped before finishing it (max_output_tokens).")
+    expect(partial.text).toContain("The change is documented[web:7].")
+    expect(partial.text).toContain(sourceUrl)
     installFetch({ status: "failed", error: { message: "Quota exceeded" }, output: [] })
     expect(text(await ask.execute({ messages }, context))).toContain("status: failed — Quota exceeded")
     installFetch({ status: "completed", output: [] })
@@ -100,10 +115,11 @@ describe("Perplexity Agent and Search contracts", () => {
     expect(text(empty)).toContain("No search results")
   })
 
-  test("a failed Agent result keeps the charge its response reported, and an unpriced response stays unknown", async () => {
+  test("an incomplete Agent answer keeps the charge its response reported, and an unpriced response stays unknown", async () => {
     installFetch(agentFixture("incomplete"))
     const partial = await executeSource(research, { messages }, context)
-    expect(partial.status).toBe("failed")
+    expect(partial.status).toBe("partial")
+    expect(partial.text).toContain("This answer is incomplete: Perplexity stopped before finishing it (no reason given).")
     expect(partial.details?.cost).toEqual([{ amount: 0.0082, unit: "USD" }])
 
     installFetch({ status: "completed", output: [] })

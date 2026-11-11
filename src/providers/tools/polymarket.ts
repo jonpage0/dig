@@ -9,6 +9,7 @@
  *
  * API docs: https://docs.polymarket.com/api-reference/search/search-markets-events-and-profiles
  */
+import { USER_AGENT } from "../../version.mjs"
 import { keptJson, keptText } from "../http.js"
 import { free, outcome } from "../outcome.js"
 
@@ -60,8 +61,7 @@ interface PolymarketEvent {
 
 interface PublicSearchResponse {
   events?: PolymarketEvent[]
-  tags?: Array<{ id: string; label: string; slug: string; event_count?: number }>
-  pagination?: { hasMore?: boolean; totalResults?: number }
+  pagination?: { hasMore?: boolean }
 }
 
 /** Search Polymarket prediction markets. Keyless and free. */
@@ -83,10 +83,9 @@ export default free({
     const queries = expandQueries(args.query)
 
     try {
-      // Run all query expansions, deduplicating by event ID
+      // Run all query expansions together, deduplicating by event ID in query order
       const allEvents = new Map<string, PolymarketEvent>()
-
-      for (const q of queries) {
+      const searched = await Promise.allSettled(queries.map(async (q) => {
         const url =
           `https://gamma-api.polymarket.com/public-search?` +
           `q=${encodeURIComponent(q)}` +
@@ -95,33 +94,43 @@ export default free({
           `&keep_closed_markets=0`
 
         const response = await fetch(url, {
-          signal: context.abort,
-          headers: { "User-Agent": "opencode-polymarket-tool/1.0" },
+          signal: AbortSignal.any([context.abort, AbortSignal.timeout(60_000)]),
+          headers: { "User-Agent": USER_AGENT },
         })
 
         if (!response.ok) {
           await keptText(response, context.keep, `search ${q}`).catch(() => "")
-          // Don't fail on expansion queries, just skip
-          if (q === args.query) {
-            return `ERROR: Polymarket API returned ${response.status}: ${response.statusText}`
-          }
-          continue
+          return { response, data: null }
         }
 
         context.abort.throwIfAborted()
-        const data = (await keptJson(response, context.keep, `search ${q}`)) as PublicSearchResponse
+        return { response, data: (await keptJson(response, context.keep, `search ${q}`)) as PublicSearchResponse }
+      }))
+      context.abort.throwIfAborted()
+
+      // The main query's failure fails the search; an expansion's failure is listed and makes it partial
+      const main = searched[0]!
+      if (main.status === "rejected") throw main.reason
+      if (!main.value.data) return `ERROR: Polymarket API returned ${main.value.response.status}: ${main.value.response.statusText}`
+      const failedQueries: string[] = []
+      const hasMore: boolean[] = []
+      searched.forEach((result, i) => {
+        if (result.status === "rejected") return void failedQueries.push(`"${queries[i]}" (${result.reason instanceof Error ? result.reason.message : "request failed"})`)
+        if (!result.value.data) return void failedQueries.push(`"${queries[i]}" (HTTP ${result.value.response.status})`)
+        if (typeof result.value.data.pagination?.hasMore === "boolean") hasMore.push(result.value.data.pagination.hasMore)
         // events can be null/undefined per the OpenAPI spec, not just empty array
-        for (const event of data.events ?? []) {
+        for (const event of result.value.data.events ?? []) {
           if (!allEvents.has(event.id)) {
             allEvents.set(event.id, event)
           }
         }
-      }
+      })
+      const failedNote = failedQueries.length ? `Expansion queries that failed, so results may be incomplete: ${failedQueries.join(", ")}.` : ""
 
       const events = Array.from(allEvents.values())
 
       if (events.length === 0) {
-        return outcome("empty", `No Polymarket events found for "${args.query}".`)
+        return outcome(failedQueries.length ? "partial" : "empty", `No Polymarket events found for "${args.query}".${failedNote ? `\n${failedNote}` : ""}`)
       }
 
       // Score and rank events
@@ -141,7 +150,7 @@ export default free({
             : tokenOverlap(queryTokens, titleLower)
 
           // Outcome-aware: check if query matches individual market outcomes or questions
-          const matchedOutcomes: { market: string; label: string; price: number }[] = []
+          const matchedOutcomes: { market: string; label: string; price: number | null }[] = []
           for (const market of markets) {
             const outcomes = safeJsonParse<string[]>(market.outcomes, [])
             const prices = safeJsonParse<string[]>(market.outcomePrices, [])
@@ -161,7 +170,7 @@ export default free({
                 matchedOutcomes.push({
                   market: market.question,
                   label: outcome,
-                  price: parseFloat(prices[i] || "0"),
+                  price: priceOf(prices[i]),
                 })
               }
             }
@@ -178,7 +187,7 @@ export default free({
           // Market quality: volume + liquidity + movement
           const topMarket = markets[0]!
           const vol24h = event.volume24hr || topMarket.volume24hr || 0
-          const volTotal = event.volume || topMarket.volumeNum || 0
+          const volTotal = event.volume || topMarket.volumeNum || (event.volume ?? topMarket.volumeNum ?? null)
           const liq = event.liquidity || topMarket.liquidityNum || 0
           const volScore = Math.min(1.0, Math.log1p(vol24h) / 14) // ~$1.2M = 1.0
           const liqScore = Math.min(1.0, Math.log1p(liq) / 14)
@@ -202,6 +211,10 @@ export default free({
         })
         .filter((x): x is NonNullable<typeof x> => x !== null)
 
+      if (scored.length === 0) {
+        return outcome(failedQueries.length ? "partial" : "empty", `No open Polymarket events with open markets found for "${args.query}" (${events.length} returned events were closed or inactive).${failedNote ? `\n${failedNote}` : ""}`)
+      }
+
       scored.sort((a, b) => b.relevance - a.relevance)
       const topEvents = scored.slice(0, limit)
 
@@ -211,7 +224,7 @@ export default free({
 
         lines.push(`**${event.title}**`)
         lines.push(
-          `  Volume: $${formatNumber(volTotal)} total` +
+          `  Volume: ${volTotal === null ? "n/a" : `$${formatNumber(volTotal)}`} total` +
             (vol24h ? ` | $${formatNumber(vol24h)} 24h` : "") +
             (event.endDate ? ` | Ends: ${event.endDate.split("T")[0]}` : "")
         )
@@ -223,14 +236,14 @@ export default free({
         // Price movement on top market
         const movement = formatPriceMovement(topMarket)
         if (movement) {
-          lines.push(`  Movement: ${movement}`)
+          lines.push(`  Movement of "${topMarket.groupItemTitle?.trim() || topMarket.question}": ${movement}`)
         }
 
         // Matched outcomes (query appeared as an outcome in a multi-outcome market)
         if (matchedOutcomes.length > 0) {
           lines.push(`  Matched outcomes:`)
           for (const mo of matchedOutcomes) {
-            lines.push(`    → ${mo.label}: ${(mo.price * 100).toFixed(1)}% — "${mo.market}"`)
+            lines.push(`    → ${mo.label}: ${percent(mo.price)} — "${mo.market}"`)
           }
         }
 
@@ -248,17 +261,17 @@ export default free({
               const prices = safeJsonParse<string[]>(m.outcomePrices, [])
               const outcomes = safeJsonParse<string[]>(m.outcomes, [])
               const yesIdx = outcomes.findIndex((o) => o.toLowerCase() === "yes")
-              const yesPrice = yesIdx >= 0 ? parseFloat(prices[yesIdx] || "0") : 0
+              const yesPrice = yesIdx >= 0 ? priceOf(prices[yesIdx]) : null
               // Gamma names each market of a grouped event; the question's wording is only a fallback
               // ("Will there be no change…" would otherwise shorten to "there").
               return { question: m.groupItemTitle?.trim() || shortenQuestion(m.question), price: yesPrice, market: m }
             })
-            .filter((x) => x.price > 0.005)
-            .sort((a, b) => b.price - a.price)
+            .filter((x) => x.price === null || x.price > 0.005)
+            .sort((a, b) => (b.price ?? -1) - (a.price ?? -1))
 
           lines.push(`  Odds:`)
           for (const item of leaderboard.slice(0, 8)) {
-            lines.push(`    ${item.question}: ${(item.price * 100).toFixed(1)}%`, ...marketIds(item.market, "      "))
+            lines.push(`    ${item.question}: ${percent(item.price)}`, ...marketIds(item.market, "      "))
           }
           if (leaderboard.length > 8) {
             lines.push(`    ... +${leaderboard.length - 8} more`)
@@ -271,16 +284,16 @@ export default free({
 
             if (outcomes.length <= 2) {
               const oddsStr = outcomes
-                .map((o, i) => `${o}: ${(parseFloat(prices[i] || "0") * 100).toFixed(1)}%`)
+                .map((o, i) => `${o}: ${percent(priceOf(prices[i]))}`)
                 .join(" / ")
               lines.push(`  📊 ${market.question} — ${oddsStr}`)
             } else {
               const pairs = outcomes
-                .map((o, i) => ({ label: o, price: parseFloat(prices[i] || "0") }))
-                .sort((a, b) => b.price - a.price)
+                .map((o, i) => ({ label: o, price: priceOf(prices[i]) }))
+                .sort((a, b) => (b.price ?? -1) - (a.price ?? -1))
               lines.push(`  📊 ${market.question}`)
               for (const p of pairs.slice(0, 5)) {
-                lines.push(`    ${p.label}: ${(p.price * 100).toFixed(1)}%`)
+                lines.push(`    ${p.label}: ${percent(p.price)}`)
               }
               if (pairs.length > 5) {
                 lines.push(`    ... +${pairs.length - 5} more outcomes`)
@@ -298,10 +311,12 @@ export default free({
 
       const header = [
         `Polymarket results for "${args.query}" (${topEvents.length} events, ${queries.length} query expansions):`,
+        `${topEvents.length} of ${scored.length} matching open events shown; provider reports more: ${hasMore.includes(true) ? "yes" : hasMore.length ? "no" : "not stated"}.`,
+        ...(failedNote ? [failedNote] : []),
         "",
       ].join("\n")
 
-      return header + results.join("\n\n")
+      return outcome(failedQueries.length ? "partial" : "success", header + results.join("\n\n"))
     } catch (err) {
       context.abort.throwIfAborted()
       return `ERROR: Failed to search Polymarket: ${err instanceof Error ? err.message : "Unknown error"}`
@@ -385,19 +400,30 @@ function shortenQuestion(question: string): string {
   return question.length > 40 ? question.slice(0, 40) + "…" : question
 }
 
-/** Format the most significant price change for a market */
+/** A price from Gamma's string list, or null when it is missing or not a number */
+function priceOf(value: string | undefined): number | null {
+  const price = value === undefined || value === "" ? NaN : Number(value)
+  return Number.isFinite(price) ? price : null
+}
+
+/** A probability as a percentage, or n/a when the provider gave none */
+function percent(price: number | null): string {
+  return price === null ? "n/a" : `${(price * 100).toFixed(1)}%`
+}
+
+/** Format the most significant price change for a market (Gamma's rolling-window changes, in probability points) */
 function formatPriceMovement(market: PolymarketMarket): string | null {
   const changes: [number, number, string][] = [
-    [Math.abs(market.oneDayPriceChange || 0), market.oneDayPriceChange || 0, "today"],
-    [Math.abs(market.oneWeekPriceChange || 0), market.oneWeekPriceChange || 0, "this week"],
-    [Math.abs(market.oneMonthPriceChange || 0), market.oneMonthPriceChange || 0, "this month"],
+    [Math.abs(market.oneDayPriceChange || 0), market.oneDayPriceChange || 0, "24 hours"],
+    [Math.abs(market.oneWeekPriceChange || 0), market.oneWeekPriceChange || 0, "7 days"],
+    [Math.abs(market.oneMonthPriceChange || 0), market.oneMonthPriceChange || 0, "30 days"],
   ]
   changes.sort((a, b) => b[0] - a[0])
   const top = changes[0]
-  if (!top || top[0] < 0.01) return null // Less than 1% = noise
+  if (!top || top[0] < 0.01) return null // Less than 1 percentage point = noise
   const [absChange, rawChange, period] = top
   const direction = rawChange > 0 ? "↑" : "↓"
-  return `${direction} ${(absChange * 100).toFixed(1)}% ${period}`
+  return `${direction} ${(absChange * 100).toFixed(1)} percentage points over the rolling ${period}`
 }
 
 /** Format large numbers for readability */

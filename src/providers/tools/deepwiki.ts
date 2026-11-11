@@ -3,15 +3,17 @@ import { knownSecrets, redactText, redactValue } from "../secrets.js";
 import type { KeepRaw, ToolSpec } from "../types.js";
 
 const DEEPWIKI_MCP_URL = "https://mcp.deepwiki.com/mcp";
+/**
+ * The most of a wiki one read returns: github_read's bound for one text, so the result stays well under the ~1 MiB
+ * of JSON a host passes to the model (even at 4 UTF-8 bytes a character). The retained original keeps the whole wiki.
+ */
+const CONTENTS_MAX_CHARS = 200_000;
+/** A page or heading boundary this close before the bound is where the cut falls; otherwise the last line break. */
+const BOUNDARY_WINDOW = 20_000;
 
 type DeepWikiToolName = "read_wiki_structure" | "read_wiki_contents" | "ask_question";
 
-function normalizeRepoName(value: unknown): string | string[] {
-	if (Array.isArray(value)) {
-		const repos = value.map((item) => String(item).trim()).filter(Boolean);
-		if (repos.length === 0) throw new Error("repoName must include at least one owner/repo value");
-		return repos;
-	}
+function normalizeRepoName(value: unknown): string {
 	const repo = String(value ?? "").trim();
 	if (!repo) throw new Error("repoName is required in owner/repo format");
 	return repo;
@@ -67,6 +69,7 @@ async function callDeepWiki(
 	args: Record<string, unknown>,
 	signal: AbortSignal,
 	keep: KeepRaw,
+	timeoutMs = 60_000,
 ): Promise<ToolOutcome> {
 	signal.throwIfAborted();
 	const response = await fetch(DEEPWIKI_MCP_URL, {
@@ -81,7 +84,7 @@ async function callDeepWiki(
 			method: "tools/call",
 			params: { name, arguments: args },
 		}),
-		signal,
+		signal: AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
 	});
 	const text = await response.text();
 	signal.throwIfAborted();
@@ -123,11 +126,30 @@ export const read_wiki_structure: ToolSpec = free({
 	},
 });
 
+/** The wiki's first part, cut at a page or heading boundary near the bound when there is one; partial, saying so. */
+function boundedContents(result: ToolOutcome): ToolOutcome {
+	const text = result.text;
+	if (result.status !== "success" || text.length <= CONTENTS_MAX_CHARS) return result;
+	const window = text.slice(0, CONTENTS_MAX_CHARS + 1);
+	const headings = [...window.matchAll(/\n(?=#{1,6} )/g)].map((match) => match.index + 1);
+	const heading = headings.at(-1);
+	const line = window.lastIndexOf("\n");
+	let cut = heading !== undefined && heading >= CONTENTS_MAX_CHARS - BOUNDARY_WINDOW ? heading : line >= CONTENTS_MAX_CHARS - BOUNDARY_WINDOW ? line + 1 : CONTENTS_MAX_CHARS;
+	if (/[\uD800-\uDBFF]/.test(text[cut - 1] ?? "")) cut -= 1;
+	const shown = text.slice(0, cut);
+	const count = (n: number) => n.toLocaleString("en-US");
+	return outcome(
+		"partial",
+		`Showing the first ${count(shown.length)} of ${count(text.length)} characters of this wiki (Dig returns at most ${count(CONTENTS_MAX_CHARS)} per call); the retained original holds the whole wiki, and deepwiki_ask_question or the page list from deepwiki_read_wiki_structure reaches a specific page.\n\n${shown}`,
+		result.details,
+	);
+}
+
 export const read_wiki_contents: ToolSpec = free({
-	description: "View DeepWiki documentation contents for a GitHub repository via DeepWiki's public no-auth endpoint.",
+	description: "View DeepWiki documentation contents for a GitHub repository via DeepWiki's public no-auth endpoint. Returns at most 200,000 characters: a longer wiki comes back cut at a page boundary, as partial, with the full size stated; the retained original keeps the whole wiki.",
 	async execute(args, context) {
 		try {
-			return await callDeepWiki("read_wiki_contents", { repoName: normalizeRepoName(args.repoName) }, context.abort, context.keep);
+			return boundedContents(await callDeepWiki("read_wiki_contents", { repoName: normalizeRepoName(args.repoName) }, context.abort, context.keep));
 		} catch (error) {
 			context.abort.throwIfAborted();
 			return failed(`DeepWiki read_wiki_contents failed: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -136,7 +158,7 @@ export const read_wiki_contents: ToolSpec = free({
 });
 
 export const ask_question: ToolSpec = free({
-	description: "Ask DeepWiki an AI-powered, context-grounded question about one or more GitHub repositories.",
+	description: "Ask DeepWiki an AI-powered, context-grounded question about one GitHub repository.",
 	async execute(args, context) {
 		try {
 			const question = String(args.question ?? "").trim();
@@ -146,6 +168,7 @@ export const ask_question: ToolSpec = free({
 				{ repoName: normalizeRepoName(args.repoName), question },
 				context.abort,
 				context.keep,
+				180_000,
 			);
 		} catch (error) {
 			context.abort.throwIfAborted();

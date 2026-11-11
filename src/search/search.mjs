@@ -45,7 +45,7 @@ export async function searchLibrary(config,args,{signal,embedding=embed,checkCon
    }
   }
  }
- if(args.dig&&!docs.length){const exists=await dirs(join(library));let found=false;for(const d of exists)if(d.isDirectory()){try{const m=frontMatter((await readLibraryFile(config,join(d.name,'digs',args.dig,'dig.md'),0,Number.MAX_SAFE_INTEGER)).text);if(resolve(m.project??'')===project)found=true;}catch{}}if(!found)throw Error('Unknown dig in project');}
+ if(args.dig){const exists=await dirs(join(library));let found=false;for(const d of exists)if(d.isDirectory()){try{const m=frontMatter((await readLibraryFile(config,join(d.name,'digs',args.dig,'dig.md'),0,Number.MAX_SAFE_INTEGER)).text);if(await realpath(m.project).catch(()=>resolve(m.project))===project)found=true;}catch{}}if(!found)throw Error('Unknown dig in project');}
  // Correction links have authority only inside the same saved question.
  for(const d of docs){
   const chain=[];let current=d;let invalid=false;
@@ -58,28 +58,30 @@ export async function searchLibrary(config,args,{signal,embedding=embed,checkCon
  let selected=docs.filter(d=>(args.include_superseded||!d.superseded)&&(!project||d.project===project)&&(!args.dig||d.dig===args.dig)&&(!args.source||d.source===args.source)&&(!args.after||d.at&&Date.parse(d.at)>=Date.parse(args.after))&&(!args.before||d.at&&Date.parse(d.at)<Date.parse(args.before)));
  if(args.file){const named=await readLibraryFile(config,args.file,0,1);if(!docs.some(d=>d.file===named.file))throw Error('file must name a report or answer matching this scope');selected=selected.filter(d=>d.file===named.file);}
  const eligible=selected.length,state=dirname(config.path),directory=join(state,'search/indexes',hash(library)),indexPath=join(directory,'index.json');
- let old=null;try{old=cacheSchema.parse(JSON.parse(await readFile(indexPath,'utf8')));if(old.library!==library||new Set(old.files.map(f=>f.file)).size!==old.files.length)old=null;}catch{}
+ let old=null,oldBytes=null;try{oldBytes=await readFile(indexPath,'utf8');old=cacheSchema.parse(JSON.parse(oldBytes));if(old.library!==library||new Set(old.files.map(f=>f.file)).size!==old.files.length)old=null;}catch{}
+ // A file whose bytes match its index entry keeps that entry's passages and vectors without being chunked again; the index
+ // is written only when an entry was added, changed, given a vector or dropped.
+ let dirty=!old;
  const indexed=[],rows=[];let skipped=0;const useSemantic=mode==='hybrid'&&config.search?.semantic;let semanticWorking=Boolean(useSemantic),queryVector=null;
  if(mode==='hybrid'&&!useSemantic)warn('semantic_disabled','Semantic search is disabled. Enable local semantic search in Dig settings for the pinned model download.');
  if(useSemantic){try{queryVector=await embedding(state,queryText(query),signal);}catch(e){signal?.throwIfAborted();semanticWorking=false;warn('semantic_unavailable',e.message);}}
  for(const d of selected){
   signal?.throwIfAborted();if(d.error){skipped++;warn('unreadable_file','Cannot read '+d.file);continue;}
   if(!d.project||d.kind==='report'&&!reportSources(ALL_MODULES).includes(d.source)||d.method!==null&&typeof d.method!=='string'||typeof d.title!=='string'||typeof d.question!=='string'){skipped++;warn('invalid_metadata','Invalid research metadata in '+d.file);continue;}
-  for(let attempt=0;attempt<2;attempt++){
-   if(attempt)d.text=(await readLibraryFile(config,d.path,0,Number.MAX_SAFE_INTEGER)).text;
-   const sha256=hash(Buffer.from(d.text)),parts=passages(d.text,d.title),cached=old?.files.find(f=>f.file===d.file&&f.sha256===sha256);
-   for(const p of parts){const previous=cached?.passages.find(x=>x.start===p.start&&x.end===p.end&&x.heading===p.heading);p.vector=cached?.passages.length===parts.length?previous?.vector??null:null;
-    if(semanticWorking&&!p.vector){try{p.vector=await embedding(state,embeddingText(d.title,p.heading,d.text.slice(p.start,p.end)),signal);}catch(e){signal?.throwIfAborted();semanticWorking=false;warn('semantic_unavailable',e.message);}}
-   }
-   const fresh=await readLibraryFile(config,d.path,0,Number.MAX_SAFE_INTEGER).catch(()=>null);
-   if(!fresh||hash(Buffer.from(fresh.text))!==sha256){if(!retried)return searchLibrary(config,args,{signal,embedding,checkConfig,retried:true});skipped++;warn('changed_during_search','File kept changing: '+d.file);break;}
-   indexed.push({file:d.file,sha256,passages:parts});for(const p of parts)rows.push({...d,...p});break;
+  const sha256=hash(Buffer.from(d.text)),cached=old?.files.find(f=>f.file===d.file&&f.sha256===sha256),parts=cached?cached.passages.map(p=>({...p})):passages(d.text,d.title);if(!cached)dirty=true;
+  for(const p of parts){
+   if(semanticWorking&&!p.vector){try{p.vector=await embedding(state,embeddingText(d.title,p.heading,d.text.slice(p.start,p.end)),signal);dirty=true;}catch(e){signal?.throwIfAborted();semanticWorking=false;warn('semantic_unavailable',e.message);}}
   }
+  const fresh=await readLibraryFile(config,d.path,0,Number.MAX_SAFE_INTEGER).catch(()=>null);
+  if(!fresh||hash(Buffer.from(fresh.text))!==sha256){if(!retried)return searchLibrary(config,args,{signal,embedding,checkConfig,retried:true});skipped++;warn('changed_during_search','File kept changing: '+d.file);continue;}
+  indexed.push({file:d.file,sha256,passages:parts});for(const p of parts)rows.push({...d,...p});
  }
  if(eligible&&skipped===eligible)throw Error('No eligible research file could be searched');
  const cache={format:1,library,generation:randomUUID(),model:MODEL,chunker:'markdown-v1',files:[...indexed,...(old?.files??[]).filter(f=>!indexed.some(x=>x.file===f.file)&&docs.some(d=>d.file===f.file&&!d.error))]};let index_revision=null;
+ if(old&&cache.files.length!==old.files.length)dirty=true;
  signal?.throwIfAborted();const tmp=join(directory,'index.'+process.pid+'.'+randomUUID()+'.tmp');
- try{await mkdir(directory,{recursive:true});const bytes=JSON.stringify(cache);await writeFile(tmp,bytes,{mode:0o600});signal?.throwIfAborted();await rename(tmp,indexPath);index_revision=hash(bytes);}catch(e){signal?.throwIfAborted();semanticWorking=false;warn('cache_unavailable','Search cache could not be saved');}finally{await rm(tmp,{force:true}).catch(()=>{});}
+ if(!dirty)index_revision=hash(oldBytes);
+ else try{await mkdir(directory,{recursive:true});const bytes=JSON.stringify(cache);await writeFile(tmp,bytes,{mode:0o600});signal?.throwIfAborted();await rename(tmp,indexPath);index_revision=hash(bytes);}catch(e){signal?.throwIfAborted();semanticWorking=false;warn('cache_unavailable','Search cache could not be saved');}finally{await rm(tmp,{force:true}).catch(()=>{});}
  const termsByRow=rows.map(r=>terms([r.title,r.heading,r.text.slice(r.start,r.end)].filter(Boolean).join('\n'))),df=new Map();
  for(const t of termsByRow)for(const w of new Set(t))df.set(w,(df.get(w)??0)+1);
  const avg=termsByRow.reduce((n,t)=>n+t.length,0)/Math.max(rows.length,1),keys=[...new Set(terms(query))];

@@ -9,7 +9,7 @@ test('source activity selects the newest dated retained receipt across saved and
   const found = latestSourceCalls({ items: [{ calls: [earlier, other] }], live: [latest, { ...earlier, at: 'invalid date' }] });
   assert.equal(found.get('exa'), latest);
   assert.equal(found.get('github'), other);
-  assert.match(activityNote(found.get('exa')), /Last retained call failed/);
-  assert.match(activityNote(found.get('github')), /returned partial results/);
+  assert.match(activityNote(found.get('exa')), /^Last retained call: Failed · /);
+  assert.match(activityNote(found.get('github')), /^Last retained call: Partial · /);
   assert.match(activityNote(found.get('youtube')), /No retained call/);
 });

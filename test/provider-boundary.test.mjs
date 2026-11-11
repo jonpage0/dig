@@ -167,6 +167,25 @@ test('a key echoed with lowercase percent escapes, form encoding or every byte e
   } finally { await client.close(); }
 });
 
+test('receipts keep declared arguments named like credentials, such as token_id and paging tokens, while a known key passed in one is still redacted', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dig-native-declared-args-'));
+  const state = join(root, 'state'); await mkdir(state);
+  const secret = 'declared-argument-secret-value';
+  await writeFile(join(state, 'keys.env'), `SCRAPECREATORS_API_KEY=${secret}\n`, { mode: 0o600 });
+  await writeFile(join(state, 'config.toml'), '[sources]\nenabled = ["polymarket", "papers", "facebook"]\n');
+  const transport = new StdioClientTransport({ command: process.execPath, args: ['--import', resolve('test/provider-fetch.mjs'), resolve('plugin/dist/server.mjs')], cwd: root, env: { DIG_STATE_DIR: state, PATH: process.env.PATH }, stderr: 'pipe' });
+  const client = new Client({ name: 'native-declared-args-proof', version: '1' });
+  // test/provider-fetch.mjs answers none of these requests, so each call fails; its receipt still records its arguments.
+  const args = async (name, values) => (await client.callTool({ name, arguments: { project: root, ...values } })).structuredContent.call.args;
+  try {
+    await client.connect(transport);
+    assert.deepEqual(await args('polymarket_history', { token_id: '123456', interval: '1d' }), { token_id: '123456', interval: '1d' });
+    assert.deepEqual(await args('papers_semantic_scholar_search', { query: 'graphs', token: 'next-page-token' }), { query: 'graphs', token: 'next-page-token' });
+    assert.deepEqual(await args('scrapecreators_facebook', { kind: 'replies', feedback_id: 'fb-1', expansion_token: 'expand-1' }), { kind: 'replies', feedback_id: 'fb-1', expansion_token: 'expand-1' });
+    assert.deepEqual(await args('papers_semantic_scholar_search', { query: 'graphs', token: secret }), { query: 'graphs', token: '[redacted]' });
+  } finally { await client.close(); }
+});
+
 test('grouped questions redact known credentials before deriving record names or saving metadata', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dig-native-start-'));
   const secret = 'NativeMixedCaseSecretQA42';
@@ -185,7 +204,7 @@ test('grouped questions redact known credentials before deriving record names or
   } finally { await client.close(); }
 });
 
-test('a failed metered call retains its known subtotal after restart with either raw-retention setting', async () => {
+test('a metered call whose second request fails retains its known subtotal after restart with either raw-retention setting', async () => {
   for (const keepRaw of [true, false]) {
     const root = await mkdtemp(join(tmpdir(), 'dig-native-partial-cost-'));
     await writeFile(join(root, 'config.toml'), `keep_raw = ${keepRaw}\n[sources]\nenabled = ["commerce"]\n`);
@@ -202,9 +221,10 @@ test('a failed metered call retains its known subtotal after restart with either
     let id;
     try {
       const result = await client.callTool({ name: 'commerce_product', arguments: { project: root, asin: 'B000000001' }, _meta: { threadId: 'cost-thread' } });
-      assert.equal(result.isError, true);
+      // The paid product page is kept when only the offer listing fails: partial, with the total charge unknown.
+      assert.equal(result.isError, undefined);
       assert.equal(result.structuredContent.retentionError, null);
-      assert.equal(result.structuredContent.call.status, 'failed');
+      assert.equal(result.structuredContent.call.status, 'partial');
       assert.equal(result.structuredContent.call.cost, null);
       assert.deepEqual(result.structuredContent.call.knownCost, [{ amount: 1, unit: 'Scrape.do credits' }]);
       id = result.structuredContent.call.id;

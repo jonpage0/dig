@@ -2,17 +2,21 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createCatalog, fileKind } from '../../ui/catalog.mjs';
 import { VERSION } from '../../version.mjs';
+import { hostWords } from '../../ui/host.mjs';
 import type { DigHost } from '../shared/host';
-import { canonicalResearchFile } from './research-state';
+import { canonicalResearchFile, primaryFile } from './research-state';
 
 export const POLL_MS = 2000;
-export const READ_LIMIT = 60000;
+const READ_LIMIT = 60000;
 export const SCHEMA_MISSING = 'Settings arrived without their schema, so no controls can be shown. Reload Dig and try again.';
-export const READ_ONLY = 'Browser preview is read-only. Open Dig in Codex to change settings.';
+export const readOnly = (value: any) => `Browser preview is read-only. Open Dig in ${hostWords(value?.host).app} to change settings.`;
 
 export function replacedMessage(value: any) {
-  const installed = typeof value.replaced?.version === 'string' ? value.replaced.version : null;
-  return `${installed ? `Dig ${installed} was installed` : 'Dig was updated or removed'} while Codex was running. Refresh Dig’s plugin connection, then refresh this view. If the connection still reports Dig ${value.version}, quit and reopen Codex as a fallback. This view currently uses Dig ${value.version}.`;
+  const installed = typeof value.replaced?.version === 'string' ? value.replaced.version : null; const { app } = hostWords(value.host);
+  return `${installed ? `Dig ${installed} was installed` : 'Dig was updated or removed'} while ${app} was running. Refresh Dig’s plugin connection, then refresh this view. If the connection still reports Dig ${value.version}, quit and reopen ${app} as a fallback. This view currently uses Dig ${value.version}.`;
+}
+export function versionMessage(value: any) {
+  return `Dig ${value.version} is installed, but ${hostWords(value.host).app} is still showing the ${VERSION} view. Right-click Dig in the sidebar and choose Refresh to load the new one.`;
 }
 
 const emptySnapshot = { items: [], live: [] };
@@ -108,11 +112,13 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
         noticedReplaced = true; noticedVersion = true; notify(replacedMessage(value));
       } else if (!noticedVersion && typeof value.version === 'string' && value.version !== VERSION) {
         noticedVersion = true;
-        notify(`Dig ${value.version} is installed, but Codex is still showing the ${VERSION} view. Right-click Dig in the sidebar and choose Refresh to load the new one.`);
+        notify(versionMessage(value));
       }
       return normalized;
     };
     const poll = (force = false): Promise<void> => {
+      // Before the host connects a request can only fail; start() polls once connected.
+      if (!latest.current.state.connected) return Promise.resolve();
       if (pollTask) { if (force) refreshQueued = true; return pollTask; }
       if (!force && document.visibilityState === 'hidden') return Promise.resolve();
       pollTask = (async () => {
@@ -245,7 +251,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
       await navigate('/reader');
       if (!alive || request !== navigation) return;
       // Open the result immediately. Accounting and recorded history stay available below the reader.
-      const primary = file ?? item.answer ?? [...(item.reportDetails ?? [])].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]?.file ?? item.reports[0] ?? item.files.find((path: string) => path.endsWith('/dig.md'));
+      const primary = file ?? primaryFile(item) ?? item.files.find((path: string) => path.endsWith('/dig.md'));
       const reading = primary ? showFile(primary) : null;
       const completedNavigation = navigation;
       // Move focus when the view opens, including while a local read is pending or fails. Do not steal it
@@ -261,7 +267,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
       const item = latest.current.state.current;
       if (!item) return;
       if (latest.current.state.document) { update({ inspectionOpen: true }); return; }
-      const file = item.answer ?? item.reports[0] ?? item.files.find((path: string) => path.endsWith('dig.md'));
+      const file = primaryFile(item) ?? item.files.find((path: string) => path.endsWith('dig.md'));
       if (file) await showFile(file);
     };
     const inspectRaw = async (file: string) => {
@@ -339,21 +345,22 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
         const prepared = await host.call('prepare_keys_file', source ? { source } : {});
         path = prepared.path;
         const added = !prepared.added.length ? '' : prepared.added.length > 4 ? ` Added ${prepared.added.length} empty lines.` : ` Added empty lines for ${prepared.added.join(', ')}.`;
-        if (!host.canOpenFile()) { notify(`Codex cannot open files from this view. Open ${path} in a text editor, fill in the values and save.${added}`); return; }
+        if (!host.canOpenFile()) { notify(`${hostWords(latest.current.snapshot.host).app} cannot open files from this view. Open ${path} in a text editor, fill in the values and save.${added}`); return; }
         await host.openFile(path!);
         notify(`Opened keys.env.${added} Fill in the values and save; Dig reloads the file and updates readiness here.`);
-      } catch (error: any) { notify(path ? `Codex did not open ${path}: ${error.message}` : `Unable to prepare keys.env: ${error.message}`, true); }
+      } catch (error: any) { notify(path ? `${hostWords(latest.current.snapshot.host).app} did not open ${path}: ${error.message}` : `Unable to prepare keys.env: ${error.message}`, true); }
     };
     const useEnvironment = async (source: string) => {
       try {
         const result = await host.call('use_environment_keys', { source });
-        notify(result.copied.length ? `Copied ${result.copied.join(', ')} from Codex’s environment into keys.env.` : 'keys.env already matches Codex’s environment.');
+        const { app } = hostWords(latest.current.snapshot.host);
+        notify(result.copied.length ? `Copied ${result.copied.join(', ')} from ${app}’s environment into keys.env.` : `keys.env already matches ${app}’s environment.`);
         await poll(true);
       } catch (error: any) { notify(`Unable to copy the key into keys.env: ${error.message}`, true); }
     };
     const activate = async () => {
       const url = host.readDeepLink();
-      if (!url || url === handledDeepLink) return;
+      if (!url || url === handledDeepLink || !latest.current.state.connected) return;
       handledDeepLink = url;
       const route = new URL(url, 'https://dig.invalid');
       if (route.pathname === '/') return;
@@ -361,9 +368,10 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
       if (route.pathname !== '/read' || !requested) { notify(`Dig cannot open this link: ${url}`, true); return; }
       const request = ++navigation;
       try {
-        // Activation always refreshes a hidden view before resolving its file.
-        const fresh = await read('library', 'library_snapshot');
-        if (!alive || request !== navigation) return;
+        // Activation always refreshes a hidden view before resolving its file; a forced poll re-runs after one in flight.
+        await poll(true);
+        if (!alive || request !== navigation || latest.current.state.updatesFailed) return;
+        const fresh = latest.current.snapshot;
         const prefix = `${fresh.library.replace(/\/+$/, '')}/`;
         const file = requested.startsWith(prefix) ? requested.slice(prefix.length)
           : requested.startsWith('/') ? (await host.call('library_read', { file: requested, offset: 0, limit: 1 })).file : requested;

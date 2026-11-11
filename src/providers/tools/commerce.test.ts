@@ -243,32 +243,6 @@ describe("commerce_history Nexscope provider", () => {
 		);
 		expect(mock.calls).toHaveLength(0);
 	});
-	test("falls back to compact review labels when search returns a zero structured count", async () => {
-		const mock = installFetchMock({
-			status: "success",
-			products: [
-				{
-					position: 1,
-					title: "Example product",
-					asin: "B0DGHMNQ5Z",
-					url: "https://www.amazon.com/dp/B0DGHMNQ5Z",
-					price: { amount: 99, currencyCode: "USD" },
-					rating: { value: 4.5, count: 0 },
-					reviewCount: "(34K)",
-					isSponsored: false,
-				},
-			],
-		});
-		restoreFetch = mock.restore;
-
-		const result = await search.execute(
-			{ query: "example", limit: 1 },
-			context,
-		);
-
-		expect(result).toContain("Rating: 4.5 | Ratings: 34,000");
-		expect(result).toContain("Review count label: (34K)");
-	});
 });
 
 describe("commerce Scrape.do enrichment", () => {
@@ -350,6 +324,33 @@ describe("commerce Scrape.do enrichment", () => {
 		expect(result).toContain("Brand: Acme (rh=p_123:456)");
 		expect(result).toContain("Electronics (node=172282)");
 		expect(result).toContain("laptop riser");
+	});
+
+	test("falls back to compact review labels when search returns a zero structured count", async () => {
+		const mock = installFetchMock({
+			status: "success",
+			products: [
+				{
+					position: 1,
+					title: "Example product",
+					asin: "B0DGHMNQ5Z",
+					url: "https://www.amazon.com/dp/B0DGHMNQ5Z",
+					price: { amount: 99, currencyCode: "USD" },
+					rating: { value: 4.5, count: 0 },
+					reviewCount: "(34K)",
+					isSponsored: false,
+				},
+			],
+		});
+		restoreFetch = mock.restore;
+
+		const result = await search.execute(
+			{ query: "example", limit: 1 },
+			context,
+		);
+
+		expect(result).toContain("Rating: 4.5 | Ratings: 34,000");
+		expect(result).toContain("Review count label: (34K)");
 	});
 
 	test("search keeps ZIP localization for ZIP-level marketplaces and requires a query or seller", async () => {
@@ -541,6 +542,30 @@ describe("commerce Scrape.do enrichment", () => {
 		expect(result).toContain("Next page available: No");
 	});
 
+	test("discover charts list chart positions whose cards were cut by limit among the rank-only entries", async () => {
+		const asin = (rank: number) => `B0RANK${String(rank).padStart(4, "0")}`;
+		const mock = installFetchMock({
+			category: "electronics",
+			ranking: Array.from({ length: 50 }, (_, index) => ({ rank: index + 1, asin: asin(index + 1) })),
+			products: Array.from({ length: 30 }, (_, index) => ({ rank: index + 1, asin: asin(index + 1), title: `Card ${index + 1}` })),
+		});
+		restoreFetch = mock.restore;
+
+		const result = await discover.execute({ kind: "bestsellers", category: "electronics" }, context);
+
+		expect(result).toContain("- 10 more product cards omitted by limit");
+		expect(result).not.toContain("- #20 B0RANK0020");
+		for (const rank of [21, 30, 31, 50]) expect(result).toContain(`- #${rank} ${asin(rank)}`);
+	});
+
+	test("search with no normalized results is empty, not success", async () => {
+		const mock = installFetchMock({ status: "success", products: [] });
+		restoreFetch = mock.restore;
+		const result = await commerce.search.execute({ query: "x" }, context);
+		expect(typeof result === "string" ? undefined : result.status).toBe("empty");
+		expect(text(result)).toContain("No normalized Amazon search results were extracted for this query.");
+	});
+
 	test("discover seller keeps absent feedback and business details explicit", async () => {
 		const mock = installFetchMock({
 			seller_id: "A2L77EE7U53NWQ",
@@ -640,7 +665,7 @@ describe("commerce Scrape.do enrichment", () => {
 		});
 		restoreFetch = mock.restore;
 
-		const result = await search.execute({ query: "x" }, context);
+		const result = text(await search.execute({ query: "x" }, context));
 		expect(result.startsWith("ERROR:")).toBe(false);
 		expect(result).toContain("## Raw Response Excerpt");
 		expect(result).not.toContain("scrape-do-test-key");
@@ -656,7 +681,7 @@ describe("commerce Scrape.do enrichment", () => {
 		const mock = installFetchMock({ status: "success", products: [], debug: `${"x".repeat(1599 - start - 10)}${encoded}` });
 		restoreFetch = mock.restore;
 
-		const result = await search.execute({ query: "x" }, context);
+		const result = text(await search.execute({ query: "x" }, context));
 		expect(result).toContain("## Raw Response Excerpt");
 		expect(result).not.toContain("PRIVATE%2f");
 	});
@@ -780,6 +805,107 @@ describe("commerce Scrape.do billing", () => {
 		expect(result.status).toBe("cancelled");
 		expect(result.details?.cost).toBeNull();
 		expect(result.details?.knownCost).toEqual([{ amount: 1, unit: "Scrape.do credits" }]);
+	});
+
+	test("a failed offer listing keeps the paid product page and makes the lookup partial", async () => {
+		route({
+			"/plugin/amazon/pdp": () => reply(pdp, "1"),
+			"/plugin/amazon/offer-listing": () => Response.json({ message: "Not found" }, { status: 404, headers: { "Scrape.do-Request-Cost": "0" } }),
+		});
+		const result = await executeSource(product, { asin: "B0DGHMNQ5Z" }, context);
+		expect(result.status).toBe("partial");
+		expect(result.text).toContain("Offers: the offer-listing request failed (404: Not found), so no Buy Box or seller offers are shown.");
+		expect(result.text).toContain("- Title: Example product");
+		expect(result.details?.cost).toEqual([{ amount: 1, unit: "Scrape.do credits" }]);
+	});
+
+	test("a request that got no response is sent once and its cost is unknown, not free", async () => {
+		let requests = 0;
+		globalThis.fetch = (async () => {
+			requests += 1;
+			throw new TypeError("fetch failed");
+		}) as typeof fetch;
+		const result = await executeSource(search, { query: "usb c cable" }, context);
+		expect(requests).toBe(1);
+		expect(result.status).toBe("failed");
+		expect(result.text).toContain("Scrape.do may have received and charged this request, but no complete response arrived; its cost is unknown.");
+		expect(result.details?.cost).toBeNull();
+
+		route({ "/plugin/amazon/pdp": () => reply(pdp, "1"), "/plugin/amazon/offer-listing": () => { throw new TypeError("fetch failed"); } });
+		const offers = await executeSource(product, { asin: "B0DGHMNQ5Z" }, context);
+		expect(offers.status).toBe("partial");
+		expect(offers.text).toContain("Scrape.do may have received and charged this request");
+		expect(offers.details?.cost).toBeNull();
+		expect(offers.details?.knownCost).toEqual([{ amount: 1, unit: "Scrape.do credits" }]);
+	});
+
+	test("search shows every result of the paid page by default; an explicit limit says the next page skips the rest", async () => {
+		const products = Array.from({ length: 12 }, (_, index) => ({ title: `Product ${index + 1}`, asin: `B0000000${String(index).padStart(2, "0")}` }));
+		route({ "/plugin/amazon/search": () => reply({ status: "success", products }, "1") });
+		const all = await executeSource(search, { query: "usb c cable" }, context);
+		expect(all.text).toContain("Normalized results: 12\n");
+		expect(all.text).toContain("Product 12");
+
+		const narrowed = await executeSource(search, { query: "usb c cable", limit: 3, page: 2 }, context);
+		expect(narrowed.text).toContain("Normalized results: 3 shown of 12 returned; page 3 continues after all 12, including the 9 not shown");
+		expect(narrowed.text).not.toContain("Product 4");
+	});
+
+	test("product checks the PDP before buying the offer listing", async () => {
+		const paths: string[] = [];
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const url = input instanceof URL ? input : new URL(String(input));
+			paths.push(url.pathname);
+			return reply(url.pathname === "/plugin/amazon/pdp" ? { status: "success" } : { status: "success", offers: [] }, "1");
+		}) as typeof fetch;
+		const result = await executeSource(product, { asin: "B0DGHMNQ5Z" }, context);
+		expect(result.status).toBe("failed");
+		expect(result.text).toContain("without the documented `asin`/`name` fields");
+		expect(paths).toEqual(["/plugin/amazon/pdp"]);
+		expect(result.details?.cost).toEqual([{ amount: 1, unit: "Scrape.do credits" }]);
+	});
+
+	test("GTIN resolution skips sponsored results, and says so when only sponsored results exist", async () => {
+		const searched = (products: Record<string, unknown>[]) => {
+			const asked: string[] = [];
+			globalThis.fetch = (async (input: RequestInfo | URL) => {
+				const url = input instanceof URL ? input : new URL(String(input));
+				asked.push(url.searchParams.get("asin") ?? url.pathname);
+				if (url.pathname === "/plugin/amazon/search") return reply({ status: "success", products }, "1");
+				if (url.pathname === "/plugin/amazon/pdp") return reply({ ...pdp, asin: url.searchParams.get("asin") }, "1");
+				return reply({ status: "success", offers: [] }, "1");
+			}) as typeof fetch;
+			return asked;
+		};
+		let asked = searched([
+			{ title: "Ad", asin: "B0SPONSOR1", isSponsored: true },
+			{ title: "Organic", asin: "B0ORGANIC1", isSponsored: false },
+		]);
+		let result = await executeSource(product, { gtin: "0123456789012" }, context);
+		expect(result.status).toBe("success");
+		expect(asked).toEqual(["/plugin/amazon/search", "B0ORGANIC1", "B0ORGANIC1"]);
+		expect(result.text).toContain("Resolved GTIN 0123456789012 to ASIN B0ORGANIC1");
+		expect(result.text).not.toContain("sponsored");
+
+		asked = searched([{ title: "Ad", asin: "B0SPONSOR1", isSponsored: true }]);
+		result = await executeSource(product, { gtin: "0123456789012" }, context);
+		expect(asked).toEqual(["/plugin/amazon/search", "B0SPONSOR1", "B0SPONSOR1"]);
+		expect(result.text).toContain("Resolved GTIN 0123456789012 to ASIN B0SPONSOR1");
+		expect(result.text).toContain("only sponsored results");
+	});
+
+	test("product rejects a URL on a host that is not a listed marketplace before any request", async () => {
+		let requests = 0;
+		globalThis.fetch = (async () => {
+			requests += 1;
+			return reply(pdp, "1");
+		}) as typeof fetch;
+		for (const url of ["https://www.amazon.cn/dp/B0DGHMNQ5Z", "https://example.com/dp/B0DGHMNQ5Z"]) {
+			const result = await executeSource(product, { url }, context);
+			expect(result.status).toBe("failed");
+			expect(result.text).toContain(new URL(url).hostname);
+		}
+		expect(requests).toBe(0);
 	});
 });
 

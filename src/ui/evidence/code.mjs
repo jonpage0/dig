@@ -13,15 +13,15 @@ function repo(r) {
   return { kind: 'repo', key: name.toLowerCase(), title: name, url: str(r.html_url) ?? `https://github.com/${name}`, meta: [stars === undefined ? undefined : `★ ${compact(stars)}`, str(r.language), pushed ? `pushed ${shortDate(pushed)}` : undefined].filter(Boolean), excerpt: str(r.description) };
 }
 
-/** What a read returned: a file's size, or a directory's entry count. */
+/** What a read returned, from the contents response (the one with a `type`, after the repository and commit): a file's size, or a directory's entry count. */
 function readSize(bodies) {
-  for (const body of bodies) {
-    if (typeof body === 'string') return bytes(body.length);
-    if (Array.isArray(body)) return plural(body.length, 'entry', 'entries');
-    const b = obj(body); const size = numv(b?.size) ?? str(b?.text)?.length;
-    if (size !== undefined) return bytes(size);
-  }
-  return undefined;
+  const contents = [...bodies].reverse().find(body => Array.isArray(body) || str(obj(body)?.type));
+  if (Array.isArray(contents)) return plural(contents.length, 'entry', 'entries');
+  const b = obj(contents);
+  if (!b) return undefined;
+  if (str(b.type) === 'dir') return plural(objs(b.entries).length, 'entry', 'entries');
+  const size = numv(b.size);
+  return size === undefined ? undefined : bytes(size);
 }
 
 export function readGithub(call, bodies) {
@@ -60,7 +60,7 @@ const words = value => value.split(/\s+/).filter(Boolean).length;
 
 export function readDeepwiki(call, bodies) {
   const a = call.args;
-  const name = str(a.repoName) ?? (Array.isArray(a.repoName) ? a.repoName.join(', ') : 'a repository');
+  const name = str(a.repoName) ?? 'a repository';
   const failed = failedCall(call); const answer = answerText(bodies);
   if (call.tool === 'deepwiki_ask_question') return {
     action: [`asked DeepWiki about ${name}`, ...query(str(a.question))],

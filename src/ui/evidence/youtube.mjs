@@ -1,7 +1,7 @@
 // YouTube: Data API search and video details, or yt-dlp JSON. Transcripts live in the library, not in the raw response.
 // Adapted from Dig's dashboard/ui/evidence/youtube.ts (MIT, same author).
 import { compact, duration, isoDuration, num, plural, shortDate } from '../format.mjs';
-import { failedCall, noItems, numv, obj, objs, query, scope, str } from './read.mjs';
+import { arr, attempted, failedCall, noItems, numv, obj, objs, query, scope, str } from './read.mjs';
 
 const WATCH_URL = 'https://www.youtube.com/watch?v=';
 
@@ -27,7 +27,26 @@ function readItem(item, videos) {
   }
 }
 
+/** youtube_transcript reads one video's hosted transcript; youtube_analyze and youtube_analysis_status ask Gemini about videos. None of them searches. */
+function readVideoCall(call, bodies) {
+  const a = call.args; const failed = failedCall(call); const found = bodies.map(obj).filter(Boolean);
+  if (call.tool === 'youtube_transcript') {
+    const b = found.find(x => 'transcript' in x);
+    return {
+      action: [attempted(call.status, 'read the transcript of', 'read the transcript of'), str(a.video) ?? 'a video', ...scope([str(a.language), a.originalAudio === true ? 'original audio' : undefined])],
+      result: failed || !b ? undefined : Array.isArray(b.transcript) ? plural(b.transcript.length, 'segment') : 'no transcript returned',
+      items: [],
+    };
+  }
+  const status = str(found.findLast(x => str(x.status))?.status);
+  const action = call.tool === 'youtube_analyze'
+    ? [attempted(call.status, a.previousInteractionId ? `followed up on YouTube analysis ${str(a.previousInteractionId)} with` : `asked Gemini about ${plural(arr(a.videos).length, 'video')}:`, 'ask Gemini about YouTube videos:'), ...query(str(a.question))]
+    : [attempted(call.status, a.action === 'cancel' ? 'asked to cancel YouTube analysis' : 'checked YouTube analysis', a.action === 'cancel' ? 'cancel YouTube analysis' : 'check YouTube analysis'), str(a.interactionId) ?? '?'];
+  return { action, result: failed || !status ? undefined : `status ${status}`, items: [] };
+}
+
 export function readYoutube(call, bodies) {
+  if (['youtube_transcript', 'youtube_analyze', 'youtube_analysis_status'].includes(call.tool)) return readVideoCall(call, bodies);
   const videos = new Map();
   for (const body of bodies) {
     const b = obj(body);

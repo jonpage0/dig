@@ -34,7 +34,7 @@ Call `source_info` before the first provider call. If this source is disabled, s
 
 Normalize a GitHub URL or caller input to `owner/repo`. If no unambiguous public repository is named, stop with a failed or partial result; do not guess.
 
-Always start with `deepwiki_read_wiki_structure`. Use the topic map to select the relevant architecture, API, or internals material. Read `deepwiki_read_wiki_contents` when broader context is needed, then use `deepwiki_ask_question` for the caller's focused structural question. One pass can answer a narrow structure lookup; two or three calls are typical.
+Always start with `deepwiki_read_wiki_structure`. Use the topic map to select the relevant architecture, API, or internals material. Read `deepwiki_read_wiki_contents` when broader context is needed; it returns at most 200,000 characters, so a longer wiki comes back as its first pages, marked `partial` with the full size, and a later page is reached through `deepwiki_ask_question`. Then use `deepwiki_ask_question` for the caller's focused structural question. One pass can answer a narrow structure lookup; two or three calls are typical.
 
 Keep findings at the level DeepWiki supports. When exact behavior matters, identify the file, module, API, or code path that needs direct inspection under `## Needs Follow-Up`. Do not turn a summary-level answer into a signature or line-level claim. Preserve ambiguity and missing sections.
 

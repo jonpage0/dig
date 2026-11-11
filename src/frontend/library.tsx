@@ -16,7 +16,7 @@ import './library/conversation-activity.css';
 
 export { LibraryApp } from './library/app';
 
-export function mountLibraryApp(host = createDigHost('Dig Library'), element = document.getElementById('root')!) {
+function mountLibraryApp(host = createDigHost('Dig Library'), element = document.getElementById('root')!) {
   const root = createRoot(element);
   root.render(<LibraryApp host={host} />);
   return () => root.unmount();

@@ -5,7 +5,7 @@ import { ownerOf, settingsGroups } from '../../ui/settings.mjs';
 import { Badge } from '../shared/components';
 import { Frame, FrameHeader, FrameTitle, FrameDescription, FramePanel } from '../shared/frame';
 import { SourceSetting } from './source-controls';
-import { READ_ONLY, SCHEMA_MISSING } from './controller';
+import { readOnly, SCHEMA_MISSING } from './controller';
 import type { DigHost } from '../shared/host';
 
 const LIBRARY_FOLDER_NOTES: Record<string, string> = {
@@ -43,6 +43,6 @@ export function SettingsPage({ app, host, hidden }: { app: any; host: DigHost; h
       </Frame>;
     })}</div>
     <div className="settings-authority"><div><span className="settings-eyebrow">One settings file</span><p>Dig and the host’s plugin settings edit this same file. Source-specific controls are in Sources &amp; tools.</p></div><details><summary>File location</summary><p id="config-path">{app.snapshot.configPath || 'config.toml'}</p></details></div>
-    <p id="settings-status" className="settings-status" role="status" aria-live="polite">{error || (!read ? 'Reading settings…' : host.preview ? READ_ONLY : '')}</p>
+    <p id="settings-status" className="settings-status" role="status" aria-live="polite">{error || (!read ? 'Reading settings…' : host.preview ? readOnly(app.snapshot) : '')}</p>
   </section>;
 }

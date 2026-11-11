@@ -15,6 +15,7 @@
  *   - OPENALEX_API_KEY (optional; increases the free daily metered budget)
  *   - PAPER_SEARCH_MCP_<name> aliases are accepted for both keys
  */
+import { USER_AGENT } from "../../version.mjs"
 import { keptJson, keptText } from "../http.js"
 import { free, metered, outcome } from "../outcome.js"
 import type { ToolSpec } from "../types.js"
@@ -43,7 +44,6 @@ function openAlexCharge(body: unknown, status: number | string): number | null {
 const SEMANTIC_SCHOLAR_GRAPH_BASE = "https://api.semanticscholar.org/graph/v1"
 const SEMANTIC_SCHOLAR_RECOMMENDATIONS_BASE = "https://api.semanticscholar.org/recommendations/v1"
 const OPENALEX_BASE = "https://api.openalex.org"
-const DEFAULT_USER_AGENT = "opencode-papers-tool/1.0"
 
 const SEMANTIC_SCHOLAR_FIELDS = [
   "paperId",
@@ -169,7 +169,7 @@ function providerKey(name: string): string | undefined {
 function semanticScholarHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/json",
-    "User-Agent": DEFAULT_USER_AGENT,
+    "User-Agent": USER_AGENT,
   }
 
   const apiKey = providerKey("SEMANTIC_SCHOLAR_API_KEY")
@@ -184,7 +184,7 @@ function openAlexHeaders(): Record<string, string> {
   const apiKey = providerKey("OPENALEX_API_KEY")
   return {
     Accept: "application/json",
-    "User-Agent": DEFAULT_USER_AGENT,
+    "User-Agent": USER_AGENT,
     ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
   }
 }
@@ -577,6 +577,7 @@ export const semantic_scholar_search = free({
     const sort = args.sort ?? "relevance"
     const apiLimit = requestedLimit
     const bulk = sort !== "relevance" || args.token !== undefined
+    if (sort !== "relevance" && args.token !== undefined) return `ERROR: token cannot be combined with sort "${sort}": a sorted Semantic Scholar search returns no continuation, because its token resumes after the provider's whole batch, past papers never shown. Narrow the sorted search instead (yearFrom/yearTo, fieldsOfStudy, minCitationCount or a tighter query).`
 
     const url = new URL(`${SEMANTIC_SCHOLAR_GRAPH_BASE}/paper/search${bulk ? "/bulk" : ""}`)
     url.searchParams.set("query", args.query)
@@ -623,7 +624,8 @@ export const semantic_scholar_search = free({
       const header = [
         `Semantic Scholar papers for "${args.query}" (${papers.length} shown${data.total ? `, ${data.total} total matches` : ""}):`,
         `Sorted by ${sort}${bulk ? " by the provider across matching papers" : ""}.`,
-        ...((data as any).token ? [`Next token: ${(data as any).token}. Use the same query, filters and sort to continue.`] : []),
+        ...(sort !== "relevance" ? [`These are the first ${papers.length} of the provider's batch for this sort; no continuation is offered. Reach more by narrowing the search (yearFrom/yearTo, fieldsOfStudy, minCitationCount or a tighter query).`]
+          : (data as any).token ? [`Next token: ${(data as any).token}. Use the same query and filters to continue.`] : []),
         semanticAccess(),
       ].join("\n")
 

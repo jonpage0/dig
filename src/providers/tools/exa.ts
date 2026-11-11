@@ -60,9 +60,9 @@ const RESEARCH_TIMEOUT_MS = 180_000
 
 /**
  * Exa documents 429 and 503 as "the request was not processed; retry with backoff".
- * Other statuses are not retried. requestJson also retries transport errors (including its
- * own timeout) up to `retries`, so the paid deep-reasoning call sets retries to 0: it must
- * never be issued twice.
+ * Other statuses are not retried, and requestJson never repeats a request that got no
+ * response (including its own timeout). The paid deep-reasoning call, and exa_search in any
+ * deep mode, also sets retries to 0: it must never be issued twice.
  */
 const EXA_RETRY_STATUSES = [429, 503] as const
 const RESEARCH_RETRIES = 0
@@ -298,6 +298,9 @@ async function exaPost(
     provider: "Exa",
     keep: options.keep,
     label: path,
+  }).catch((error: unknown) => {
+    if (options.signal.aborted) throw error
+    throw new ExaUnansweredError(error instanceof Error ? error.message : "Unknown error")
   })
 
   const payload = asRecord(response.payload)
@@ -315,15 +318,19 @@ async function exaPost(
   return parseResponse(path, payload)
 }
 
+/** No complete response arrived (a transport failure, or a body cut off): Exa may still have received and charged the request. */
+class ExaUnansweredError extends Error {}
+const UNANSWERED_COST = "Exa may have received and charged this request, but no complete response arrived; its cost is unknown."
+
 /** Provider bodies arrive redacted (requestJson); a transport error's message does not, so it is redacted here. */
 function failure(operation: string, error: unknown, signal: AbortSignal): string {
   if (signal.aborted) return `ERROR: Exa ${operation} canceled before completion; not a provider failure.`
   const message = error instanceof Error ? error.message : "Unknown error"
-  return `ERROR: Exa ${operation} failed: ${redactText(message, knownSecrets())}`
+  return `ERROR: Exa ${operation} failed: ${redactText(message, knownSecrets())}${error instanceof ExaUnansweredError ? `. ${UNANSWERED_COST}` : ""}`
 }
 
 // ---------------------------------------------------------------------------
-// Argument normalization (runtime checks; the registration schema is advisory)
+// Argument normalization (runtime checks behind the registration schema, which the server enforces)
 // ---------------------------------------------------------------------------
 
 type Invalid = { error: string }
@@ -566,7 +573,7 @@ export const search = exaMetered({
 
     let response: ExaResponse
     try {
-      response = await exaPost("/search", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: plan.beta })
+      response = await exaPost("/search", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: plan.beta, ...(type.startsWith("deep") ? { retries: RESEARCH_RETRIES } : {}) })
     } catch (error) {
       return failure("search", error, ctx.abort)
     }
@@ -700,6 +707,7 @@ export const contents = exaMetered({
     }
 
     return {
+      status: results.length === 0 ? "empty" : failures.length || unaccounted.length ? "partial" : "success",
       text: lines.join("\n"),
       details: resultDetails(response, {
         requested: requested.length,
@@ -864,6 +872,7 @@ export const research = exaMetered({
     })
 
     return {
+      ...(!output && results.length === 0 ? { status: "empty" as const } : {}),
       text: lines.join("\n"),
       details: resultDetails(response, {
         type: RESEARCH_TYPE,

@@ -1,8 +1,6 @@
 // Type-only: the host supplies the builder (`Type`), so this module adds no
 // runtime schema dependency of its own.
 import type { Type, TSchema } from "@sinclair/typebox";
-import { REPORT_STATUSES, TOPIC_VOLATILITIES } from "./library/files.js";
-import { ALL_MODULES, reportSources } from "./modules.js";
 import { createEvidenceSchemas } from "./evidence-schemas.js";
 import { createYouTubeAnalysisSchemas } from "./youtube-analysis-schemas.js";
 import { createFacebookSchemas } from "./facebook-schemas.js";
@@ -55,7 +53,6 @@ function messageArraySchema(T: Typebox) {
 
 export function createSchemas(
   T: Typebox,
-  sources: readonly string[] = reportSources(ALL_MODULES),
 ): Record<string, TSchema> {
   const schemas: Record<string, Schema> = {
     ...createFacebookSchemas(T),
@@ -85,15 +82,15 @@ export function createSchemas(
     hackernews: T.Object({
       query: T.String({ description: "Search query." }),
       days: T.Optional(
-        T.Number({ description: "Look back N days (default: 30)." }),
+        T.Number({ minimum: 1, description: "Look back N days (default: 30)." }),
       ),
       limit: T.Optional(
-        T.Number({ description: "Max results (default: 20, max: 50)." }),
+        T.Integer({ minimum: 1, maximum: 50, description: "Max results (default: 20, max: 50)." }),
       ),
       type: enumSchema(
         T,
         ["story", "comment", "all"],
-        "Filter by result type.",
+        "Filter by result type. Story searches return only stories with more than 2 points; all-type and comment searches apply no points filter (comments carry no points).",
       ),
       sort: enumSchema(
         T,
@@ -101,17 +98,17 @@ export function createSchemas(
         "Sort by relevance or newest first.",
       ),
     }),
-    polymarket_history: T.Object({token_id: T.String(), interval: enumSchema(T, ["max", "all", "1m", "1w", "1d", "6h", "1h"], "Relative window; exclusive with start/end or as_of."), start: T.Optional(T.Integer({minimum: 0})), end: T.Optional(T.Integer({minimum: 0})), as_of: T.Optional(T.Integer({minimum: 0})), bucket_seconds: T.Optional(T.Integer({minimum: 60, maximum: 86400})), limit: T.Optional(T.Integer({minimum: 1, maximum: 1000})), cursor: T.Optional(T.String())}, {additionalProperties:false}),
-    polymarket_resolution: T.Object({condition: T.Optional(T.String()), event_id: T.Optional(T.String()), question_id: T.Optional(T.String())}, {additionalProperties:false}),
+    polymarket_history: T.Object({token_id: T.String({description: "Outcome token ID (decimal digits), as the polymarket search prints under Outcome token IDs; not a market or condition ID."}), interval: enumSchema(T, ["max", "all", "1m", "1w", "1d", "6h", "1h"], "Relative window; exclusive with start/end or as_of."), start: T.Optional(T.Integer({minimum: 0, description: "Window start, epoch seconds; use with end, exclusive with interval and as_of."})), end: T.Optional(T.Integer({minimum: 0, description: "Window end, epoch seconds, after start."})), as_of: T.Optional(T.Integer({minimum: 0, description: "Price as of this time, epoch seconds; exclusive with interval and start/end."})), bucket_seconds: T.Optional(T.Integer({minimum: 60, maximum: 86400, description: "Bucket width in seconds, 60–86400."})), limit: T.Optional(T.Integer({minimum: 1, maximum: 1000, description: "Points per page, default 200."})), cursor: T.Optional(T.String({description: "next_cursor from the previous page; repeat the same query with it."}))}, {additionalProperties:false}),
+    polymarket_resolution: T.Object({condition: T.Optional(T.String({description: "Up to 20 comma-separated market condition IDs (0x followed by 64 hex digits)."})), event_id: T.Optional(T.String({description: "Up to 20 comma-separated Gamma event IDs (numeric)."})), question_id: T.Optional(T.String({description: "One UMA question ID (0x followed by 64 hex digits)."}))}, {additionalProperties:false}),
     polymarket: T.Object({
       query: T.String({
         description: "Prediction-market topic, entity, event, or question.",
       }),
       limit: T.Optional(
-        T.Number({ description: "Max events (default: 10, max: 30)." }),
+        T.Integer({ minimum: 1, description: "Max events (default: 10, max: 30)." }),
       ),
       page: T.Optional(
-        T.Number({ description: "Pagination page (default: 1)." }),
+        T.Integer({ minimum: 1, description: "Pagination page (default: 1)." }),
       ),
     }),
     reddit: T.Object(
@@ -130,7 +127,7 @@ export function createSchemas(
         filter: enumSchema(
           T,
           ["posts", "comments"],
-          "Search posts (default) or comment text.",
+          "Search posts (default) or comment text. Inside subreddits one request returns both and both are shown, this one first.",
         ),
         sort: enumSchema(
           T,
@@ -156,7 +153,7 @@ export function createSchemas(
           T.Integer({
             minimum: 1,
             maximum: 40,
-            description: "Max results to display (default: 15, max: 40).",
+            description: "Max results to display (default: 15, max: 40); inside subreddits, for posts and for comments each.",
           }),
         ),
         includeComments: T.Optional(
@@ -239,33 +236,33 @@ export function createSchemas(
         ),
         includeSettings: T.Optional(
           T.Boolean({
-            description: "Fetch subreddit settings when available.",
+            description: "Fetch subreddit settings when available (default: true).",
           }),
         ),
         includeStyle: T.Optional(
-          T.Boolean({ description: "Fetch subreddit rules/style." }),
+          T.Boolean({ description: "Fetch subreddit rules/style (default: true)." }),
         ),
         includeHighlights: T.Optional(
-          T.Boolean({ description: "Fetch community highlights." }),
+          T.Boolean({ description: "Fetch community highlights (default: true)." }),
         ),
         includeSubredditContext: T.Optional(
           T.Boolean({
             description:
-              "Fetch lightweight context/feed for surfaced communities.",
+              "Fetch lightweight context/feed for surfaced communities (default: true).",
           }),
         ),
         includeBatchEnrich: T.Optional(
           T.Boolean({
-            description: "Batch-enrich surfaced post IDs when available.",
+            description: "Batch-enrich surfaced post IDs when available (default: true).",
           }),
         ),
         includeUserHistory: T.Optional(
-          T.Boolean({ description: "Fetch recent user posts/comments." }),
+          T.Boolean({ description: "Fetch recent user posts/comments (default: true)." }),
         ),
         includeReplies: T.Optional(
           T.Boolean({
             description:
-              "Fetch bounded collapsed-reply cursors from the first comment page.",
+              "Fetch bounded collapsed-reply cursors from the first comment page (default: true).",
           }),
         ),
         maxReplyCursors: T.Optional(
@@ -273,7 +270,7 @@ export function createSchemas(
             minimum: 0,
             maximum: 8,
             description:
-              "Max collapsed reply cursors to complete (thread_intelligence caps at 5 per post).",
+              "Max collapsed reply cursors to complete (default: 3 for deep_thread; thread_intelligence defaults to 2 and caps at 5 per post).",
           }),
         ),
         feed: enumSchema(
@@ -302,11 +299,11 @@ export function createSchemas(
             minimum: 1,
             maximum: 25,
             description:
-              "Max candidate items to format, not a complete dataset.",
+              "Max candidate items to format per evidence section (default: 10; Comment Highlights never more than 12), not a complete dataset.",
           }),
         ),
         needFormat: T.Optional(
-          T.Boolean({ description: "Pass TikHub need_format flag." }),
+          T.Boolean({ description: "Pass TikHub need_format flag (default: true)." }),
         ),
       },
       { additionalProperties: false },
@@ -328,10 +325,10 @@ export function createSchemas(
     papers_semantic_scholar_snippets: T.Object({query: T.String(), paperIds: stringArray(T, "Optional known paper IDs, max 100."), limit: T.Optional(T.Integer({minimum: 1, maximum: 100}))}),
     papers_semantic_scholar_relations: T.Object({paperId: T.String(), direction: requiredEnumSchema(T, ["citations", "references"], "Direction from the seed paper."), offset: T.Optional(T.Integer({minimum: 0, maximum: 9999})), limit: T.Optional(T.Integer({minimum: 1, maximum: 100}))}),
     papers_semantic_scholar_search: T.Object({
-      token: T.Optional(T.String({description: "Bulk-search continuation; repeat the same query, filters and sort."})),
+      token: T.Optional(T.String({description: "Continuation from an unsorted search; repeat the same query and filters. Refused with a non-relevance sort, which offers none."})),
       query: T.String({ description: "Paper/literature query." }),
       limit: T.Optional(
-        T.Number({ description: "Max papers (default: 10, max: 20)." }),
+        T.Integer({ minimum: 1, maximum: 20, description: "Max papers (default: 10, max: 20)." }),
       ),
       yearFrom: T.Optional(
         T.Number({ description: "Only papers in or after this year." }),
@@ -361,7 +358,9 @@ export function createSchemas(
         "Optional paper IDs to steer away from.",
       ),
       limit: T.Optional(
-        T.Number({
+        T.Integer({
+          minimum: 1,
+          maximum: 20,
           description: "Max recommendations (default: 10, max: 20).",
         }),
       ),
@@ -371,9 +370,9 @@ export function createSchemas(
       mode: enumSchema(T, ["keyword", "semantic"], "Keyword or semantic search; semantic queries max 2000 characters, relevance ordering."),
       query: T.String({ description: "Paper/literature query." }),
       limit: T.Optional(
-        T.Number({ description: "Max works (default: 10, max: 25)." }),
+        T.Integer({ minimum: 1, maximum: 25, description: "Max works (default: 10, max: 25)." }),
       ),
-      page: T.Optional(T.Number({ description: "Pagination page." })),
+      page: T.Optional(T.Integer({ minimum: 1, description: "Pagination page." })),
       yearFrom: T.Optional(
         T.Number({ description: "Only works in or after this year." }),
       ),
@@ -441,7 +440,7 @@ export function createSchemas(
       savePath: T.Optional(
         T.String({
           description:
-            "Directory to save the PDF (default: the library's papers/ folder).",
+            "Directory to save the PDF (default: the library's papers/ folder). A relative path resolves against the project directory; the directory must lie inside the project or Dig's state directory, symbolic links resolved.",
         }),
       ),
     }),
@@ -477,7 +476,7 @@ export function createSchemas(
             minimum: 1,
             maximum: 8,
             description:
-              "Max normalized items per platform, not provider page size.",
+              "Max normalized items shown per platform (default: every item in the response); the next cursor or page still starts after the whole response. Bilibili also requests max(limit, 4) items per page and Zhihu max(limit, 5), 5 for both when limit is omitted, with Zhihu's page offset counted in that size, so keep limit unchanged while paging.",
           }),
         ),
         provider: enumSchema(
@@ -639,7 +638,7 @@ export function createSchemas(
           T.Integer({
             minimum: 1,
             maximum: 10,
-            description: "Max normalized results (default: 5, max: 10).",
+            description: "Max normalized results to show (default: every result on the page, max: 10); the next page starts after the whole page either way.",
           }),
         ),
         seller: T.Optional(
@@ -816,7 +815,7 @@ export function createSchemas(
         type: enumSchema(
           T,
           ["instant", "fast", "lite", "auto", "deep-lite", "deep", "deep-reasoning"],
-          "Search mode: auto (default), fast/instant for latency, deep-lite/deep/deep-reasoning for opt-in iterative research ($12-15/1k).",
+          "Search mode: auto (default), fast/instant for latency, lite for cached page content only (no maxAgeHours or summary), deep-lite/deep/deep-reasoning for opt-in iterative research ($12-15/1k).",
         ),
         category: T.Optional(
           T.String({
@@ -868,7 +867,7 @@ export function createSchemas(
               "Opt in to Exa Dynamic Highlights (research preview, shared budget across the result set; sends the Exa-Beta header).",
           }),
         ),
-        snapshotAsOf: T.Optional(T.String({ description: "ISO cutoff date for stored historical content. Plan and rolling lookback limits apply; incompatible with maxAgeHours and category. Does not reproduce historical ranking." })),
+        snapshotAsOf: T.Optional(T.String({ description: "ISO cutoff date for stored historical content. Plan and rolling lookback limits apply; incompatible with maxAgeHours, category and the deep and deep-reasoning types. Does not reproduce historical ranking." })),
         maxAgeHours: T.Optional(
           T.Integer({
             minimum: -1,
@@ -919,7 +918,7 @@ export function createSchemas(
               "Opt in to Exa Dynamic Highlights (research preview; sends the Exa-Beta header).",
           }),
         ),
-        snapshotAsOf: T.Optional(T.String({ description: "ISO cutoff date for stored historical content. Plan and rolling lookback limits apply; incompatible with maxAgeHours and category. Does not reproduce historical ranking." })),
+        snapshotAsOf: T.Optional(T.String({ description: "ISO cutoff date for stored historical content. Plan and rolling lookback limits apply; incompatible with maxAgeHours. Does not reproduce historical ranking." })),
         maxAgeHours: T.Optional(
           T.Integer({
             minimum: -1,
@@ -1308,7 +1307,7 @@ export function createSchemas(
       { additionalProperties: false },
     ),
     xsearch: T.Object({
-      query: T.String({ description: "What to search for on X.com." }),
+      query: T.String({ minLength: 1, description: "What to search for on X.com." }),
       passLabel: T.Optional(
         T.String({ description: "Optional lowercase label prefix." }),
       ),
@@ -1414,11 +1413,11 @@ export function createSchemas(
         archive: T.Optional(
           T.Boolean({
             description:
-              "false (default): the last 7 days. true: the full archive.",
+              "false (default): the last 7 days. true: the full archive, which needs start_time.",
           }),
         ),
         start_time: T.Optional(
-          T.String({ description: "Start of the counted window, ISO 8601." }),
+          T.String({ description: "Start of the counted window, ISO 8601. Required with archive true." }),
         ),
         end_time: T.Optional(
           T.String({ description: "End of the counted window, ISO 8601." }),
@@ -1636,7 +1635,7 @@ export function createSchemas(
             minimum: 1,
             maximum: 40,
             description:
-              "Max videos to display from the page (default: 20, max: 40).",
+              "Max videos to display from the page (default: every video returned; max: 40). Does not reduce what is fetched or billed.",
           }),
         ),
         transcripts: T.Optional(
@@ -1701,7 +1700,7 @@ export function createSchemas(
             minimum: 1,
             maximum: 40,
             description:
-              "Max items to display (default: 20, max: 40); per list in native mode.",
+              "Max items to display (default: every item returned; max: 40); per list in native mode. Does not reduce what is fetched or billed.",
           }),
         ),
         transcripts: T.Optional(
@@ -1909,7 +1908,7 @@ export function createSchemas(
             minimum: 1,
             maximum: 50,
             description:
-              "Max ads to display from the page (default: 20, max: 50).",
+              "Max ads to display from the page (default: every ad returned; max: 50). Does not reduce what is fetched or billed.",
           }),
         ),
       },
@@ -2217,7 +2216,7 @@ export function createSchemas(
             minimum: 1,
             maximum: 40,
             description:
-              "kind='posts'. Max posts to display from the page (default: 20, max: 40).",
+              "kind='posts'. Max posts to display from the page (default: every post returned; max: 40). Does not reduce what is fetched or billed.",
           }),
         ),
         cache_max_age: enumSchema(
@@ -2318,83 +2317,6 @@ export function createSchemas(
       },
       { additionalProperties: false },
     ),
-    research_save: T.Object({
-      source: requiredEnumSchema(
-        T,
-        sources,
-        "Dig source (catalog id) the report came from; the front-matter `source`.",
-      ),
-      content: T.String({
-        description:
-          "Full Markdown report as the source skill specifies, without YAML front matter.",
-      }),
-      topic: T.Optional(
-        T.String({
-          description: "Short lowercase hyphenated topic, at most 50 characters.",
-        }),
-      ),
-      topic_volatility: enumSchema(
-        T,
-        TOPIC_VOLATILITIES,
-        "How fast the topic changes, when known.",
-      ),
-      dig: T.Optional(
-        T.String({
-          description:
-            "Dig id from dig_start or your assignment. Omit to save a single-source dig.",
-        }),
-      ),
-      question: T.Optional(
-        T.String({
-          description:
-            "The research question as asked. Pass it when you omit `dig`: it names the new single-source dig.",
-        }),
-      ),
-      agent: T.Optional(
-        T.String({
-          description:
-            "Agent (method) that produced the report, e.g. x-judge; the file is <agent>.md. Defaults to source.",
-        }),
-      ),
-      supersedes: T.Optional(
-        T.String({
-          description:
-            "Report file in the same dig that this report corrects, e.g. x-judge.md.",
-        }),
-      ),
-    }),
-    dig_start: T.Object({
-      question: T.String({
-        minLength: 1,
-        description: "The question this dig researches, in the user's terms.",
-      }),
-      planned: stringArray(
-        T,
-        "Source agents you plan to run, e.g. [x-judge, x-breadth].",
-      ),
-      refreshes: T.Optional(
-        T.String({
-          description:
-            "Id of an earlier dig in this project that this one re-researches.",
-        }),
-      ),
-    }),
-    dig_finish: T.Object({
-      dig: T.String({ description: "Dig id from dig_start." }),
-      answer: T.String({
-        minLength: 1,
-        description: "Your final answer in Markdown, with citations.",
-      }),
-      status: requiredEnumSchema(
-        T,
-        REPORT_STATUSES,
-        "complete, partial, or failed.",
-      ),
-      reports: stringArray(
-        T,
-        "Report files the answer relied on, e.g. [x-judge.md, x-breadth.md].",
-      ),
-    }),
   };
 
   // Host builders may be opaque (callable schema values, not TypeBox objects).
