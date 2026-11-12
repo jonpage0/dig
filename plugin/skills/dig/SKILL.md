@@ -34,8 +34,11 @@ The view updates from saved digs, reports and completed retrievals. It does not 
 
 Pick a source only because it answers a named part of the question; never run every source by default.
 
+Before choosing among paid tools, look at each source's `history` in `source_info`: what this library's own calls to each tool have cost over the last 90 days, how long they took and how often they failed. It is a record of past calls here, not a price list. A provider call that names a `dig` returns `digCost`, what that dig has cost so far; watch it. If Dig refuses a call because the dig has reached its spending ceiling, tell the user and stop; never work around it by leaving out `dig`, changing the setting or using another tool for the same request.
+
 - `perplexity`: current web facts, official documentation, news, web-grounded comparisons.
 - `exa`: targeted document discovery, page extraction, similar pages; deep research only on request.
+- `wayback`: what a web page said on a given date and how it changed, from the Internet Archive's captures; the page behind a dead link.
 - `deepwiki`: structure and Q&A for one named public GitHub repository.
 - `github`: discover, compare and rank public repositories for a need.
 - `papers`: scholarly literature, citations, related work, full text.
@@ -44,12 +47,14 @@ Pick a source only because it answers a named part of the question; never run ev
 - `reddit`: public Reddit threads and comments. `tikhub-reddit`: advanced Reddit scouting, subreddit context, a thread's first page of comments with up to 8 collapsed-reply continuations per call, batch enrichment.
 - `hackernews`: Hacker News stories, comments, Ask HN, Show HN.
 - `polymarket`: market-implied probabilities, volume, liquidity, movement.
-- `youtube`: discover videos and research transcript-grounded creator claims. `youtube-video`: deeper analysis of supplied public YouTube videos, with Gemini 3.8 Flash as the standard and Argon for harder reasoning; save its own standard YouTube source report. Glimpse remains a separate tool for focused visual inspection.
+- `youtube`: discover videos and research transcript-grounded creator claims; read a video's comments. `youtube-video`: deeper analysis of supplied public YouTube videos, with Gemini 3.8 Flash as the standard and Argon for harder reasoning; save its own standard YouTube source report. Glimpse remains a separate tool for focused visual inspection.
 - `china-social`: Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat.
 - `commerce`: Amazon products, deals, charts, sellers, reviews, up to 365 days of history.
 - `tiktok`, `instagram`, `linkedin`, `telegram`, `threads`: public evidence from each platform.
 - `facebook`: public Facebook profiles, posts, groups, video search and events; supplied post links, comments and available transcripts.
 - `facebook-ads`: Meta Ad Library advertisers, ad creatives, run dates and available transcripts, not inferred performance.
+- `google-ads`: Google Ads Transparency Center advertisers, their ads by region, date and format, and one ad's text, destination and dates, not inferred performance.
+- `linkedin-ads`: LinkedIn Ad Library ads from roughly the last year, with an ad's text, payer and the targeting and impression ranges LinkedIn publishes, not inferred performance.
 - `tiktok-ads`: TikTok Creative Center ad analytics and the public Ad Library.
 
 ## Website discovery, SEO, GEO and advertising questions

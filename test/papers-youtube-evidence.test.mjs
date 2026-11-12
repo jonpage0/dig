@@ -37,3 +37,12 @@ test('YouTube transcript and Gemini analysis calls are not described as searches
   const search = said({ tool: 'youtube', source: 'youtube', args: { query: 'sqlite' } }, [{ items: [{ id: { videoId: 'v1' }, snippet: { title: 'Video', channelTitle: 'C' } }] }]);
   assert.match(search.text, /searched YouTube for/i);
 });
+
+test('YouTube comments read as one row per comment, with its author, date and likes, not a search', () => {
+  const comment = { id: 'UgwVfRopfS2F-WB3aF14AaABAg', content: 'Side shade to Coach Sean Payton, love it :)', publishedTimeText: '9 days ago', publishedTime: '2025-01-23T23:14:02.948Z', author: { name: '@SimonT80', channelUrl: 'https://youtube.com/@SimonT80' }, engagement: { likes: 110, replies: 5 } };
+  const out = said({ tool: 'youtube_comments', source: 'youtube', args: { url: 'dQw4w9WgXcQ', order: 'top' } }, [{ success: true, credits_charged: 1, comments: [comment, { id: 'x' }], continuationToken: 'next' }]);
+  assert.doesNotMatch(out.text, /[Ss]earched/); assert.match(out.text, /^Read the comments on dQw4w9WgXcQ \(top\) → 1 comment$/);
+  assert.equal(out.items.length, 1); assert.equal(out.items[0].kind, 'comment'); assert.equal(out.items[0].title, comment.content); assert.equal(out.items[0].url, 'https://youtube.com/@SimonT80');
+  assert.equal(out.items[0].meta[0], '@SimonT80'); assert.equal(out.items[0].meta.length, 3); assert.equal(out.items[0].meta[2], '110 likes');
+  assert.match(said({ tool: 'youtube_comments', source: 'youtube', status: 'empty', args: { url: 'dQw4w9WgXcQ' } }, [{ success: true, comments: [] }]).text, /→ nothing found$/);
+});

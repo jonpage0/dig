@@ -61,8 +61,9 @@ const SEMANTIC_SCHOLAR_FIELDS = [
   "fieldsOfStudy",
   "s2FieldsOfStudy",
   "publicationTypes",
-  "tldr",
-].join(",")
+]
+/** Relevance search returns a TLDR. The bulk search (any other sort) and the recommendations endpoint refuse the field (HTTP 400, "Unrecognized or unsupported fields: [tldr]"). */
+const SEMANTIC_SCHOLAR_SEARCH_FIELDS = [...SEMANTIC_SCHOLAR_FIELDS, "tldr"].join(",")
 
 type SemanticScholarAuthor = {
   authorId?: string
@@ -584,7 +585,7 @@ export const semantic_scholar_search = free({
     if (!bulk) url.searchParams.set("limit", String(apiLimit))
     if (bulk && sort !== "relevance") url.searchParams.set("sort", `${sort}:desc`)
     if (args.token) url.searchParams.set("token", args.token)
-    url.searchParams.set("fields", SEMANTIC_SCHOLAR_FIELDS)
+    url.searchParams.set("fields", bulk ? SEMANTIC_SCHOLAR_FIELDS.join(",") : SEMANTIC_SCHOLAR_SEARCH_FIELDS)
 
     if (args.yearFrom || args.yearTo) {
       url.searchParams.set("year", `${args.yearFrom ?? ""}-${args.yearTo ?? ""}`)
@@ -645,7 +646,7 @@ export const semantic_scholar_recommendations = free({
   async execute(args, context) {
     const limit = Math.min(args.limit ?? 10, 20)
     const url = new URL(`${SEMANTIC_SCHOLAR_RECOMMENDATIONS_BASE}/papers`)
-    url.searchParams.set("fields", SEMANTIC_SCHOLAR_FIELDS)
+    url.searchParams.set("fields", SEMANTIC_SCHOLAR_FIELDS.join(","))
     url.searchParams.set("limit", String(limit))
 
     try {

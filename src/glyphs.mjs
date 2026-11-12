@@ -14,6 +14,7 @@ export const GLYPHS = {
   "folder-git-2": [["path",{"d":"M18 19a5 5 0 0 1-5-5v8"}],["path",{"d":"M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"}],["circle",{"cx":"13","cy":"12","r":"2"}],["circle",{"cx":"20","cy":"19","r":"2"}]],
   "globe": [["circle",{"cx":"12","cy":"12","r":"10"}],["path",{"d":"M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"}],["path",{"d":"M2 12h20"}]],
   "graduation-cap": [["path",{"d":"M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"}],["path",{"d":"M22 10v6"}],["path",{"d":"M6 12.5V16a6 3 0 0 0 12 0v-3.5"}]],
+  "history": [["path",{"d":"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"}],["path",{"d":"M3 3v5h5"}],["path",{"d":"M12 7v5l4 2"}]],
   "languages": [["path",{"d":"m5 8 6 6"}],["path",{"d":"m4 14 6-6 2-3"}],["path",{"d":"M2 5h12"}],["path",{"d":"M7 2h1"}],["path",{"d":"m22 22-5-10-5 10"}],["path",{"d":"M14 18h6"}]],
   "library-big": [["rect",{"width":"8","height":"18","x":"3","y":"3","rx":"1"}],["path",{"d":"M7 3v18"}],["path",{"d":"M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"}]],
   "list-tree": [["path",{"d":"M8 5h13"}],["path",{"d":"M13 12h8"}],["path",{"d":"M13 19h8"}],["path",{"d":"M3 10a2 2 0 0 0 2 2h3"}],["path",{"d":"M3 5v12a2 2 0 0 0 2 2h3"}]],
@@ -34,9 +35,13 @@ export const GLYPHS = {
 const SOURCE_GLYPHS = {"hackernews":"newspaper","deepwiki":"book-open-text","polymarket":"chart-candlestick","github":"folder-git-2","exa":"scan-search","perplexity":"globe","papers":"graduation-cap","youtube":"square-play","video":"clapperboard","x":"scale","reddit":"messages-square","tikhub-reddit":"list-tree","tiktok":"clapperboard","instagram":"camera","linkedin":"briefcase-business","telegram":"send","threads":"messages-square","china-social":"languages","commerce":"shopping-cart","tiktok-ads":"megaphone","dataforseo":"chart-no-axes-combined"};
 SOURCE_GLYPHS.facebook = "messages-square";
 SOURCE_GLYPHS["facebook-ads"] = "megaphone";
+SOURCE_GLYPHS["google-ads"] = "megaphone";
+SOURCE_GLYPHS["linkedin-ads"] = "megaphone";
 SOURCE_GLYPHS.evidence = "list-tree";
+SOURCE_GLYPHS.wayback = "history";
 const METHOD_GLYPHS = {"x-judge":"scale","x-breadth":"radar","x-post":"message-square-quote","youtube-summarizer":"captions","youtube-video":"clapperboard","video-analyze":"clapperboard"};
 METHOD_GLYPHS["evidence-rank"] = "list-tree";
+/** @returns {keyof typeof GLYPHS} */
 export const glyphFor = (source, method) => METHOD_GLYPHS[method] ?? SOURCE_GLYPHS[source] ?? 'shovel';
 
 const BRAND = ['#1d4a80', '#3d86d4'];

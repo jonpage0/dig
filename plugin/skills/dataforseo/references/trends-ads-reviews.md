@@ -1,0 +1,24 @@
+# DataForSEO recipes for search interest, Google ads and reviews
+
+These are purpose-oriented routes through the existing generic `dataforseo_request`, not per-endpoint tools. Read the exact current endpoint documentation in this session before executing; the documented request/response contract overrides this guide. Keep full responses for billing and retained evidence. All paths below follow `/v3/`.
+
+| Question | Endpoint family to inspect | What to preserve / what the numbers mean |
+| --- | --- | --- |
+| Is interest in a term rising or falling, and when did it peak? | `keywords_data/google_trends/explore/live` with `item_types: ["google_trends_graph"]` | Up to 5 keywords in one request, billed per request, not per keyword. Values are relative to the peak inside this request (100 is the peak, 0 is too little data), so keep the keywords, location, `type` (`web`, `news`, `youtube`, `images`, `froogle`), category and date range with every number. Two requests are not on one scale: compare terms inside one request. Not search volume. |
+| Where is interest concentrated? | The same endpoint with `item_types: ["google_trends_map"]` | Interest by subregion, relative within the request. One item type per request, as the documentation recommends. |
+| What do people search alongside it, and what is newly rising? | The same endpoint with `google_trends_queries_list` or `google_trends_topics_list`, one keyword per request | `top` values are relative to the most searched entry; `rising` values are percentage increases over the previous period. A rising query can still be rare. |
+| Do I need a second view of interest, or demographics? | `keywords_data/dataforseo_trends/explore/live`, `subregion_interests/live`, `demography/live` | DataForSEO's own trend index from its keyword database, not Google Trends. Name which index a number comes from; do not mix the two in one series. |
+| Which advertiser accounts does a company run on Google? | `serp/google/ads_advertisers/live/advanced` | The advertiser ids, names, verification and location the Ads Transparency platform lists for a name. Several accounts can share a name; keep the id with every later result. |
+| What ads is an advertiser running, in which formats, since when? | `serp/google/ads_search/live/advanced` by `advertiser_ids` (from the row above) or by `target` domain | Billed per page of up to 40 results. Keep advertiser id, creative id, format, platform filter, location, the date range asked for, and each ad's first and last shown time with its Ads Transparency address. First and last shown are when Google showed the ad, not its spend, reach or results. An ad's wording and destination are read on its Ads Transparency page, which the parent can open. |
+| What do reviewers say about an iOS or Android app? | `app_data/apple/app_reviews/task_post` or `app_data/google/app_reviews/task_post`, then the documented `task_get/advanced` path with the task id | Standard tasks only: post, then retrieve. Apple reviews are billed per 25 and need the App Store id, a location and a language; read the Google page for its own unit. Reviews are per storefront: say which country. Keep rating, date, app version and sort order (`most_recent` or `most_helpful`). A sample sorted by helpfulness is not the recent trend. |
+| What do reviewers say about a company on Trustpilot? | `business_data/trustpilot/reviews/task_post` with the company's Trustpilot `domain`, then its documented `task_get` path; `business_data/trustpilot/search/task_post` finds the domain from a name | Standard tasks only. Billed per 20 reviews. Keep the domain, sort order (`recency` or `relevance`), each review's rating, date and whether Trustpilot marks it verified, and any company reply. |
+
+## Interpretation rules
+
+Google Trends values are an index, rescaled for every request. Quote them as "relative interest", with the request's terms and range, and never as searches, users or market size. For volume, use the Keywords Data or Labs volume endpoints, and say that those are modelled estimates.
+
+An ad's presence in the Ads Transparency data shows that Google served it between its first and last shown dates in the regions returned. It does not show spend, audience, clicks or whether the ad worked. A long-running ad is a lead about what an advertiser keeps paying for, not a result.
+
+A review sample is what one storefront or one site returned under one sort order and depth. State the count read out of the count available, the date span of what was read, and the sort order. Star averages come from the listing's own figures where the response has them, not from the sample. Quote reviews exactly, with their date, and treat a reviewer's claim about a product as the reviewer's claim.
+
+A posted task that is not ready is not a failure: retrieve it later with the task id, and say in the report when a task was still pending at the end of the run. Posting the same task again pays again.

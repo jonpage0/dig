@@ -1,0 +1,226 @@
+{
+  "china_social_search": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "commerce_discover": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "commerce_product": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "commerce_search": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "dataforseo_docs_index": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "dataforseo_docs_read": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "dataforseo_docs_sections": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "dataforseo_request": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "deepwiki_ask_question": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "deepwiki_read_wiki_contents": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "deepwiki_read_wiki_structure": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "evidence_rank": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "exa_contents": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "exa_search": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "exa_similar": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "facebook_ad_library": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "github_inspect": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "github_read": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "github_search": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "google_ad_library": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "hackernews": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "hackernews_read": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "instagram_read": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "linkedin_ad_library": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "papers_openalex_search": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "papers_semantic_scholar_recommendations": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "papers_semantic_scholar_relations": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "papers_semantic_scholar_search": {
+    "at": "2026-11-11",
+    "version": "0.12.0"
+  },
+  "polymarket": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "polymarket_history": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "polymarket_resolution": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "reddit": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "scrapecreators_facebook": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "scrapecreators_facebook_events": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "scrapecreators_instagram": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "scrapecreators_linkedin": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "scrapecreators_telegram": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "scrapecreators_tiktok": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "threads": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "tikhub_reddit": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "tiktok_ad_library": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "tiktok_ads_search": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "tiktok_ads_top": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "tiktok_read": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "tiktok_top": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "wayback_read": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "wayback_snapshots": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "x_count_posts": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "x_explore": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "x_news": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "x_post": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "x_search_posts": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "x_users": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "youtube": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "youtube_comments": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  },
+  "youtube_transcript": {
+    "at": "2026-11-12",
+    "version": "0.13.0"
+  }
+}

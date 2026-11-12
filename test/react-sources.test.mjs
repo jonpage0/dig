@@ -192,3 +192,26 @@ test('in Claude Code the key notes name Claude Code’s environment and the file
   assert.match(document.body.textContent, /Edit keys\.env opens the file in Claude Code and adds empty lines for missing names\./);
   assert.doesNotMatch(document.body.textContent, /Codex/);
 });
+
+test('recorded use lists each tool’s last 90 days: calls, failure rate, median time and typical cost, with unknown and free kept apart', async t => {
+  const { app, host } = fixture();
+  const ago = days => new Date(Date.now() - days * 86400000).toISOString();
+  app.snapshot = { items: [{ calls: [
+    { id: 'a', source: 'exa', tool: 'exa_search', at: ago(1), ms: 1200, status: 'success', cost: [{ amount: 0.005, unit: 'USD' }] },
+    { id: 'b', source: 'exa', tool: 'exa_search', at: ago(2), ms: 800, status: 'failed', cost: [{ amount: 0.005, unit: 'USD' }] },
+    { id: 'c', source: 'exa', tool: 'exa_contents', at: ago(3), ms: 400, status: 'success', cost: null },
+    { id: 'd', source: 'exa', tool: 'exa_similar', at: ago(4), ms: 300, status: 'success', cost: [] },
+    { id: 'e', source: 'exa', tool: 'exa_research', at: ago(200), ms: 300, status: 'success', cost: [] },
+  ] }], live: [{ id: 'f', source: 'dataforseo', tool: 'dataforseo_request', at: ago(120), status: 'success', cost: [] }] };
+  await mount(t, { app, host, hidden: false });
+  const tools = $('source-exa').querySelector('.source-page-tool-history');
+  assert.match(tools.textContent, /Last 90 days, by tool/);
+  const rows = [...tools.querySelectorAll('li')].map(row => row.textContent);
+  assert.equal(rows.length, 3, 'A tool with no call in the window has no row');
+  assert.match(rows[0], /exa_search.*2 calls.*50% failed.*1\.0 s.*\$0\.0050/);
+  assert.match(rows[1], /exa_contents.*1 call.*0% failed.*400 ms.*cost not reported/);
+  assert.match(rows[2], /exa_similar.*no charge/);
+  // DataForSEO's only call is older than 90 days: its all-time metrics show, and no by-tool block.
+  assert.match($('source-dataforseo').querySelector('.source-page-recorded').textContent, /Calls1/);
+  assert.equal($('source-dataforseo').querySelector('.source-page-tool-history'), null);
+});

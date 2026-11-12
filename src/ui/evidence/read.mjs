@@ -15,7 +15,7 @@ export function bodies(content) {
 }
 
 /** Plural nouns for item kinds, for list headings and result lines. */
-export const ITEM_NOUNS = { post: ['post', 'posts'], story: ['story', 'stories'], comment: ['comment', 'comments'], paper: ['paper', 'papers'], video: ['video', 'videos'], repo: ['repository', 'repositories'], event: ['event', 'events'], page: ['page', 'pages'], answer: ['answer', 'answers'], account: ['account', 'accounts'], bucket: ['time bucket', 'time buckets'], trend: ['trend', 'trends'], space: ['Space', 'Spaces'], community: ['Community', 'Communities'] };
+export const ITEM_NOUNS = { post: ['post', 'posts'], story: ['story', 'stories'], comment: ['comment', 'comments'], paper: ['paper', 'papers'], video: ['video', 'videos'], repo: ['repository', 'repositories'], event: ['event', 'events'], page: ['page', 'pages'], answer: ['answer', 'answers'], account: ['account', 'accounts'], bucket: ['time bucket', 'time buckets'], trend: ['trend', 'trends'], space: ['Space', 'Spaces'], community: ['Community', 'Communities'], capture: ['capture', 'captures'], ad: ['ad', 'ads'], advertiser: ['advertiser', 'advertisers'] };
 
 /** Provider text that arrives as HTML (Hacker News comments) as plain text; only ever inserted as a text node. */
 export function htmlText(html) {

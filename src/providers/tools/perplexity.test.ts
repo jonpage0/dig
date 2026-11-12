@@ -34,12 +34,12 @@ function installFetch(payload: unknown, status = 200) {
   globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push({ url: String(input), body: JSON.parse(String(init?.body)) })
     return new Response(JSON.stringify(payload), { status })
-  }, { preconnect: globalThis.fetch.preconnect })
+  }, { preconnect: (globalThis.fetch as typeof fetch & { preconnect?: unknown }).preconnect })
   return calls
 }
 
 describe("Perplexity Agent and Search contracts", () => {
-  const originalFetch = globalThis.fetch
+  const originalFetch: typeof fetch & { preconnect?: unknown } = globalThis.fetch
   const originalKey = process.env.PERPLEXITY_API_KEY
   const originalTimeout = process.env.PERPLEXITY_TIMEOUT_MS
   beforeEach(() => { process.env.PERPLEXITY_API_KEY = "perplexity-test-secret" })
@@ -84,7 +84,7 @@ describe("Perplexity Agent and Search contracts", () => {
 
   test("a request that got no response is sent once; its cost is unknown and said to be", async () => {
     let calls = 0
-    globalThis.fetch = Object.assign(async () => { calls++; throw new TypeError("fetch failed") }, { preconnect: globalThis.fetch.preconnect })
+    globalThis.fetch = Object.assign(async () => { calls++; throw new TypeError("fetch failed") }, { preconnect: (globalThis.fetch as typeof fetch & { preconnect?: unknown }).preconnect })
     for (const [tool, args] of [[ask, { messages }], [search, { query: "term" }]] as const) {
       calls = 0
       const result = await executeSource(tool, args, context)

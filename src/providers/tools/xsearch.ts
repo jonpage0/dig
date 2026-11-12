@@ -6,6 +6,9 @@
  * Model and depth come from the [x] table in Dig's native config.toml; reasoning
  * effort is sent when the model supports it, and dropped if the API rejects it.
  * The answer is streamed, so a long pass is not cut off waiting for response headers.
+ * A stream cut before its final event is not sent again. xAI stores a finished response
+ * for 30 days, so Dig looks for it by its id, in the same call or a later one; a pass
+ * whose connection dropped while it ran is not stored, so only a finished one is found.
  * Supports handle filtering, date ranges, image/video understanding,
  * and multi-turn chaining via previous_response_id.
  */
@@ -13,7 +16,7 @@ import { hostOf, hostWords } from "../../ui/host.mjs"
 import { Lexer, type Token, type Tokens } from "marked"
 import type { KeepRaw, ToolSpec } from "../types.js"
 import { loadConfig } from "../runtime-config.js"
-import { keptJson, keptText } from "../http.js"
+import { abortableDelay, keptJson, keptText } from "../http.js"
 import { knownSecrets, redactProviderText } from "../secrets.js"
 import { failed, metered, outcome } from "../outcome.js"
 
@@ -104,6 +107,13 @@ interface ResponsesResponse {
     code?: string
   }
 }
+
+/** What reading a stored response by its id found. */
+type Stored =
+  | { state: "finished"; body: Record<string, unknown> }
+  | { state: "running" }
+  | { state: "missing" }
+  | { state: "error"; status: number | string }
 
 // -- Helpers --
 
@@ -284,11 +294,14 @@ const TERMINAL_EVENTS = new Set(["response.completed", "response.incomplete", "r
  * follows: records separated by a blank line, of `event:` and `data:` lines, ended by a terminal event whose `response`
  * is the object an unstreamed call returns as its body. Only that object is kept for the raw file, so a retained
  * original has the same shape either way; the deltas are read past. A stream that reports an error, breaks or ends
- * without a terminal event keeps what arrived (the error event, else the last `response` snapshot) as interrupted, so
- * its charge is unknown, and throws: it is never sent again. A JSON body (a server that ignored `stream`) is read as before.
+ * without a terminal event is never sent again. When it broke or ended and its response id had arrived, `recover`
+ * (when given) reads the stored response by that id; a finished one is the answer, kept as the call's original with
+ * the charge it reports, and `recovered` is true. Otherwise what arrived (the error event, else the last `response`
+ * snapshot) is kept as interrupted, so the charge is unknown, and this throws. A JSON body (a server that ignored
+ * `stream`) is read as before.
  */
-async function answerBody(response: Response, keep: KeepRaw): Promise<unknown> {
-  if (!response.body || !/^text\/event-stream\b/i.test(response.headers.get("content-type") ?? "")) return keptJson(response, keep, RAW_LABEL)
+async function answerBody(response: Response, keep: KeepRaw, recover?: (id: string) => Promise<Stored>): Promise<{ body: unknown; recovered?: true }> {
+  if (!response.body || !/^text\/event-stream\b/i.test(response.headers.get("content-type") ?? "")) return { body: await keptJson(response, keep, RAW_LABEL) }
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
   const secrets = knownSecrets()
   let buffer = ""
@@ -322,9 +335,22 @@ async function answerBody(response: Response, keep: KeepRaw): Promise<unknown> {
     if (field === "event") event = value
     else if (field === "data") data.push(value)
   }
-  const cut = (why: string, cause?: unknown): never => {
+  const cut = (why: string, cause?: unknown, found?: Stored): never => {
     keep(RAW_LABEL, response.status, seen, undefined, true)
-    throw new Error(`${why}. xAI accepted the request, so the pass may still have run and been charged; its cost is unknown.`, cause === undefined ? undefined : { cause })
+    const id = responseId(seen)
+    const later = !found || !id ? "" : found.state === "running"
+      ? ` Its response id is ${id}, and xAI still shows the pass running. To read the answer once it finishes, without paying for a new pass, call xsearch with recoverResponseId set to that id.`
+      : ` Its response id is ${id}; xAI held no finished response under it when Dig looked${found.state === "error" ? ` (the last read failed: ${found.status})` : ""}. To look again without paying for a new pass, call xsearch with recoverResponseId set to that id.`
+    throw new Error(`${why}. xAI accepted the request, so the pass may still have run and been charged; its cost is unknown.${later}`, cause === undefined ? undefined : { cause })
+  }
+  /** A cut stream's finished response read back by its id, or the cut itself. A recovery that cannot run changes nothing. */
+  const recovered = async (why: string, cause?: unknown): Promise<{ body: unknown; recovered: true }> => {
+    const id = responseId(seen)
+    let found: Stored | undefined
+    if (recover && id) try { found = await recover(id) } catch { found = undefined }
+    if (found?.state !== "finished") return cut(why, cause, found)
+    keep(RAW_LABEL, 200, found.body)
+    return { body: found.body, recovered: true }
   }
   try {
     while (!answer && !error) {
@@ -344,14 +370,76 @@ async function answerBody(response: Response, keep: KeepRaw): Promise<unknown> {
   } catch (failure) {
     const cause = failure instanceof Error ? (failure.cause as { code?: unknown } | undefined)?.code : undefined
     const why = [failure instanceof Error ? failure.message : String(failure), typeof cause === "string" ? cause : ""].filter(Boolean).join(": ")
-    cut(`xAI's stream broke before its final event${why ? ` (${why})` : ""}`, failure)
+    return recovered(`xAI's stream broke before its final event${why ? ` (${why})` : ""}`, failure)
   }
   reader.cancel().catch(() => {})
   if (error) cut(`xAI's stream reported an error: ${typeof error.message === "string" && error.message ? error.message : "no message"}`)
-  if (!answer) cut("xAI's stream ended before its final event")
+  if (!answer) return recovered("xAI's stream ended before its final event")
   keep(RAW_LABEL, response.status, answer)
-  return answer
+  return { body: answer }
 }
+
+const responseId = (value: unknown): string | undefined => value && typeof value === "object" && "id" in value && typeof value.id === "string" && value.id ? value.id : undefined
+
+/** Statuses of a stored response that will not change. */
+const FINISHED = new Set(["completed", "incomplete", "failed", "cancelled"])
+/**
+ * Waits before each read of a stored response after a cut stream. Two looks, ten seconds in all: xAI does not keep a
+ * pass whose connection dropped while it ran (a pass cut one second in was still not stored minutes later, 2026-11-11,
+ * and its `background` mode is unsupported), so these find only a pass that had finished when the connection dropped.
+ * Tests shorten them.
+ */
+export const RECOVERY = { waitsMs: [2_000, 8_000] }
+
+/**
+ * Reads a stored response by its id (`GET /responses/{id}`: nothing is searched and nothing is charged), once after
+ * each wait, until xAI shows it finished. A 404 means none is stored under the id, which is also what an unfinished
+ * pass can look like, so the reads go on; a refused key stops them. Returns the last thing found.
+ */
+async function storedResponse(apiKey: string, id: string, signal: AbortSignal, waitsMs: readonly number[]): Promise<Stored> {
+  let found: Stored = { state: "missing" }
+  for (const wait of waitsMs) {
+    await abortableDelay(wait, signal)
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE}/responses/${encodeURIComponent(id)}`, { headers: { "Authorization": `Bearer ${apiKey}` }, signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) })
+    } catch (error) {
+      signal.throwIfAborted()
+      found = { state: "error", status: error instanceof Error ? error.message : String(error) }
+      continue
+    }
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {})
+      found = response.status === 404 ? { state: "missing" } : { state: "error", status: response.status }
+      if (response.status === 401 || response.status === 403) return found
+      continue
+    }
+    const record = redactProviderText(await response.text(), knownSecrets())
+    const body = record.json && record.value && typeof record.value === "object" ? record.value as Record<string, unknown> : undefined
+    if (body && FINISHED.has(String(body.status))) return { state: "finished", body }
+    found = body ? { state: "running" } : { state: "error", status: "unreadable response" }
+  }
+  return found
+}
+
+function incompleteNote(data: ResponsesResponse): string {
+  const reason = typeof data.incomplete_details?.reason === "string" ? ` (${data.incomplete_details.reason})` : ""
+  return `\n\n**Incomplete response:** xAI marked this response incomplete${reason}. The readable text is retained, but it is not a complete research result.`
+}
+
+function citationNote(text: string): string {
+  const numbered = numberedCitations(text)
+  if (!numbered.length) return ""
+  const markers = numbered.length === 1 ? "1 bracketed marker that looks like a citation by number" : `${numbered.length} bracketed markers that look like citations by number`
+  return `\n\n**Citations by number:** this write-up has ${markers} (such as ${numbered[0]}) but no link for them. Dig does not resolve which post each means, and the Sources list below is numbered by Dig, not by Grok, so do not read a number as that Sources entry. Find the post a claim rests on through X's search (\`x_search_posts\`) before relying on it.`
+}
+
+function sourceList(sources: ReturnType<typeof extractContent>["sources"]): string {
+  if (!sources.length) return ""
+  return `\n---\n**Sources:**\n${sources.map((source, index) => `- [${index + 1}] ${source.url}${source.title ? ` - ${source.title}` : ""}\n`).join("")}`
+}
+
+const isIncomplete = (data: ResponsesResponse) => data.status === "incomplete" || data.output.some(item => item.type === "message" && item.status === "incomplete")
 
 function shouldRetryWithoutStorage(status: number, errorText: string): boolean {
   return status === 400 && errorText.includes("Response is too large to store")
@@ -395,7 +483,9 @@ export const search = metered({
     "metrics (likes, reposts, quotes, replies, bookmarks, views) when asked for them. " +
     "Supports X search operators in the query, handle filtering, date ranges, multimedia " +
     "understanding, and multi-turn chaining via previousResponseId. Date bounds are " +
-    "inclusive fromDate and exclusive toDate at 00:00 UTC. Each handle filter accepts at most 20 handles.",
+    "inclusive fromDate and exclusive toDate at 00:00 UTC. Each handle filter accepts at most 20 handles. " +
+    "A pass is never sent twice: when its stream is cut, Dig looks for the finished answer under its response id (xAI keeps a finished pass, not one whose connection dropped while it ran), " +
+    "and recoverResponseId reads a stored pass later, free, without running a search.",
   async execute(args, context) {
     const xConfig = loadConfig().x
 
@@ -419,6 +509,36 @@ export const search = metered({
     const apiKey = process.env.XAI_API_KEY
     if (!apiKey) {
       return failed(hostOf(process.env.DIG_HOST) === "codex" ? "ERROR: XAI_API_KEY is not set in Dig's keys.env. The user adds it outside the chat (Dig Settings → Edit keys.env), or copies one Codex's environment already has (Dig Settings → X → Use existing key)." : `ERROR: XAI_API_KEY is not set in Dig's keys.env. The user adds it outside the chat by editing keys.env directly (${hostWords(process.env.DIG_HOST).skill("setup")} gives the exact line), or copies one ${hostWords(process.env.DIG_HOST).app}'s environment already has into keys.env by hand.`)
+    }
+
+    if (args.recoverResponseId) {
+      const id = String(args.recoverResponseId).trim()
+      let found: Stored
+      try {
+        found = await storedResponse(apiKey, id, context.abort, [0])
+      } catch (error) {
+        return fail(error instanceof Error ? error.message : "Unknown error")
+      }
+      if (found.state === "running") return outcome("empty", `xAI still shows the pass with response id ${id} running. Nothing was searched or charged by this read; call again with the same recoverResponseId once it has had time to finish.`)
+      if (found.state === "missing") return outcome("empty", `xAI holds no response under id ${id}. It stores a pass for 30 days, and only a pass sent with storage on; a pass whose connection dropped before xAI began it is not stored. Nothing was searched or charged by this read.`)
+      if (found.state === "error") return fail(`xAI could not be read for response id ${id} (${found.status}). Nothing was searched or charged by this read.`)
+      context.keep(RAW_LABEL, 200, found.body)
+      const data = found.body as unknown as ResponsesResponse
+      if (data.error) return fail(`xAI reports the pass with response id ${id} failed: ${data.error.message}`)
+      if (!Array.isArray(data.output)) return fail(`xAI's stored response under id ${id} has no readable output`)
+      const { text, sources } = extractContent(data)
+      const incomplete = isIncomplete(data)
+      if (!text) return fail(`xAI's stored response under id ${id} is ${data.status ?? "finished"} with no readable content`)
+      const charged = reportedUsd(data)
+      let result = `${args.passLabel?.trim() || "pass-1"}\n${text}${incomplete ? incompleteNote(data) : ""}${citationNote(text)}`
+      result += `\n\n---\n**Recovered pass:** this is the stored answer of an earlier pass, read from xAI by its response id. No search was run by this call, and the query, dates, handles and depth are those of that pass, not of this call's other arguments.\n`
+      result += charged === null
+        ? "- Billing: this read is free. xAI's stored response reports no charge for the pass; do not estimate one.\n"
+        : `- Billing: this read is free. xAI reports the pass itself cost $${charged.toFixed(4)}; that charge belongs to the call that sent it, whose receipt records its cost as unknown.\n`
+      result += sourceList(sources)
+      result += `\n---\n**response_id:** ${data.id}\n`
+      if (data.usage) result += `*Tokens: ${data.usage.total_tokens?.toLocaleString() ?? "not reported"}*`
+      return outcome(incomplete ? "partial" : "success", result)
     }
 
     if (args.handles?.length && args.excludeHandles?.length) {
@@ -524,25 +644,22 @@ export const search = metered({
         }
       }
 
-      const data = (await answerBody(response, keep)) as ResponsesResponse
+      // A response sent without storage cannot be read back, so its cut stream is not looked for.
+      const answered = await answerBody(response, keep, requestBody.store === false ? undefined : (id) => storedResponse(apiKey, id, context.abort, RECOVERY.waitsMs))
+      const data = answered.body as ResponsesResponse
       if (data.error) return fail(data.error.message)
+      if (!Array.isArray(data.output)) return fail("No response content from xAI API")
 
       const { text, sources } = extractContent(data)
-      const incomplete = data.status === "incomplete" || data.output.some(item => item.type === "message" && item.status === "incomplete")
+      const incomplete = isIncomplete(data)
       if (!text) return fail(incomplete ? "xAI returned an incomplete response with no readable content" : "No response content from xAI API")
 
       // Build result
       const passLabel = args.passLabel?.trim() || "pass-1"
       let result = `${passLabel}\n${text}`
-      if (incomplete) {
-        const reason = typeof data.incomplete_details?.reason === "string" ? ` (${data.incomplete_details.reason})` : ""
-        result += `\n\n**Incomplete response:** xAI marked this response incomplete${reason}. The readable text is retained, but it is not a complete research result.`
-      }
-      const numbered = numberedCitations(text)
-      if (numbered.length > 0) {
-        const markers = numbered.length === 1 ? "1 bracketed marker that looks like a citation by number" : `${numbered.length} bracketed markers that look like citations by number`
-        result += `\n\n**Citations by number:** this write-up has ${markers} (such as ${numbered[0]}) but no link for them. Dig does not resolve which post each means, and the Sources list below is numbered by Dig, not by Grok, so do not read a number as that Sources entry. Find the post a claim rests on through X's search (\`x_search_posts\`) before relying on it.`
-      }
+      if (incomplete) result += incompleteNote(data)
+      result += citationNote(text)
+      if (answered.recovered) result += "\n\n**Recovered:** xAI's stream was cut before its final event. The pass was not sent again: Dig read the finished answer back from xAI by its response id."
 
       // Search parameters summary
       const handleList = args.handles?.length ? args.handles.map((h: string) => h.replace(/^@/, "")).join(", ") : "none"
@@ -563,13 +680,7 @@ export const search = metered({
         result += `- Chained from: ${requestBody.previous_response_id}\n`
       }
 
-      if (sources.length > 0) {
-        result += "\n---\n**Sources:**\n"
-        sources.forEach((source, index) => {
-          const title = source.title ? ` - ${source.title}` : ""
-          result += `- [${index + 1}] ${source.url}${title}\n`
-        })
-      }
+      result += sourceList(sources)
 
       result += "\n---\n"
       result += `**response_id:** ${data.id}\n`
@@ -610,3 +721,5 @@ export const search = metered({
     }
   },
 } satisfies ToolSpec, "USD", reportedUsd)
+// Reading a stored response back by its id runs nothing and is not charged.
+search.billing = { ...(search.billing as Exclude<ToolSpec["billing"], "free" | undefined>), noCharge: (args) => typeof args?.recoverResponseId === "string" && args.recoverResponseId.trim().length > 0 }

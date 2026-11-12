@@ -2,12 +2,14 @@
 // items it brought back. One reader per source family; a source without one says which tool ran with what,
 // and the view falls back to the original JSON. These are views of retained evidence, never a second store.
 // Adapted from Dig's dashboard/ui/evidence/index.ts (MIT, same author).
+import { readGoogleAds, readLinkedInAds } from './ads.mjs';
 import { readDeepwiki, readGithub } from './code.mjs';
 import { readHackerNews } from './hackernews.mjs';
 import { readPapersCall } from './papers.mjs';
 import { readPolymarket } from './polymarket.mjs';
 import { obj, query, str } from './read.mjs';
 import { readSocial } from './social.mjs';
+import { readWayback } from './wayback.mjs';
 import { readWeb } from './web.mjs';
 import { readX } from './x.mjs';
 import { readYoutube } from './youtube.mjs';
@@ -42,6 +44,9 @@ const READERS = {
   linkedin: readSocial,
   telegram: readSocial,
   'china-social': readSocial,
+  wayback: readWayback,
+  'google-ads': readGoogleAds,
+  'linkedin-ads': readLinkedInAds,
 };
 
 /** Whether a source has a source-shaped reader; otherwise the reader shows the original JSON first. */

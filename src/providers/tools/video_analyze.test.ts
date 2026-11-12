@@ -66,7 +66,7 @@ test("video options trim inputs, set bounded defaults and reject unsupported or 
     { fps: 0 }, { fps: 9 }, { fps: NaN }, { maxTokens: 127 }, { maxTokens: 4097 }, { maxTokens: 128.5 },
     { startSeconds: -1 }, { startSeconds: Infinity }, { startSeconds: 30, endSeconds: 30 },
     { startSeconds: 0, endSeconds: 121 }, { endSeconds: NaN },
-  ]) assert.throws(() => videoOptions({ ...ARGS, ...extra }), undefined, JSON.stringify(extra));
+  ]) assert.throws(() => videoOptions({ ...ARGS, ...extra }), JSON.stringify(extra));
 });
 
 test("only exact HTTPS YouTube video forms enter the downloader route", () => {

@@ -1,0 +1,9 @@
+interface:
+  display_name: "Dig · Google ads"
+  short_description: "Google Ads Transparency Center advertisers and ads"
+  icon_small: "../../assets/skills/megaphone.svg"
+  icon_large: "../../assets/skills/megaphone.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:google-ads to research an advertiser's ads in Google's Ads Transparency Center."
+policy:
+  allow_implicit_invocation: false

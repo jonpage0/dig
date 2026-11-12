@@ -42,7 +42,7 @@ If your terminal doesn't know `codex`, use the copy inside the ChatGPT app:
 
 Refresh the plugin connection, then type **`$dig:setup`** in a new conversation. It walks you through choosing sources. If Dig still does not appear after the refresh, quit and reopen ChatGPT.
 
-> **Try it with no keys:** Hacker News, DeepWiki and Polymarket work without any account.
+> **Try it with no keys:** Hacker News, DeepWiki, Polymarket and the Wayback Machine work without any account.
 
 For a first run, enable Hacker News and ask: **“Use Dig and Hacker News to research how developers approach local-first software. Show the strongest findings, disagreements and remaining gaps. Save the supporting research and suggest a useful next question.”** Open **Overview**, choose the question, and use its saved findings and coverage to decide what to ask next.
 
@@ -63,17 +63,18 @@ To add keys in Claude Code, edit `~/.local/share/dig/keys.env` directly, or run 
 
 Ask a question in Codex. Your assistant chooses useful enabled sources, reads their reports and important originals, and explains the findings. Dig presents the saved research state for you to observe and steer; full records are available when you want to inspect a particular point.
 
-**22 sources · 26 research methods · 74 tools, including two optional shared helpers**
+**25 sources · 29 research methods · 79 tools, including two optional shared helpers**
 
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
 | :---: | --- | --- |
 | <img src="docs/logos/exa.svg" width="22" height="22" alt=""> | **Exa** | Web search and page text |
 | <img src="docs/logos/perplexity.svg" width="22" height="22" alt=""> | **Perplexity** | Cited web answers |
+| <img src="plugin/assets/skills/history.svg" width="22" height="22" alt=""> | **Wayback&nbsp;Machine** | What a web page said on a given date, from the Internet Archive |
 | <img src="docs/logos/github.svg" width="22" height="22" alt=""> | **GitHub** | Repositories, their activity and source code |
 | <img src="plugin/assets/skills/book-open-text.svg" width="22" height="22" alt=""> | **DeepWiki** | Questions about a public codebase |
 | <img src="docs/logos/ycombinator.svg" width="22" height="22" alt=""> | **Hacker&nbsp;News** | Developer stories and discussion |
 | <img src="plugin/assets/skills/graduation-cap.svg" width="22" height="22" alt=""> | **Papers** | Semantic Scholar, OpenAlex and 18 more indexes; full text, PDFs and section extraction |
-| <img src="docs/logos/youtube.svg" width="22" height="22" alt=""> | **YouTube** | Video discovery, saved transcripts and optional Gemini video understanding |
+| <img src="docs/logos/youtube.svg" width="22" height="22" alt=""> | **YouTube** | Video discovery, saved transcripts, comments and optional Gemini video understanding |
 | <img src="docs/logos/x.svg" width="22" height="22" alt=""> | **X** | Exact posts, threads and accounts; Grok for search by meaning, images and video |
 | <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **Reddit** | Threads, comments and collapsed replies |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok** | Videos, captions and transcripts |
@@ -84,10 +85,12 @@ Ask a question in Codex. Your assistant chooses useful enabled sources, reads th
 | <img src="plugin/assets/skills/messages-square.svg" width="22" height="22" alt=""> | **Threads** | Public posts, replies and account posts |
 | <img src="plugin/assets/skills/languages.svg" width="22" height="22" alt=""> | **China&nbsp;social** | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat |
 | <img src="plugin/assets/skills/megaphone.svg" width="22" height="22" alt=""> | **Facebook&nbsp;ads** | Meta Ad Library advertisers and creatives |
+| <img src="plugin/assets/skills/megaphone.svg" width="22" height="22" alt=""> | **Google&nbsp;ads** | Ads Transparency Center advertisers, their ads and ad details |
+| <img src="docs/logos/linkedin.svg" width="22" height="22" alt=""> | **LinkedIn&nbsp;ads** | Ad Library ads with their payer and published targeting |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok&nbsp;ads** | Creative Center analytics and the Ad Library |
 | <img src="docs/logos/polymarket.svg" width="22" height="22" alt=""> | **Polymarket** | Prediction-market odds |
 | <img src="plugin/assets/skills/shopping-cart.svg" width="22" height="22" alt=""> | **Amazon** | Products, reviews and price history |
-| <img src="plugin/assets/skills/chart-no-axes-combined.svg" width="22" height="22" alt=""> | **DataForSEO** | Search results, keywords, rankings and backlinks |
+| <img src="plugin/assets/skills/chart-no-axes-combined.svg" width="22" height="22" alt=""> | **DataForSEO** | Search results, keywords, rankings and backlinks; Google Trends, Google ads, and app-store and Trustpilot reviews |
 
 What you get back:
 
@@ -130,7 +133,7 @@ Enable **Evidence ranking** under **Sources & tools → Shared tools** and add `
 
 **You only need keys for the sources you turn on.** Each service bills you directly, separately from your ChatGPT plan.
 
-**No key needed:** Hacker News, DeepWiki, Polymarket.
+**No key needed:** Hacker News, DeepWiki, Polymarket, Wayback Machine.
 **Works without a key, with limits:** GitHub (lower rate limits), Papers (shared rate limits), YouTube (needs `yt-dlp` installed).
 
 | Service | Used by | Key name in `keys.env` |
@@ -143,7 +146,7 @@ Enable **Evidence ranking** under **Sources & tools → Shared tools** and add `
 | [xAI](https://console.x.ai/team/default/api-keys) | **X**: Grok's search by meaning, including images and videos | `XAI_API_KEY` |
 | [X API](https://console.x.com) | **X**: exact posts, threads, replies, accounts, search, counts, News | `X_BEARER_TOKEN` |
 | X sign-in *(optional)* | **X**: your bookmarks and likes; people and Communities search | `X_CONSUMER_KEY`, `X_CONSUMER_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` |
-| [ScrapeCreators](https://app.scrapecreators.com) | **Reddit**, **TikTok**, **Instagram**, **Facebook**, **LinkedIn**, **Telegram**, **Threads**, **Facebook ads**, **TikTok ads** (Ad Library) | `SCRAPECREATORS_API_KEY` |
+| [ScrapeCreators](https://app.scrapecreators.com) | **Reddit**, **TikTok**, **Instagram**, **Facebook**, **LinkedIn**, **Telegram**, **Threads**, **Facebook ads**, **Google ads**, **LinkedIn ads**, **TikTok ads** (Ad Library), **YouTube** (hosted transcripts and comments) | `SCRAPECREATORS_API_KEY` |
 | [TikHub](https://user.tikhub.io/dashboard/api) | **Reddit** (advanced), **China social**, **TikTok ads** (Creative Center), **X** (Communities) | `TIKHUB_API_KEY` |
 | [Just One](https://dashboard.justoneapi.com/en) *(optional)* | **China social**: an alternative backend, used only when asked for | `JUSTONE_API_KEY` |
 | [Scrape.do](https://dashboard.scrape.do/) | **Amazon**: products, search, deals, Best Sellers | `SCRAPE_DO_API_KEY` |
@@ -215,8 +218,9 @@ Your research stays in `~/.local/share/dig` until you delete it.
 
 ```sh
 npm install
-npm run check   # build and offline tests
+npm run check   # build, type check and offline tests
 npm run smoke   # one live, keyless Hacker News search in a throwaway folder
+npm run live-check   # one live call per free tool, saved under verification/live
 ```
 
 Install a local checkout with `codex plugin marketplace add /path/to/dig`. See the [architecture](docs/architecture.md), the [changelog](CHANGELOG.md) and the [security policy](SECURITY.md).

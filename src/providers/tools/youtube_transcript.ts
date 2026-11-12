@@ -8,18 +8,24 @@ import { knownSecrets, redactText } from "../secrets.js"
 import type { ToolSpec } from "../types.js"
 import { saveTranscript } from "./youtube.js"
 
+/** The 11-character id of a YouTube video, Short or live link, or of a bare id; `name` is the argument named in the error. */
+export function youtubeVideoId(value: unknown, name: string): string {
+  let id = String(value ?? "").trim()
+  if (id.startsWith("https://")) {
+    const url = new URL(id)
+    if (["youtube.com", "www.youtube.com", "m.youtube.com"].includes(url.hostname)) id = url.pathname === "/watch" ? url.searchParams.get("v") ?? "" : /^\/(?:shorts|live)\/([^/]+)$/.exec(url.pathname)?.[1] ?? ""
+    else if (url.hostname === "youtu.be") id = url.pathname.slice(1)
+    else throw new Error(`${name} must be a YouTube URL or video ID`)
+  }
+  if (!/^[\w-]{11}$/.test(id)) throw new Error(`${name} must be a valid YouTube video ID or URL`)
+  return id
+}
+
 export const transcript = creditMetered({
   description: "Fetch a timestamped YouTube transcript through ScrapeCreators and save it in the existing transcript library. Paid, explicit fallback when yt-dlp captions are unavailable. Supports requested language, original audio and provider cache. Existing transcript files are never replaced.",
   async execute(args, ctx) {
     try {
-      let id = String(args.video ?? "").trim()
-      if (id.startsWith("https://")) {
-        const url = new URL(id)
-        if (["youtube.com", "www.youtube.com", "m.youtube.com"].includes(url.hostname)) id = url.pathname === "/watch" ? url.searchParams.get("v") ?? "" : /^\/(?:shorts|live)\/([^/]+)$/.exec(url.pathname)?.[1] ?? ""
-        else if (url.hostname === "youtu.be") id = url.pathname.slice(1)
-        else throw new Error("video must be a YouTube URL or video ID")
-      }
-      if (!/^[\w-]{11}$/.test(id)) throw new Error("video must be a valid YouTube video ID or URL")
+      const id = youtubeVideoId(args.video, "video")
       const language = args.language
       if (language !== undefined && (typeof language !== "string" || !/^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/.test(language))) throw new Error("language must be a language code such as en or en-US")
       if (args.cacheMaxAge !== undefined && !["1d", "3d", "7d", "14d", "30d"].includes(args.cacheMaxAge)) throw new Error("Unsupported cacheMaxAge")

@@ -63,6 +63,10 @@ Do not narrow this skill to remembered endpoints.
 
 For website, competitor, AI citation, page-access or ad/landing questions, read [the website and GEO recipe router](references/website-recipes.md). It gives purpose-specific endpoint routes and their interpretation boundaries. Follow its answer → cited/competing page → owned-page chain; return a precise page-reading queue to the parent when page evidence is outside this source's scope. A metrics-only sample does not establish a complete website diagnosis. Use adaptive batches for the actual decision rather than a fixed tiny pilot or an automatic broad crawl.
 
+## Search interest, Google ads and review recipes
+
+For how interest in a term has changed (Google Trends), what ads a company runs on Google (the Ads Transparency data), and what reviewers say about an app or a company (App Store, Google Play and Trustpilot reviews), read [the trends, ads and reviews recipes](references/trends-ads-reviews.md). It names the endpoint for each question, what each bills for, and what the numbers do and do not mean. Trends values are relative to the peak inside one request, never search volume; an ad's first and last shown dates are not spend or results; app and Trustpilot reviews are posted as tasks and retrieved afterwards.
+
 ## Frame the market and the cost
 
 Identify the target, market or location, language, device, date range, and whether the question asks about a current observation or a trend. When missing context materially changes the answer, state the gap and use only a defensible explicit default.

@@ -161,7 +161,7 @@ export async function librarySnapshot(c, activity, host) {
 // The version and a replaced package are part of the fingerprint so a running view polls a fresh snapshot, and
 // notices, after an update.
 export async function libraryFingerprint(c, activity) {
-  return createHash('sha256').update(JSON.stringify([VERSION, packageReplaced(), activity.revision, await libraryRevision(c), c.library, await libraryFolder(c), c.keep_raw, c.sources.enabled, c.x, c.workers, c.search, environmentPresence()])).digest('hex').slice(0, 24);
+  return createHash('sha256').update(JSON.stringify([VERSION, packageReplaced(), activity.revision, await libraryRevision(c), c.library, await libraryFolder(c), c.keep_raw, c.sources.enabled, c.x, c.workers, c.search, c.spend, environmentPresence()])).digest('hex').slice(0, 24);
 }
 /** saved_research's card for one library file, read from `snapshot` (a librarySnapshot), with known credentials redacted. */
 export async function savedResearchCard(c, file, snapshot) {

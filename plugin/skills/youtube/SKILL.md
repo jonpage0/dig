@@ -23,6 +23,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 - `source_info` with `source: "youtube"` — enablement, readiness, the library path, the separate video-analysis method and the transcript helper's packaged skill;
 - `youtube` — search videos and optionally save full transcripts;
 - `youtube_transcript` — explicit paid ScrapeCreators fallback for an exact video, preserving caption timestamps and language;
+- `youtube_comments` — one page of a video's comments through the same paid ScrapeCreators key, in top or newest order, with a cursor for the next page;
 - `library_read` — read a saved transcript or summary in full; it accepts an absolute path inside the active library and returns `nextOffset` until the file is complete;
 - `research_save` with `source: "youtube"` and `agent: "youtube"` — save the source report.
 
@@ -33,6 +34,8 @@ Call `source_info` before the first provider call. If this source is disabled, s
 Use `library_read` or the host's own full-file reader and file discovery for transcript and summary artifacts, and the host's file writer for the one permitted summary recovery write. Never use shell redirection.
 
 yt-dlp reads a video's uploaded English captions, or YouTube's automatic ones when there are none, and the result says which kind it read. If neither is saved, use `youtube_transcript` only within the user’s authorized paid-provider scope. Pass `video`, optional `language`, `originalAudio` and `cacheMaxAge`. Read its exact returned path; hosted variants have provider/language suffixes and do not overwrite earlier transcripts.
+
+Read comments with `youtube_comments` only when the question is about how viewers responded to a video, or a comment names a correction, a dispute or a source worth checking, and only within the user's authorized paid-provider scope. Pass `url`, optional `order` (`top` or `newest`) and the returned `cursor` for a further page. One page is a sample in the provider's ordering: top comments are the most liked, not a cross-section of viewers, and newest are only the latest. Quote a comment exactly with its author and date, and never treat a page of comments as a measure of what viewers think.
 
 ## Search and reuse transcripts
 

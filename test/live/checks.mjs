@@ -1,0 +1,97 @@
+// One small live call per provider tool, for `npm run live-check` and the replay test (test/live-replay.test.mjs).
+// Subjects are stable and public: large open-source repositories, long-standing videos, organisations' and public
+// figures' accounts, a standard reference paper. `args` leaves out project and dig; the script adds project.
+// `replay: false` names a tool whose saved responses cannot be served back through fetch in order; `replayNote` says why.
+
+/** "Attention Is All You Need" (arXiv 1706.03762): its Semantic Scholar id. */
+const PAPER = '204e3073870fae3d05bcbc2f6a8e263d9b72e776';
+/** The first YouTube upload, "Me at the zoo" (19 seconds). */
+const VIDEO = 'https://www.youtube.com/watch?v=jNQXAC9IVRw';
+
+export const CHECKS = [
+  { tool: 'hackernews', args: { query: 'sqlite', type: 'comment', sort: 'relevance', days: 365, limit: 3 }, note: 'Comment search: one request, no comment-tree fetches.' },
+  { tool: 'hackernews_read', args: { item: '8863', limit: 3 }, note: 'The 2007 Dropbox launch thread.' },
+  { tool: 'deepwiki_read_wiki_structure', args: { repoName: 'expressjs/express' } },
+  { tool: 'deepwiki_read_wiki_contents', args: { repoName: 'expressjs/express' } },
+  { tool: 'deepwiki_ask_question', args: { repoName: 'expressjs/express', question: 'Which file defines the router?' } },
+  { tool: 'polymarket', args: { query: 'bitcoin', limit: 1 } },
+  { tool: 'polymarket_history', args: { token_id: '21742633143463906290569050155826241533067272736897614950488156847949938836455', start: 1730419200, end: 1730764800, bucket_seconds: 86400, limit: 3 }, note: 'The Yes token of the resolved 2024 US presidential election market for Donald Trump, over the four days before the vote.' },
+  { tool: 'polymarket_resolution', args: { event_id: '903193' }, note: 'The resolved 2024 US presidential election winner event.' },
+  { tool: 'wayback_snapshots', args: { url: 'example.com', from: '2010', to: '2011', limit: 3 } },
+  { tool: 'wayback_read', args: { url: 'example.com', date: '2010-06-01', limit: 2000 } },
+  { tool: 'github_search', args: { query: 'react in:name language:javascript', perPage: 3 } },
+  { tool: 'github_inspect', args: { repo: 'expressjs/express', days: 7, samples: 1 } },
+  { tool: 'github_read', args: { repo: 'expressjs/express', path: 'Readme.md', maxLines: 20 } },
+  { tool: 'exa_search', args: { query: 'SQLite write-ahead logging', numResults: 1, type: 'fast', contents: false } },
+  { tool: 'exa_contents', args: { urls: ['https://www.sqlite.org/wal.html'], maxCharacters: 1000 } },
+  { tool: 'exa_similar', args: { url: 'https://www.sqlite.org/wal.html', numResults: 1, contents: false } },
+  { tool: 'exa_research', args: { query: 'When was SQLite first released, and by whom?', numResults: 1 } },
+  { tool: 'perplexity_ask', args: { messages: [{ role: 'user', content: 'In what year was SQLite first released?' }], search_context_size: 'low' } },
+  { tool: 'perplexity_search', args: { query: 'SQLite release history', max_results: 1 } },
+  { tool: 'perplexity_research', args: { messages: [{ role: 'user', content: 'When was SQLite first released, and by whom?' }], search_context_size: 'low' } },
+  { tool: 'perplexity_reason', args: { messages: [{ role: 'user', content: 'Is SQLite older than PostgreSQL? Answer in one sentence.' }], search_context_size: 'low' } },
+  { tool: 'papers_semantic_scholar_search', args: { query: 'attention is all you need', limit: 2 } },
+  { tool: 'papers_semantic_scholar_recommendations', args: { positivePaperIds: [PAPER], limit: 2 } },
+  { tool: 'papers_semantic_scholar_snippets', args: { query: 'scaled dot-product attention', paperIds: [PAPER], limit: 2 } },
+  { tool: 'papers_semantic_scholar_relations', args: { paperId: PAPER, direction: 'references', limit: 2 } },
+  { tool: 'papers_openalex_search', args: { query: 'attention is all you need', limit: 1 } },
+  { tool: 'papers_openalex_content', args: { workId: 'W2626778328', format: 'xml' }, note: 'OpenAlex work for "Attention Is All You Need".', replay: false, replayNote: 'Keeps only a summary of the file it saved (size and digest), not the content it fetched.' },
+  { tool: 'youtube', args: { query: 'Me at the zoo jawed', limit: 1 }, replay: false, replayNote: 'Without a YouTube Data API key it searches with the local yt-dlp, not fetch.' },
+  { tool: 'youtube_transcript', args: { video: 'jNQXAC9IVRw' } },
+  { tool: 'youtube_comments', args: { url: VIDEO, order: 'top', limit: 3 } },
+  { tool: 'youtube_analyze', args: { question: 'In one sentence, what happens in this video?', videos: [{ url: VIDEO, resolution: 'low' }], model: 'gemini-3.8-flash', thinking: 'minimal', maxTokens: 256 } },
+  { tool: 'video_analyze', args: { video: VIDEO, question: 'In one sentence, what happens in this clip?', startSeconds: 0, endSeconds: 19, fps: 0.25, maxTokens: 256 }, replay: false, replayNote: 'Downloads the clip with the local yt-dlp before uploading it.' },
+  { tool: 'evidence_rank', args: { question: 'When was SQLite first released?', candidates: [{ id: 'a', text: 'SQLite was first released in August 2000.' }, { id: 'b', text: 'PostgreSQL traces its origins to the POSTGRES project begun in 1986.' }] } },
+  { tool: 'xsearch', args: { query: 'from:NASA Artemis', depth: 'quick', enableWebSearch: false } },
+  { tool: 'x_post', args: { posts: ['20'] }, note: 'Jack Dorsey’s first post, "just setting up my twttr".' },
+  { tool: 'x_search_posts', args: { query: 'from:NASA', limit: 1 }, note: 'X’s search reads at least 10 posts per page.' },
+  { tool: 'x_count_posts', args: { query: 'from:NASA', granularity: 'day' } },
+  { tool: 'x_users', args: { handles: ['NASA'] } },
+  { tool: 'x_news', args: { query: 'NASA', limit: 1 } },
+  { tool: 'x_explore', args: { kind: 'trends', woeid: 1, limit: 3 } },
+  { tool: 'reddit', args: { query: 'sqlite', limit: 1, includeComments: false } },
+  { tool: 'tikhub_reddit', args: { operation: 'query_scout', query: 'sqlite', searchType: 'post', maxItems: 3 } },
+  { tool: 'scrapecreators_tiktok', args: { query: 'nasa', limit: 1, transcripts: false } },
+  { tool: 'tiktok_top', args: { query: 'nasa' } },
+  { tool: 'tiktok_read', args: { kind: 'profile', handle: 'nasa' } },
+  { tool: 'scrapecreators_instagram', args: { query: 'nasa', mode: 'native', limit: 1 } },
+  { tool: 'instagram_read', args: { kind: 'profile', handle: 'nasa' } },
+  { tool: 'threads', args: { kind: 'posts', handle: 'nasa' } },
+  { tool: 'scrapecreators_facebook', args: { kind: 'profile', url: 'https://www.facebook.com/NASA' } },
+  { tool: 'scrapecreators_facebook_events', args: { kind: 'search', query: 'NASA' } },
+  { tool: 'scrapecreators_linkedin', args: { kind: 'company', url: 'https://www.linkedin.com/company/nasa' } },
+  { tool: 'scrapecreators_telegram', args: { kind: 'channel', handle: 'durov' } },
+  { tool: 'china_social_search', args: { query: '人工智能', platforms: ['bilibili'], limit: 1 } },
+  { tool: 'commerce_search', args: { query: 'usb c cable', limit: 1 } },
+  { tool: 'commerce_product', args: { asin: '0132350882' }, note: 'Clean Code (ISBN-10 0132350882, its amazon.com ASIN).' },
+  { tool: 'commerce_history', args: { asin: '0132350882', days: 30, max_points: 4 } },
+  { tool: 'commerce_reviews', args: { asin: '0132350882', stars: [5], per_star_limit: 1 } },
+  { tool: 'commerce_discover', args: { kind: 'bestsellers', category: 'books', limit: 3 } },
+  { tool: 'tiktok_ads_search', args: { keyword: 'coffee', period: 7, limit: 1 } },
+  { tool: 'tiktok_ads_top', args: { limit: 1 } },
+  { tool: 'tiktok_ad_library', args: { advertiser_name: 'Nike', limit: 1 } },
+  { tool: 'facebook_ad_library', args: { kind: 'companies', query: 'Nike' } },
+  { tool: 'google_ad_library', args: { action: 'advertisers', query: 'Nike' } },
+  { tool: 'linkedin_ad_library', args: { action: 'search', company_name: 'Microsoft', limit: 3 } },
+  { tool: 'dataforseo_docs_sections', args: {} },
+  { tool: 'dataforseo_docs_index', args: { section: 'SERP API', query: 'languages', limit: 3 } },
+  { tool: 'dataforseo_docs_read', args: { path: 'serp/google/languages', limit: 4000 } },
+  { tool: 'dataforseo_request', args: { path: 'serp/google/languages', method: 'GET' } },
+];
+
+export const SKIPPED = [
+  { tool: 'papers_multi_search', reason: "Needs the optional Papers bridge, which is installed inside Dig's state folder; a live check's temporary state folder has none." },
+  { tool: 'papers_fulltext_read', reason: "Needs the optional Papers bridge, which is installed inside Dig's state folder; a live check's temporary state folder has none." },
+  { tool: 'papers_pdf_download', reason: "Needs the optional Papers bridge, which is installed inside Dig's state folder; a live check's temporary state folder has none." },
+  { tool: 'papers_sections', reason: 'Needs a file another call saves (papers_pdf_download or papers_openalex_content).' },
+  { tool: 'youtube_analysis_status', reason: 'Needs an interaction id that youtube_analyze returns.' },
+  { tool: 'tiktok_comments', reason: 'Needs a post URL that a search returns (tiktok_top or scrapecreators_tiktok).' },
+  { tool: 'instagram_comments', reason: 'Needs a post URL that a search returns (scrapecreators_instagram).' },
+  { tool: 'tiktok_ads_detail', reason: 'Needs an ad id that tiktok_ads_search or tiktok_ads_top returns.' },
+  { tool: 'x_community', reason: 'Needs a Community id that x_explore returns.' },
+  { tool: 'x_bookmarks', reason: 'Reads the signed-in account’s bookmarks: needs an X sign-in.' },
+  { tool: 'x_likes', reason: 'Reads the signed-in account’s likes: needs an X sign-in.' },
+];
+
+/** Deep-research and model-analysis calls: run only when named with --tool. */
+export const EXPENSIVE = ['exa_research', 'perplexity_research', 'perplexity_reason', 'xsearch', 'youtube_analyze', 'video_analyze'];

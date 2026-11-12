@@ -1,5 +1,15 @@
+import { appendFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 globalThis.fetch = async (url, init) => {
   const target = new URL(url);
+  // xAI reports a US-dollar cost (1e-10 USD ticks). Each request is noted in the state folder, so a test can show that a refused call sent none.
+  if (String(url) === 'https://api.x.ai/v1/responses') {
+    await appendFile(join(process.env.DIG_STATE_DIR, 'xai-requests.log'), 'request\n');
+    return Response.json({ id: 'fixture-response', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Returned fixture evidence' }] }], usage: { total_tokens: 12, cost_in_usd_ticks: 123400000 } });
+  }
+  // A stored answer read back by its id: nothing is searched, so it is not noted as a request.
+  if (String(url).startsWith('https://api.x.ai/v1/responses/')) return Response.json({ id: target.pathname.split('/').at(-1), status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Stored fixture evidence' }] }], usage: { total_tokens: 12, cost_in_usd_ticks: 123400000 } });
   if (target.origin === 'https://api.typesafe.ai' && target.pathname === '/v1/systemone') {
     const body = JSON.parse(init.body);
     if ('project' in body || 'dig' in body || init.body.includes(process.env.TYPESAFE_API_KEY)) throw new Error('Local identity or credential reached provider state');

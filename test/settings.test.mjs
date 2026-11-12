@@ -4,7 +4,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initializeConfig, loadConfig, updateConfig, workerGuidance } from '../src/config.mjs';
-import { sourceInfo } from '../src/catalog.mjs';
+import { sourceInfo, settingsValues, settingsDocument } from '../src/catalog.mjs';
 
 test('[workers] stores only suggestions that differ from what a method inherits, and X methods keep their own', async () => {
   const state = await mkdtemp(join(tmpdir(), 'dig-workers-'));
@@ -37,4 +37,36 @@ test('[workers] stores only suggestions that differ from what a method inherits,
   await assert.rejects(loadConfig(state), /Unknown configuration field: workers\.reddit\.temperature/);
   await writeFile(file, `${saved}\n[workers.reddit]\nmodel = "gpt-7-sol"\n`);
   assert.deepEqual((await updateConfig({ keep_raw: false }, state)).workers.reddit, { model: 'gpt-7-sol' });
+});
+
+test('[spend] holds an optional per-dig ceiling in US dollars; 0 removes it and a file without one is written back without it', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-spend-'));
+  const file = join(state, 'config.toml');
+  assert.equal((await initializeConfig(state)).spend.dig_ceiling_usd, null);
+  await updateConfig({ keep_raw: false }, state);
+  assert.doesNotMatch(await readFile(file, 'utf8'), /\[spend\]/, 'Without a ceiling no table is written');
+  assert.equal(settingsValues(await loadConfig(state)).spend_dig_ceiling_usd, 0);
+
+  const c = await updateConfig({ spend_dig_ceiling_usd: 2.5 }, state);
+  assert.equal(c.spend.dig_ceiling_usd, 2.5);
+  assert.match(await readFile(file, 'utf8'), /\[spend\]\ndig_ceiling_usd = 2\.5\n/);
+  assert.equal((await loadConfig(state)).spend.dig_ceiling_usd, 2.5, 'The table round-trips');
+  assert.equal(settingsValues(c).spend_dig_ceiling_usd, 2.5);
+  assert.equal((await updateConfig({ keep_raw: true }, state)).spend.dig_ceiling_usd, 2.5, 'Other changes keep it');
+
+  assert.equal((await updateConfig({ spend_dig_ceiling_usd: 0 }, state)).spend.dig_ceiling_usd, null);
+  assert.doesNotMatch(await readFile(file, 'utf8'), /\[spend\]|dig_ceiling_usd/, '0 removes the ceiling');
+  for (const value of [-1, '5', Infinity, null]) await assert.rejects(updateConfig({ spend_dig_ceiling_usd: value }, state), /spend_dig_ceiling_usd must be/);
+
+  // Hand edits: an unknown key, a nonpositive or a non-numeric ceiling is refused like any other field.
+  const saved = await readFile(file, 'utf8');
+  for (const [table, message] of [['[spend]\ndig_ceiling_usd = 5\nmonthly_usd = 9\n', /Unknown configuration field: spend\.monthly_usd/], ['[spend]\ndig_ceiling_usd = -1\n', /spend\.dig_ceiling_usd must be a positive number/], ['[spend]\ndig_ceiling_usd = 0\n', /spend\.dig_ceiling_usd must be a positive number/], ['[spend]\ndig_ceiling_usd = "5"\n', /spend\.dig_ceiling_usd must be a positive number/]]) {
+    await writeFile(file, `${saved}\n${table}`);
+    await assert.rejects(loadConfig(state), message);
+  }
+  await writeFile(file, `${saved}\n[spend]\ndig_ceiling_usd = 5\n`);
+  assert.equal((await loadConfig(state)).spend.dig_ceiling_usd, 5, 'A whole number written by hand is accepted');
+  const fields = settingsDocument(await loadConfig(state));
+  assert.deepEqual([fields.schema.properties.spend_dig_ceiling_usd.type, fields.schema.properties.spend_dig_ceiling_usd.minimum], ['number', 0]);
+  assert.deepEqual(fields.layout.find(group => group.title === 'Library').items.map(item => item.property), ['library', 'keep_raw', 'spend_dig_ceiling_usd', 'search_semantic']);
 });

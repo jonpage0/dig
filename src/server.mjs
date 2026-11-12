@@ -8,7 +8,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { watchFile } from 'node:fs';
 import { isAbsolute, relative, resolve, join } from 'node:path';
 import { loadConfig, updateConfig, initializeConfig, loadKeys, keysPath, stateDirectory } from './config.mjs';
-import { startDig, assertDig, recordCall, saveReport, finishDig, readLibraryFile, safeSegment, SESSION_UNAVAILABLE, projectFolder } from './library.mjs';
+import { startDig, assertDig, recordCall, saveReport, finishDig, readLibraryFile, listLibrary, safeSegment, SESSION_UNAVAILABLE, projectFolder } from './library.mjs';
 import { sourceInfo, settingsFields, settingsValues, settingsLayout, prepareKeysFile, copyEnvironmentKeys } from './catalog.mjs';
 import { isDigDocument, mentionItems, openInDig, readinessText, librarySnapshot, libraryFingerprint, savedResearchCard } from './surfaces.mjs';
 import { monochromeSvg, svgDataUri } from './glyphs.mjs';
@@ -23,6 +23,9 @@ import { cleanupSearchTemps } from './search/engine.mjs';
 import { VERSION } from './version.mjs';
 import { ANSWER_STATUSES } from './status.mjs';
 import { hostOf, hostWords } from './ui/host.mjs';
+import { toolHistory } from './ui/usage.mjs';
+import { costAmounts, costTotal, plural } from './ui/format.mjs';
+import { costSummary } from './providers/library/cost.ts';
 import { createCallActivity } from './call-activity.mjs';
 import { CARD_SCHEMA, PRESENTATION_INPUT, PRESENTATION_OUTPUT, presentResearch } from './presentation.mjs';
 
@@ -46,11 +49,11 @@ const OUTPUT = {
   open: { view: z.enum(['library', 'panel']), thread: z.string().nullable(), library: z.string() },
   list: { library: z.string(), configPath: z.string(), items: z.array(z.looseObject({ id: z.string(), title: z.string(), link })), total: z.number().int(), nextOffset: z.number().int().nullable(), live: z.array(z.looseObject({ id: z.string() })), liveTotal: z.number().int() },
   read: { file: z.string(), path: z.string(), text: z.string(), offset: z.number().int(), nextOffset: z.number().int().nullable(), totalCharacters: z.number().int(), link: link.optional() },
-  info: { sources: z.array(z.looseObject({ id: z.string(), kind: z.enum(['source', 'tool']), label: z.string(), enabled: z.boolean(), helperSkillPath: z.string().optional() })), library: z.string(), configPath: z.string(), keysPath: z.string(), credentialsChecked: z.string() },
+  info: { sources: z.array(z.looseObject({ id: z.string(), kind: z.enum(['source', 'tool']), label: z.string(), enabled: z.boolean(), helperSkillPath: z.string().optional() })), library: z.string(), configPath: z.string(), keysPath: z.string(), credentialsChecked: z.string(), historyDays: z.number().int() },
   start: { dig: z.string(), project: z.string(), path: z.string(), session: z.string() },
   save: { path: z.string(), file: z.string(), dig: z.string(), report: z.string(), createdDig: z.boolean(), link },
   finish: { path: z.string(), file: z.string(), dig: z.string(), link },
-  provider: z.looseObject({ text: z.string().describe('The provider results as formatted text.'), status: z.enum(['success', 'empty', 'partial', 'failed', 'cancelled', 'skipped']), project: z.string(), dig: z.string().optional(), call: z.looseObject({ id: z.string() }).nullable().describe('The retained call receipt, or null when it could not be saved.'), retentionError: z.string().nullable() }),
+  provider: z.looseObject({ text: z.string().describe('The provider results as formatted text.'), status: z.enum(['success', 'empty', 'partial', 'failed', 'cancelled', 'skipped']), project: z.string(), dig: z.string().optional(), call: z.looseObject({ id: z.string() }).nullable().describe('The retained call receipt, or null when it could not be saved.'), retentionError: z.string().nullable(), digCost: z.looseObject({ calls: z.number().int(), byUnit: z.record(z.string(), z.number()), unknownCalls: z.number().int(), freeCalls: z.number().int() }).optional().describe('When the call names a dig: what every call this library attributes to that dig has cost so far, this one included. Known amounts per unit, never converted; unknownCalls and freeCalls counted apart.') }),
 };
 const libraryFile = async (c, path) => relative(await realpath(c.library), path);
 const entrypoint = (type, resourceUri = URI) => ({ ui: { resourceUri }, 'openai/ui': { entrypoints: [{ type }] }, 'openai/iconStyle': 'monochrome' });
@@ -64,6 +67,9 @@ const snapshot = async config => librarySnapshot(config ?? await loadConfig(), c
 const threadOf = extra => { const id = extra?._meta?.threadId; return typeof id === 'string' ? safeSegment(id, '') || null : null; };
 const callIdOf = extra => typeof extra?._meta?.callId === 'string' ? extra._meta.callId : undefined;
 const NEVER_ABORT = new AbortController().signal;
+const HISTORY_DAYS = 90;
+// The receipts the library attributes to one dig (the calls of that dig's item in listLibrary), or null when the item is not found.
+const digCalls = async (c, project, dig) => (await listLibrary(c)).items.find(item => item.id === dig && item.project === resolve(project))?.calls ?? null;
 
 // Both views are read once at startup and served from memory. Installing another version removes this version's
 // folder while Codex keeps this server running, and a read from disk then would fail ("Couldn't refresh app").
@@ -136,8 +142,13 @@ server.registerResource('retained-research', new ResourceTemplate('dig://library
   const data = await readLibraryFile(await loadConfig(), decodeURIComponent(Array.isArray(file) ? file[0] : file), 0, Number.MAX_SAFE_INTEGER);
   return { contents: [{ uri: uri.href, mimeType: data.file.endsWith('.md') ? 'text/markdown' : 'application/json', text: data.text }] };
 });
-server.registerTool('source_info', { title: 'Source methods, shared tools and setup', description: 'Read the catalog, credential/prerequisite presence, packaged skills and worker model guidance. Entries with kind tool are shared utilities: they have a helperSkillPath but no research methods or independent reports. This does not validate credentials or call providers.', inputSchema: { source: z.enum(ALL_MODULES).optional() }, outputSchema: OUTPUT.info, annotations: readOnly }, async ({ source }) => {
-  const info = sourceInfo(await loadConfig(), source);
+server.registerTool('source_info', { title: 'Source methods, shared tools and setup', description: `Read the catalog, credential/prerequisite presence, packaged skills and worker model guidance. Entries with kind tool are shared utilities: they have a helperSkillPath but no research methods or independent reports. This does not validate credentials or call providers. Each source's history gives, per tool, what that tool's calls recorded in this library over the last ${HISTORY_DAYS} days cost, how long they took and how often they failed: a record of past calls here, not a price list, with no row for a tool never called.`, inputSchema: { source: z.enum(ALL_MODULES).optional() }, outputSchema: OUTPUT.info, annotations: readOnly }, async ({ source }) => {
+  const c = await loadConfig();
+  // Setup must still be readable when the library is not: history is then left out, never shown as empty.
+  let history = null;
+  try { const library = await listLibrary(c); history = toolHistory([...library.items.flatMap(item => item.calls), ...library.live], { days: HISTORY_DAYS }); } catch {}
+  const catalog = sourceInfo(c, source);
+  const info = { ...catalog, sources: catalog.sources.map(entry => ({ ...entry, ...(history ? { history: history.filter(row => entry.tools.includes(row.tool)) } : {}) })), historyDays: HISTORY_DAYS };
   const sourceCount = info.sources.filter(s => s.kind === 'source').length;
   const toolCount = info.sources.length - sourceCount;
   const counts = [sourceCount ? `${sourceCount} source${sourceCount === 1 ? '' : 's'}` : null, toolCount ? `${toolCount} shared tool${toolCount === 1 ? '' : 's'}` : null].filter(Boolean).join(', ');
@@ -165,6 +176,18 @@ for (const module of MODULES) for (const name of module.tools) {
     if (!c.sources.enabled.includes(module.id)) throw new Error(`${module.label} is disabled in Dig settings`);
     if (!(await stat(project)).isDirectory()) throw new Error('project must be an existing directory');
     if (dig) await assertDig(c, project, dig);
+    // The spending ceiling ([spend] dig_ceiling_usd) is checked before a call, against the US-dollar amounts the dig's
+    // receipts already report (including the known part of an incompletely priced call). So the call that crosses the
+    // ceiling completes and the next paid call is refused. Only US-dollar amounts count: provider credits and unknown
+    // costs do not. Free tools, and calls a metered tool makes at no charge (a sandbox request, a stored answer read
+    // back), are never refused, and a call that names no dig is neither counted nor refused.
+    const ceiling = c.spend.dig_ceiling_usd;
+    let unpaid = spec.billing === 'free';
+    if (!unpaid) try { unpaid = spec.billing?.noCharge?.(args) === true; } catch {}
+    if (ceiling !== null && dig && !unpaid) {
+      const { byUnit, unknownCalls } = costSummary(await digCalls(c, project, dig) ?? []); const spent = byUnit.USD ?? 0;
+      if (spent >= ceiling) throw new Error(`This dig has reached its spending ceiling: its calls have recorded ${costAmounts({ byUnit: { USD: spent } })[0]} in provider-reported US-dollar costs, and the ceiling is $${ceiling}.${unknownCalls ? ` ${plural(unknownCalls, 'call')} in this dig ${unknownCalls === 1 ? 'has' : 'have'} an unknown cost that this total does not include.` : ''} No request was sent. The user can raise or remove the ceiling in Dig’s settings (dig_ceiling_usd under [spend] in config.toml). Tell the user; do not work around it by leaving out dig, changing the setting yourself or using another tool for the same request.`);
+    }
     return callActivity.run({ library: c.library, project, dig, session: threadOf(extra), source: module.id, tool: name }, async () => {
       const at = new Date().toISOString(); const begin = Date.now(); const responses = [];
       const outcome = await executeSource(spec, args, { directory: project, worktree: project, sessionID: threadOf(extra) ?? SESSION_UNAVAILABLE, abort: extra.signal ?? NEVER_ABORT, keep: (label, status, body, headers) => responses.push({ label, status, body, ...(headers ? { headers } : {}) }) });
@@ -174,8 +197,12 @@ for (const module of MODULES) for (const name of module.tools) {
       try {
         call = await recordCall(c, project, dig, { tool: name, source: module.id, args: redactRecord(args, secrets), declared: Object.keys(schemas[name].properties ?? {}), at, ms: Date.now() - begin, status: clean.status, cost: clean.details.cost, ...(clean.details.knownCost ? { knownCost: clean.details.knownCost } : {}), responses: redactValue(responses, secrets), ...(failed ? { error: clean.text.split('\n', 1)[0].slice(0, 300) } : {}), session: threadOf(extra) ?? SESSION_UNAVAILABLE, callId: callIdOf(extra) });
       } catch (error) { retentionError = redactText(`Evidence receipt not saved: ${error.message}`, secrets); }
-      const summary = `${module.label} · ${clean.status}${call ? ` · receipt ${call.id}` : ''}${retentionError ? ` · ${retentionError}` : ''}. Provider results are in structuredContent.text.`;
-      return { ...reply({ ...clean.details, text: clean.text, status: clean.status, project, ...(dig ? { dig } : {}), call, retentionError }, failed ? `${summary}\n${clean.text.split('\n', 1)[0].slice(0, 300)}` : summary), ...(failed ? { isError: true } : {}) };
+      // The dig's running cost, from every receipt the library attributes to it. Reading it never fails the call.
+      let digCost = null;
+      if (dig) try { const calls = await digCalls(c, project, dig); if (calls) digCost = { calls: calls.length, ...costSummary(calls) }; } catch {}
+      const sofar = digCost ? costTotal(digCost, digCost.calls) : null;
+      const summary = `${module.label} · ${clean.status}${call ? ` · receipt ${call.id}` : ''}${retentionError ? ` · ${retentionError}` : ''}${sofar ? ` · dig so far: ${sofar}` : ''}. Provider results are in structuredContent.text.`;
+      return { ...reply({ ...clean.details, text: clean.text, status: clean.status, project, ...(dig ? { dig } : {}), call, retentionError, ...(digCost ? { digCost } : {}) }, failed ? `${summary}\n${clean.text.split('\n', 1)[0].slice(0, 300)}` : summary), ...(failed ? { isError: true } : {}) };
     });
   });
   sourceTools.set(name, { registered, source: module.id });

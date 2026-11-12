@@ -14,7 +14,7 @@ For example:
 
 > Use Dig and Hacker News to investigate how people choose a note-taking app. Show me the strongest findings, disagreements, and what is still missing. Save the supporting research, check the original discussions, and suggest a useful next question.
 
-Hacker News needs no provider account; enable it first. DeepWiki and Polymarket are also keyless options. Other sources may need a provider account, key, or local tool. You only need to configure what you want to use.
+Hacker News needs no provider account; enable it first. DeepWiki, Polymarket and the Wayback Machine are also keyless options. Other sources may need a provider account, key, or local tool. You only need to configure what you want to use.
 
 ## In Claude Code
 
@@ -100,6 +100,8 @@ Some providers report dollars, some report credits, and some report no price for
 Provider charges are billed by those services, separately from your ChatGPT or Claude plan.
 
 Overview keeps usage and costs visible. A report or card's usage is limited to the receipts associated with it; its reference to another piece of evidence does not automatically include that evidence's cost.
+
+**Sources & tools** shows, under each source, what each of its tools has cost in your library over the last 90 days, how long its calls took and how often they failed. To cap one question's spending, set **Spending ceiling per dig (US dollars)** in Settings: once a dig's calls have recorded that much in US dollars, Dig refuses that dig's further paid calls before sending them. It counts only costs providers report in dollars, not credits or unknown costs, and the call that crosses the ceiling still completes.
 
 ## Setup and privacy
 

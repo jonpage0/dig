@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.13.0 — 2026-11-10
+
+- Add the Wayback Machine as a free source: list the Internet Archive's captures of a page and read what the page said on a given date.
+- Add Google ads and LinkedIn ads as sources, and YouTube comments to the YouTube source, through ScrapeCreators.
+- Show what each tool has cost, how long it took and how often it failed, from this library's own receipts over the last 90 days: in `source_info` and on the Sources & tools page.
+- Return a dig's running cost with every call that names the dig, and add an optional spending ceiling per dig (`dig_ceiling_usd` under `[spend]`), which refuses the dig's next paid call once its recorded US-dollar cost reaches it.
+- When a Grok stream is cut, look for the finished answer under its response id before failing, and read a stored pass later, free, with `recoverResponseId`. xAI keeps a finished pass, not one whose connection dropped while it ran.
+- Add `npm run live-check`, which calls each tool once for real and saves what came back, a tracked record of when each tool last worked, and a test that replays saved responses through the parsers.
+- Type-check the TypeScript in `npm run check`.
+- Fix Semantic Scholar recommendations and sorted searches, which asked for a field those endpoints refuse.
+- DataForSEO method: add routes for Google Trends, the ads a company runs on Google, and app-store and Trustpilot reviews.
+
 ## 0.12.0 — 2026-11-10
 
 - Never send a paid request again when it got no response; record its cost as unknown. Stream Grok searches, so a long pass is no longer cut off at 300 seconds.

@@ -1,7 +1,7 @@
 // YouTube: Data API search and video details, or yt-dlp JSON. Transcripts live in the library, not in the raw response.
 // Adapted from Dig's dashboard/ui/evidence/youtube.ts (MIT, same author).
 import { compact, duration, isoDuration, num, plural, shortDate } from '../format.mjs';
-import { arr, attempted, failedCall, noItems, numv, obj, objs, query, scope, str } from './read.mjs';
+import { arr, attempted, excerpt, failedCall, noItems, numv, obj, objs, query, scope, str } from './read.mjs';
 
 const WATCH_URL = 'https://www.youtube.com/watch?v=';
 
@@ -45,7 +45,25 @@ function readVideoCall(call, bodies) {
   return { action, result: failed || !status ? undefined : `status ${status}`, items: [] };
 }
 
+// youtube_comments in src/providers/tools/youtube_comments.ts: one row per returned comment, with its author, date and likes.
+const COMMENT_EXCERPT = 200;
+function readComments(call, bodies) {
+  const rows = new Map();
+  for (const c of bodies.flatMap(b => objs(obj(b)?.comments))) {
+    const content = str(c.content); if (!content) continue;
+    const key = str(c.id) ?? content; const at = str(c.publishedTime); const likes = numv(obj(c.engagement)?.likes);
+    if (!rows.has(key)) rows.set(key, { kind: 'comment', key, title: excerpt(content, COMMENT_EXCERPT), url: str(obj(c.author)?.channelUrl), meta: [str(obj(c.author)?.name), at ? shortDate(at) : str(c.publishedTimeText), likes === undefined ? undefined : `${compact(likes)} likes`].filter(Boolean) });
+  }
+  const items = [...rows.values()]; const a = call.args;
+  return {
+    action: [attempted(call.status, 'read the comments on', 'read the comments on'), str(a.url) ?? 'a video', ...scope([str(a.order), str(a.cursor) ? 'a later page' : undefined])],
+    result: failedCall(call) ? undefined : items.length ? plural(items.length, 'comment') : noItems(call),
+    items,
+  };
+}
+
 export function readYoutube(call, bodies) {
+  if (call.tool === 'youtube_comments') return readComments(call, bodies);
   if (['youtube_transcript', 'youtube_analyze', 'youtube_analysis_status'].includes(call.tool)) return readVideoCall(call, bodies);
   const videos = new Map();
   for (const body of bodies) {

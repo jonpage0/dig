@@ -3,7 +3,7 @@ import { Badge, Button } from '../shared/components';
 import { Frame, FrameHeader, FrameTitle, FrameDescription, FramePanel, FrameFooter } from '../shared/frame';
 import { IconTile } from '../shared/icon-tile';
 import { Timeline, TimelineItem, TimelineHeader, TimelineTitle, TimelineDate, TimelineContent, TimelineIndicator, TimelineSeparator } from '../shared/timeline';
-import { MODULES } from '../../providers/modules.ts';
+import { MODULES, type DigModule } from '../../providers/modules.ts';
 import { costSummary } from '../../providers/library/cost.ts';
 import { costAmounts, costShort, costTotal, costScope, COST_CAVEAT, num, plural, shortDate, clock, basename, callOutcome } from '../../ui/format.mjs';
 import { usageOf, outcomeCounts, WINDOWS } from '../../ui/usage.mjs';
@@ -84,7 +84,7 @@ function ActivityChart({ usage, expanded }: { usage: any; expanded: boolean }) {
 function SourceBar({ row, maximum, catalog }: any) {
   const id = `source-bar-${useId().replaceAll(':', '')}`;
   const width = 240; let x = 0;
-  const module = MODULES.find(module => module.id === row.id);
+  const module: DigModule | undefined = MODULES.find(module => module.id === row.id);
   const description = `${label(catalog, row.id)}: ${plural(row.total, 'retrieval')}${row.total ? ` (${breakdown(row)})` : ''}; ${module?.kind === 'tool' ? 'shared tool' : plural(row.reports, 'report') + ' saved'}.`;
   return <li className="research-overview-source-row">
     <div className="research-overview-source-name"><SourceIcon id={row.id} /><span>{label(catalog, row.id)}</span><strong>{num(row.total)}</strong></div>
@@ -177,7 +177,7 @@ function ResearchRow({ item, app, host, trail = false }: { item: any; app: any; 
           <p className="research-overview-project" title={item.project}>{basename(item.project) || item.project}</p>
         </div><div className="research-overview-question-state"><Badge tone={tone(item.status)} data-pattern={patternOf(item.status)}>{state.savedState}</Badge>
           <p>{plural(state.reportCount, 'report')} · {plural(state.callCount, 'retrieval')}</p>
-          {cost && <strong title={costTotal(state.cost, state.callCount)}>{cost}</strong>}
+          {cost && <strong title={costTotal(state.cost, state.callCount)!}>{cost}</strong>}
         </div></div>
         {item.snippet && (state.reportCount > 0 || state.hasAnswer) && <div className="research-overview-summary"><span>Saved summary</span><p>{item.snippet}</p></div>}
         <div className="research-overview-coverage-line"><span>{plural(state.reportedMethodCount, 'method')} with saved reports</span>{missing.length > 0 && <span>{missing.map(method => method.label).join(', ')}: No report saved</span>}{!state.hasAnswer && <span>No answer saved yet</span>}</div>

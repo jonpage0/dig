@@ -1,0 +1,9 @@
+interface:
+  display_name: "Dig · LinkedIn ads"
+  short_description: "LinkedIn Ad Library ads and their published details"
+  icon_small: "../../assets/skills/megaphone.svg"
+  icon_large: "../../assets/skills/megaphone.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:linkedin-ads to research what a company advertises in LinkedIn's Ad Library."
+policy:
+  allow_implicit_invocation: false

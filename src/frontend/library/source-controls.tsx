@@ -3,7 +3,7 @@ import { Input } from '@base-ui/react/input';
 import { Select } from '@base-ui/react/select';
 import { Switch } from '@base-ui/react/switch';
 import { Collapsible } from '@base-ui/react/collapsible';
-import { ACCOUNTS } from '../../providers/modules.ts';
+import { ACCOUNTS, type ProviderAccount } from '../../providers/modules.ts';
 import { Badge, Button } from '../shared/components';
 import { Frame, FrameHeader, FramePanel } from '../shared/frame';
 
@@ -189,7 +189,7 @@ export function AccountsPanel({ sources, keysPath, editKeys, preview }: {
   const [open, setOpen] = useState(false);
   const available = Array.isArray(sources) ? sources : [];
   const credentials = available.flatMap(source => (source.credentials ?? []).map((credential: any) => ({ ...credential, source })));
-  const accounts = ACCOUNTS.map(account => {
+  const accounts = ACCOUNTS.map((account: ProviderAccount) => {
     const groups = groupsOf(account);
     const uses = credentials.filter(credential => groups.flat().includes(credential.name));
     const held = groups.filter((group: string[]) => uses.some(credential => group.includes(credential.name) && credential.available)).length;

@@ -10,8 +10,8 @@ import { GLYPHS, glyphFor } from '../../glyphs.mjs';
 import { MODULES, SOURCE_GROUPS, moduleAgents } from '../../providers/modules.ts';
 import { SOURCE_GUIDES, activityNote, latestSourceCalls } from '../../ui/source-guide.mjs';
 import { enabledField, ownerOf, settingsGroups } from '../../ui/settings.mjs';
-import { clock, shortDate, costAmounts, num, plural, callOutcome } from '../../ui/format.mjs';
-import { usageOf } from '../../ui/usage.mjs';
+import { clock, shortDate, costAmounts, duration, num, plural, callOutcome } from '../../ui/format.mjs';
+import { usageOf, toolHistory } from '../../ui/usage.mjs';
 import { hostWords } from '../../ui/host.mjs';
 import { readOnly, SCHEMA_MISSING } from './controller';
 import type { DigHost } from '../shared/host';
@@ -224,7 +224,11 @@ function activityBrief(call: any) {
   return `${callOutcome(call.status)} · ${shortDate(call.at)} · ${clock(call.at)}`;
 }
 
-function RecordedUse({ usage, recent }: { usage: any; recent: any }) {
+const HISTORY_DAYS = 90;
+/** A toolHistory row's typical cost: each unit's median on its own, "no charge" when typically free, "cost not reported" when no call was priced. */
+const typicalCost = (cost: any[] | null) => cost === null ? 'cost not reported' : cost.length ? `${costAmounts({ byUnit: Object.fromEntries(cost.map(({ amount, unit }) => [unit, amount])) }).join(' + ')} typical` : 'no charge';
+
+function RecordedUse({ usage, recent, tools = [] }: { usage: any; recent: any; tools?: any[] }) {
   const amounts = usage ? costAmounts(usage.cost) : [];
   return <div className="source-page-recorded">
     <div className="source-page-recorded-heading"><span>Recorded use</span><span>All-time retained usage</span></div>
@@ -234,11 +238,14 @@ function RecordedUse({ usage, recent }: { usage: any; recent: any }) {
         {usage.cost.unknownCalls > 0 && <span>{plural(usage.cost.unknownCalls, 'call')} incompletely priced</span>}
       </div>
     </dl> : <p className="source-page-unused">No retained calls yet</p>}
+    {tools.length > 0 && <div className="source-page-tool-history"><p>Last {HISTORY_DAYS} days, by tool</p>
+      <ul>{tools.map(row => <li key={row.tool}><code>{row.tool}</code><span>{plural(row.calls, 'call')}</span><span>{num(Math.round(row.failureRate * 100))}% failed</span>{row.medianMs !== null && <span>{duration(row.medianMs)} median</span>}<span>{typicalCost(row.typicalCost)}</span></li>)}</ul>
+    </div>}
     <p className="source-page-activity" title={activityNote(recent)}><span>Last retained call</span>{activityBrief(recent)}</p>
   </div>;
 }
 
-function SourceCard({ module, addOns = [], modules, app, host, info, activity, usage, read, addOn = false }: any) {
+function SourceCard({ module, addOns = [], modules, app, host, info, activity, usage, history = [], read, addOn = false }: any) {
   const [setupOpen, setSetupOpen] = useState(false);
   const properties = read?.schema?.properties ?? {}; const values = read?.values ?? {};
   const ownField = enabledField(module.id);
@@ -291,9 +298,9 @@ function SourceCard({ module, addOns = [], modules, app, host, info, activity, u
           <p className="source-page-activity-detail">{activityNote(recent)}</p>
         </Collapsible.Panel>
       </Collapsible.Root>}
-      <RecordedUse usage={usage.get(module.id)} recent={recent} />
+      <RecordedUse usage={usage.get(module.id)} recent={recent} tools={history.filter((row: any) => module.tools.includes(row.tool))} />
     </FramePanel>
-    {addOns.length > 0 && <div className="source-page-addons">{addOns.map((entry: any) => <SourceCard key={entry.id} module={entry} modules={modules} app={app} host={host} info={info} activity={activity} usage={usage} read={read} addOn />)}</div>}
+    {addOns.length > 0 && <div className="source-page-addons">{addOns.map((entry: any) => <SourceCard key={entry.id} module={entry} modules={modules} app={app} host={host} info={info} activity={activity} usage={usage} history={history} read={read} addOn />)}</div>}
     <FrameFooter className="source-page-card-footer">
       <details className="source-page-tertiary"><summary>{module.kind === 'tool' ? 'About this tool' : 'About this source'}</summary><p>{module.about}</p></details>
       {guide?.example && <Example id={module.id} example={guide.example} />}
@@ -306,10 +313,11 @@ function SourceCard({ module, addOns = [], modules, app, host, info, activity, u
 
 export function SourcesPage({ app, host, hidden }: { app: any; host: DigHost; hidden: boolean }) {
   const sources = Array.isArray(app.sources?.sources) ? app.sources.sources : [];
-  const info = useMemo(() => new Map(sources.map((source: any) => [source.id, source])), [sources]);
+  const info = useMemo(() => new Map<string, any>(sources.map((source: any) => [source.id, source])), [sources]);
   const groups = useMemo(() => groupSourceModules(MODULES), []);
   const activity = useMemo(() => latestSourceCalls(app.snapshot), [app.snapshot]);
   const usage = useMemo(() => new Map(usageOf(app.snapshot, { days: 0 }).sources.map((source: any) => [source.id, source])), [app.snapshot]);
+  const history = useMemo(() => toolHistory([...(Array.isArray(app.snapshot?.items) ? app.snapshot.items : []).flatMap((item: any) => Array.isArray(item.calls) ? item.calls : []), ...(Array.isArray(app.snapshot?.live) ? app.snapshot.live : [])], { days: HISTORY_DAYS }), [app.snapshot]);
   const on = sources.filter((source: any) => source.enabled);
   const ready = on.filter((source: any) => source.readiness?.status === 'ready').length;
   const attention = on.filter((source: any) => ['partial', 'setup-required'].includes(source.readiness?.status)).length;
@@ -338,7 +346,7 @@ export function SourcesPage({ app, host, hidden }: { app: any; host: DigHost; hi
     <div id="sources-list" className="source-page-groups">
       {groups.map(group => <section key={group.id} id={`source-group-${group.id}`} className={`source-page-group${group.members.length === 1 ? ' source-page-group-single' : ''}`} aria-labelledby={`source-group-heading-${group.id}`}>
         <div className="source-page-group-header"><div><h3 id={`source-group-heading-${group.id}`} tabIndex={-1}>{group.label}</h3><p>{GROUP_DESCRIPTIONS[group.id] ?? 'Additional tools in this edition.'}</p></div><span>{group.members.filter(({ module }) => info.get(module.id)?.enabled).length} of {group.members.length} on</span></div>
-        <div className="source-page-grid">{group.members.map(({ module, addOns }) => <SourceCard key={module.id} module={module} addOns={addOns} modules={MODULES} app={app} host={host} info={info} activity={activity} usage={usage} read={read} />)}</div>
+        <div className="source-page-grid">{group.members.map(({ module, addOns }) => <SourceCard key={module.id} module={module} addOns={addOns} modules={MODULES} app={app} host={host} info={info} activity={activity} usage={usage} history={history} read={read} />)}</div>
       </section>)}
     </div>
   </section>;

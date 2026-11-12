@@ -5,6 +5,7 @@ import { createEvidenceSchemas } from "./evidence-schemas.js";
 import { createYouTubeAnalysisSchemas } from "./youtube-analysis-schemas.js";
 import { createFacebookSchemas } from "./facebook-schemas.js";
 import { createFacebookAdsSchemas } from "./facebook-ads-schemas.js";
+import { createAdLibrarySchemas } from "./ad-library-schemas.js";
 import { createSocialReadSchemas } from "./social-read-schemas.js";
 type Typebox = typeof Type;
 type Schema = TSchema;
@@ -59,6 +60,7 @@ export function createSchemas(
     ...createYouTubeAnalysisSchemas(T),
     ...createEvidenceSchemas(T),
     ...createFacebookAdsSchemas(T),
+    ...createAdLibrarySchemas(T),
     ...createSocialReadSchemas(T),
     tiktok_top: T.Object({ query: T.String(), cursor: T.Optional(T.Integer({minimum: 0})), region: T.Optional(T.String()), sort: enumSchema(T, ["relevance", "most-liked", "date-posted"], "Result ordering."), period: enumSchema(T, ["yesterday", "this-week", "this-month", "last-3-months", "last-6-months", "all-time"], "Publication window.") }, {additionalProperties: false}),
     tiktok_comments: T.Object({ url: T.String(), cursor: T.Optional(T.Integer({minimum: 0})) }, {additionalProperties: false}),
@@ -74,6 +76,27 @@ export function createSchemas(
       maxTokens: T.Optional(T.Integer({ minimum: 128, maximum: 4096, description: "Final answer token limit, default 1600. This is not a cap on internal reasoning or total spend." })),
     }, { additionalProperties: false }),
     youtube_transcript: T.Object({ video: T.String({ description: "YouTube URL or 11-character video ID." }), language: T.Optional(T.String()), originalAudio: T.Optional(T.Boolean()), cacheMaxAge: enumSchema(T, ["1d", "3d", "7d", "14d", "30d"], "Provider cache age; omitted means live retrieval.") }),
+    youtube_comments: T.Object({
+      url: T.String({ description: "YouTube video or Short URL, or the 11-character video ID." }),
+      order: enumSchema(T, ["top", "newest"], "Comment order: top (YouTube's most liked first) or newest. Omitted sends none and takes the provider's default."),
+      cursor: T.Optional(T.String({ description: "The cursor a previous page returned, with the same url and order; omit for the first page." })),
+      limit: T.Optional(T.Integer({ minimum: 1, description: "Show at most this many of the returned comments. The request is unchanged and the whole page is paid for; the cursor still continues after every returned comment." })),
+    }, { additionalProperties: false }),
+    wayback_snapshots: T.Object({
+      url: T.String({ minLength: 1, description: "Web address, with or without https://, such as example.com/pricing." }),
+      from: T.Optional(T.String({ description: "Earliest capture date, YYYY, YYYY-MM or YYYY-MM-DD (inclusive)." })),
+      to: T.Optional(T.String({ description: "Latest capture date, YYYY, YYYY-MM or YYYY-MM-DD (inclusive)." })),
+      match: enumSchema(T, ["exact", "prefix", "host", "domain"], "Which addresses to list: exact (default) this address, prefix every address under it, host its whole host, domain the host and its subdomains."),
+      limit: T.Optional(T.Integer({ minimum: 1, maximum: 100, description: "Captures to list, default 20, at most 100." })),
+      changesOnly: T.Optional(T.Boolean({ description: "Leave out a capture identical to the one before it, so the list shows when the content changed. Default true." })),
+      resumeKey: T.Optional(T.String({ description: "The resumeKey a previous call printed; repeat its other arguments to list the next page." })),
+    }),
+    wayback_read: T.Object({
+      url: T.String({ minLength: 1, description: "Web address, with or without https://, such as example.com/pricing." }),
+      date: T.Optional(T.String({ description: "Date to read the page as of: YYYY, YYYY-MM, YYYY-MM-DD or a 14-digit capture timestamp. The nearest capture is read; without a date, the newest." })),
+      offset: T.Optional(T.Integer({ minimum: 0, description: "Character offset to continue from (default: 0)." })),
+      limit: T.Optional(T.Integer({ minimum: 1, maximum: 100000, description: "Characters to return (default: 40000, max: 100000)." })),
+    }),
     hackernews_read: T.Object({
       item: T.String({ description: "Numeric item ID or https://news.ycombinator.com/item?id=... URL." }),
       offset: T.Optional(T.Integer({ minimum: 0, description: "Comment offset, default 0." })),
@@ -1313,6 +1336,9 @@ export function createSchemas(
       ),
       previousResponseId: T.Optional(
         T.String({ description: "Previous response id for chaining." }),
+      ),
+      recoverResponseId: T.Optional(
+        T.String({ minLength: 1, description: "Read the stored answer of an earlier pass by the response id an interrupted call reported, instead of running a search. Free: nothing is searched or charged. Pass the original query for the record; the other arguments are not applied." }),
       ),
       handles: T.Optional(T.Array(T.String(), { maxItems: 20, description: "Limit to at most 20 handles, without @. Mutually exclusive with excludeHandles." })),
       excludeHandles: T.Optional(T.Array(T.String(), { maxItems: 20, description: "Exclude at most 20 handles, without @. Mutually exclusive with handles." })),

@@ -314,7 +314,7 @@ describe("commerce Scrape.do enrichment", () => {
 		expect(params.get("high_price")).toBe("99.5");
 		expect(params.get("seller")).toBe("A2L77EE7U53NWQ");
 		expect(params.get("language")).toBe("ES");
-		expect(result.startsWith("ERROR:")).toBe(false);
+		expect((result as string).startsWith("ERROR:")).toBe(false);
 		expect(result).toContain("Country-level marketplace (mx)");
 		expect(result).toContain(
 			"Savings vs. reference (computed locally): 20.0%",

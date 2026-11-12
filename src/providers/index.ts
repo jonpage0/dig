@@ -3,6 +3,7 @@ import { snippets as papers_semantic_scholar_snippets, relations as papers_seman
 import { content as papers_openalex_content } from "./tools/openalex_content.js";
 import hackernews from "./tools/hackernews.js";
 import { read as hackernews_read } from "./tools/hackernews_read.js";
+import { snapshots as wayback_snapshots, read as wayback_read } from "./tools/wayback.js";
 import { history as polymarket_history, resolution as polymarket_resolution } from "./tools/polymarket_data.js";
 import polymarket from "./tools/polymarket.js";
 import reddit from "./tools/reddit.js";
@@ -13,6 +14,7 @@ import youtube from "./tools/youtube.js";
 import { youtube_analyze, youtube_analysis_status } from "./tools/gemini_video.js";
 import { video_analyze } from "./tools/video_analyze.js";
 import { transcript as youtube_transcript } from "./tools/youtube_transcript.js";
+import { comments as youtube_comments } from "./tools/youtube_comments.js";
 import {
 	semantic_scholar_search,
 	semantic_scholar_recommendations,
@@ -33,6 +35,8 @@ import { post as x_post, search_posts as x_search_posts, count_posts as x_count_
 import { tiktok as scrapecreators_tiktok, instagram as scrapecreators_instagram, linkedin as scrapecreators_linkedin, telegram as scrapecreators_telegram } from "./tools/scrapecreators.js";
 import { facebook as scrapecreators_facebook, facebook_events as scrapecreators_facebook_events } from "./tools/facebook.js";
 import { library as facebook_ad_library } from "./tools/facebook_ads.js";
+import { library as google_ad_library } from "./tools/google_ads.js";
+import { library as linkedin_ad_library } from "./tools/linkedin_ads.js";
 import { search as github_search, inspect as github_inspect, read as github_read } from "./tools/github.js";
 import { search as tiktok_ads_search, top as tiktok_ads_top, detail as tiktok_ads_detail, library as tiktok_ad_library } from "./tools/tiktok_ads.js";
 import { read_wiki_structure as deepwiki_read_wiki_structure, read_wiki_contents as deepwiki_read_wiki_contents, ask_question as deepwiki_ask_question } from "./tools/deepwiki.js";
@@ -46,6 +50,8 @@ import type { ToolSpec } from "./types.js";
 export const providerTools: Record<string, ToolSpec> = {
 	hackernews,
 	hackernews_read,
+	wayback_snapshots,
+	wayback_read,
 	polymarket,
 	polymarket_history,
 	polymarket_resolution,
@@ -63,6 +69,7 @@ export const providerTools: Record<string, ToolSpec> = {
 	youtube_analysis_status,
 	video_analyze,
 	youtube_transcript,
+	youtube_comments,
 	papers_semantic_scholar_search: semantic_scholar_search,
 	papers_semantic_scholar_recommendations: semantic_scholar_recommendations,
 	papers_semantic_scholar_snippets,
@@ -104,6 +111,8 @@ export const providerTools: Record<string, ToolSpec> = {
 	scrapecreators_facebook,
 	scrapecreators_facebook_events,
 	facebook_ad_library,
+	google_ad_library,
+	linkedin_ad_library,
 	github_search,
 	github_inspect,
 	github_read,

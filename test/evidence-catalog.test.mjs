@@ -81,3 +81,64 @@ test('ranking receipts count toward the named dig without being claimed by anoth
     await rm(state, { recursive: true, force: true });
   }
 });
+
+test('the Wayback Machine is a keyless free web source with one method, both tools, a glyph and a guide entry', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-wayback-catalog-'));
+  try {
+    const { MODULES, PRESETS, SOURCE_GROUPS } = await import('../src/providers/modules.ts');
+    const { providerTools } = await import('../src/providers/index.ts');
+    const { glyphFor, GLYPHS } = await import('../src/glyphs.mjs');
+    const { SOURCE_GUIDES } = await import('../src/ui/source-guide.mjs');
+    const module = MODULES.find(m => m.id === 'wayback');
+    assert.equal(module.label, 'Wayback Machine'); assert.equal(module.billing, 'Free. No account or key.'); assert.equal(module.env, undefined);
+    assert.deepEqual(module.providers, [{ name: 'Internet Archive Wayback Machine', url: 'https://web.archive.org' }]);
+    assert.ok(SOURCE_GROUPS.find(g => g.id === 'web').sources.includes('wayback')); assert.ok(PRESETS.research.includes('wayback')); assert.ok(!PRESETS.starter.includes('wayback'));
+    for (const tool of module.tools) assert.equal(providerTools[tool]?.billing, 'free', tool);
+    assert.ok(reportSources(ALL_MODULES).includes('wayback'));
+    assert.deepEqual(moduleAgents(['wayback']).map(a => [a.name, a.tools]), [['wayback', ['research_save', 'wayback_snapshots', 'wayback_read']]]);
+    assert.equal(glyphFor('wayback'), 'history'); assert.ok(GLYPHS.history.length);
+    assert.equal(SOURCE_GUIDES.wayback.tasks.length, 2);
+    const config = await loadConfig(state);
+    assert.deepEqual(config.sources.enabled, ['hackernews'], 'Adding the source does not enable it by default');
+    const info = sourceInfo(config, 'wayback').sources[0];
+    assert.equal(info.kind, 'source'); assert.deepEqual(info.credentials, []); assert.deepEqual(info.methods.map(m => m.name), ['wayback']);
+    const skill = await readFile(info.methods[0].skillPath, 'utf8');
+    assert.match(skill, /^---\nname: wayback\n/); assert.match(skill, /wayback_snapshots/); assert.match(skill, /wayback_read/); assert.match(skill, /source: "wayback"/);
+    assert.match(await readFile(join(info.methods[0].skillPath, '../agents/openai.yaml'), 'utf8'), /icon_small: "\.\.\/\.\.\/assets\/skills\/history\.svg"/);
+  } finally {
+    await rm(state, { recursive: true, force: true });
+  }
+});
+
+test('Google ads and LinkedIn ads are ScrapeCreators market sources after Facebook ads, each with one method, a megaphone and a guide entry; YouTube reads comments', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-ad-libraries-catalog-'));
+  try {
+    const { MODULES, SOURCE_GROUPS } = await import('../src/providers/modules.ts');
+    const { providerTools } = await import('../src/providers/index.ts');
+    const { glyphFor } = await import('../src/glyphs.mjs');
+    const { SOURCE_GUIDES } = await import('../src/ui/source-guide.mjs');
+    const { hasSourceView } = await import('../src/ui/evidence/index.mjs');
+    const markets = SOURCE_GROUPS.find(g => g.id === 'markets').sources;
+    assert.deepEqual(markets.slice(markets.indexOf('facebook-ads'), markets.indexOf('facebook-ads') + 3), ['facebook-ads', 'google-ads', 'linkedin-ads']);
+    const config = await loadConfig(state);
+    for (const [id, label, tool] of [['google-ads', 'Google ads', 'google_ad_library'], ['linkedin-ads', 'LinkedIn ads', 'linkedin_ad_library']]) {
+      const module = MODULES.find(m => m.id === id);
+      assert.equal(module.label, label); assert.deepEqual(module.tools, [tool]); assert.deepEqual(module.keys, ['SCRAPECREATORS_API_KEY']);
+      assert.deepEqual(module.providers, [{ name: 'ScrapeCreators', url: 'https://scrapecreators.com' }]); assert.match(module.billing, /ScrapeCreators credits/);
+      assert.equal(typeof providerTools[tool]?.billing?.charge, 'function', tool);
+      assert.ok(reportSources(ALL_MODULES).includes(id)); assert.equal(glyphFor(id), 'megaphone'); assert.equal(SOURCE_GUIDES[id].tasks.length, 2); assert.ok(hasSourceView(id));
+      assert.deepEqual(moduleAgents([id]).map(a => [a.name, a.tools]), [[id, ['research_save', tool]]]);
+      const info = sourceInfo(config, id).sources[0];
+      assert.equal(info.enabled, false); assert.deepEqual(info.methods.map(m => m.name), [id]);
+      const skill = await readFile(info.methods[0].skillPath, 'utf8');
+      assert.match(skill, new RegExp(`^---\\nname: ${id}\\n`)); assert.match(skill, new RegExp(tool)); assert.match(skill, new RegExp(`source: "${id}"`)); assert.match(skill, /disable-model-invocation: true/);
+      assert.match(await readFile(join(info.methods[0].skillPath, '../agents/openai.yaml'), 'utf8'), /icon_small: "\.\.\/\.\.\/assets\/skills\/megaphone\.svg"/);
+    }
+    assert.equal(MODULES.find(m => m.id === 'linkedin-ads').logo, 'linkedin');
+    const youtube = MODULES.find(m => m.id === 'youtube');
+    assert.ok(youtube.tools.includes('youtube_comments')); assert.match(youtube.credential, /SCRAPECREATORS_API_KEY for hosted transcripts and video comments/);
+    assert.match(sourceInfo(config, 'youtube').sources[0].message ?? JSON.stringify(sourceInfo(config, 'youtube')), /Hosted transcripts and video comments/);
+  } finally {
+    await rm(state, { recursive: true, force: true });
+  }
+});

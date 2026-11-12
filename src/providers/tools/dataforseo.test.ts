@@ -5,7 +5,7 @@ import { knownSecrets } from "../secrets.js";
 import type { ToolContext } from "../types.js";
 import { docs_index, docs_read, request } from "./dataforseo.js";
 
-const originalFetch = globalThis.fetch;
+const originalFetch: typeof fetch & { preconnect?: unknown } = globalThis.fetch;
 const saved = { DATAFORSEO_USERNAME: process.env.DATAFORSEO_USERNAME, DATAFORSEO_PASSWORD: process.env.DATAFORSEO_PASSWORD };
 const LOGIN = "analyst@example.com";
 const PASSWORD = "dfs-test-password-9f2c";

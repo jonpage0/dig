@@ -2,7 +2,7 @@
 // retained provider-call receipt (claimed by a saved report or answer, or still live) and every saved report's date.
 // Nothing is stored. Costs keep the receipts' own semantics: summed per unit and never converted, with unknown kept
 // apart from no charge.
-import { costSummary } from '../providers/library/cost.ts';
+import { costSummary, receiptCost } from '../providers/library/cost.ts';
 
 const DAY_MS = 86400000;
 // Beyond about two months a column per day is too thin to read; All time then counts by week.
@@ -64,3 +64,36 @@ export function usageOf(snapshot, { days = 30, now = Date.now() } = {}) {
   };
 }
 
+
+const median = values => { if (!values.length) return null; const sorted = [...values].sort((a, b) => a - b); const mid = sorted.length >> 1; return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2; };
+/**
+ * What this library's own receipts say about each tool over the last `days` days (rolling, back from `now`): its calls,
+ * failures, median time and typical cost, one row per tool, busiest first. Cancelled and skipped calls say nothing
+ * about the provider and are left out, as is a receipt without a readable time. Costs keep the receipts' meaning: a
+ * call is priced when its cost is a complete provider-reported total (empty: no charge) and unknown when it is null.
+ * `typicalCost` is each unit's median over the priced calls (a priced call without that unit counts as 0), zero
+ * medians left out, units never converted or added: `[]` when the priced calls are typically free, null when none is
+ * priced. A record of past calls here, not a price list. Server (source_info) and the Sources page share it.
+ */
+export function toolHistory(calls, { days = 90, now = Date.now() } = {}) {
+  const start = now - days * DAY_MS; const tools = new Map();
+  for (const call of Array.isArray(calls) ? calls : []) {
+    const time = typeof call?.at === 'string' ? Date.parse(call.at) : NaN;
+    if (!Number.isFinite(time) || time < start || time > now || typeof call.tool !== 'string' || ['cancelled', 'skipped'].includes(call.status)) continue;
+    if (!tools.has(call.tool)) tools.set(call.tool, []);
+    tools.get(call.tool).push({ call, time });
+  }
+  return [...tools].map(([tool, list]) => {
+    list.sort((a, b) => b.time - a.time);
+    const priced = list.map(({ call }) => { try { return receiptCost(call).cost; } catch { return null; } }).filter(cost => cost !== null);
+    const units = [...new Set(priced.flat().map(({ unit }) => unit))].sort();
+    const typical = units.map(unit => ({ amount: median(priced.map(cost => cost.find(entry => entry.unit === unit)?.amount ?? 0)), unit })).filter(({ amount }) => amount > 0);
+    const failed = list.filter(({ call }) => call.status === 'failed').length;
+    return {
+      tool, source: list[0].call.source ?? null, calls: list.length, failed, failureRate: failed / list.length,
+      medianMs: median(list.map(({ call }) => call.ms).filter(ms => typeof ms === 'number' && Number.isFinite(ms))),
+      typicalCost: priced.length ? typical : null, pricedCalls: priced.length, unknownCalls: list.length - priced.length,
+      freeCalls: priced.filter(cost => !cost.length).length, lastAt: list[0].call.at,
+    };
+  }).sort((a, b) => b.calls - a.calls || a.tool.localeCompare(b.tool));
+}

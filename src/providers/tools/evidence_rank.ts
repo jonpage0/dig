@@ -28,7 +28,7 @@ export function buildEvidenceRequest(args: any) {
   const claim = args.claim === undefined ? undefined : text(args.claim, "claim", 4000);
   if (!Array.isArray(args.candidates) || !args.candidates.length || args.candidates.length > 32) throw new Error("Supply 1–32 candidates");
   const ids = new Set();
-  const candidates = args.candidates.map((v: any) => {
+  const candidates: { id: string; text: string; reference?: string }[] = args.candidates.map((v: any) => {
     if (!object(v) || typeof v.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(v.id) || ids.has(v.id)) throw new Error("Candidate IDs must be unique ASCII identifiers of 1–80 characters");
     ids.add(v.id);
     return { id: v.id, text: text(v.text, "candidate text", 6000), ...(v.reference === undefined ? {} : { reference: text(v.reference, "reference", 512) }) };

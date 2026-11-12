@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · Wayback Machine"
+  short_description: "What a web page said on a date, from the Internet Archive"
+  icon_small: "../../assets/skills/history.svg"
+  icon_large: "../../assets/skills/history.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:wayback to find what this page said on that date."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:wayback mention.
+  allow_implicit_invocation: false

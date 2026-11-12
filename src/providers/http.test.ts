@@ -2,7 +2,7 @@ import { afterEach, describe, test } from "node:test";
 import { expect } from "expect";
 import { keptJson, keptText, requestJson } from "./http.js";
 
-const originalFetch = globalThis.fetch;
+const originalFetch: typeof fetch & { preconnect?: unknown } = globalThis.fetch;
 const keep = () => {};
 
 afterEach(() => {

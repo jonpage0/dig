@@ -21,7 +21,7 @@ Give a short overview, grouped by what the user would do next:
 
 - **Ready to use**: enabled and ready.
 - **Enabled but needs something**: name the missing credential or prerequisite.
-- **Available to turn on**: disabled sources, each with one line on what it researches. Hacker News, DeepWiki and Polymarket need no key. GitHub works without a login at lower limits (a login is optional; see step 5).
+- **Available to turn on**: disabled sources, each with one line on what it researches. Hacker News, DeepWiki, Polymarket and the Wayback Machine need no key. GitHub works without a login at lower limits (a login is optional; see step 5).
 
 Use the source labels, not ids. Keep it to one screen; offer details on request.
 

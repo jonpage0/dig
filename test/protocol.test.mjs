@@ -342,3 +342,69 @@ test('a server launched by Claude Code emits no codex:// links', async () => {
     assert.equal((await client.callTool({ name: 'library_read', arguments: { file: saved.structuredContent.file } })).structuredContent.link, null);
   } finally { await client.close(); }
 });
+
+test('a call naming a dig returns the dig’s running cost, a spending ceiling refuses its next paid call, and source_info gives each tool’s recorded history', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dig-native-spend-'));
+  await mkdir(join(root, 'state'));
+  await writeFile(join(root, 'state/keys.env'), 'XAI_API_KEY=xai-protocol-synthetic-value\n', { mode: 0o600 });
+  const { client } = await startServer(root);
+  const call = (name, args) => client.callTool({ name, arguments: args });
+  const requests = async () => (await readFile(join(root, 'state/xai-requests.log'), 'utf8')).trim().split('\n').length;
+  try {
+    const set = await call('settings.update', { set: { x_enabled: true, spend_dig_ceiling_usd: 0.02 } });
+    assert.equal(set.structuredContent.values.spend_dig_ceiling_usd, 0.02);
+    const { dig } = (await call('dig_start', { project: root, question: 'What does a paid source cost here?' })).structuredContent;
+    const first = await call('xsearch', { project: root, dig, query: 'first' });
+    assert.notEqual(first.isError, true, JSON.stringify(first));
+    assert.deepEqual(first.structuredContent.digCost, { calls: 1, byUnit: { USD: 0.01234 }, unknownCalls: 0, freeCalls: 0 });
+    // Under the ceiling the call runs; its result carries the sum of both calls.
+    const second = await call('xsearch', { project: root, dig, query: 'second' });
+    assert.notEqual(second.isError, true, JSON.stringify(second));
+    assert.equal(second.structuredContent.digCost.calls, 2);
+    assert.equal(second.structuredContent.digCost.byUnit.USD, 0.01234 + 0.01234);
+    assert.match(second.content[0].text, / · dig so far: Provider-reported cost: \$0\.0247\. Provider results/);
+    assert.equal(await requests(), 2);
+
+    // The second call crossed $0.02: the dig's next paid call is refused before any request, and no receipt is written.
+    const refused = await call('xsearch', { project: root, dig, query: 'third' });
+    assert.equal(refused.isError, true);
+    assert.match(refused.content[0].text, /This dig has reached its spending ceiling: its calls have recorded \$0\.0247 .* the ceiling is \$0\.02\. No request was sent\. .*dig_ceiling_usd under \[spend\] in config\.toml.*Tell the user; do not work around it/);
+    assert.equal(await requests(), 2);
+    const listed = () => client.callTool({ name: 'library_list', arguments: { project: root } }).then(r => r.structuredContent);
+    assert.equal((await listed()).items[0].calls.length, 2);
+
+    // A free tool in the same dig and a paid call naming no dig still run; the latter carries no running cost.
+    const free = await call('hackernews', { project: root, dig, query: 'ceiling' });
+    assert.equal(free.structuredContent.status, 'success');
+    assert.deepEqual(free.structuredContent.digCost, { calls: 3, byUnit: { USD: 0.01234 + 0.01234 }, unknownCalls: 0, freeCalls: 1 });
+    // So does a call a metered tool makes at no charge: a stored answer read back by its id sends no search.
+    const read = await call('xsearch', { project: root, dig, query: 'third', recoverResponseId: 'stored-response' });
+    assert.equal(read.structuredContent.status, 'success', JSON.stringify(read));
+    assert.deepEqual(read.structuredContent.call.cost, []);
+    assert.deepEqual(read.structuredContent.digCost, { calls: 4, byUnit: { USD: 0.01234 + 0.01234 }, unknownCalls: 0, freeCalls: 2 });
+    assert.equal(await requests(), 2);
+    const loose = await call('xsearch', { project: root, query: 'no dig' });
+    assert.equal(loose.structuredContent.status, 'success');
+    assert.equal('digCost' in loose.structuredContent, false);
+    assert.doesNotMatch(loose.content[0].text, /dig so far/);
+    assert.equal(await requests(), 3);
+
+    const info = await call('source_info', {});
+    assert.equal(info.structuredContent.historyDays, 90);
+    assert.match(info.content[0].text, /enabled\. Readiness is credential and prerequisite presence only\.$/);
+    const history = id => info.structuredContent.sources.find(source => source.id === id).history;
+    assert.deepEqual(history('x').map(row => [row.tool, row.source, row.calls, row.failed, row.failureRate, row.pricedCalls, row.unknownCalls, row.freeCalls]), [['xsearch', 'x', 4, 0, 0, 4, 0, 1]]);
+    assert.deepEqual(history('x')[0].typicalCost, [{ amount: 0.01234, unit: 'USD' }]);
+    assert.equal(typeof history('x')[0].medianMs, 'number');
+    assert.deepEqual(history('hackernews').map(row => [row.tool, row.calls, row.typicalCost]), [['hackernews', 1, []]]);
+    assert.deepEqual(history('reddit'), []);
+    assert.match((await client.listTools()).tools.find(tool => tool.name === 'source_info').description, /history gives, per tool, what that tool's calls recorded in this library over the last 90 days cost/);
+
+    // Removing the ceiling lets the dig's paid calls run again.
+    await call('settings.update', { set: { spend_dig_ceiling_usd: 0 } });
+    assert.notEqual((await call('xsearch', { project: root, dig, query: 'after' })).isError, true);
+  } finally {
+    await client.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -390,7 +390,7 @@ describe("scrapecreators tools", () => {
 		});
 		restore = mock.restore;
 		const originals: string[] = [];
-		const retained = { ...context, keep: (_label: string, _status: number, body: unknown) => { originals.push(JSON.stringify(body)); } };
+		const retained = { ...context, keep: (_label: string, _status: number | string, body: unknown) => { originals.push(JSON.stringify(body)); } };
 
 		for (const provider of [tiktok, instagram]) {
 			const result = await executeSource(provider, { query: "x" }, retained);

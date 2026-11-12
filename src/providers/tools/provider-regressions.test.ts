@@ -137,7 +137,7 @@ test("a DeepWiki error excerpt is redacted before it is cut, so no fragment of a
   expect(result.content[0].text).toContain("DeepWiki HTTP 502");
   expect(result.content[0].text).not.toContain("PRIVATE%2f");
 });
-test("the keyless Hacker News, Polymarket and DeepWiki reads bound each request with a timeout", async () => {
+test("the keyless Hacker News, Polymarket, Wayback Machine and DeepWiki reads bound each request with a timeout", async () => {
   const timeout = AbortSignal.timeout, seen: number[] = [];
   AbortSignal.timeout = (ms: number) => { seen.push(ms); return timeout.call(AbortSignal, ms); };
   try {
@@ -152,7 +152,7 @@ test("the keyless Hacker News, Polymarket and DeepWiki reads bound each request 
       expect(seen).toEqual([ms]);
     }
     mockFetch(async () => Response.json({ hits: [], nbHits: 0, events: [], id: 1, children: [] }));
-    for (const [name, args] of [["hackernews", { query: "x" }], ["hackernews_read", { item: "1" }], ["polymarket", { query: "x" }]] as const) {
+    for (const [name, args] of [["hackernews", { query: "x" }], ["hackernews_read", { item: "1" }], ["polymarket", { query: "x" }], ["wayback_snapshots", { url: "example.com" }], ["wayback_read", { url: "example.com" }]] as const) {
       seen.length = 0;
       await tool(name, args);
       expect(seen).toEqual([60_000]);
@@ -249,8 +249,8 @@ test("cancellation after Exa returns billing preserves the reported subtotal", a
   });
   const result = await tool("exa_search", { query: "retained billing", numResults: 1 }, controller.signal);
   expect(result.details.status).toBe("cancelled");
-  expect(result.details.cost).toBeNull();
-  expect(result.details.knownCost).toEqual([{ amount: 0.125, unit: "USD" }]);
+  expect((result.details as Record<string, unknown>).cost).toBeNull();
+  expect((result.details as Record<string, unknown>).knownCost).toEqual([{ amount: 0.125, unit: "USD" }]);
 });
 test("aborting YouTube during an uncooperative fetch prevents follow-up requests and disk writes", async () => {
   process.env.OPENCODE_RESEARCH_GOOGLE_API_KEY = "fixture";

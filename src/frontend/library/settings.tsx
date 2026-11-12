@@ -13,7 +13,7 @@ const LIBRARY_FOLDER_NOTES: Record<string, string> = {
   'not-folder': 'This path is not a folder, so research cannot be saved here. Choose a folder.',
 };
 const GROUP_COPY: Record<string, { eyebrow: string; description: string }> = {
-  Library: { eyebrow: 'Research records', description: 'Choose where research lives and whether to retain original provider responses.' },
+  Library: { eyebrow: 'Research records', description: 'Choose where research lives, whether to retain original provider responses and how much one dig may spend.' },
   'Source workers': { eyebrow: 'Agent guidance', description: 'Suggested defaults for the conversation. Each source can have its own suggestions.' },
 };
 

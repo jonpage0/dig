@@ -101,6 +101,24 @@ describe("papers provider outcomes", () => {
 		expect(text(await semantic_scholar_recommendations.execute({ positivePaperIds: ["seed"] }, context))).toMatch(/^ERROR:/);
 	});
 
+	test("recommendations and a sorted search ask for the paper fields without tldr, which those endpoints refuse, while a relevance search still asks for it", async () => {
+		const asked: string[] = [];
+		mockFetch(async (url) => {
+			asked.push(new URL(String(url)).searchParams.get("fields") ?? "");
+			return new Response(JSON.stringify(String(url).includes("/recommendations/") ? { recommendedPapers: [{ paperId: "p1", title: "A related paper" }] } : { total: 1, data: [{ paperId: "p1", title: "A paper", tldr: { text: "Short." } }] }));
+		});
+		const recommended = await executeSource(semantic_scholar_recommendations, { positivePaperIds: ["seed"] }, context);
+		expect(recommended.status).toBe("success");
+		expect(recommended.text).toContain("A related paper");
+		await executeSource(semantic_scholar_search, { query: "test" }, context);
+		expect((await executeSource(semantic_scholar_search, { query: "test", sort: "citations" }, context)).status).toBe("success");
+		expect(asked[0].split(",")).not.toContain("tldr");
+		expect(asked[0].split(",")).toContain("citationCount");
+		expect(asked[1].split(",")).toContain("tldr");
+		expect(asked[2].split(",")).not.toContain("tldr");
+		expect(asked[2].split(",")).toContain("citationCount");
+	});
+
 	test("a malformed abstract index leaves the work without an abstract instead of sizing an array from it", async () => {
 		const work = (id: string, index: unknown) => ({ id: `https://openalex.org/${id}`, display_name: `Work ${id}`, abstract_inverted_index: index });
 		mockFetch(async () => new Response(JSON.stringify({

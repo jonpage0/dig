@@ -1,8 +1,8 @@
 # Sources and their keys
 
-Turn sources on and off on Dig's **Sources & tools** page. Each source card says whether it is ready, which keys it uses and where to get them; the card's **Setup** fold opens the full list. Claude Code shows no Dig pages: there, run `/dig:setup` to turn sources on and off and to see what each still needs. Dig has 22 research sources, 26 methods and 74 provider tools, including the separate shared Video analysis and Evidence ranking tools. Methods below are named in Codex's form, `$dig:<name>`; in Claude Code, type `/dig:<name>`.
+Turn sources on and off on Dig's **Sources & tools** page. Each source card says whether it is ready, which keys it uses and where to get them; the card's **Setup** fold opens the full list. Claude Code shows no Dig pages: there, run `/dig:setup` to turn sources on and off and to see what each still needs. Dig has 25 research sources, 29 methods and 79 provider tools, including the separate shared Video analysis and Evidence ranking tools. Methods below are named in Codex's form, `$dig:<name>`; in Claude Code, type `/dig:<name>`.
 
-No source requires that you configure every other source. Hacker News, DeepWiki and Polymarket need no account. GitHub public REST reads and direct Papers searches can run without keys, with provider-specific limits. YouTube's keyless path needs a local `yt-dlp`. Other sources use your own provider accounts; API charges are separate from your ChatGPT or Claude plan.
+No source requires that you configure every other source. Hacker News, DeepWiki, Polymarket and the Wayback Machine need no account. GitHub public REST reads and direct Papers searches can run without keys, with provider-specific limits. YouTube's keyless path needs a local `yt-dlp`. Other sources use your own provider accounts; API charges are separate from your ChatGPT or Claude plan.
 
 ## Keys
 
@@ -20,11 +20,12 @@ Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.en
 | Hacker News | Stories and comments | None | |
 | DeepWiki | How a public GitHub repository is built | None | |
 | Polymarket | Prediction-market odds, volume and movement | None | |
+| Wayback Machine | What a web page said on a given date, from the Internet Archive's captures | None | |
 | GitHub | Repositories, their activity and source | Optional: `GH_TOKEN` or `GITHUB_TOKEN` | Or a `gh` login |
 | Exa | Web search and page text | `EXA_API_KEY` | |
 | Perplexity | Cited answers on current facts | `PERPLEXITY_API_KEY` | |
 | Papers | Scholarly papers, citations and full text | Optional: `SEMANTIC_SCHOLAR_API_KEY`, `OPENALEX_API_KEY`, `NCBI_API_KEY` and others | The Papers bridge (`git`, `uv`) for federated search, full text, PDFs and section extraction |
-| YouTube | Video discovery, saved transcripts and Gemini video understanding | Optional by route: `OPENCODE_RESEARCH_GOOGLE_API_KEY`, `SCRAPECREATORS_API_KEY`, `GEMINI_API_KEY` | `yt-dlp` for keyless search/local captions; no local video tools for Gemini |
+| YouTube | Video discovery, saved transcripts, comments and Gemini video understanding | Optional by route: `OPENCODE_RESEARCH_GOOGLE_API_KEY`, `SCRAPECREATORS_API_KEY`, `GEMINI_API_KEY` | `yt-dlp` for keyless search/local captions; no local video tools for Gemini |
 | X | Posts, threads, accounts, search, counts, X News, Communities | `XAI_API_KEY` (Grok's X search) and `X_BEARER_TOKEN` (X's API); optional sign-in keys and `TIKHUB_API_KEY` | |
 | Reddit | Threads and comments | `SCRAPECREATORS_API_KEY` | |
 | TikHub Reddit | A thread's first page of comments with up to 8 collapsed-reply continuations per call, and subreddit context | `TIKHUB_API_KEY` | |
@@ -32,10 +33,12 @@ Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.en
 | Threads | Public posts, replies and account posts | `SCRAPECREATORS_API_KEY` | |
 | Facebook | Public profiles, posts, groups, videos and events | `SCRAPECREATORS_API_KEY` | |
 | Facebook ads | Meta Ad Library advertisers, ads and transcripts | `SCRAPECREATORS_API_KEY` | |
+| Google ads | Ads Transparency Center advertisers, their ads and ad details | `SCRAPECREATORS_API_KEY` | |
+| LinkedIn ads | Ad Library ads with their payer and published targeting and impressions | `SCRAPECREATORS_API_KEY` | |
 | China social | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat | `TIKHUB_API_KEY`; optional `JUSTONE_API_KEY`, used only when the Just One backend is asked for | |
 | Commerce | Amazon products, deals, price and rank history, reviews | `SCRAPE_DO_API_KEY` (or `SCRAPEDO_API_TOKEN`); optional `NEXSCOPE_API_KEY` for history and reviews, without which the card reads partly ready | |
 | TikTok ads | Top ads and what an advertiser is running | `TIKHUB_API_KEY` and `SCRAPECREATORS_API_KEY` | |
-| DataForSEO | Search results, keywords, rankings, backlinks | `DATAFORSEO_USERNAME` and `DATAFORSEO_PASSWORD` | |
+| DataForSEO | Search results, keywords, rankings, backlinks; Google Trends, Google ads, app-store and Trustpilot reviews | `DATAFORSEO_USERNAME` and `DATAFORSEO_PASSWORD` | |
 
 One key can cover several sources: ScrapeCreators serves multiple social sources and hosted YouTube transcripts; TikHub serves advanced Reddit, China social, TikTok ads and supported X reads. Each provider account appears once in Accounts and keys.
 
@@ -56,7 +59,7 @@ Choose the route that answers your question; none requires every YouTube option:
 | --- | --- | --- |
 | Discovery and local captions | Install `yt-dlp`; Dig gives it its own Node as the JavaScript runtime | Search without a key and save each video's English captions in the library: the uploaded captions, or automatic ones when there are none. |
 | YouTube Data API metadata | Optional `OPENCODE_RESEARCH_GOOGLE_API_KEY` from [Google Cloud](https://console.cloud.google.com/apis/credentials) | Adds keyed metadata search; it does not enable Gemini analysis. |
-| Hosted transcripts | Optional `SCRAPECREATORS_API_KEY` | The separate paid `youtube_transcript` tool preserves returned timing and language. It is used explicitly, not as an automatic paid fallback. |
+| Hosted transcripts and comments | Optional `SCRAPECREATORS_API_KEY` | The separate paid `youtube_transcript` tool preserves returned timing and language. It is used explicitly, not as an automatic paid fallback. `youtube_comments` reads one page of a video's comments, top or newest, with a cursor for the next. |
 | Gemini video understanding | Optional `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey) | Analyzes supplied public YouTube videos with Flash or Argon, without local download tools. |
 
 The full-report methods are `$dig:youtube` for discovery and transcript research, and `$dig:youtube-video` for deeper analysis of selected videos. The latter starts with Gemini 3.8 Flash, preferring Gemini 4 Argon for harder reasoning before a different provider. A focused visual need or an explicit user choice can go directly to the separate Glimpse tool.
@@ -98,6 +101,16 @@ Facebook research starts from a public URL, video search or event discovery. It 
 
 Facebook ads searches advertiser and ad records. Keep the country, filters, dates and pages inspected with any conclusion: an empty filtered page does not prove that an advertiser runs no ads, and an ad's run duration does not establish its return on spend.
 
+## Google ads and LinkedIn ads
+
+Both use your existing ScrapeCreators key, and each is enabled separately; neither needs a Google or LinkedIn login.
+
+Google ads finds an advertiser in Google's Ads Transparency Center, lists its ads by region, date and format, and reads one ad's text, destination, media addresses, regions and dates. Several advertiser accounts can share a name, so confirm the advertiser before reading its ads. Google shows ads from verified advertisers only, and gives no spend, reach or results outside political ads; ads that need a Google login to view are unavailable.
+
+LinkedIn ads searches LinkedIn's Ad Library by company, keyword, country and date, and reads one ad's text, payer, and the targeting and impression ranges LinkedIn publishes. The library covers ads shown in roughly the last year, and gives no spend or results.
+
+As with Facebook ads, keep the filters, dates and pages inspected with any conclusion: an empty page does not prove that an advertiser runs no ads.
+
 ## Papers bridge
 
 Semantic Scholar and OpenAlex search work without the bridge. Federated search across more databases, full text, PDF downloads and section extraction (`papers_sections`) need the Papers bridge, which needs `git` and `uv`. Ask Dig for the installed plugin's path (it is in `source_info`), then run:
@@ -124,7 +137,7 @@ The direct tools and the bridge also accept `PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_A
 
 ## DataForSEO
 
-DataForSEO charges per request from a prepaid account. Set `DATAFORSEO_USERNAME` (the API login, usually your account email) and `DATAFORSEO_PASSWORD` (the API password from the API Access page of DataForSEO's dashboard, not your dashboard password). Dig records each request's reported cost and never retries a request on its own.
+DataForSEO charges per request from a prepaid account. Set `DATAFORSEO_USERNAME` (the API login, usually your account email) and `DATAFORSEO_PASSWORD` (the API password from the API Access page of DataForSEO's dashboard, not your dashboard password). Dig records each request's reported cost and never retries a request on its own. The same connection reaches the rest of DataForSEO's API: its method has routes for how interest in a term has changed (Google Trends, whose values are relative to the peak inside one request, not search volume), the ads a company runs on Google (when Google showed each ad, not what it spent or achieved), and reviews of an app or a company (App Store, Google Play and Trustpilot, posted as tasks and retrieved afterwards).
 
 ## Shared video analysis
 

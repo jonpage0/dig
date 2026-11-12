@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # LinkedIn public-data research
 
-Use this source for public LinkedIn company positioning, professional profiles, company posts, individual posts or articles, product and hiring announcements, and executive or founder messaging. The URL kinds see only public data without login. The `search` kind finds public posts and Pulse articles by keyword through Google-indexed results; it is best-effort discovery, not a complete LinkedIn-native search, and it never reaches private or non-indexed content.
+Use this source for public LinkedIn company positioning, professional profiles, company posts, individual posts or articles, product and hiring announcements, and executive or founder messaging. The URL kinds see only public data without login. The `search` kind finds public posts and Pulse articles by keyword through Google-indexed results; it is best-effort discovery, not a complete LinkedIn-native search, and it never reaches private or non-indexed content. Advertising research belongs to the separate `linkedin-ads` method.
 
 Run this skill inline in the thread that needs it, or as an ordinary source worker that the parent thread spawned for this one question. Either way, run it yourself: do not spawn another agent or run a second source. Do not edit code or infer private personal data.
 

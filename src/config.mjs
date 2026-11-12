@@ -49,7 +49,7 @@ function table(value, name, keys) {
   return value;
 }
 function config(input, state) {
-  table(input, 'config', ['library', 'keep_raw', 'sources', 'x', 'workers', 'search']);
+  table(input, 'config', ['library', 'keep_raw', 'sources', 'x', 'workers', 'search', 'spend']);
   if (input.library !== undefined && (typeof input.library !== 'string' || !input.library.trim())) throw new Error('library must be a nonempty path');
   const library = (input.library ?? join(state, 'library')).replace(/^~(?=\/|$)/, homedir());
   if (!isAbsolute(library)) throw new Error('library must be an absolute path or start with ~/');
@@ -62,12 +62,15 @@ function config(input, state) {
   for (const key of ['web_search', 'code_execution']) if (typeof x[key] !== 'boolean') throw new Error(`x.${key} must be boolean`);
   const search = { semantic: false, ...table(input.search, 'search', ['semantic']) };
   if (typeof search.semantic !== 'boolean') throw new Error('search.semantic must be boolean');
+  // `[spend] dig_ceiling_usd`: an optional ceiling, in US dollars, on what one dig's calls may record before its paid calls are refused.
+  const spend = { dig_ceiling_usd: null, ...table(input.spend, 'spend', ['dig_ceiling_usd']) };
+  if (spend.dig_ceiling_usd !== null && (typeof spend.dig_ceiling_usd !== 'number' || !Number.isFinite(spend.dig_ceiling_usd) || spend.dig_ceiling_usd <= 0)) throw new Error('spend.dig_ceiling_usd must be a positive number of US dollars');
   const workers = {};
   for (const [name, entry] of Object.entries(table(input.workers, 'workers', WORKER_TABLES))) {
     const fields = Object.entries(table(entry, `workers.${name}`, WORKER_FIELDS)).map(([field, value]) => [field, workerValue(`workers.${name}.${field}`, field, value)]);
     if (fields.length) workers[name] = Object.fromEntries(fields);
   }
-  return { path: join(state, 'config.toml'), library: resolve(library), keep_raw: input.keep_raw ?? true, sources: { enabled }, x, workers, search };
+  return { path: join(state, 'config.toml'), library: resolve(library), keep_raw: input.keep_raw ?? true, sources: { enabled }, x, workers, search, spend };
 }
 export function loadConfigSync(state = stateDirectory()) {
   const path = join(state, 'config.toml');
@@ -81,8 +84,8 @@ export async function loadConfig(state = stateDirectory()) {
   try { input = TOML.parse(await readFile(path, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw new Error(`Cannot read ${path}: ${e.message}`); }
   return config(input, state);
 }
-// `[workers]` is written only when it holds something, so a file without worker suggestions stays as before.
-const serialized = c => `# Dig native settings. Native controls edit this file.\n${TOML.stringify({ library: c.library, keep_raw: c.keep_raw, sources: c.sources, x: c.x, search: c.search, ...(Object.keys(c.workers).length ? { workers: c.workers } : {}) })}`;
+// `[workers]` and `[spend]` are written only when they hold something, so a file without them stays as before.
+const serialized = c => `# Dig native settings. Native controls edit this file.\n${TOML.stringify({ library: c.library, keep_raw: c.keep_raw, sources: c.sources, x: c.x, search: c.search, ...(c.spend.dig_ceiling_usd !== null ? { spend: c.spend } : {}), ...(Object.keys(c.workers).length ? { workers: c.workers } : {}) })}`;
 export async function initializeConfig(state = stateDirectory()) {
   const c = await loadConfig(state);
   await mkdir(state, { recursive: true });
@@ -98,9 +101,11 @@ export async function initializeConfig(state = stateDirectory()) {
 export async function updateConfig(set, state = stateDirectory()) {
   const current = await loadConfig(state);
   const workerKeys = WORKER_TABLES.flatMap(name => WORKER_FIELDS.map(field => [workerSetting(name, field), name, field]));
-  const allowed = ['library', 'keep_raw', 'search_semantic', ...MODULES.map(m => sourceSetting(m.id)), ...Object.keys(X_DEFAULTS).map(k => `x_${k}`), ...workerKeys.map(([key]) => key)];
+  const allowed = ['library', 'keep_raw', 'search_semantic', 'spend_dig_ceiling_usd', ...MODULES.map(m => sourceSetting(m.id)), ...Object.keys(X_DEFAULTS).map(k => `x_${k}`), ...workerKeys.map(([key]) => key)];
   for (const key of Object.keys(set)) if (!allowed.includes(key)) throw new Error(`Unknown setting: ${key}`);
   for (const m of MODULES) if (set[sourceSetting(m.id)] !== undefined && typeof set[sourceSetting(m.id)] !== 'boolean') throw new Error(`${sourceSetting(m.id)} must be boolean`);
+  const ceiling = set.spend_dig_ceiling_usd;
+  if (ceiling !== undefined && (typeof ceiling !== 'number' || !Number.isFinite(ceiling) || ceiling < 0)) throw new Error('spend_dig_ceiling_usd must be a number of US dollars, 0 for no ceiling');
   const workers = Object.fromEntries(Object.entries(current.workers).map(([name, entry]) => [name, { ...entry }]));
   const touched = workerKeys.filter(([key]) => set[key] !== undefined);
   for (const [key, name, field] of touched) (workers[name] ??= {})[field] = workerValue(key, field, set[key]);
@@ -114,6 +119,8 @@ export async function updateConfig(set, state = stateDirectory()) {
     sources: { enabled: MODULES.filter(m => set[sourceSetting(m.id)] ?? current.sources.enabled.includes(m.id)).map(m => m.id) },
     x: Object.fromEntries(Object.keys(X_DEFAULTS).map(k => [k, set[`x_${k}`] ?? current.x[k]])),
     workers, search: { semantic: set.search_semantic ?? current.search.semantic },
+    // 0 removes the ceiling.
+    spend: { dig_ceiling_usd: ceiling === undefined ? current.spend.dig_ceiling_usd : ceiling || null },
   }, state);
   await mkdir(state, { recursive: true });
   const temporary = `${current.path}.${crypto.randomUUID()}.tmp`;

@@ -14,7 +14,7 @@ const POST_ID = "2107184236008718446";
 const OTHER_ID = "2107182485377626379";
 const AUTHOR_ID = "44196397";
 
-const originalFetch = globalThis.fetch;
+const originalFetch: typeof fetch & { preconnect?: unknown } = globalThis.fetch;
 const saved: Record<string, string | undefined> = Object.fromEntries(["X_BEARER_TOKEN", "TIKHUB_API_KEY", "TIKHUB_BASE_URL", ...USER_KEY_NAMES].map((name) => [name, process.env[name]]));
 
 type Call = { url: URL; headers: Record<string, string>; redirect: RequestRedirect | undefined; at: number };
