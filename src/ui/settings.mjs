@@ -1,5 +1,5 @@
-// Settings helpers shared by Dig's Sources and Settings pages, built from settings.read: its JSON schema names
-// and types every control, and its layout orders them as Codex's native plugin settings page does.
+// Settings helpers shared by Dig's Sources and Settings pages, built from the settings they read (the service's
+// view_settings): its JSON schema names and types every control, and its layout orders them.
 
 const ENABLED_SUFFIX = '_enabled';
 /** The settings field that turns a source on: `tikhub-reddit` → `tikhub_reddit_enabled`. */

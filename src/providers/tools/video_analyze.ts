@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, extname, isAbsolute, join, relative } from "node:path";
 import { findExecutable } from "../executables.js";
 import { abortableDelay, keptJson } from "../http.js";
-import { failed, outcome } from "../outcome.js";
+import { failed, outcome, setOutsideChat } from "../outcome.js";
 import { knownSecrets, redactText } from "../secrets.js";
 import type { ToolContext, ToolSpec } from "../types.js";
 
@@ -142,7 +142,7 @@ export const video_analyze: ToolSpec = {
     const key = process.env.ELORIAN_API_KEY?.trim();
     try {
       const opts = videoOptions(args);
-      if (!key) return failed("Set ELORIAN_API_KEY in Dig's keys.env to use Video analysis");
+      if (!key) return failed(`ELORIAN_API_KEY is not set in Dig's keys.env, and Video analysis needs it. ${setOutsideChat()}`);
       let media = opts.video;
       const id = youtubeVideoId(media);
       let clip: Record<string, unknown> | undefined;

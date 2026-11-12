@@ -1,5 +1,5 @@
 // Source brand logos (trademarks of their owners, used to identify each service) become one hidden SVG sprite of
-// <symbol>s inlined into the library view: the view runs in a sandbox that cannot load the plugin's files or outside
+// <symbol>s inlined into the library view: the view runs in a sandbox that cannot load Dig's files or outside
 // images, and <use> references need no parsing at runtime. Each logo is re-serialized from the allowlist below, its
 // ids are prefixed with its name and its class rules become inline styles, so one logo cannot restyle another or the
 // page, and every internal reference must name an id the same logo defines.

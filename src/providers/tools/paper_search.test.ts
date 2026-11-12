@@ -128,7 +128,7 @@ test("a relative savePath saves into the call's project directory, never the ser
 	const project = join(root, "project"), server = join(root, "server"), cwd = process.cwd();
 	mkdirSync(server);
 	process.env.FAKE_PDF_BYTES = "project-pdf-bytes";
-	// The server's working directory is the installed plugin; here it is a scratch folder, so a regression writes nothing outside this test.
+	// The service's working directory is not the project; here it is a scratch folder, so a regression writes nothing outside this test.
 	process.chdir(server);
 	try {
 		const out = text(await pdf_download.execute({ source: "arxiv", paperId: "5678.90123", savePath: "pdfs" }, { ...context, directory: project }));

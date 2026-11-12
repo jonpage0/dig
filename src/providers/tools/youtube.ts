@@ -1,4 +1,3 @@
-import { hostWords } from "../../ui/host.mjs"
 import type { KeepRaw, ToolSpec } from "../types.js";
 import { failed, free, outcome } from "../outcome.js";
 import { keptJson, keptText } from "../http.js";
@@ -136,7 +135,7 @@ export default free({
         const executable = findExecutable("yt-dlp");
         if (needFetch.length && !executable)
           warnings.push(
-            `yt-dlp is unavailable; new transcripts were not fetched. Install yt-dlp (https://github.com/yt-dlp/yt-dlp) where ${hostWords(process.env.DIG_HOST).app} can find it, such as /opt/homebrew/bin, /usr/local/bin or ~/.local/bin.`,
+            `yt-dlp is unavailable; new transcripts were not fetched. Install yt-dlp (https://github.com/yt-dlp/yt-dlp) where Dig's service can find it, such as /opt/homebrew/bin, /usr/local/bin or ~/.local/bin.`,
           );
         else if (needFetch.length && executable) {
           signal.throwIfAborted();
@@ -382,7 +381,7 @@ async function searchViaYtdlp(
   const executable = findExecutable("yt-dlp");
   if (!executable)
     throw new Error(
-      `yt-dlp is required for keyless YouTube search. Install yt-dlp (https://github.com/yt-dlp/yt-dlp) where ${hostWords(process.env.DIG_HOST).app} can find it, such as /opt/homebrew/bin, /usr/local/bin or ~/.local/bin.`,
+      `yt-dlp is required for keyless YouTube search. Install yt-dlp (https://github.com/yt-dlp/yt-dlp) where Dig's service can find it, such as /opt/homebrew/bin, /usr/local/bin or ~/.local/bin.`,
     );
   signal.throwIfAborted();
   let stdout: string;

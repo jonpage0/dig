@@ -302,8 +302,8 @@ describe("tiktok ads tools", () => {
 	test("missing keys fail closed per provider", async () => {
 		delete process.env.TIKHUB_API_KEY;
 		delete process.env.SCRAPECREATORS_API_KEY;
-		expect((text(await search.execute({ keyword: "x" }, context))).startsWith("ERROR: TIKHUB_API_KEY not set")).toBe(true);
-		expect((text(await library.execute({ query: "x" }, context))).startsWith("ERROR: SCRAPECREATORS_API_KEY not set")).toBe(true);
+		expect((text(await search.execute({ keyword: "x" }, context))).startsWith("ERROR: TIKHUB_API_KEY is not set in Dig's keys.env")).toBe(true);
+		expect((text(await library.execute({ query: "x" }, context))).startsWith("ERROR: SCRAPECREATORS_API_KEY is not set in Dig's keys.env")).toBe(true);
 	});
 
 	test("a sub-industry name under two parents is refused before any request, naming each parent with its id", async () => {

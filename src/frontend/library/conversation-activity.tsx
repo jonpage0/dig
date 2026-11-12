@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '../shared/components';
 import { costShort, plural } from '../../ui/format.mjs';
 import { projectConversationActivity } from './research-state';
@@ -7,8 +7,17 @@ import { SourceIcon } from './source-icon';
 const toolLabel = (tool: string) => ({ xsearch: 'Semantic search', x_search_posts: 'Post search', x_post: 'Reading posts',
   exa_search: 'Search', exa_contents: 'Reading pages', youtube_analyze: 'Video analysis', video_analyze: 'Video analysis' } as Record<string, string>)[tool] || tool.replace(/_/g, ' ');
 
+/** How long a job has run: seconds under two minutes, then minutes. */
+export function jobAge(createdAt: string, now = Date.now()) {
+  const seconds = Math.max(0, Math.round((now - (Date.parse(createdAt) || now)) / 1000));
+  return seconds < 120 ? `${seconds} s` : `${Math.round(seconds / 60)} min`;
+}
+
 export function ConversationActivity({ app, hidden }: { app: any; hidden: boolean; host?: any }) {
-  const scope = projectConversationActivity(app.snapshot, app.thread);
+  const scope = projectConversationActivity(app.snapshot, app.dig);
+  // Ages advance while jobs run even when nothing else in the snapshot changes.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { if (!scope.jobs.length || hidden) return; const timer = setInterval(() => setNow(Date.now()), 5000); return () => clearInterval(timer); }, [scope.jobs.length, hidden]);
   const [allSources, setAllSources] = useState(false);
   const [allResults, setAllResults] = useState(false);
   const sourceLimit = Math.max(5, scope.sources.filter(row => row.active.length).length);
@@ -16,11 +25,11 @@ export function ConversationActivity({ app, hidden }: { app: any; hidden: boolea
   const shownResults = allResults ? scope.digs : scope.digs.slice(0, 3);
   const liveAvailable = scope.liveAvailable && !app.updatesFailed;
   const active = scope.activeCalls.length;
-  const status = app.updatesFailed ? 'Updates paused' : !scope.identified ? 'Conversation not identified'
+  const status = app.updatesFailed ? 'Updates paused' : !scope.identified ? 'No dig selected'
     : !scope.liveAvailable ? 'Live status unavailable' : active ? `${plural(active, 'call')} running` : 'No active calls';
   const read = (item: any) => { void app.showDig(item); };
-  return <section id="panel" className="conversation-activity" hidden={hidden} aria-label="Dig conversation activity">
-    <header className="activity-header"><div><strong>Dig</strong><span id="panel-scope">This conversation</span></div>
+  return <section id="panel" className="conversation-activity" hidden={hidden} aria-label="Dig research trail">
+    <header className="activity-header"><div><strong>Dig</strong><span id="panel-scope">{scope.digs[0]?.displayTitle || scope.digs[0]?.title || 'This dig'}</span></div>
       <div className="activity-actions"><Button size="sm" variant="ghost" aria-label="Configure Dig" onClick={() => { void app.expand('/sources'); }}>Configure</Button>
         <Button size="sm" variant="ghost" onClick={() => { void app.expand('/library'); }}>Open library <span aria-hidden="true">↗</span></Button></div>
     </header>
@@ -48,6 +57,13 @@ export function ConversationActivity({ app, hidden }: { app: any; hidden: boolea
         {scope.sources.length > sourceLimit && <Button size="sm" variant="ghost" className="activity-expand" aria-expanded={allSources} onClick={() => setAllSources(!allSources)}>{allSources ? 'Show fewer sources' : `Show all ${scope.sources.length} sources`}</Button>}
         {!scope.sources.length && <p className="activity-empty">{app.snapshotLoaded ? 'Source activity will appear here when a call starts.' : 'Loading activity…'}</p>}
       </div>
+      {scope.jobs.length > 0 && <div id="panel-jobs" className="activity-sources" role="group" aria-label="Running jobs">
+        {scope.jobs.map((job: any) => <div className="activity-source" key={job.id} data-running={liveAvailable}>
+          <SourceIcon id={job.source} />
+          <div className="activity-source-name"><strong>{app.catalog.label(job.source)}</strong><span>{job.tool}</span></div>
+          <div className="activity-source-counts"><span className="activity-active" title={`Job ${job.id}, started ${job.createdAt}`}>job running {jobAge(job.createdAt, now)}</span></div>
+        </div>)}
+      </div>}
       {!!scope.digs.length && <div id="panel-digs" className="activity-results" role="group" aria-label="Saved research">
         {shownResults.map(item => <button type="button" key={`${item.project}:${item.id}`} className="activity-result" onClick={() => read(item)}>
           <span>{item.displayTitle || item.title}</span><span>{item.answer ? 'Answer' : plural(item.reports?.length ?? 0, 'report')} <span aria-hidden="true">↗</span></span>
@@ -55,8 +71,8 @@ export function ConversationActivity({ app, hidden }: { app: any; hidden: boolea
         {scope.digs.length > 3 && <Button size="sm" variant="ghost" className="activity-expand" aria-expanded={allResults} onClick={() => setAllResults(!allResults)}>{allResults ? 'Show fewer results' : `Show all ${scope.digs.length} results`}</Button>}
       </div>}
       <footer className="activity-footer"><span>{plural(scope.calls.length, 'finished call')}{scope.calls.length ? ` · ${costShort(scope.cost, scope.calls.length)}` : ''}</span>
-        <details><summary aria-label="Activity scope">Scope</summary><p>Only calls attributed to this conversation or its research groups are counted. Live status covers this Dig connection; separate worker connections and provider background jobs may continue elsewhere. Finished calls include partial, empty and failed results. Provider usage excludes the conversation model.</p></details>
+        <details><summary aria-label="Activity scope">Scope</summary><p>Only calls recorded in this dig are counted. Live status and running jobs cover every connection to this Dig service, workers’ included; a provider may still hold work of its own. Finished calls include partial, empty and failed results. Provider usage excludes the conversation model.</p></details>
       </footer>
-    </> : <p className="activity-empty">The host has not identified this conversation, so Dig cannot select its calls. Open the library to see saved research.</p>}
+    </> : <p className="activity-empty">No dig was named when this view opened, so Dig cannot select its calls. Open the library to see saved research.</p>}
   </section>;
 }

@@ -22,7 +22,7 @@
  *   - commerce_discover
  */
 import { requestJson } from "../http.js"
-import { metered, outcome } from "../outcome.js"
+import { metered, outcome, setOutsideChat } from "../outcome.js"
 import { knownSecrets, redactText, redactValue } from "../secrets.js"
 import type { KeepRaw, SourceToolResult, ToolSpec } from "../types.js"
 
@@ -398,7 +398,7 @@ function scrapeDoApiToken(): string {
   const token =
     process.env.SCRAPE_DO_API_KEY?.trim() || process.env.SCRAPEDO_API_TOKEN?.trim()
   if (!token) {
-    throw new Error("SCRAPE_DO_API_KEY not set")
+    throw new Error(`SCRAPE_DO_API_KEY is not set in Dig's keys.env. ${setOutsideChat()}`)
   }
   return token
 }
@@ -406,7 +406,7 @@ function scrapeDoApiToken(): string {
 function nexscopeApiKey(): string {
   const token = process.env.NEXSCOPE_API_KEY?.trim()
   if (!token) {
-    throw new Error("NEXSCOPE_API_KEY not set")
+    throw new Error(`NEXSCOPE_API_KEY is not set in Dig's keys.env. ${setOutsideChat()}`)
   }
   return token
 }

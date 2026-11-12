@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.0 — 2026-11-12
+
+Dig 1.0 is one local MCP service that every host on a computer connects to, built on the MCP revision 2026-07-28 and its official extensions, with 2025-era clients served through the SDK's legacy path. The sources, their actions, receipts, reports, answers, retained originals, `config.toml` and `keys.env` keep their meaning, and an existing library and settings are used as they are. Below, `dig` stands for `node <checkout>/dist/dig.mjs`: nothing installs a `dig` command, and on macOS and Linux that name is the DNS lookup tool.
+
+- **One service.** `dig mcp` is what a host launches; it starts the service when needed and adds the service's token itself. Hosts that prefer an address connect to `http://127.0.0.1:47811/mcp` with the token. `dig status`, `dig stop` and `dig open` report on, stop and open the service. It listens on `127.0.0.1` only, refuses requests from web pages, and exits after 30 idle minutes.
+- **The call form.** Each source is one tool, called with `dig`, `action` (the existing provider tool's name, such as `x_post`) and `args`. Arguments are checked against the action's schema, and a mistake comes back with the schema. A source's result is content only: a first line with the source, action, status, receipt and costs, the text (ending with a `Details:` block of JSON when the action returned data beside it), links to the receipt and the original, and any pictures. `x_images` is an ordinary action of the `x` tool.
+- **A dig on every call.** `dig_start` returns a handle, and every source call and `research_save` takes it; nothing reads a host's conversation id. A new dig's receipts are filed under `sessions/<dig id>/`.
+- **Jobs, and no repeated charge.** Every paid or slow call is a job that the service owns, so a dropped connection neither stops it nor sends it twice. An identical call attaches to a running job or, within 10 minutes, gets its result; `fresh: true` pays again. Slow actions answer with an MCP task where the host supports tasks, or with a job id for the new `job` tool after 40 seconds. A job cut off by a stop is marked failed with its cost unknown.
+- **Questions before spending.** At a dig's spending ceiling, Dig asks whether to raise it for that dig or stop. The new `[spend] ask_above_usd` makes Dig ask before a paid call whose action typically costs at least that much, or has no priced call yet. Answers apply to one dig. A host that cannot ask gets the refusal.
+- **The key page.** The new `keys` tool opens a one-time page on your computer where you type keys; they go to `keys.env` and never through the conversation. A call whose key is missing says the same, in words true in any host.
+- **Methods from the server.** The methods live in `skills/` and are served through MCP's Skills extension, as prompts, and through the new `method` tool, to any host.
+- **A tool list a third of the size.** With every source on, the model sees 39 tools in about 136,000 characters, against 0.15's 100 tools in 408,388. `settings` replaces the two settings tools.
+- **Views in any host.** The library, the trail and the saved-research card are served as MCP Apps, and in a browser, which `open_library` opens for a host that shows no views (or `dig open` in a terminal). The trail follows one dig and shows its running jobs.
+
+### Coming from 0.15
+
+- Remove the 0.15 plugin from each host, build Dig, and connect each host to `dig mcp` (see the README). Settings, keys and the library carry over.
+- Per-host plugins and per-host skills are gone: one service serves every host, and generated wrappers in `plugins/` only point a host at it. `DIG_HOST` is no longer read. Methods are no longer invoked with a host's plugin prefix; ask for one by name, or use the host's prompt command.
+- Calls name the source's tool and an `action`; `project` is passed only to `dig_start`.
+- Removed: the host settings page and the composer mentions add-on (use the `settings` tool and the views), `settings.read`, `settings.update`, `source_readiness`, `show_research`, the Open in Dig links, and the **Edit keys.env** and **Use existing key** buttons (use **Enter keys**).
+
 ## 0.15.0 — 2026-11-12
 
 - Add `x_images`: the model looks at the pictures in X posts itself. Pass it the image links an X read printed; it returns the pictures, makes no X API request and costs nothing. It keeps a note in place of each picture.

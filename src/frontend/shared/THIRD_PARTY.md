@@ -6,7 +6,7 @@
 Its documentation is <https://reui.io/docs/components/base/timeline>.
 The import of `cn` is changed to Dig's local shadcn-style `clsx` /
 `tailwind-merge` utility; the timeline API and rendering remain upstream's.
-The MIT license is retained in `ReUI-LICENSE.md` and ships in the plugin.
+The MIT license is retained in `ReUI-LICENSE.md` and ships as ReUI-LICENSE at the package root.
 No ReUI Pro component, template, subscription or runtime service is used.
 
 The compact Button, Badge, Disclosure, Dialog and Tabs wrappers follow
@@ -25,4 +25,4 @@ import points to Dig's existing utility, and the static variant selection uses
 that same utility instead of adding `class-variance-authority`. React is imported
 explicitly for both development and bundled JSX transforms. The upstream MIT
 notice, verified against <https://github.com/keenthemes/reui/blob/main/LICENSE.md>,
-is the existing `ReUI-LICENSE.md` shipped with the plugin.
+is the existing `ReUI-LICENSE.md`, shipped as ReUI-LICENSE at the package root.

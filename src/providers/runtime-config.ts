@@ -51,7 +51,7 @@ export function loadConfig(): ProviderConfig {
 
 /**
  * The optional Papers bridge: a pinned, patched paper-search-mcp clone that
- * plugin/bridges/papers/setup.mjs installs beneath the native state
+ * bridges/papers/setup.mjs installs beneath the native state
  * directory, never inside the package cache or another edition's tools.
  */
 export function paperSearchDirectory(): string {

@@ -73,40 +73,51 @@ test('composer integration submits only an editable unsent draft and surfaces re
   host.dispose();
 });
 
-test('native link/file refusals stay explicit and deep links are app-relative', async () => {
+test('native link/file refusals stay explicit, and a host carries no reader link of its own', async () => {
   const { host, setContext, calls, app } = nativeFixture();
   await host.start();
   setContext({ 'openai/deepLink': { url: '/read?file=project%2Freport.md' } });
-  assert.equal(host.readDeepLink(), '/read?file=project%2Freport.md');
-  for (const url of ['//elsewhere.test/read', 'https://elsewhere.test/read', 'javascript:alert(1)', '/\\elsewhere.test/read']) {
-    setContext({ 'openai/deepLink': { url } });
-    assert.equal(host.readDeepLink(), null);
-  }
+  assert.equal(host.readDeepLink(), null);
   await host.openFile('/library/report.md');
   assert.deepEqual(calls.at(-1), ['file', '/library/report.md']);
   await assert.rejects(() => host.openLink('javascript:alert(1)'), /cannot be opened/);
+  await assert.rejects(() => host.openLink('codex://plugins/dig@dig/app/open_library'), /cannot be opened/);
   app.openLink = async () => ({ isError: true });
   await assert.rejects(() => host.openLink('https://example.com'), /did not open/);
   host.dispose();
 });
 
-test('browser preview is the only HTTP adapter and cannot draft or open native files', async () => {
-  window.location.href = 'http://localhost:1234/?preview=1&path=%2Fread%3Ffile%3Done.md';
-  const originalFetch = globalThis.fetch;
-  const requests = [];
-  globalThis.fetch = async (...args) => { requests.push(args); return { ok: true, json: async () => ({ structuredContent: { items: [] } }) }; };
-  const host = createDigHost('Preview');
+test('the page the service serves in a browser calls /api with its cookie, opens links in a new tab and keeps reader links app-relative', async () => {
+  window.location.href = 'http://127.0.0.1:47811/?dig=p%2Fd&path=%2Fread%3Ffile%3Done.md';
+  const root = document.createElement('div'); root.id = 'root'; root.dataset.digBrowser = ''; root.dataset.digSurface = 'trail'; document.body.append(root);
+  const originalFetch = globalThis.fetch; const originalOpen = window.open;
+  const requests = []; const windows = [];
+  let answer = { ok: true, json: async () => ({ content: [], structuredContent: { revision: 'r1' } }) };
+  globalThis.fetch = async (...args) => { requests.push(args); return answer; };
+  window.open = (...args) => { windows.push(args); return null; };
+  const host = createDigHost('Browser');
   try {
     await host.start();
-    assert.equal(host.preview, true);
+    assert.equal(host.browser, true);
+    assert.equal(host.getContext().toolInfo.tool.name, 'open_trail');
     assert.equal(host.readDeepLink(), '/read?file=one.md');
-    assert.deepEqual(await host.call('library_snapshot'), { items: [] });
-    assert.equal(requests[0][0], '/api/library_snapshot');
-    assert.equal(host.canDraft(), false);
-    await assert.rejects(() => host.draft('No automatic send'), /read-only browser preview/);
-    await assert.rejects(() => host.openFile('/anything'), /read-only browser preview/);
+    assert.deepEqual(await host.call('library_revision'), { revision: 'r1' });
+    assert.equal(requests[0][0], '/api/library_revision'); assert.equal(requests[0][1].method, 'POST'); assert.equal(requests[0][1].credentials, 'same-origin');
+    // The service's 401 says how to open Dig again, with its own command; without it, the view says to ask the assistant.
+    answer = { ok: false, status: 401, json: async () => ({}), text: async () => 'To open Dig in a browser, ask the assistant to open Dig\'s library, or run this in a terminal: node /checkout/dist/dig.mjs open\n' };
+    await assert.rejects(() => host.call('library_revision'), /This browser session has ended\. To open Dig in a browser, ask the assistant to open Dig's library, or run this in a terminal: node \/checkout\/dist\/dig\.mjs open$/);
+    answer = { ok: false, status: 401, json: async () => ({}), text: async () => { throw new Error('no body'); } };
+    await assert.rejects(() => host.call('library_revision'), /This browser session has ended\. Ask the assistant to open Dig's library again\.$/);
+    answer = { ok: false, status: 400, json: async () => ({ isError: true, content: [{ type: 'text', text: 'Invalid arguments for saved_research: file: required' }] }) };
+    await assert.rejects(() => host.call('saved_research', {}), /Invalid arguments for saved_research/);
+    await host.openLink('http://127.0.0.1:47811/keys/one-time');
+    assert.deepEqual(windows, [['http://127.0.0.1:47811/keys/one-time', '_blank', 'noopener,noreferrer']]);
+    await assert.rejects(() => host.openLink('javascript:alert(1)'), /cannot be opened/);
+    assert.equal(await host.requestDisplayMode('fullscreen'), null);
+    assert.equal(host.canDraft(), false); assert.equal(host.canOpenFile(), false);
+    await assert.rejects(() => host.openFile('/anything'), /not in the browser/);
   } finally {
-    host.dispose(); globalThis.fetch = originalFetch; window.location.href = 'https://dig.test/';
+    host.dispose(); root.remove(); globalThis.fetch = originalFetch; window.open = originalOpen; window.location.href = 'https://dig.test/';
   }
 });
 

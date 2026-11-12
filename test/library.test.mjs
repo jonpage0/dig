@@ -12,8 +12,8 @@ import { frontMatter, reportParts } from '../src/ui/markdown.mjs';
 
 import { report } from './report-fixture.mjs';
 
-test('compact library labels use saved titles or topics without rewriting the original question or reports', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-library-titles-'));
+test('compact library labels use saved titles or topics without rewriting the original question or reports', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-library-titles-')); t.after(() => rm(state, { recursive: true, force: true }));
   const config = await loadConfig(state);
   const question = 'Which practical research workflow preserves original evidence while keeping saved results easy to inspect?';
   const titled = await saveReport(config, { project: state, source: 'hackernews', question, content: report.replace('## Summary', '# Inspectable research workflows\n\n## Summary') });
@@ -31,8 +31,8 @@ test('compact library labels use saved titles or topics without rewriting the or
   assert.equal(await readFile(titled.path, 'utf8'), original);
 });
 
-test('reports and answers never overwrite, projects stay isolated, and cards group by dig', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-library-'));
+test('reports and answers never overwrite, projects stay isolated, and cards group by dig', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-library-')); t.after(() => rm(state, { recursive: true, force: true }));
   const config = await loadConfig(state);
   const one = await startDig(config, state, 'One original question', 'thread-main');
   const two = await startDig(config, state, 'One original question', 'thread-other');
@@ -59,8 +59,8 @@ test('reports and answers never overwrite, projects stay isolated, and cards gro
 
 const SECTIONS = ['## Summary', '## Evidence Highlights', '## Needs Follow-Up', '## Negative Evidence (when relevant)'];
 
-test('the save refuses required sections that appear only inside code, and a source_card block that never closes, writing nothing', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-fenced-sections-')); const config = await loadConfig(state);
+test('the save refuses required sections that appear only inside code, and a source_card block that never closes, writing nothing', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-fenced-sections-')); t.after(() => rm(state, { recursive: true, force: true })); const config = await loadConfig(state);
   const save = lines => saveReport(config, { project: state, source: 'hackernews', question: 'Fenced sections?', content: lines.join('\n') });
   const filled = SECTIONS.flatMap(heading => [heading, 'None.', '']);
   const card = ['```yaml', 'source_card:', '  status: "complete"'];
@@ -81,8 +81,8 @@ test('the save refuses required sections that appear only inside code, and a sou
   assert.equal(existsSync(join(config.library, projectFolder(state), 'digs')), false);
 });
 
-test('the title, source card and Summary are read as the save reads them, so valid reports that quote code read as written', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-fence-readers-')); const config = await loadConfig(state);
+test('the title, source card and Summary are read as the save reads them, so valid reports that quote code read as written', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-fence-readers-')); t.after(() => rm(state, { recursive: true, force: true })); const config = await loadConfig(state);
   const save = (lines, question) => saveReport(config, { project: state, source: 'hackernews', question, content: lines.join('\n') });
   const filled = SECTIONS.flatMap(heading => [heading, heading === '## Summary' ? 'Read summary.' : 'None.', '']);
   const card = ['```yaml', 'source_card:', '  status: "complete"', '```', ''];
@@ -115,8 +115,8 @@ test('the title, source card and Summary are read as the save reads them, so val
   assert.deepEqual([shown.summary, shown.status], ['Read summary.', 'complete']);
 });
 
-test('the save and the readers follow the rendered block structure: code in lists and quotes, indented and setext headings, closing sequences', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-block-structure-')); const config = await loadConfig(state);
+test('the save and the readers follow the rendered block structure: code in lists and quotes, indented and setext headings, closing sequences', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-block-structure-')); t.after(() => rm(state, { recursive: true, force: true })); const config = await loadConfig(state);
   const save = (lines, question) => saveReport(config, { project: state, source: 'hackernews', question, content: lines.join('\n') });
   const card = ['```yaml', 'source_card:', '  status: "complete"', '```', ''];
   const sections = SECTIONS.map(heading => heading.slice(3));
@@ -149,8 +149,8 @@ test('the save and the readers follow the rendered block structure: code in list
     accepted.map((_, index) => [`Accepted ${index}`, 'Read summary.', 'complete']));
 });
 
-test('an existing report with a fenced block in a list keeps its Summary, status and discovery snippet', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-list-fence-')); const config = await loadConfig(state);
+test('an existing report with a fenced block in a list keeps its Summary, status and discovery snippet', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-list-fence-')); t.after(() => rm(state, { recursive: true, force: true })); const config = await loadConfig(state);
   const dig = await startDig(config, state, 'Saved before 0.2.32', 'parent');
   // Written as an earlier version saved it; the reading must not depend on the save that accepted it.
   const content = report.replace('## Summary', '- ```text\n  Example code\n  ```\n\n## Summary');
@@ -163,8 +163,8 @@ test('an existing report with a fenced block in a list keeps its Summary, status
   assert.deepEqual([shown.summary, shown.status], [summary, 'complete']);
 });
 
-test('calls that name no dig belong to the session save that follows them; unclaimed calls stay visible as live activity', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-attribution-'));
+test('calls that name no dig belong to the session save that follows them; unclaimed calls stay visible as live activity', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-attribution-')); t.after(() => rm(state, { recursive: true, force: true }));
   const config = await loadConfig(state); const pause = () => new Promise(resolve => setTimeout(resolve, 5));
   const receipt = (session, at = new Date().toISOString(), callId) => recordCall(config, state, undefined, { tool: 'hackernews', source: 'hackernews', cost: [], responses: [{ label: 'search', status: 200, body: { hits: [] } }], at, ms: 1, args: { query: `${session} query` }, status: 'success', session, callId });
   const main = await startDig(config, state, 'Attribution', 'thread-main'); await pause();
@@ -184,8 +184,8 @@ test('calls that name no dig belong to the session save that follows them; uncla
   assert.deepEqual(new Set(live.map(c => `${c.session}:${c.id}`)), new Set([`thread-main:${beforeStart.id}`, `worker-1:${afterReport.id}`, `thread-main:${afterFinish.id}`]));
 });
 
-test('a call that names its dig counts in that dig whichever conversation made it, even when no report saves it', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-named-dig-'));
+test('a call that names its dig counts in that dig whichever conversation made it, even when no report saves it', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-named-dig-')); t.after(() => rm(state, { recursive: true, force: true }));
   const config = await loadConfig(state); const pause = () => new Promise(resolve => setTimeout(resolve, 5));
   const call = (dig, session, callId) => recordCall(config, state, dig, { tool: 'xsearch', source: 'x', cost: [{ amount: 1.5, unit: 'USD' }], responses: [], at: new Date().toISOString(), ms: 1, args: { query: 'q' }, status: 'success', session, callId });
   const first = await startDig(config, state, 'First question', 'parent');
@@ -211,8 +211,8 @@ test('a call that names its dig counts in that dig whichever conversation made i
   assert.deepEqual(live.map(c => c.id), ['call_removed_dig']);
 });
 
-test('a report claims only its own source’s calls, and the conversation that started the dig keeps the rest', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-source-claims-'));
+test('a report claims only its own source’s calls, and the conversation that started the dig keeps the rest', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-source-claims-')); t.after(() => rm(state, { recursive: true, force: true }));
   const config = await loadConfig(state); const pause = () => new Promise(resolve => setTimeout(resolve, 5));
   const call = (dig, session, source, tool, callId) => recordCall(config, state, dig, { tool, source, cost: [], responses: [], at: new Date().toISOString(), ms: 1, args: { query: 'q' }, status: 'success', session, callId });
   const saved = (dig, session, source, agent = source, question) => saveReport(config, { project: state, dig, source, agent, question, content: report.replace('source: "hackernews"', `source: "${source}"`), session });
@@ -237,8 +237,8 @@ test('a report claims only its own source’s calls, and the conversation that s
   assert.deepEqual(live, []);
 });
 
-test('an answer records whether the question was answered', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-answer-status-'));
+test('an answer records whether the question was answered', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-answer-status-')); t.after(() => rm(state, { recursive: true, force: true }));
   const config = await loadConfig(state);
   const answered = await startDig(config, state, 'Answered question', 'thread');
   const saved = await saveReport(config, { project: state, dig: answered.dig, source: 'hackernews', content: report, session: 'thread' });
@@ -260,8 +260,8 @@ test('an answer records whether the question was answered', async () => {
   assert.equal(items.find(i => i.title === 'Answered question').reportDetails[0].status, 'complete', 'A report carries its own source-card run status');
 });
 
-test('under the session rule, an abandoned unfinished dig does not take a newer open dig’s inline retrievals', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-open-digs-')); const config = await loadConfig(state);
+test('under the session rule, an abandoned unfinished dig does not take a newer open dig’s inline retrievals', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-open-digs-')); t.after(() => rm(state, { recursive: true, force: true })); const config = await loadConfig(state);
   const older = '2026-09-28-0900-abandoned'; const newer = '2026-09-29-1000-current';
   for (const [id, started] of [[older, '2026-09-28T09:00:00.000Z'], [newer, '2026-09-29T10:00:00.000Z']]) {
     const folder = join(config.library, projectFolder(state), 'digs', id); await mkdir(folder, { recursive: true });
@@ -273,8 +273,8 @@ test('under the session rule, an abandoned unfinished dig does not take a newer 
   assert.deepEqual(items.find(item => item.id === older).calls, []);
 });
 
-test('native preferences have one TOML authority and raw-off calls never claim a raw file', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-config-'));
+test('native preferences have one TOML authority and raw-off calls never claim a raw file', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-config-')); t.after(() => rm(state, { recursive: true, force: true }));
   const updated = await updateConfig({ keep_raw: false, hackernews_enabled: false }, state);
   assert.equal(updated.keep_raw, false); assert.deepEqual(updated.sources.enabled, []);
   const fresh = await loadConfig(state); assert.deepEqual(fresh, updated);
@@ -285,8 +285,8 @@ test('native preferences have one TOML authority and raw-off calls never claim a
   await assert.rejects(loadConfig(state), /keep_raw must be boolean/);
 });
 
-test('discovery and every write path refuse symlinks outside the chosen library', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-confinement-'));
+test('discovery and every write path refuse symlinks outside the chosen library', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-confinement-')); t.after(() => rm(state, { recursive: true, force: true }));
   const config = await loadConfig(state); const dig = await startDig(config, state, 'Confinement');
   const outside = join(state, 'outside'); await mkdir(outside);
   const externalReport = join(outside, 'hackernews.md'); await writeFile(externalReport, '## Summary\nOUTSIDE_MARKER\n');
@@ -364,8 +364,8 @@ test('a refresh parses only library files whose size or modification time change
   assert.equal((await listLibrary(config)).items[0].calls.length, 0);
 });
 
-test('library reads return only Dig research files, even after the library is pointed at another folder', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-research-only-'));
+test('library reads return only Dig research files, even after the library is pointed at another folder', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-research-only-')); t.after(() => rm(state, { recursive: true, force: true }));
   const config = await loadConfig(state); const dig = await startDig(config, state, 'What may be read?');
   const saved = await saveReport(config, { project: state, dig: dig.dig, source: 'hackernews', content: report });
   const call = await recordCall(config, state, dig.dig, { tool: 'hackernews', source: 'hackernews', cost: [], responses: [{ label: 'search', status: 200, body: { hits: [] } }], at: new Date().toISOString(), ms: 1, args: {}, status: 'empty', session: 'worker' });
@@ -381,8 +381,8 @@ test('library reads return only Dig research files, even after the library is po
   for (const file of ['auth.json', 'config/settings.json']) await assert.rejects(readLibraryFile(moved, file), /Only Dig research files/);
 });
 
-test('single-source saves claim earlier calls without inventing a composed answer; corrections and refreshes keep prior records', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-single-')); const config = await loadConfig(state);
+test('single-source saves claim earlier calls without inventing a composed answer; corrections and refreshes keep prior records', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-single-')); t.after(() => rm(state, { recursive: true, force: true })); const config = await loadConfig(state);
   const session = 'source-worker';
   const inventory = report.replace('source: "hackernews"', 'source: "x"');
   const call = await recordCall(config, state, undefined, { tool: 'xsearch', source: 'x', cost: null, responses: [], at: '2020-01-01T00:00:00.000Z', ms: 1, args: { query: 'sample' }, status: 'success', session });
@@ -403,8 +403,8 @@ test('single-source saves claim earlier calls without inventing a composed answe
   await assert.rejects(saveReport(config, { project: state, dig: first.dig, source: 'x', agent: 'hackernews', content: inventory }), /source method/);
 });
 
-test('a rejected settings update leaves the authority unchanged', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-native-rejected-'));
+test('a rejected settings update leaves the authority unchanged', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-native-rejected-')); t.after(() => rm(state, { recursive: true, force: true }));
   const enabled = await updateConfig({ papers_enabled: true }, state);
   assert.deepEqual(enabled.sources.enabled, ['hackernews', 'papers']);
   const before = await readFile(enabled.path, 'utf8');

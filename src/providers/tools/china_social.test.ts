@@ -396,7 +396,7 @@ describe("china_social_search providers", () => {
 		const mock = installFetchRouter({});
 		restoreFetch = mock.restore;
 		delete process.env.JUSTONE_API_KEY;
-		expect(resultText(await search.execute({ query: "猫咪", platforms: ["wechat"], provider: "justone" }, ctx))).toContain("JUSTONE_API_KEY not set");
+		expect(resultText(await search.execute({ query: "猫咪", platforms: ["wechat"], provider: "justone" }, ctx))).toContain("JUSTONE_API_KEY is not set in Dig's keys.env. The user sets it outside chat");
 		process.env.JUSTONE_API_KEY = "test-justone-key";
 		expect(resultText(await search.execute({ query: "猫咪", platforms: ["wechat"], provider: "justone" }, ctx))).toContain("require justone_start");
 		expect(mock.calls).toHaveLength(0);

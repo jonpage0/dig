@@ -23,7 +23,7 @@
  */
 import { USER_AGENT } from "../../version.mjs"
 import { requestJson } from "../http.js"
-import { outcome } from "../outcome.js"
+import { outcome, setOutsideChat } from "../outcome.js"
 import { knownSecrets, redactText } from "../secrets.js"
 import type { ToolContext, ToolSpec } from "../types.js"
 import { TIKTOK_AD_INDUSTRIES, type TikTokAdIndustry } from "./tiktok_ads_industries.js"
@@ -364,7 +364,7 @@ export const search = {
     "Requires TIKHUB_API_KEY. The Creative Center is curated, not a census. Metered per request.",
   async execute(args: SearchArgs, ctx: ToolContext) {
     const headers = tikhubHeaders()
-    if (!headers) return "ERROR: TIKHUB_API_KEY not set. Get a key at https://tikhub.io"
+    if (!headers) return `ERROR: TIKHUB_API_KEY is not set in Dig's keys.env. Get a key at https://tikhub.io. ${setOutsideChat()}`
 
     const industry = resolveIndustryIds(args.industry)
     if (industry.error) return `ERROR: ${industry.error}`
@@ -457,7 +457,7 @@ export const top = {
     "Requires TIKHUB_API_KEY. Metered per request.",
   async execute(args: TopArgs, ctx: ToolContext) {
     const headers = tikhubHeaders()
-    if (!headers) return "ERROR: TIKHUB_API_KEY not set. Get a key at https://tikhub.io"
+    if (!headers) return `ERROR: TIKHUB_API_KEY is not set in Dig's keys.env. Get a key at https://tikhub.io. ${setOutsideChat()}`
     const industry = resolveIndustryIds(args.industry)
     if (industry.error) return `ERROR: ${industry.error}`
     if (industry.ids?.includes(",")) return "ERROR: tiktok_ads_top accepts one industry at a time."
@@ -551,7 +551,7 @@ export const detail = {
     "Requires TIKHUB_API_KEY. Each analytics block is a separate metered request.",
   async execute(args: DetailArgs, ctx: ToolContext) {
     const headers = tikhubHeaders()
-    if (!headers) return "ERROR: TIKHUB_API_KEY not set. Get a key at https://tikhub.io"
+    if (!headers) return `ERROR: TIKHUB_API_KEY is not set in Dig's keys.env. Get a key at https://tikhub.io. ${setOutsideChat()}`
     const adId = args.ad_id?.trim()
     if (!adId) return "ERROR: ad_id is required."
     const withAnalytics = args.analytics ?? true

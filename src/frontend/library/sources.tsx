@@ -12,18 +12,13 @@ import { SOURCE_GUIDES, activityNote, latestSourceCalls } from '../../ui/source-
 import { enabledField, ownerOf, settingsGroups } from '../../ui/settings.mjs';
 import { clock, shortDate, costAmounts, duration, num, plural, callOutcome } from '../../ui/format.mjs';
 import { usageOf, toolHistory } from '../../ui/usage.mjs';
-import { hostWords } from '../../ui/host.mjs';
-import { readOnly, SCHEMA_MISSING } from './controller';
+import { SCHEMA_MISSING } from './controller';
 import type { DigHost } from '../shared/host';
 
 const STATE_WORDS: Record<string, string> = {
   ready: 'Configured', partial: 'Partly configured', 'setup-required': 'Needs setup', disabled: 'Off', unknown: 'Unknown',
 };
 const KEY_WORDS: Record<string, string> = { set: 'Set', missing: 'Missing', unset: 'Not set' };
-const ENVIRONMENT_NOTES: Record<string, (app: string) => string> = {
-  unused: app => `${app}’s environment has a key that Dig isn’t using.`,
-  different: app => `${app}’s environment has a different key.`,
-};
 const GROUP_DESCRIPTIONS: Record<string, string> = {
   web: 'Discover and read the web.',
   code: 'Follow software, repositories and developer discussions.',
@@ -34,7 +29,7 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
   tools: 'Optional analysis for evidence already in hand.',
 };
 const WORKERS_NOTE = 'The conversation chooses each worker’s model and effort and may choose others. A method without a suggestion of its own follows Source workers on the Settings page.';
-const keysNote = (app: string) => `Edit keys.env opens the file in ${app} and adds empty lines for missing names. Fill in values there and save. Dig checks whether a key is present; it does not test whether the provider accepts it.`;
+const KEYS_NOTE = 'Enter keys opens a page on this computer with a field for each of this source’s keys. Dig saves what you type there in keys.env; neither this page nor the conversation sees it. Dig checks whether a key is present; it does not test whether the provider accepts it.';
 const WORKER_FIELD = /_worker_(model|effort)$/;
 const workerKey = (method: string, field: string) => `${method.replaceAll('-', '_')}_worker_${field}`;
 const list = new Intl.ListFormat('en', { type: 'conjunction' });
@@ -145,39 +140,27 @@ function ActionButton({ children, action, disabled, ...props }: any) {
   </span>;
 }
 
-function Credentials({ module, source, modules, app, preview }: any) {
+function Credentials({ module, source, modules, app }: any) {
   const credentials = source?.credentials ?? [];
   const envSettings = source?.envSettings ?? [];
   const guidance = source?.credentialGuidance;
-  const copyable = credentials.filter((credential: any) => ['unused', 'different'].includes(credential.environment));
-  const replacing = copyable.some((credential: any) => credential.environment === 'different');
-  const plural = copyable.length > 1 ? 's' : '';
   const share = sharedKeys(module, modules);
-  const { app: hostApp } = hostWords(app.snapshot?.host);
   if (!credentials.length && !envSettings.length && !guidance) return null;
   return <section className="source-page-setup-section" aria-label={`${module.label} keys`}>
-    <div className="source-page-section-heading"><h5>Keys</h5><HelpNote label={`About ${module.label}’s keys`}>{keysNote(hostApp)}</HelpNote></div>
+    <div className="source-page-section-heading"><h5>Keys</h5><HelpNote label={`About ${module.label}’s keys`}>{KEYS_NOTE}</HelpNote></div>
     {guidance && !credentials.some((credential: any) => credential.name === guidance) && <p className="source-page-note-text">{guidance}</p>}
     {(credentials.length > 0 || envSettings.length > 0) && <>
       <ul className="source-page-presence-list">
         {credentials.map((credential: any) => <PresenceRow key={credential.name} name={credential.name}
-          state={credential.available ? 'set' : credential.required === false ? 'unset' : 'missing'} optional={credential.required === false}>
-          {ENVIRONMENT_NOTES[credential.environment]?.(hostApp)}
-        </PresenceRow>)}
+          state={credential.available ? 'set' : credential.required === false ? 'unset' : 'missing'} optional={credential.required === false} />)}
         {envSettings.map((setting: any) => <PresenceRow key={setting.name} name={setting.name} state={setting.available || setting.bridge ? 'set' : 'unset'} optional>
           {setting.bridge && 'Set in the Papers bridge’s .env. '}{setting.label}. {setting.purpose}
         </PresenceRow>)}
       </ul>
       {share && <p className="source-page-note-text">{share}</p>}
-      <div className="source-page-key-actions">
-        <ActionButton disabled={preview} action={() => app.editKeys(module.id)} data-key={`keys:${module.id}`}>Edit keys.env</ActionButton>
-        {copyable.length > 0 && <ActionButton disabled={preview} action={() => app.useEnvironment(module.id)} data-key={`env:${module.id}`}>
-          {replacing ? `Update key${plural} from env` : `Use existing key${plural}`}
-        </ActionButton>}
-      </div>
-      {copyable.length > 0 && <p className="source-page-note-text">{replacing
-        ? `Update key${plural} from env replaces the keys.env value${plural} with the one${plural} in ${hostApp}’s environment.`
-        : `Use existing key${plural} copies the key${plural} from ${hostApp}’s environment into keys.env.`}</p>}
+      {credentials.length > 0 && <div className="source-page-key-actions">
+        <ActionButton action={() => app.enterKeys(module.id)} data-key={`keys:${module.id}`}>Enter keys</ActionButton>
+      </div>}
     </>}
   </section>;
 }
@@ -249,7 +232,7 @@ function SourceCard({ module, addOns = [], modules, app, host, info, activity, u
   const [setupOpen, setSetupOpen] = useState(false);
   const properties = read?.schema?.properties ?? {}; const values = read?.values ?? {};
   const ownField = enabledField(module.id);
-  const save = host.preview ? undefined : app.saveSetting;
+  const save = app.saveSetting;
   const guide = (SOURCE_GUIDES as Record<string, any>)[module.id];
   const own = settingsGroups(read ?? {}).flatMap((group: any) => group.keys)
     .filter((key: string) => key !== ownField && !WORKER_FIELD.test(key) && ownerOf(key, modules.map((entry: any) => entry.id)) === module.id && properties[key]);
@@ -287,7 +270,7 @@ function SourceCard({ module, addOns = [], modules, app, host, info, activity, u
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></svg>
         </Collapsible.Trigger>
         <Collapsible.Panel keepMounted className="source-page-setup-panel">
-          <Credentials module={module} source={source} modules={modules} app={app} preview={host.preview} />
+          <Credentials module={module} source={source} modules={modules} app={app} />
           {prerequisites.length > 0 && <section className="source-page-setup-section"><div className="source-page-section-heading"><h5>On this computer</h5></div>
             <ul className="source-page-presence-list">{prerequisites.map((prerequisite: any) => <PresenceRow key={prerequisite.name} name={prerequisite.name} state={prerequisite.available ? 'set' : 'missing'} words={prerequisite.available ? 'Installed' : 'Not installed'}>{prerequisite.detail}</PresenceRow>)}</ul>
           </section>}
@@ -338,8 +321,8 @@ export function SourcesPage({ app, host, hidden }: { app: any; host: DigHost; hi
       </dl>}
     </header>
     <p className="source-page-scope" id="sources-summary">{sources.length > 0 && <>{on.length} of {sources.length} sources and tools on. </>}Configured means local prerequisites are present. Recent calls describe past activity, not a connection test.</p>
-    <AccountsPanel sources={sources} keysPath={app.sources?.keysPath} editKeys={host.preview ? undefined : app.editKeys} preview={host.preview} />
-    <p id="sources-status" className="source-page-status" role="status" aria-live="polite">{error || (app.sourcesError ? `Source readiness is unavailable: ${app.sourcesError.message}` : !read || !app.sources ? 'Reading sources and tools…' : host.preview ? readOnly(app.snapshot) : '')}</p>
+    <AccountsPanel sources={sources} keysPath={app.sources?.keysPath} enterKeys={() => app.enterKeys()} />
+    <p id="sources-status" className="source-page-status" role="status" aria-live="polite">{error || (app.sourcesError ? `Source readiness is unavailable: ${app.sourcesError.message}` : !read || !app.sources ? 'Reading sources and tools…' : '')}</p>
     <nav id="sources-toc" className="source-page-categories" aria-label="Source categories">
       {groups.map(group => <Button key={group.id} variant="ghost" size="sm" onClick={() => jump(group.id)} data-key={`category:${group.id}`}><span>{group.label}</span><span className="source-page-category-count">{group.members.length}</span></Button>)}
     </nav>

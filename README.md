@@ -1,6 +1,6 @@
 # Dig
 
-Research across many sources for Codex in the ChatGPT desktop app, and in Claude Code. See what has been found, what is still uncertain, what it used, and where to steer next.
+Dig is a research service that runs on your computer. Your assistant (ChatGPT desktop, Codex, Claude Code or another MCP host) connects to it and searches the sources you turn on: the web, code, papers, videos, social platforms, ads and markets. Every call leaves a receipt, and with it the provider's original response, in a library on your disk; reports and answers are saved there too. Dig's methods tell the assistant how to research each source.
 
 <p align="center">
 <img src="docs/logos/exa.svg" width="32" height="32" alt="Exa" title="Exa">
@@ -17,214 +17,157 @@ Research across many sources for Codex in the ChatGPT desktop app, and in Claude
 <img src="docs/logos/polymarket.svg" width="32" height="32" alt="Polymarket" title="Polymarket">
 </p>
 
-**New to Dig?** Open **Start here** in Dig for a visual introduction to asking a question, observing the saved research, and steering the next step. It includes practical examples and plain-language explanations of sources, evidence and costs. Or read the [getting started guide](docs/getting-started.md).
+**New to Dig?** Read the [getting started guide](docs/getting-started.md).
+
+## Requirements
+
+- **[Node.js](https://nodejs.org) 22 or newer** (`node --version` to check).
+- An MCP host: ChatGPT desktop, Codex, Claude Code or another client.
+- Optional local programs for some sources: [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) for YouTube search and transcripts, `ffmpeg` and `ffprobe` for video clips, `git` and `uv` for the Papers bridge.
 
 ## Install
 
-You need:
-
-- the **ChatGPT desktop app with Codex** (tested on macOS);
-- **[Node.js](https://nodejs.org) 22 or newer** (`node --version` to check).
-
-Then run:
+Build Dig from a checkout:
 
 ```sh
-codex plugin marketplace add jonpage0/dig
-codex plugin add dig@dig
+git clone https://github.com/jonpage0/dig.git
+cd dig
+npm ci
+npm run build
 ```
 
-If your terminal doesn't know `codex`, use the copy inside the ChatGPT app:
+The build writes the `dig` command to `dist/dig.mjs`, the local search runtime to `runtime/` and the host wrappers to `plugins/`; all three are generated, not tracked. Below, `dig` stands for `node /absolute/path/to/dig/dist/dig.mjs`: nothing installs a `dig` command, and on macOS and Linux that name is the DNS lookup tool, so type the full form in a terminal. In a host's configuration, use the absolute path.
+
+### Connect a host
+
+There are two ways to connect. In the **command form** the host launches `dig mcp`, which starts Dig's service when it is not running and forwards to it; nothing in the host's configuration holds a credential. In the **address form** the host connects to the running service at `http://127.0.0.1:47811/mcp` with a bearer token. The command form is the one to use unless your host can only connect to an address.
+
+**Remove or disable the released Dig plugin first.** If Dig 0.15 or earlier is installed as a plugin in a host, remove or disable it there before you connect this one: both register a server named `dig`.
+
+**Claude Code**, command form:
 
 ```sh
-/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex plugin marketplace add jonpage0/dig
-/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex plugin add dig@dig
+claude mcp add dig -- node /absolute/path/to/dig/dist/dig.mjs mcp
 ```
 
-Refresh the plugin connection, then type **`$dig:setup`** in a new conversation. It walks you through choosing sources. If Dig still does not appear after the refresh, quit and reopen ChatGPT.
+**Codex and ChatGPT desktop**, command form, in `~/.codex/config.toml`:
 
-> **Try it with no keys:** Hacker News, DeepWiki, Polymarket and the Wayback Machine work without any account.
+```toml
+[mcp_servers.dig]
+command = "node"
+args = ["/absolute/path/to/dig/dist/dig.mjs", "mcp"]
+tool_timeout_sec = 600
+```
 
-For a first run, enable Hacker News and ask: **“Use Dig and Hacker News to research how developers approach local-first software. Show the strongest findings, disagreements and remaining gaps. Save the supporting research and suggest a useful next question.”** Open **Overview**, choose the question, and use its saved findings and coverage to decide what to ask next.
-
-### Claude Code
-
-Dig also runs in [Claude Code](https://code.claude.com) 2.1 or newer, with the same Node 22 requirement:
+**Address form.** Start the service with `dig serve` (or let a `dig mcp` start it). The token is `token` in `~/.local/share/dig/service.json`, which only you can read.
 
 ```sh
-claude plugin marketplace add jonpage0/dig
-claude plugin install dig@dig
+claude mcp add --transport http dig http://127.0.0.1:47811/mcp --header "Authorization: Bearer $(jq -r .token ~/.local/share/dig/service.json)"
 ```
 
-Start a new session and type **`/dig:setup`**. Run one method directly with `/dig:hackernews`, `/dig:reddit` and so on, or ask a research question with `/dig:dig`. Claude Code and Codex share the same settings, keys and research library. Claude Code shows no Dig views: research, saved reports, library search and reading work through the conversation, and the library is the folder under `~/.local/share/dig`. Update with `claude plugin marketplace update dig` then `claude plugin update dig@dig`; remove with `claude plugin uninstall dig@dig`.
+For Codex, set `url = "http://127.0.0.1:47811/mcp"` under `[mcp_servers.dig]` and `bearer_token_env_var` to the name of an environment variable that holds the token. The token stays the same across restarts. The service exits after 30 minutes with nothing to do, and in the address form nothing starts it again: run `dig serve` before you use it.
 
-To add keys in Claude Code, edit `~/.local/share/dig/keys.env` directly, or run `/dig:setup` for the exact lines to add.
+**Host wrappers.** The build also generates thin wrappers in `plugins/` that launch `dig mcp` from your checkout: a marketplace named `dig-local` with a `dig` entry for Claude Code and one for Codex and ChatGPT, whose copy carries Dig's methods as ChatGPT skills.
 
-## What Dig does
+```sh
+claude plugin marketplace add /absolute/path/to/dig/plugins
+claude plugin install dig@dig-local
+codex plugin marketplace add /absolute/path/to/dig/plugins
+```
 
-Ask a question in Codex. Your assistant chooses useful enabled sources, reads their reports and important originals, and explains the findings. Dig presents the saved research state for you to observe and steer; full records are available when you want to inspect a particular point.
+then install `dig` from `dig-local` in Codex's plugin browser.
 
-**25 sources · 30 research methods · 81 tools, including two optional shared helpers**
+## First run
+
+1. **Turn sources on.** Ask your assistant to set Dig up: it reads the `setup` method, shows the sources and turns on the ones you choose through the `settings` tool. Hacker News is on from the start. Hacker News, DeepWiki, Polymarket and the Wayback Machine need no key.
+2. **Enter keys.** For a source that needs one, your assistant calls the `keys` tool. Your host asks you to open a page that Dig serves on your computer, with one field per key; what you type there goes straight into `keys.env` and never into the conversation. If the host cannot open pages, the assistant gives you the address to open in a browser. Never paste a key into the chat.
+3. **Ask a question.** For example: **“Use Dig and Hacker News to research how developers approach local-first software. Show the strongest findings, disagreements and remaining gaps, and save the supporting research.”**
+
+## Sources
+
+**25 sources and 2 shared tools · 30 research methods · 81 actions · 39 tools the model sees, with every source on**
+
+Each source and each shared tool is one tool, named after it (`hackernews`, `x`, `papers`, `google_ads`). A call names one of its actions, such as `x_post` or `papers_openalex_search`. With every source on, the model sees those 27 tools, 11 of Dig's own and `open_library`: a tool list of about 136,000 characters. A host that shows Dig's views also gets the views' own tools.
 
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
 | :---: | --- | --- |
 | <img src="docs/logos/exa.svg" width="22" height="22" alt=""> | **Exa** | Web search and page text |
 | <img src="docs/logos/perplexity.svg" width="22" height="22" alt=""> | **Perplexity** | Cited web answers |
-| <img src="plugin/assets/skills/history.svg" width="22" height="22" alt=""> | **Wayback&nbsp;Machine** | What a web page said on a given date, from the Internet Archive |
+|  | **Wayback&nbsp;Machine** | What a web page said on a given date, from the Internet Archive |
 | <img src="docs/logos/github.svg" width="22" height="22" alt=""> | **GitHub** | Repositories, their activity and source code |
-| <img src="plugin/assets/skills/book-open-text.svg" width="22" height="22" alt=""> | **DeepWiki** | Questions about a public codebase |
+|  | **DeepWiki** | Questions about a public codebase |
 | <img src="docs/logos/ycombinator.svg" width="22" height="22" alt=""> | **Hacker&nbsp;News** | Developer stories and discussion |
-| <img src="plugin/assets/skills/graduation-cap.svg" width="22" height="22" alt=""> | **Papers** | Semantic Scholar, OpenAlex and 18 more indexes; full text, PDFs and section extraction |
+|  | **Papers** | Semantic Scholar, OpenAlex and 18 more indexes; full text, PDFs and section extraction |
 | <img src="docs/logos/youtube.svg" width="22" height="22" alt=""> | **YouTube** | Video discovery, saved transcripts, comments and optional Gemini video understanding |
 | <img src="docs/logos/x.svg" width="22" height="22" alt=""> | **X** | Exact posts, threads, accounts, who follows whom and the pictures in posts; Grok for search by meaning, images and video |
 | <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **Reddit** | Threads, comments and collapsed replies |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok** | Videos, captions and transcripts |
 | <img src="docs/logos/instagram.svg" width="22" height="22" alt=""> | **Instagram** | Reels, accounts and transcripts |
-| <img src="plugin/assets/skills/messages-square.svg" width="22" height="22" alt=""> | **Facebook** | Public pages, posts, groups and events |
+|  | **Facebook** | Public pages, posts, groups and events |
 | <img src="docs/logos/linkedin.svg" width="22" height="22" alt=""> | **LinkedIn** | Profiles, companies and posts |
 | <img src="docs/logos/telegram.svg" width="22" height="22" alt=""> | **Telegram** | Public channels and posts |
-| <img src="plugin/assets/skills/messages-square.svg" width="22" height="22" alt=""> | **Threads** | Public posts, replies and account posts |
-| <img src="plugin/assets/skills/languages.svg" width="22" height="22" alt=""> | **China&nbsp;social** | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat |
-| <img src="plugin/assets/skills/megaphone.svg" width="22" height="22" alt=""> | **Facebook&nbsp;ads** | Meta Ad Library advertisers and creatives |
-| <img src="plugin/assets/skills/megaphone.svg" width="22" height="22" alt=""> | **Google&nbsp;ads** | Ads Transparency Center advertisers, their ads and ad details |
+|  | **Threads** | Public posts, replies and account posts |
+|  | **China&nbsp;social** | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat |
+|  | **Facebook&nbsp;ads** | Meta Ad Library advertisers and creatives |
+|  | **Google&nbsp;ads** | Ads Transparency Center advertisers, their ads and ad details |
 | <img src="docs/logos/linkedin.svg" width="22" height="22" alt=""> | **LinkedIn&nbsp;ads** | Ad Library ads with their payer and published targeting |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok&nbsp;ads** | Creative Center analytics and the Ad Library |
 | <img src="docs/logos/polymarket.svg" width="22" height="22" alt=""> | **Polymarket** | Prediction-market odds |
-| <img src="plugin/assets/skills/shopping-cart.svg" width="22" height="22" alt=""> | **Amazon** | Products, reviews and price history |
-| <img src="plugin/assets/skills/chart-no-axes-combined.svg" width="22" height="22" alt=""> | **DataForSEO** | Search results, keywords, rankings and backlinks; Google Trends, Google ads, and app-store and Trustpilot reviews |
+|  | **Commerce** | Amazon products, reviews and price history |
+|  | **DataForSEO** | Search results, keywords, rankings and backlinks; Google Trends, Google ads, and app-store and Trustpilot reviews |
+| <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **TikHub&nbsp;Reddit** | Advanced Reddit discovery and enrichment |
 
-What you get back:
+The two shared tools work alongside any source: **Video analysis** inspects a video or a clip of one with Elorian Glimpse, and **Evidence ranking** suggests a reading order for a shortlist of excerpts with TypeSafe Jev. [Sources and their keys](docs/sources.md) has each source's keys, actions, methods and costs.
 
-- **An overview of saved research**, with provider usage visible and a research trail for the current conversation.
-- **Direct reading for each question:** its saved answer or latest report, with coverage, reported gaps and activity available under Research details.
-- **A way to steer the next step:** review a proposed instruction, place it in the conversation as an unsent draft or copy it, then send when ready.
-- **A retained-evidence reader** for full reports and saved answers, with document navigation and original responses retained when enabled and saving succeeds.
+## How a question runs
 
-The interface shows retained observations. A missing report does not mean an agent is paused or still running, and a source count does not prove that a question has been fully covered. Provider costs remain in their reported units; unknown never means free.
+1. **A dig.** The assistant starts a dig with `dig_start`, giving your project folder and the question. A dig groups everything one question produces, and its handle goes on every call that follows.
+2. **Source calls.** The assistant calls each source's tool with the dig, an action and that action's arguments. Each call's result starts with one line: the source, the action, its status, its receipt and what the call and the dig so far have cost. The action's text follows; when the action also returned data (a structured answer, ids, a cursor), the text ends with a `Details:` block of that data as JSON, cut at 20,000 characters. Links to the receipt and the original response follow.
+3. **Reports.** For each source it researched, the assistant (or a helper it starts) saves a report with `research_save`: a summary, the evidence, what needs follow-up and what was looked for and not found.
+4. **An answer.** The assistant reads the reports and the originals its conclusions rest on, answers you, and can save the answer with `dig_finish`.
 
-Good to know:
+Ask for a method by name (“use Dig's x-judge method”) or let the assistant choose. Earlier research is reused: ask the assistant to find what you already researched about a topic.
 
-- **You choose the sources.** Run one directly (`$dig:reddit` in Codex, `/dig:reddit` in Claude Code) or let Codex combine several.
-- **Public research by default.** Optional X sign-in reads your own bookmarks and likes. Video analysis can upload a local project clip you select. Coverage varies by platform.
-- **X has two ways in.** X's API returns the posts themselves, and your assistant can look at the pictures in them; Grok adds search by meaning and reads images and videos. Four methods use them: X judge weighs claims, X breadth finds as many angles as it can, X post inspects one post, and X trace follows a conversation outward and weighs who is speaking.
+## Cost
 
-## Findings in the conversation
+- **Receipts.** Every call records what the provider reported it cost, in the provider's own units: US dollars, ScrapeCreators or Scrape.do credits, OpenAlex credits, X post and account reads. Units are never converted or added together. A cost the provider did not report is unknown, never zero.
+- **Running cost.** Every result says what the call cost and what its dig has cost so far.
+- **Spending ceiling.** `[spend] dig_ceiling_usd` in Dig's settings caps what one dig may record in US dollars. When a dig reaches it, Dig asks you whether to raise it for that dig or stop.
+- **Ask first.** `[spend] ask_above_usd` makes Dig ask you before a paid call whose action has typically cost at least that much in your library, or has never been priced there.
+- **No double charge.** A call identical to one that just finished returns the earlier result instead of paying again.
 
-In Codex, each save shows a compact card in the conversation: the research's title, its outcome (such as **Report saved** or **Answer has gaps**), its sources, when it was saved and the provider cost recorded for it. Its one **Open** button opens the saved file in Dig, or reads the complete retained file in place when Codex cannot open the link. The card carries no summary or findings: the conversation explains the conclusions, and displaying a card does not verify them. Claude Code shows no card. See [research cards](docs/insight-cards.md).
+Each provider bills you directly, separately from your ChatGPT or Claude plan. Dig does not count your assistant's own model use.
 
-For website discovery, SEO and GEO questions, Dig's method connects customer intent and search/AI observations to the actual cited or competing page and the owned page, then proposes specific changes and verification. The initiating conversation combines DataForSEO evidence, page reads and any owner-supplied analytics; provider-native history and saved reports support comparisons without a separate tracking system.
+## Slow calls
 
-## Video understanding
+A slow action (a Grok search, a video analysis, deep research) runs as a job in Dig's service, not in the connection. A host that supports MCP tasks follows it as a task; in any other host, if it is still running after 40 seconds the result is a job id, and the assistant asks the `job` tool for the result.
 
-Ask **“Use Dig’s YouTube video method to analyze this demo from 35 to 55 seconds. What changes, and does it support the speaker’s claim? Give the video URL and original timestamps for each finding.”**
+## Views
 
-The optional **YouTube video** method (`$dig:youtube-video` in Codex, `/dig:youtube-video` in Claude Code) uses **Gemini 3.8 Flash** for standard deeper analysis. Choose **Gemini 4 Argon** next when the question needs harder reasoning. It can analyze selected intervals, compare up to ten video inputs, follow up on stored context, and return structured findings. Enable YouTube and add `GEMINI_API_KEY` in keys.env; this route needs no local downloader. The key is separate from the optional YouTube Data API key, and transcript research still works without it.
+Dig's views show the library, the current dig's trail and a card for each saved report or answer. A host that renders MCP Apps (ChatGPT desktop) shows them in the conversation; a client that names itself as Codex or ChatGPT gets them without declaring the MCP Apps extension. In a host that renders none, such as Claude Code, ask the assistant to open Dig's library: it calls `open_library`, and the host asks you to open the library in your browser. In a terminal, `dig open` does the same; use it in Codex in a terminal, which is given the views but cannot show them. Either way the browser gets a one-time address that works once, within 5 minutes.
 
-Use the standalone **Video analysis** tool (`$dig:video-analyze` in Codex, `/dig:video-analyze` in Claude Code) with [Elorian Glimpse](https://elorian.ai/) for a focused visual need or when you explicitly choose it. It works directly in the conversation, without a dig or report, and alongside appropriate source research. Enable it under **Sources & tools → Shared tools** and add `ELORIAN_API_KEY`. Direct video-file URLs work; local or YouTube clips need `ffmpeg` and `ffprobe`, plus `yt-dlp` for YouTube, and cover at most two minutes per selected interval.
+## Where things are
 
-Analysis remains model interpretation. Check exact speech and timestamps against the original; with several videos, require a separate original-video timeline for each. Google’s stored interaction history and Elorian’s uploaded media have their own retention, separate from Dig’s library. Both providers return token usage without a per-call dollar charge, so Dig records cost as unknown. See [YouTube video understanding](docs/youtube-video.md) and [Glimpse video inspection](docs/video-analysis.md) for controls, storage and evidence limits.
-
-## Optional evidence ranking
-
-When a shortlist of collected excerpts is burdensome to compare, **Evidence ranking** can suggest what to read first and how each excerpt relates to a specific claim. It uses TypeSafe Jev on the supplied text, keeps every candidate available, and gives contradictions attention alongside supporting evidence. Scores and confidence are reading advice, not a truth check.
-
-Enable **Evidence ranking** under **Sources & tools → Shared tools** and add `TYPESAFE_API_KEY` in keys.env. Enabling it does not run it automatically; a few obvious candidates usually need no extra call. The agent still reads relied-on reports completely and checks important originals. See [evidence ranking](docs/evidence-ranking.md) for inputs, limits and interpretation.
-
-## Services and API keys
-
-**You only need keys for the sources you turn on.** Each service bills you directly, separately from your ChatGPT plan.
-
-**No key needed:** Hacker News, DeepWiki, Polymarket, Wayback Machine.
-**Works without a key, with limits:** GitHub (lower rate limits), Papers (shared rate limits), YouTube (needs `yt-dlp` installed).
-
-| Service | Used by | Key name in `keys.env` |
-| --- | --- | --- |
-| [Elorian](https://platform.elorian.ai/settings/keys) | **Video analysis**: selected clips, visual events and available speech | `ELORIAN_API_KEY` |
-| [TypeSafe](https://console.typesafe.ai/keys) *(optional)* | **Evidence ranking**: a suggested reading order for supplied excerpts | `TYPESAFE_API_KEY` |
-| [Exa](https://dashboard.exa.ai/api-keys) | **Exa**: web search, page text, similar pages | `EXA_API_KEY` |
-| [Perplexity](https://console.perplexity.ai) | **Perplexity**: cited answers and web search | `PERPLEXITY_API_KEY` |
-| [GitHub](https://github.com/settings/tokens) *(optional)* | **GitHub**: higher limits, plus review and issue samples | `GH_TOKEN` or `GITHUB_TOKEN` |
-| [xAI](https://console.x.ai/team/default/api-keys) | **X**: Grok's search by meaning, including images and videos | `XAI_API_KEY` |
-| [X API](https://console.x.com) | **X**: exact posts, threads, replies, accounts, search, counts, News | `X_BEARER_TOKEN` |
-| X sign-in *(optional)* | **X**: your bookmarks and likes; people and Communities search | `X_CONSUMER_KEY`, `X_CONSUMER_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` |
-| [ScrapeCreators](https://app.scrapecreators.com) | **Reddit**, **TikTok**, **Instagram**, **Facebook**, **LinkedIn**, **Telegram**, **Threads**, **Facebook ads**, **Google ads**, **LinkedIn ads**, **TikTok ads** (Ad Library), **YouTube** (hosted transcripts and comments) | `SCRAPECREATORS_API_KEY` |
-| [TikHub](https://user.tikhub.io/dashboard/api) | **Reddit** (advanced), **China social**, **TikTok ads** (Creative Center), **X** (Communities) | `TIKHUB_API_KEY` |
-| [Just One](https://dashboard.justoneapi.com/en) *(optional)* | **China social**: an alternative backend, used only when asked for | `JUSTONE_API_KEY` |
-| [Scrape.do](https://dashboard.scrape.do/) | **Amazon**: products, search, deals, Best Sellers | `SCRAPE_DO_API_KEY` |
-| [Nexscope](https://www.nexscope.ai) *(optional)* | **Amazon**: reviews and price/rank history | `NEXSCOPE_API_KEY` |
-| [Semantic Scholar](https://www.semanticscholar.org/product/api#api-key-form) *(optional)* | **Papers**: higher limits for paper search | `SEMANTIC_SCHOLAR_API_KEY` |
-| [OpenAlex](https://openalex.org/settings/api) *(optional)* | **Papers**: your own OpenAlex allowance | `OPENALEX_API_KEY` |
-| [Google Cloud](https://console.cloud.google.com/apis/credentials) *(optional)* | **YouTube**: Data API search | `OPENCODE_RESEARCH_GOOGLE_API_KEY` |
-| [Google Gemini](https://aistudio.google.com/apikey) *(optional)* | **YouTube**: Gemini video understanding and follow-up analysis | `GEMINI_API_KEY` |
-| [DataForSEO](https://app.dataforseo.com/api-access) | **DataForSEO**: search results, keywords, rankings, backlinks | `DATAFORSEO_USERNAME`, `DATAFORSEO_PASSWORD` |
-
-Partial setups work. X's API and Grok are independent, and so are Amazon's current data and its history. YouTube discovery, hosted transcripts and Gemini video understanding have separate prerequisites. Dig names what's unavailable instead of quietly swapping in another source.
-
-**Local tools:** YouTube transcripts need [`yt-dlp`](https://github.com/yt-dlp/yt-dlp). Federated paper search, full text, PDFs and section extraction need the optional Papers bridge (`git` and `uv`).
-
-[Sources and their keys](docs/sources.md) has every option, alias and setup step.
-
-### Adding keys
-
-Keys never go in the chat. On Dig's **Sources & tools** page, click **Edit keys.env**, paste your keys after the `=` signs and save. Dig picks up the change right away. The file lives at `~/.local/share/dig/keys.env`; Claude Code has no Dig pages, so there you edit it directly.
-
-## Use in Codex
-
-- **Ask a research question** normally, or name the sources you want.
-- **Run one method:** type `$dig:` and pick one, such as `$dig:x-post` or `$dig:facebook`.
-- **Open Dig** from the sidebar to read reports, original responses and costs.
-- **Keep the overview in sight:** activity charts and costs stay visible above recent research. Expand the charts for more detail, and inspect original responses alongside a report.
-- **Find saved research through the conversation:** ask Dig to locate earlier reports by project, source or topic. The dashboard focuses on the overview and reading.
-- **Reuse past research** by typing `@` in the composer.
-
-## Optional: route Dig from another conversation (Codex)
-
-The [Dig routing companion](optional/dig-routing/README.md) is a separate, instruction-only plugin that can use the current Dig connection or delegate to an authorized connected computer. Install it only if you want that routing skill:
-
-```sh
-codex plugin marketplace upgrade dig
-codex plugin add dig-routing@dig
-```
-
-Its explicit invocation is `$dig-routing:route`; matching requests may select it automatically. Local installation makes it discoverable locally. Cloud-dot discovery and delegation require host support and separate verification.
-
-## Update in Codex
-
-```sh
-codex plugin marketplace upgrade dig
-codex plugin add dig@dig
-```
-
-Refresh Dig’s plugin/MCP connection, then verify the running version in About Dig or through `source_info`. Refresh an already-open Dig view after the server updates. Quit and reopen ChatGPT only if the connection still uses the old version. Your settings, keys and research are kept.
-
-## Privacy and costs
-
-- **Runs on your computer.** Dig has no server of its own and collects nothing.
-- **What leaves your computer:** searches go to the services you turn on, with your keys. YouTube understanding sends selected public video references and your question to Google; Glimpse sends selected media or media references to Elorian; optional evidence ranking sends the selected question and excerpts to TypeSafe. Their results enter your Codex conversation.
-- **Provider history:** Google interaction storage is enabled by default for follow-ups and background results; a foreground first request can opt out with `store: false`. Elorian uploads expire according to its returned file metadata. These are separate from Dig’s local retention.
-- **Where things are kept:** settings, keys and research live in `~/.local/share/dig` (you can choose another research folder).
-- **Costs:** each service bills you. Dig shows what each reports; Codex model usage isn't included.
-- **Provider terms still apply** to what you search and reuse.
-
-## Uninstall
-
-```sh
-codex plugin remove dig@dig
-codex plugin marketplace remove dig
-```
-
-Your research stays in `~/.local/share/dig` until you delete it.
+Settings, keys, the library, jobs and the service's own files live in `~/.local/share/dig` (`DIG_STATE_DIR` chooses another folder). `dig status` says whether the service is running and lists running jobs; `dig stop` stops it. See [getting started](docs/getting-started.md), [permissions](docs/permissions.md) and [the architecture](docs/architecture.md).
 
 ## Development
 
 ```sh
-npm install
-npm run check   # build, type check and offline tests
-npm run smoke   # one live, keyless Hacker News search in a throwaway folder
-npm run live-check   # one live call per free tool, saved under verification/live
+npm ci
+npm run build        # dist/ (the dig command and the views), runtime/ and plugins/
+npm run typecheck
+npm test             # offline tests
+npm run check        # build, type check and tests
+npm run smoke        # one keyless Hacker News call through the service, in a throwaway folder
+npm run live-check   # one live call per free action, captured under verification/live; --paid with --keys adds paid ones, which cost money
 ```
 
-Install a local checkout with `codex plugin marketplace add /path/to/dig`. See the [architecture](docs/architecture.md), the [changelog](CHANGELOG.md) and the [security policy](SECURITY.md).
+See [AGENTS.md](AGENTS.md), the [changelog](CHANGELOG.md) and the [security policy](SECURITY.md).
+
+## Optional: route Dig from another conversation
+
+The [Dig routing companion](optional/dig-routing/README.md) is a separate, instruction-only Codex add-on that uses the current Dig connection or hands the task to an authorized connected computer. It has no server, keys or library of its own; its README says how to install it.
 
 ## License
 
-MIT. See [LICENSE](LICENSE); bundled third-party licenses are in [plugin/THIRD_PARTY_NOTICES.md](plugin/THIRD_PARTY_NOTICES.md). Service logos are their owners' trademarks, shown to identify each service. Dig is an independent project, not affiliated with OpenAI, X or any provider.
+MIT. See [LICENSE](LICENSE); bundled third-party licences are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Service logos are their owners' trademarks, shown to identify each service. Dig is an independent project, not affiliated with OpenAI, Anthropic, X or any provider.

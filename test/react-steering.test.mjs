@@ -28,7 +28,7 @@ async function mount(t, props) {
 }
 
 test('opening and choosing a direction is inert; only the explicit action requests an unsent draft', async t => {
-  const drafted = []; const host = { preview: false, canDraft: () => true, draft: async prompt => drafted.push(prompt) };
+  const drafted = []; const host = { canDraft: () => true, draft: async prompt => drafted.push(prompt) };
   await mount(t, { host, item: item('A'), library: '/library' });
   await click('Steer research'); await click('Review gaps');
   assert.equal(drafted.length, 0);
@@ -41,7 +41,7 @@ test('opening and choosing a direction is inert; only the explicit action reques
 
 test('late draft completion never confirms a different selected question', async t => {
   const waiting = deferred(); const drafted = [];
-  const host = { preview: false, canDraft: () => true, draft: prompt => { drafted.push(prompt); return waiting.promise; } };
+  const host = { canDraft: () => true, draft: prompt => { drafted.push(prompt); return waiting.promise; } };
   const ui = await mount(t, { host, item: item('A'), library: '/library' });
   await click('Steer research'); await click('Draft in conversation');
   await ui.render({ item: item('B') }); await click('Steer research');
@@ -53,7 +53,7 @@ test('late draft completion never confirms a different selected question', async
 
 test('closing and reopening invalidates old feedback and snapshots the instruction references', async t => {
   const waiting = deferred();
-  const host = { preview: false, canDraft: () => true, draft: () => waiting.promise };
+  const host = { canDraft: () => true, draft: () => waiting.promise };
   const ui = await mount(t, { host, item: item('A'), library: '/library' });
   await click('Steer research');
   await ui.render({ item: { ...item('A'), reports: ['p/digs/A/new-report.md'] } });
@@ -65,10 +65,10 @@ test('closing and reopening invalidates old feedback and snapshots the instructi
   assert.doesNotMatch(document.body.textContent, /Old request failed/);
 });
 
-test('preview copy fallback never calls the native host and a changed direction rejects a stale clipboard notice', async t => {
+test('without composer drafts the copy fallback never calls the native host, and a changed direction rejects a stale clipboard notice', async t => {
   const waiting = deferred(); let copied = ''; let drafts = 0;
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: text => { copied = text; return waiting.promise; } } });
-  await mount(t, { host: { preview: true, canDraft: () => false, draft: () => drafts++ }, item: item('A'), library: '/library' });
+  await mount(t, { host: { canDraft: () => false, draft: () => drafts++ }, item: item('A'), library: '/library' });
   await click('Steer research');
   assert.equal(button('Draft in conversation'), undefined);
   await click('Copy instruction'); await click('Refocus the question');

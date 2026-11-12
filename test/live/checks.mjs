@@ -1,6 +1,7 @@
 // One small live call per provider tool, for `npm run live-check` and the replay test (test/live-replay.test.mjs).
 // Subjects are stable and public: large open-source repositories, long-standing videos, organisations' and public
-// figures' accounts, a standard reference paper. `args` leaves out project and dig; the script adds project.
+// figures' accounts, a standard reference paper. `args` is the action's own arguments, without project or dig; the
+// script calls the action through its source's tool under a dig it starts.
 // `replay: false` names a tool whose saved responses cannot be served back through fetch in order; `replayNote` says why.
 
 /** "Attention Is All You Need" (arXiv 1706.03762): its Semantic Scholar id. */

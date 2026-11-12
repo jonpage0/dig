@@ -7,6 +7,10 @@ import manifest from './assets/manifest.json' with {type:'json'};
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile,mkdir,writeFile,rename,rm,readdir } from 'node:fs/promises';
 import { dirname,join } from 'node:path';
+import { existsSync } from 'node:fs';
+// The packaged ONNX Runtime (scripts/search-runtime.mjs) is the package's runtime/: beside dist/ for the bundled service
+// (dist/dig.mjs), two folders up from here.
+export const RUNTIME=(['../runtime/dist/onnx.cjs','../../runtime/dist/onnx.cjs'].map(path=>new URL(path,import.meta.url)).find(url=>existsSync(url))??new URL('../runtime/dist/onnx.cjs',import.meta.url)).href;
 export const MODEL={id:manifest.model,revision:manifest.revision,dtype:'q8',pooling:'cls',dimensions:384,normalized:true};
 export const tokenizer=new Tokenizer(tokenizerData,tokenizerConfig);
 export const hash=value=>createHash('sha256').update(value).digest('hex');
@@ -53,8 +57,8 @@ export function embed(state,text,signal){return serialized(async()=>{
  if(process.platform!=='darwin'||process.arch!=='arm64')throw Error('Local semantic search is currently packaged for macOS arm64. Keyword search remains available.');
  const path=join(state,'search/models',manifest.revision,'onnx/model_quantized.onnx');
  if(!session||sessionPath!==path)await installAssets(state,signal);
- if(!session||sessionPath!==path){await session?.release();session=null;const runtime=await import(new URL('../runtime/dist/onnx.cjs',import.meta.url).href);session=await (runtime.default??runtime).InferenceSession.create(path,{executionProviders:['cpu'],intraOpNumThreads:4,interOpNumThreads:1});sessionPath=path;}
- const runtime=await import(new URL('../runtime/dist/onnx.cjs',import.meta.url).href);const ort=runtime.default??runtime;
+ if(!session||sessionPath!==path){await session?.release();session=null;const runtime=await import(RUNTIME);session=await (runtime.default??runtime).InferenceSession.create(path,{executionProviders:['cpu'],intraOpNumThreads:4,interOpNumThreads:1});sessionPath=path;}
+ const runtime=await import(RUNTIME);const ort=runtime.default??runtime;
  const encoded=tokenizer.encode(text);if(encoded.ids.length>480)throw Error('Embedding input exceeds 480 tokens');
  const n=encoded.ids.length,feeds={input_ids:new ort.Tensor('int64',BigInt64Array.from(encoded.ids,BigInt),[1,n]),attention_mask:new ort.Tensor('int64',BigInt64Array.from(encoded.attention_mask,BigInt),[1,n])};
  if(session.inputNames.includes('token_type_ids'))feeds.token_type_ids=new ort.Tensor('int64',new BigInt64Array(n),[1,n]);

@@ -12,7 +12,7 @@
  *   - TIKHUB_BASE_URL (optional; defaults to https://api.tikhub.io)
  */
 import { USER_AGENT } from "../../version.mjs"
-import { outcome } from "../outcome.js"
+import { outcome, setOutsideChat } from "../outcome.js"
 import { knownSecrets, redactProviderText, redactText, redactValue } from "../secrets.js"
 import type { ToolContext, ToolSpec } from "../types.js"
 
@@ -1123,7 +1123,7 @@ export const reddit = {
     try {
       const typedArgs = args as ToolArgs
       if (!OPERATION_VALUES.includes(typedArgs.operation)) throw new Error("Unknown operation")
-      if (!process.env.TIKHUB_API_KEY?.trim()) throw new Error("TIKHUB_API_KEY not set")
+      if (!process.env.TIKHUB_API_KEY?.trim()) throw new Error(`TIKHUB_API_KEY is not set in Dig's keys.env. ${setOutsideChat()}`)
       if (typedArgs.searchType !== undefined && !SEARCH_TYPE_VALUES.includes(typedArgs.searchType)) throw new Error("Unknown searchType")
       if (typedArgs.timeRange !== undefined && !TIME_RANGE_VALUES.includes(typedArgs.timeRange)) throw new Error("Unknown timeRange")
       if (typedArgs.feed !== undefined && !FEED_VALUES.includes(typedArgs.feed)) throw new Error("Unknown feed")

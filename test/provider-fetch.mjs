@@ -8,7 +8,7 @@ const ROTATED_TOKEN = 'x-bearer-rotated-replacement-value';
 const ROTATION_WAIT_MS = 5_000;
 const POLL_MS = 50;
 
-/** Rewrites keys.env with a new token and waits until the server's keys.env watcher has applied it. */
+/** Rewrites keys.env with a new token and waits until the service's keys.env watcher has applied it. */
 async function rotateBearerToken() {
   await writeFile(join(process.env.DIG_STATE_DIR, 'keys.env'), `X_BEARER_TOKEN=${ROTATED_TOKEN}\n`, { mode: 0o600 });
   for (let waited = 0; process.env.X_BEARER_TOKEN !== ROTATED_TOKEN; waited += POLL_MS) {

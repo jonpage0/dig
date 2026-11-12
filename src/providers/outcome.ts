@@ -28,6 +28,8 @@ export function outcome(
 ): ToolOutcome {
   return { status, text, ...(details ? { details } : {}) };
 }
+/** Where the user sets a missing credential, true in any host: on the key page or in keys.env, never in chat. */
+export const setOutsideChat = (several = false) => `The user sets ${several ? "them" : "it"} outside chat, on the page Dig's keys tool opens or in keys.env.`;
 
 /** The provider's existing no-charge policy, finalized even on failure/cancellation. */
 export function free(spec: ToolSpec): ToolSpec {

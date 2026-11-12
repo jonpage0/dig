@@ -26,7 +26,7 @@
  */
 import { USER_AGENT } from "../../version.mjs"
 import { requestJson } from "../http.js"
-import { metered } from "../outcome.js"
+import { metered, setOutsideChat } from "../outcome.js"
 import { knownSecrets, redactText } from "../secrets.js"
 import type { KeepRaw, ToolContext, ToolSpec } from "../types.js"
 
@@ -64,7 +64,7 @@ export function scrapecreatorsHeaders(): Record<string, string> | null {
   return { "x-api-key": key, Accept: "application/json", "User-Agent": USER_AGENT }
 }
 
-export const MISSING_KEY_ERROR = "SCRAPECREATORS_API_KEY not set. Get a key at https://scrapecreators.com"
+export const MISSING_KEY_ERROR = `SCRAPECREATORS_API_KEY is not set in Dig's keys.env. Get a key at https://scrapecreators.com. ${setOutsideChat()}`
 
 /** The sentence for a request that ended without a complete response, which is never sent again. */
 export const UNANSWERED_COST = "ScrapeCreators may have received and charged this request, but no complete response arrived; its cost is unknown."

@@ -260,7 +260,7 @@ describe("linkedin_ad_library", () => {
 		];
 		for (const [args, expected] of refusals) expect(text(await library.execute(args, context))).toContain(expected);
 		delete process.env.SCRAPECREATORS_API_KEY;
-		expect(await library.execute({ action: "search", query: "x" }, context)).toBe("ERROR: SCRAPECREATORS_API_KEY not set. Get a key at https://scrapecreators.com");
+		expect(await library.execute({ action: "search", query: "x" }, context)).toBe("ERROR: SCRAPECREATORS_API_KEY is not set in Dig's keys.env. Get a key at https://scrapecreators.com. The user sets it outside chat, on the page Dig's keys tool opens or in keys.env.");
 		expect(mock.calls).toHaveLength(0);
 	});
 

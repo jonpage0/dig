@@ -23,7 +23,6 @@ export interface ResearchCard {
   savedAt?: string | null;
   retrievals: number;
   reports?: string[];
-  link?: string | null;
   cost?: {
     byUnit: Record<string, number>;
     unknownCalls: number;
@@ -39,7 +38,7 @@ export interface ResearchCard {
   schemaWarnings?: string[];
   insights?: Insight[];
 }
-export interface SavedResult { file: string; path?: string; link?: string | null; card?: ResearchCard }
+export interface SavedResult { file: string; path?: string; card?: ResearchCard }
 export interface RetainedRead {
   file: string;
   path?: string;
@@ -66,15 +65,6 @@ export function webLink(value: unknown): string | null {
   try {
     const url = new URL(value);
     return ['http:', 'https:'].includes(url.protocol) && url.hostname && !url.username && !url.password ? url.href : null;
-  } catch { return null; }
-}
-export function digLink(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'codex:' && url.hostname === 'plugins' &&
-      /^\/dig@[^/]+\/app\/open_library$/.test(url.pathname) &&
-      url.searchParams.get('path')?.startsWith('/read?file=') ? url.href : null;
   } catch { return null; }
 }
 

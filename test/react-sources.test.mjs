@@ -43,11 +43,10 @@ function fixture() {
     settings: { schema: { type: 'object', properties }, values, layout: [{ title: 'Exa', items: Object.keys(properties).map(property => ({ kind: 'property', property })) }] },
     snapshot: { items: [{ calls: [{ id: 'call-1', source: 'exa', tool: 'exa_search', status: 'partial', at: '2026-10-20T12:00:00Z' }] }], live: [] },
     saveSetting: async (key, value) => { calls.push(['setting', key, value]); return { ...values, [key]: value }; },
-    editKeys: async source => { calls.push(['keys', source]); },
-    useEnvironment: async source => { calls.push(['environment', source]); },
+    enterKeys: async source => { calls.push(['keys', source]); },
     notify: (...args) => calls.push(['notify', ...args]),
   };
-  const host = { preview: false, openLink: async url => { calls.push(['link', url]); }, call() { throw new Error('Sources must never make a provider request'); } };
+  const host = { openLink: async url => { calls.push(['link', url]); }, call() { throw new Error('Sources must never make a provider request'); } };
   return { app, host, calls };
 }
 async function mount(t, props) {
@@ -117,22 +116,21 @@ test('setup exposes presence, optional names, historical activity and explicit k
   assert.match(card.textContent, /fixture executableNot installed/);
   assert.match(card.querySelector('.source-page-activity').textContent, /Last retained callPartial · /);
   assert.match(card.querySelector('.source-page-activity-detail').textContent, /not a current connection check/);
-  await click(keyed('env:exa')); await click(keyed('keys:exa'));
-  assert.deepEqual(calls, [['environment', 'exa'], ['keys', 'exa']]);
-  assert.match(card.textContent, /replaces the keys.env values/);
+  assert.equal(keyed('env:exa'), undefined);
+  assert.equal(keyed('keys:exa').textContent, 'Enter keys');
+  await click(keyed('keys:exa'));
+  assert.deepEqual(calls, [['keys', 'exa']]);
+  assert.doesNotMatch(card.textContent, /environment|keys\.env value/);
   // The shell's handler opens marked links through the host (react-library covers the click).
   assert.equal(card.querySelector('.source-page-providers a').dataset.external, '');
 });
 
-test('example copying never submits a conversation; preview keeps source actions disabled', async t => {
+test('example copying never submits a conversation, and an open example survives hidden navigation', async t => {
   const { app, host, calls } = fixture();
   const copied = [];
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { copied.push(text); } } });
-  const ui = await mount(t, { app, host: { ...host, preview: true }, hidden: false });
-  assert.equal($('setting-exa_enabled').disabled, true);
+  const ui = await mount(t, { app, host, hidden: false });
   await click(keyed('setup:exa'));
-  assert.equal(keyed('env:exa').disabled, true);
-  assert.equal(keyed('keys:exa').disabled, true);
   const example = keyed('example:exa'); example.open = true;
   await click([...example.querySelectorAll('button')].find(button => button.textContent === 'Copy example'));
   assert.equal(copied.length, 1);
@@ -141,8 +139,8 @@ test('example copying never submits a conversation; preview keeps source actions
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
   await click([...example.querySelectorAll('button')].find(button => button.textContent === 'Copy example'));
   assert.match(example.textContent, /Select the example text and copy it/);
-  await ui.render({ app, host: { ...host, preview: true }, hidden: true });
-  await ui.render({ app, host: { ...host, preview: true }, hidden: false });
+  await ui.render({ app, host, hidden: true });
+  await ui.render({ app, host, hidden: false });
   assert.equal(keyed('example:exa'), example);
   assert.equal(example.open, true);
 });
@@ -181,16 +179,14 @@ test('source recorded use preserves every scoped receipt, separates reported uni
   assert.deepEqual(calls, []);
 });
 
-test('in Claude Code the key notes name Claude Code’s environment and the file it opens', async t => {
-  const { app, host } = fixture(); app.snapshot = { ...app.snapshot, host: 'claude-code' };
+for (const name of ['claude-code', 'codex', 'any']) test(`the key note describes the key page and names no host (${name})`, async t => {
+  const { app, host } = fixture(); app.snapshot = { ...app.snapshot, host: name };
   await mount(t, { app, host, hidden: false });
   await click(keyed('setup:exa'));
   const card = $('source-exa');
-  assert.match(card.textContent, /Claude Code’s environment has a different key\./);
-  assert.match(card.textContent, /replaces the keys\.env values with the ones in Claude Code’s environment\./);
   await click(card.querySelector('[aria-label="About Exa’s keys"]'));
-  assert.match(document.body.textContent, /Edit keys\.env opens the file in Claude Code and adds empty lines for missing names\./);
-  assert.doesNotMatch(document.body.textContent, /Codex/);
+  assert.match(document.body.textContent, /Enter keys opens a page on this computer with a field for each of this source’s keys\./);
+  assert.doesNotMatch(document.body.textContent, /Codex|Claude|ChatGPT|environment/);
 });
 
 test('recorded use lists each tool’s last 90 days: calls, failure rate, median time and typical cost, with unknown and free kept apart', async t => {

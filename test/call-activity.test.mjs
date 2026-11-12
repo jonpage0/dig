@@ -20,15 +20,16 @@ test('executing calls are transient, library-scoped and removed even when execut
   assert.deepEqual(activity.snapshot('/library'), []); assert.equal(activity.revision, 4);
 });
 
-test('conversation activity includes grouped workers, excludes unrelated calls and never treats old receipts as running', () => {
-  const item = { id: 'one', project: '/project', session: 'parent', reports: [], calls: [{ id: 'done', session: 'worker', source: 'x', status: 'success', cost: [] }] };
+test('a dig\'s trail includes its workers\' calls, excludes unrelated calls and never treats old receipts as running', () => {
+  const item = { id: 'one', project: '/project', dig: 'project-p/one', session: 'one', reports: [], calls: [{ id: 'done', session: 'worker', source: 'x', status: 'success', cost: [] }] };
   const active = { id: 'active', project: '/project', dig: 'one', session: 'worker', source: 'exa', tool: 'exa_search' };
   const snapshot = { items: [item], live: [{ id: 'old', session: 'other', source: 'youtube' }], activeCalls: [active, { ...active, id: 'wrong-project', project: '/elsewhere' }, { ...active, id: 'own', dig: undefined, session: 'parent' }] };
-  const result = projectConversationActivity(snapshot, 'parent');
-  assert.deepEqual(result.activeCalls.map(call => call.id), ['active', 'own']);
-  assert.equal(result.calls.length, 1); assert.equal(result.totalCalls, 3);
+  const result = projectConversationActivity(snapshot, 'project-p/one');
+  // Only a call that names the dig's own project and id is its; a host's conversation id names nothing.
+  assert.deepEqual(result.activeCalls.map(call => call.id), ['active']);
+  assert.equal(result.calls.length, 1); assert.equal(result.totalCalls, 2);
   assert.deepEqual(result.sources.map(row => row.source), ['exa', 'x']);
   assert.equal(result.sources[1].active.length, 0);
   assert.equal(projectConversationActivity(snapshot, null).totalCalls, 0);
-  assert.equal(projectConversationActivity({ items: [item], live: [] }, 'parent').liveAvailable, false);
+  assert.equal(projectConversationActivity({ items: [item], live: [] }, 'project-p/one').liveAvailable, false);
 });

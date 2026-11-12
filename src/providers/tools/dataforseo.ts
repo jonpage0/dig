@@ -1,5 +1,5 @@
 import { keptText } from "../http.js";
-import { failed, free, metered, outcome, type ToolOutcome } from "../outcome.js";
+import { failed, free, metered, outcome, setOutsideChat, type ToolOutcome } from "../outcome.js";
 import { knownSecrets, redactValue, registerSecret } from "../secrets.js";
 import type { ToolContext, ToolSpec } from "../types.js";
 
@@ -353,7 +353,7 @@ export const request: ToolSpec = metered(
 			const login = process.env.DATAFORSEO_USERNAME?.trim();
 			const password = process.env.DATAFORSEO_PASSWORD?.trim();
 			if (!login || !password)
-				return failed("DATAFORSEO_USERNAME and DATAFORSEO_PASSWORD must both be set (DataForSEO's API login and API password). The user adds them outside the chat in Dig's keys.env (Dig Settings → Edit keys.env); Dig reloads that file when it is saved.");
+				return failed(`DATAFORSEO_USERNAME and DATAFORSEO_PASSWORD must both be set in Dig's keys.env (DataForSEO's API login and API password). ${setOutsideChat(true)}`);
 			const basic = Buffer.from(`${login}:${password}`).toString("base64");
 			// The encoded pair is as sensitive as the password; redact it everywhere if a response ever echoes it.
 			registerSecret(basic);

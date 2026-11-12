@@ -82,12 +82,14 @@ export function projectResearch(item: any, catalog?: any) {
   };
 }
 
-/** snapshot.live means unassigned retained receipts. Other conversations never enter these totals. */
-export function projectConversation(snapshot: any, thread: string | null | undefined) {
-  const identified = typeof thread === 'string' && Boolean(thread);
-  const digs = identified ? array(snapshot?.items).filter(item => item.session === thread) : [];
-  const ownUnassignedCalls = identified ? array(snapshot?.live).filter(call => call.session === thread) : [];
-  const otherUnassignedCalls = array(snapshot?.live).filter(call => !identified || call.session !== thread);
+/** One dig, by the handle the service gives each item (`dig`). snapshot.live means unassigned retained receipts; a
+ * receipt that names this dig while the dig is not listed still counts. Other digs never enter these totals. */
+export function projectConversation(snapshot: any, dig: string | null | undefined) {
+  const identified = typeof dig === 'string' && Boolean(dig);
+  const own = (call: any) => typeof call?.projectFolder === 'string' && typeof call?.dig === 'string' && `${call.projectFolder}/${call.dig}` === dig;
+  const digs = identified ? array(snapshot?.items).filter(item => item.dig === dig) : [];
+  const ownUnassignedCalls = identified ? array(snapshot?.live).filter(own) : [];
+  const otherUnassignedCalls = array(snapshot?.live).filter(call => !identified || !own(call));
   const calls = [...digs.flatMap(item => array(item.calls)), ...ownUnassignedCalls];
   return { identified, digs, calls, ownUnassignedCalls, otherUnassignedCalls, otherUnassignedCallCount: otherUnassignedCalls.length, cost: costSummary(calls) };
 }
@@ -117,12 +119,14 @@ export function steeringPrompt(item: any, library: string, intent: SteeringInten
   ].join('\n');
 }
 
-/** Active calls are observations from this server, never inferred from saved plans or unclaimed receipts. */
-export function projectConversationActivity(snapshot: any, thread: string | null | undefined) {
-  const scope = projectConversation(snapshot, thread);
+/** Active calls and running jobs are observations from the service, never inferred from saved plans or unclaimed receipts. */
+export function projectConversationActivity(snapshot: any, dig: string | null | undefined) {
+  const scope = projectConversation(snapshot, dig);
   const liveAvailable = Array.isArray(snapshot?.activeCalls);
   const activeCalls = scope.identified ? array(snapshot?.activeCalls).filter(call =>
-    call.session === thread || scope.digs.some(item => call.dig === item.id && call.project === item.project)) : [];
+    scope.digs.some(item => call.dig === item.id && call.project === item.project)) : [];
+  // A job is the service's record of a slow or paid call; it names its dig by handle.
+  const jobs = scope.identified ? array(snapshot?.jobs).filter(job => job?.dig === dig).sort((a, b) => time(a.createdAt) - time(b.createdAt)) : [];
   const calls = [...new Map(scope.calls.map(call => [`${call.session}:${call.id}`, call])).values()];
   const sources = names([...activeCalls, ...calls].map(call => call.source)).map(source => {
     const active = activeCalls.filter(call => call.source === source);
@@ -132,6 +136,6 @@ export function projectConversationActivity(snapshot: any, thread: string | null
       stopped: finished.filter(call => call.status === 'cancelled' || call.status === 'skipped').length,
       empty: finished.filter(call => call.status === 'empty').length };
   }).sort((a, b) => b.active.length - a.active.length || b.finished.length - a.finished.length || a.source.localeCompare(b.source));
-  return { ...scope, calls, activeCalls, liveAvailable, sources, totalCalls: calls.length + activeCalls.length,
+  return { ...scope, calls, activeCalls, jobs, liveAvailable, sources, totalCalls: calls.length + activeCalls.length,
     reports: scope.digs.reduce((n, item) => n + array(item.reports).length, 0), cost: costSummary(calls) };
 }

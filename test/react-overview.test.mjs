@@ -30,14 +30,14 @@ const at = new Date(Date.now() - 60_000).toISOString();
 const startedAt = new Date(Date.now() - 120_000).toISOString();
 const file = 'p/digs/a/exa.md';
 const call = (id, overrides = {}) => ({ id, at, ms: 400, session: 'worker', source: 'exa', tool: 'exa_search', status: 'success', cost: [], claimedBy: file, rawFile: `p/sessions/worker/raw/${id}.json`, ...overrides });
-const question = (overrides = {}) => ({ id: 'a', title: 'Which page should we improve?', displayTitle: 'Search visibility opportunities', project: '/projects/site', session: 'current-chat', status: 'report saved', startedAt, planned: ['exa', 'youtube-video'], methods: ['exa'], sources: ['exa'], reports: [file], reportDetails: [{ file, source: 'exa', method: 'exa', status: 'partial', at }], files: ['p/digs/a/dig.md', file], answer: null, calls: [call('one')], snippet: 'Retained evidence suggests a page comparison.', ...overrides });
+const question = (overrides = {}) => ({ id: 'a', title: 'Which page should we improve?', displayTitle: 'Search visibility opportunities', project: '/projects/site', session: 'a', dig: 'site-p/a', status: 'report saved', startedAt, planned: ['exa', 'youtube-video'], methods: ['exa'], sources: ['exa'], reports: [file], reportDetails: [{ file, source: 'exa', method: 'exa', status: 'partial', at }], files: ['p/digs/a/dig.md', file], answer: null, calls: [call('one')], snippet: 'Retained evidence suggests a page comparison.', ...overrides });
 function fixture(items = [question()], live = []) {
   const actions = [];
   const app = {
-    snapshot: { library: '/library', items, live, activeCalls: [] }, snapshotLoaded: true, usageDays: 30, thread: 'current-chat', catalog: createCatalog(MODULES),
+    snapshot: { library: '/library', items, live, activeCalls: [] }, snapshotLoaded: true, usageDays: 30, dig: 'site-p/a', catalog: createCatalog(MODULES),
     go: path => actions.push(['go', path]), expand: path => actions.push(['expand', path]), update: patch => actions.push(['update', patch]), showDig: (...args) => actions.push(['showDig', ...args]), notify: (...args) => actions.push(['notice', ...args]),
   };
-  const host = { preview: false, canDraft: () => false, canOpenFile: () => true, openFile: async path => actions.push(['openFile', path]), draft: async value => actions.push(['draft', value]), openLink: async value => actions.push(['openLink', value]), call: async () => { throw new Error('Overview must not call providers'); } };
+  const host = { canDraft: () => false, canOpenFile: () => true, openFile: async path => actions.push(['openFile', path]), draft: async value => actions.push(['draft', value]), openLink: async value => actions.push(['openLink', value]), call: async () => { throw new Error('Overview must not call providers'); } };
   return { app, host, actions };
 }
 async function mount(t, Component, props) {
@@ -127,9 +127,9 @@ test('an empty or undated library never describes missing pricing as free', asyn
 });
 
 
-test('compact conversation view leads with active calls and sources, with no dashboard or foreign receipts', async t => {
+test('compact trail leads with active calls and sources, with no dashboard or foreign receipts', async t => {
   const mine = question({ calls: [call('mine', { cost: [{ unit: 'USD', amount: .4 }] })] });
-  const data = fixture([mine], [call('own', { session: 'current-chat', claimedBy: null, cost: null }), call('foreign', { session: 'elsewhere', source: 'youtube', cost: [{ unit: 'USD', amount: 999 }] })]);
+  const data = fixture([mine], [call('own', { projectFolder: 'site-p', dig: 'a', claimedBy: null, cost: null }), call('foreign', { projectFolder: 'site-p', dig: 'elsewhere', source: 'youtube', cost: [{ unit: 'USD', amount: 999 }] })]);
   data.app.snapshot.activeCalls = [{ id: 'running', project: mine.project, dig: mine.id, session: 'worker', source: 'exa', tool: 'exa_search' }];
   const props = { ...data, hidden: false }; const ui = await mount(t, ConversationOverview, props);
   assert.match(document.querySelector('.activity-status').textContent, /1 call running/);
@@ -150,13 +150,13 @@ test('compact conversation view leads with active calls and sources, with no das
 });
 
 test('missing identity, old-server telemetry and paused updates never claim zero or current running activity', async t => {
-  const data = fixture(); data.app.thread = null;
+  const data = fixture(); data.app.dig = null;
   const props = { ...data, hidden: false }; const ui = await mount(t, ConversationOverview, props);
-  assert.match($('panel').textContent, /Conversation not identified/); assert.equal($('panel-figures'), null);
-  await ui.render({ ...props, app: { ...data.app, thread: 'current-chat', snapshot: { ...data.app.snapshot, activeCalls: undefined } } });
+  assert.match($('panel').textContent, /No dig selected/); assert.equal($('panel-figures'), null);
+  await ui.render({ ...props, app: { ...data.app, dig: 'site-p/a', snapshot: { ...data.app.snapshot, activeCalls: undefined } } });
   assert.match(document.querySelector('.activity-status').textContent, /Live status unavailable/);
   assert.equal($('panel-figures').querySelector('dd').textContent, '—');
-  await ui.render({ ...props, app: { ...data.app, thread: 'current-chat', updatesFailed: true } });
+  await ui.render({ ...props, app: { ...data.app, dig: 'site-p/a', updatesFailed: true } });
   assert.match(document.querySelector('.activity-status').textContent, /Updates paused/);
   assert.equal($('panel-figures').querySelector('dd').textContent, '—');
 });
@@ -165,7 +165,7 @@ test('missing identity, old-server telemetry and paused updates never claim zero
 test('large source sets stay compact while running sources remain visible', async t => {
   const sources = ['exa', 'github', 'hackernews', 'x', 'youtube', 'reddit', 'papers'];
   const data = fixture([question({ calls: sources.map((source, i) => call(String(i), { source })) })]);
-  data.app.snapshot.activeCalls = [{ id: 'now', source: 'papers', session: 'current-chat', tool: 'papers_multi_search' }];
+  data.app.snapshot.activeCalls = [{ id: 'now', source: 'papers', project: '/projects/site', dig: 'a', tool: 'papers_multi_search' }];
   await mount(t, ConversationOverview, { ...data, hidden: false });
   assert.equal(document.querySelectorAll('.activity-source').length, 5);
   assert.match(document.querySelector('.activity-source').textContent, /Papers/);
@@ -173,4 +173,22 @@ test('large source sets stay compact while running sources remain visible', asyn
   await click(expand);
   assert.equal(document.querySelectorAll('.activity-source').length, 7);
   assert.equal(expand.getAttribute('aria-expanded'), 'true');
+});
+
+test('the trail shows the dig\'s running jobs with their action and age, and no other dig\'s', async t => {
+  const data = fixture();
+  data.app.snapshot.jobs = [
+    { id: 'job-mine', dig: 'site-p/a', source: 'x', tool: 'xsearch', createdAt: new Date(Date.now() - 185_000).toISOString() },
+    { id: 'job-quick', dig: 'site-p/a', source: 'youtube', tool: 'youtube_analyze', createdAt: new Date(Date.now() - 30_000).toISOString() },
+    { id: 'job-other', dig: 'site-p/b', source: 'perplexity', tool: 'perplexity_research', createdAt: at },
+  ];
+  await mount(t, ConversationOverview, { ...data, hidden: false });
+  const rows = [...$('panel-jobs').querySelectorAll('.activity-source')].map(node => node.textContent);
+  assert.equal(rows.length, 2);
+  assert.match(rows[0], /^Xxsearchjob running 3 min$/);
+  assert.match(rows[1], /^YouTubeyoutube_analyzejob running (29|30|31) s$/);
+  assert.doesNotMatch($('panel').textContent, /perplexity_research/);
+  const props = { ...data, hidden: false, app: { ...data.app, dig: null } };
+  await mount(t, ConversationOverview, props);
+  assert.equal($('panel-jobs'), null);
 });

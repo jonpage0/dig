@@ -217,7 +217,7 @@ export function GuidePage({ hidden, onNavigate, host }: GuidePageProps) {
         <FrameHeader><h3>Where your information goes</h3><p>Local records, with external research services.</p></FrameHeader>
         <FramePanel>
           <ul className="guide-privacy">
-            <li><strong>Saved research lives in your chosen library.</strong> Reports and call receipts stay outside the plugin package. Original responses are kept when retention is enabled and saving succeeds.</li>
+            <li><strong>Saved research lives in your chosen library.</strong> Reports and call receipts stay apart from Dig’s program files. Original responses are kept when retention is enabled and saving succeeds.</li>
             <li><strong>Research can send information to providers.</strong> The selected question, search terms, excerpts, URLs, or media go to the service being used. Video uploads and provider history have their own retention rules.</li>
             <li><strong>Keys belong outside the conversation.</strong> An API key is a credential that lets Dig use your provider account. Add it through Sources &amp; tools, never by pasting it into chat.</li>
           </ul>

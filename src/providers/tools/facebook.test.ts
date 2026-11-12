@@ -553,7 +553,7 @@ describe("facebook tools", () => {
 		mock.restore();
 		restore = undefined;
 		delete process.env.SCRAPECREATORS_API_KEY;
-		expect(await facebook_events.execute({ kind: "search", query: "dogs" }, context)).toBe("ERROR: SCRAPECREATORS_API_KEY not set. Get a key at https://scrapecreators.com");
+		expect(await facebook_events.execute({ kind: "search", query: "dogs" }, context)).toBe("ERROR: SCRAPECREATORS_API_KEY is not set in Dig's keys.env. Get a key at https://scrapecreators.com. The user sets it outside chat, on the page Dig's keys tool opens or in keys.env.");
 	});
 
 	test("mixed readable and malformed results preserve evidence and report partial coverage", async () => {

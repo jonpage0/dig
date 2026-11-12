@@ -21,6 +21,7 @@
  */
 import { USER_AGENT } from "../../version.mjs"
 import { requestJson } from "../http.js"
+import { setOutsideChat } from "../outcome.js"
 import { knownSecrets, redactText, redactValue } from "../secrets.js"
 import type { KeepRaw, ToolSpec } from "../types.js"
 
@@ -135,7 +136,7 @@ const DEFAULT_PAGE = 1
 function tikhubHeaders(): Record<string, string> {
   const token = process.env.TIKHUB_API_KEY?.trim()
   if (!token) {
-    throw new Error("TIKHUB_API_KEY not set")
+    throw new Error(`TIKHUB_API_KEY is not set in Dig's keys.env. ${setOutsideChat()}`)
   }
 
   return {
@@ -941,7 +942,7 @@ function parseJustOnePayload(value: Record<string, unknown>): Record<string, unk
 
 async function fetchJustOneJson(args: ProviderSearchArgs): Promise<ProviderJsonResult> {
   const token = process.env.JUSTONE_API_KEY?.trim()
-  if (!token) throw new Error("JUSTONE_API_KEY not set")
+  if (!token) throw new Error(`JUSTONE_API_KEY is not set in Dig's keys.env. ${setOutsideChat()}`)
   if (!args.cursor && (!args.justoneStart || !args.justoneEnd)) {
     throw new Error("Just One initial requests require justone_start and justone_end (yyyy-MM-dd HH:mm:ss); official prose requires them despite optional OpenAPI flags.")
   }

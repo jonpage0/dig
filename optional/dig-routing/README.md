@@ -1,6 +1,6 @@
 # Dig routing (optional)
 
-An instruction-only companion to [Dig](../../README.md). It teaches an agent to use Dig in the current conversation when its tools are available, or send the task to an authorized connected computer and bring the result back. Automatic skill selection is enabled.
+An instruction-only companion to [Dig](../../README.md). It teaches an agent to use Dig in the current conversation when its tools are available, or send the task to an authorized connected computer where Dig is connected and bring the result back. Automatic skill selection is enabled.
 
 ## Install locally
 
@@ -11,7 +11,7 @@ codex plugin marketplace upgrade dig
 codex plugin add dig-routing@dig
 ```
 
-For a local checkout, register its root with `codex plugin marketplace add /absolute/path/to/dig`, then run `codex plugin add dig-routing@dig`. Install the main Dig plugin separately on the computer that will run the research. The routing plugin has no MCP server, credentials or library of its own, and installing Dig does not install this companion.
+For a local checkout, register its root with `codex plugin marketplace add /absolute/path/to/dig`, then run `codex plugin add dig-routing@dig`. Install and connect Dig itself, as its [README](../../README.md) describes, on the computer that will run the research. The routing plugin has no MCP server, credentials or library of its own, and installing Dig does not install this companion.
 
 Refresh skill discovery or start a new conversation. The explicit invocation is `$dig-routing:route`. A matching request can select the skill automatically once the host has made it available.
 

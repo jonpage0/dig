@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,14 +8,15 @@ import { MODULES, ALL_MODULES, moduleAgents } from './providers/modules.ts';
 import { WORKER_DEFAULTS, WORKER_EFFORTS, WORKER_TABLES, environmentValues, keysPath, loadKeys, sourceSetting, stateDirectory, workerGuidance, workerSetting } from './config.mjs';
 import { findExecutable } from './providers/executables.ts';
 import { paperSearchDirectory, paperSearchEnvValues, paperSearchInterpreter } from './providers/runtime-config.ts';
-import { hostOf, hostWords } from './ui/host.mjs';
 
-export const packageRoot = fileURLToPath(new URL(existsSync(new URL('../skills', import.meta.url)) ? '../' : '../plugin/', import.meta.url));
+// The package folder: the repository root, which holds the Papers bridge and the methods. Both src/ and the bundle's
+// dist/ sit directly inside it.
+export const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const executable = name => !!findExecutable(name);
 const has = name => !!process.env[name]?.trim();
 /**
- * How the environment Codex started Dig with relates to keys.env for one name, never the value: `absent` (no value
- * there), `unused` (a value Dig does not use because keys.env lacks the name), `same`, or `different`.
+ * How the environment Dig's service started with relates to keys.env for one name, never the value: `absent` (no
+ * value there), `unused` (a value Dig does not use because keys.env lacks the name), `same`, or `different`.
  */
 function environmentState(name, env = process.env) {
   const starting = environmentValues(env).get(name);
@@ -24,7 +25,7 @@ function environmentState(name, env = process.env) {
   return !current ? 'unused' : current === starting ? 'same' : 'different';
 }
 /** A source's credential environment names: secret-shaped names plus any login its setup requires. GitHub's are optional. */
-function credentialNames(m) {
+export function credentialNames(m) {
   const required = new Set((m.id === 'github' ? [] : m.keys ?? []).flatMap(k => typeof k === 'string' ? [k] : k));
   return (m.env ?? []).filter(name => /_(KEY|TOKEN|SECRET|PASSWORD)$/.test(name) || required.has(name)).map(name => ({ name, required: required.has(name) }));
 }
@@ -35,13 +36,14 @@ function credentialNames(m) {
 const bridgeHas = name => paperSearchEnvValues(name).length > 0;
 const PAPERS_SETTINGS = (MODULES.find(m => m.id === 'papers')?.envSettings ?? []).map(s => s.name);
 /**
- * How the user supplies missing credentials, in the host's words. Codex shows Dig's Sources & tools page; Claude Code
- * shows no views, so there the user edits keys.env directly, as README's Claude Code section says.
+ * How the user supplies missing credentials, true in any host: on the page the `keys` tool opens, or in keys.env.
+ * Dig takes credentials only from keys.env, so a value the environment Dig started with holds is not used until it is set there.
  */
 function keysAdvice(missing, unused) {
-  const { app, skill } = hostWords(process.env.DIG_HOST);
-  if (hostOf(process.env.DIG_HOST) === 'codex') return unused.length ? `${app}’s environment has ${unused.join(' and ')}; Use existing key on Dig’s Sources & tools page copies ${unused.length > 1 ? 'them' : 'it'} into keys.env.` : `The user adds ${missing.length > 1 ? 'them' : 'it'} outside chat with Edit keys.env on Dig’s Sources & tools page; Dig reloads keys.env when it is saved.`;
-  return unused.length ? `${app}’s environment has ${unused.join(' and ')}; Dig uses ${unused.length > 1 ? 'them' : 'it'} only once the user copies ${unused.length > 1 ? 'them' : 'it'} into keys.env by hand.` : `The user adds ${missing.length > 1 ? 'them' : 'it'} outside chat by editing keys.env directly (${skill('setup')} gives the exact lines); Dig reloads keys.env when it is saved.`;
+  const them = (names, plural, single) => (names.length > 1 ? plural : single);
+  return unused.length
+    ? `The environment Dig started with has ${unused.join(' and ')}, which Dig does not use until ${them(unused, 'they are', 'it is')} in keys.env: the user sets ${them(unused, 'them', 'it')} outside chat, on the page Dig’s keys tool opens or in keys.env.`
+    : `The user sets ${them(missing, 'them', 'it')} outside chat, on the page Dig’s keys tool opens or in keys.env; Dig reloads keys.env when it is saved.`;
 }
 export function sourceInfo(config, source) {
   const allMethods = moduleAgents(ALL_MODULES);
@@ -96,7 +98,7 @@ export function sourceInfo(config, source) {
         workerDefault: workerDefault(config, method.name),
       })),
       credentials, credentialGuidance: m.credential ?? 'No API key required', prerequisites,
-      // Settings such as a contact email: `available` when Dig's environment (keys.env, else Codex's) has a value;
+      // Settings such as a contact email: `available` when Dig's environment (keys.env, else the one its service started with) has a value;
       // `bridge` when only the Papers bridge's own .env does.
       envSettings: (m.envSettings ?? []).map(({ name, label, purpose }) => ({ name, label, purpose, available: has(name), bridge: !has(name) && m.id === 'papers' && bridgeHas(name) })),
       readiness: { status, message },
@@ -115,7 +117,7 @@ export const environmentPresence = (env = process.env) => [
 
 const KEYS_HEADER = `# Dig provider credentials, and a few provider settings such as a contact email: one NAME=value line each.
 # Keep this file private, and keep its values out of chat and version control.
-# Dig takes credentials only from this file; Dig's Sources & tools page can copy in a key Codex's environment already has.
+# Dig takes credentials only from this file; the page Dig's keys tool opens writes them here.
 # Dig reloads this file whenever it is saved.
 `;
 // keys.env writes run one at a time.
@@ -124,67 +126,38 @@ const queueKeysWrite = write => { const work = keysWork.then(write); keysWork = 
 const readKeys = async path => { try { return await readFile(path, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } };
 const ensureNewline = text => (text === '' || text.endsWith('\n') ? text : `${text}\n`);
 /**
- * The Sources & tools page's "Edit keys.env": creates the file (mode 600) if it is missing, then appends an empty `NAME=` line,
- * under a comment naming the source and its guidance, for each credential name of `source` (or of every source) that
- * the file does not already assign, commented out or not, so the file always shows everything Dig can use. A source's
- * settings (`envSettings`, such as the Unpaywall contact email) follow, each under a comment saying what it is for. An
- * empty assignment is ignored until the user fills it in. Existing lines and file mode are left alone, and values are
- * never returned.
+ * The key-entry page's submission: writes each `NAME → value` the person typed into keys.env. The first active
+ * assignment of a name (an empty `NAME=` placeholder included) is replaced; otherwise the line is appended under a
+ * comment naming the sources that use it and their guidance. Only catalog credential names are accepted, and a value
+ * must be one line. The file is written atomically at mode 600 and applied at once. Returns the names written, never values.
  */
-export function prepareKeysFile(source, state = stateDirectory()) {
+export function saveKeys(values, state = stateDirectory(), env = process.env) {
   return queueKeysWrite(async () => {
     const path = keysPath(state);
-    const text = await readKeys(path);
-    const assigned = new Set([...(text ?? '').matchAll(/^[ \t]*(?:#[ \t]*)?(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=/gm)].map(match => match[1]));
-    const selected = MODULES.filter(m => !source || m.id === source);
-    const added = []; const blocks = [];
-    for (const m of selected) {
-      const names = credentialNames(m).map(c => c.name).filter(name => !assigned.has(name) && !added.includes(name));
-      const settings = (m.envSettings ?? []).filter(s => !assigned.has(s.name) && !added.includes(s.name));
-      if (!names.length && !settings.length) continue;
-      added.push(...names, ...settings.map(s => s.name));
-      // A name shared by several selected sources is written once, under every label that uses it.
-      const labels = selected.filter(other => credentialNames(other).some(c => names.includes(c.name))).map(other => other.label);
-      blocks.push([
-        ...(names.length ? [`# ${labels.join(', ')}: ${m.credential ?? names.join(', ')}`, ...names.map(name => `${name}=`)] : []),
-        ...settings.flatMap(s => [`# ${s.label} (${m.label}): ${s.purpose}`, `${s.name}=`]),
-      ].join('\n'));
+    const known = new Set(MODULES.flatMap(m => credentialNames(m).map(c => c.name)));
+    const entries = Object.entries(values).map(([name, value]) => [name, String(value).trim()]).filter(([, value]) => value);
+    for (const [name, value] of entries) {
+      if (!known.has(name)) throw new Error(`${name} is not a credential Dig uses`);
+      if (/[\r\n\0]/.test(value)) throw new Error(`The value for ${name} spans several lines`);
     }
-    await mkdir(state, { recursive: true });
-    if (text === null) await writeFile(path, `${KEYS_HEADER}${blocks.map(block => `\n${block}\n`).join('')}`, { flag: 'wx', mode: 0o600 });
-    else if (blocks.length) await appendFile(path, `${ensureNewline(text) === text ? '' : '\n'}${blocks.map(block => `\n${block}\n`).join('')}`);
-    return { path, added, created: text === null };
-  });
-}
-/**
- * The Sources & tools page's "Use existing key" / "Update key from env": copies into keys.env each credential of `source` that
- * Codex's environment holds and keys.env lacks (`unused`) or holds differently (`different`). The first active
- * assignment of a name is replaced; otherwise the line is appended under the source's comment. The file is written
- * atomically at mode 600 and applied at once. Returns the names copied, never values.
- */
-export function copyEnvironmentKeys(source, state = stateDirectory(), env = process.env) {
-  return queueKeysWrite(async () => {
-    const path = keysPath(state);
-    const m = MODULES.find(candidate => candidate.id === source);
-    if (!m) throw new Error(`Unknown source: ${source}`);
-    const names = credentialNames(m).map(c => c.name).filter(name => ['unused', 'different'].includes(environmentState(name, env)));
-    if (!names.length) return { path, copied: [] };
+    if (!entries.length) return { path, saved: [] };
     let text = (await readKeys(path)) ?? KEYS_HEADER;
     const appended = [];
-    for (const name of names) {
-      const value = environmentValues(env).get(name);
-      if (/[\r\n]/.test(value)) throw new Error(`${name} in ${hostWords(process.env.DIG_HOST).app}’s environment spans several lines; copy it into keys.env by hand`);
+    for (const [name, value] of entries) {
       const line = new RegExp(`^[ \\t]*(?:export[ \\t]+)?${name}[ \\t]*=.*$`, 'm');
       if (line.test(text)) text = text.replace(line, () => `${name}=${value}`);
-      else appended.push(`${name}=${value}`);
+      else appended.push([name, value]);
     }
-    if (appended.length) text = `${ensureNewline(text)}\n# ${m.label}: ${m.credential ?? appended.map(line => line.split('=')[0]).join(', ')}\n${appended.join('\n')}\n`;
+    for (const [name, value] of appended) {
+      const users = MODULES.filter(m => credentialNames(m).some(c => c.name === name));
+      text = `${ensureNewline(text)}\n# ${users.map(m => m.label).join(', ')}: ${users[0]?.credential ?? name}\n${name}=${value}\n`;
+    }
     await mkdir(state, { recursive: true });
     const temporary = `${path}.${randomUUID()}.tmp`;
     await writeFile(temporary, text, { mode: 0o600 });
     await rename(temporary, path);
     loadKeys(env, state);
-    return { path, copied: names };
+    return { path, saved: entries.map(([name]) => name) };
   });
 }
 /** A method's suggested worker for source_info: the effective guidance and what decided it. */
@@ -204,13 +177,13 @@ const workerFields = agent => {
 };
 export const settingsFields = {
   search_semantic: { schema: z.boolean(), title: 'Local semantic report search', description: 'Enable BGE-small on this computer. First use downloads about 34 MB plus tokenizer assets. Report text stays local; no embedding API key. Keyword search works while this is off.' },
-  library: { schema: z.string().min(1), title: 'Research library', description: 'Absolute directory outside the plugin cache. Changing it selects a library; it does not move research.' },
+  library: { schema: z.string().min(1), title: 'Research library', description: 'Absolute directory outside Dig’s program files. Changing it selects a library; it does not move research.' },
   keep_raw: { schema: z.boolean(), title: 'Retain original provider responses' },
   spend_dig_ceiling_usd: { schema: z.number().min(0), title: 'Spending ceiling per dig (US dollars)', description: 'Once the calls in one dig have recorded this much in provider-reported costs, Dig refuses that dig’s further paid calls before any request is sent; 0 means no ceiling. It counts only costs providers report in US dollars, not provider credits or costs a provider did not report.' },
-  worker_model: { schema: z.string().min(1), title: 'Source worker model', description: `The Codex model Dig suggests for source workers, ${WORKER_DEFAULTS.default.model} unless you change it. The conversation chooses each worker’s model and may choose another; Dig does not check that your account offers it. Each method follows this until it has its own suggestion on the Sources & tools page; X judge, X breadth and X trace start with their own.` },
+  worker_model: { schema: z.string().min(1), title: 'Source worker model', description: `The model Dig suggests for source workers, ${WORKER_DEFAULTS.default.model} unless you change it. The conversation chooses each worker’s model and may choose another; Dig does not check that your account offers it. Each method follows this until it has its own suggestion on the Sources & tools page; X judge, X breadth and X trace start with their own.` },
   worker_effort: { schema: z.enum(WORKER_EFFORTS), title: 'Source worker effort', description: `The reasoning effort Dig suggests for source workers, ${WORKER_DEFAULTS.default.effort} unless you change it. Each method follows this until it has its own suggestion on the Sources & tools page; X judge, X breadth and X trace start with their own.` },
   ...Object.fromEntries(MODULES.map(m => [sourceSetting(m.id), { schema: z.boolean(), title: `Enable ${m.label}`, description: m.description }])),
-  x_model: { schema: z.string().min(1), title: 'X provider model', description: 'xAI retrieval model, not the Codex source-worker model.' },
+  x_model: { schema: z.string().min(1), title: 'X provider model', description: 'xAI retrieval model, not the source-worker model.' },
   x_depth: { schema: z.enum(['quick', 'standard', 'max', 'ultra']), title: 'Starting X search depth', description: 'X passes use this depth unless a pass needs another: X judge may run one max pass for a nuanced or disputed question, X breadth one max pass for a final sweep, and a quick existence check runs quick. A max or ultra starting depth applies to every pass.' },
   x_web_search: { schema: z.boolean(), title: 'Include web search in X retrieval', description: 'Off keeps X research to X posts. A request can still turn web search on or off for a single pass.' },
   x_code_execution: { schema: z.boolean(), title: 'Allow provider code execution in X retrieval' },
@@ -224,7 +197,7 @@ const ownSettings = m => [...(m.id === 'x' ? X_SETTINGS : []), ...METHODS.filter
 export const settingsLayout = [
   { kind: 'group', title: 'Library', items: properties(['library', 'keep_raw', 'spend_dig_ceiling_usd', 'search_semantic']) },
   { kind: 'group', title: 'Source workers', items: properties(['worker_model', 'worker_effort']) },
-  { kind: 'group', title: 'Sources', items: [...properties(MODULES.filter(m => m.kind !== 'tool').flatMap(m => [sourceSetting(m.id), ...ownSettings(m)])), { kind: 'tool', tool: 'source_readiness', title: 'Check source and tool readiness', description: 'Credential names and local prerequisites for every source and shared tool. Does not call providers.' }] },
+  { kind: 'group', title: 'Sources', items: [...properties(MODULES.filter(m => m.kind !== 'tool').flatMap(m => [sourceSetting(m.id), ...ownSettings(m)]))] },
   { kind: 'group', title: 'Shared tools', items: properties(MODULES.filter(m => m.kind === 'tool').map(m => sourceSetting(m.id))) },
 ];
 /** Each worker field shows the guidance in effect: its own stored value, else what it inherits. */

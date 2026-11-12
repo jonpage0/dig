@@ -35,7 +35,7 @@ function fixture() {
     snapshot: { library: '/saved/research', configPath: '/state/config.toml', libraryFolder: 'folder' },
     saveSetting: async (key, value) => { calls.push([key, value]); return { ...values, [key]: value }; },
   };
-  return { app, host: { preview: false }, calls };
+  return { app, calls };
 }
 async function mount(t, props) {
   document.body.replaceChildren();
@@ -48,8 +48,8 @@ async function mount(t, props) {
 }
 
 test('settings presents current operating preferences and only global schema controls through the existing authority', async t => {
-  const { app, host, calls } = fixture();
-  const ui = await mount(t, { app, host, hidden: false });
+  const { app, calls } = fixture();
+  const ui = await mount(t, { app, hidden: false });
   assert.match(ui.element.querySelector('.settings-state').textContent, /Originals retained/);
   assert.match(ui.element.querySelector('.settings-state').textContent, /suggested-model/);
   assert.match(ui.element.querySelector('.settings-state').textContent, /conversation may choose another/);
@@ -64,8 +64,8 @@ test('settings presents current operating preferences and only global schema con
 });
 
 test('folder warnings and in-progress drafts survive hidden navigation and external settings refresh', async t => {
-  const { app, host, calls } = fixture();
-  const ui = await mount(t, { app: { ...app, snapshot: { ...app.snapshot, libraryFolder: 'missing' } }, host, hidden: false });
+  const { app, calls } = fixture();
+  const ui = await mount(t, { app: { ...app, snapshot: { ...app.snapshot, libraryFolder: 'missing' } }, hidden: false });
   const field = $('setting-library');
   await React.act(async () => {
     Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(field, '/my/new/draft');
@@ -73,20 +73,17 @@ test('folder warnings and in-progress drafts survive hidden navigation and exter
   });
   assert.match($('setting-library-note').textContent, /does not exist yet/);
   const changed = { ...app, snapshot: { ...app.snapshot, libraryFolder: 'not-folder' }, settings: { ...app.settings, values: { ...app.settings.values, library: '/external' } } };
-  await ui.render({ app: changed, host, hidden: true }); await ui.render({ app: changed, host, hidden: false });
+  await ui.render({ app: changed, hidden: true }); await ui.render({ app: changed, hidden: false });
   assert.equal($('setting-library'), field);
   assert.equal(field.value, '/my/new/draft');
   assert.match($('setting-library-note').textContent, /not a folder/);
   assert.deepEqual(calls, []);
 });
 
-test('preview remains read-only and unavailable schema is disclosed', async t => {
+test('unavailable schema is disclosed', async t => {
   const { app } = fixture();
-  const ui = await mount(t, { app, host: { preview: true }, hidden: false });
-  assert.equal($('setting-library').disabled, true);
-  assert.equal($('setting-keep_raw').disabled, true);
-  assert.match($('settings-status').textContent, /read-only/);
-  await ui.render({ app: { ...app, settings: { values: {} } }, host: { preview: true }, hidden: false });
+  const ui = await mount(t, { app, hidden: false });
+  await ui.render({ app: { ...app, settings: { values: {} } }, hidden: false });
   assert.match($('settings-status').textContent, /without their schema/);
   assert.equal($('setting-library'), null);
 });

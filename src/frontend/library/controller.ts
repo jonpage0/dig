@@ -9,19 +9,15 @@ import { canonicalResearchFile, primaryFile } from './research-state';
 export const POLL_MS = 2000;
 const READ_LIMIT = 60000;
 export const SCHEMA_MISSING = 'Settings arrived without their schema, so no controls can be shown. Reload Dig and try again.';
-export const readOnly = (value: any) => `Browser preview is read-only. Open Dig in ${hostWords(value?.host).app} to change settings.`;
 
-export function replacedMessage(value: any) {
-  const installed = typeof value.replaced?.version === 'string' ? value.replaced.version : null; const { app } = hostWords(value.host);
-  return `${installed ? `Dig ${installed} was installed` : 'Dig was updated or removed'} while ${app} was running. Refresh Dig’s plugin connection, then refresh this view. If the connection still reports Dig ${value.version}, quit and reopen ${app} as a fallback. This view currently uses Dig ${value.version}.`;
-}
 export function versionMessage(value: any) {
-  return `Dig ${value.version} is installed, but ${hostWords(value.host).app} is still showing the ${VERSION} view. Right-click Dig in the sidebar and choose Refresh to load the new one.`;
+  const words = hostWords(value.host);
+  return `Dig ${value.version} is installed, but ${words.app} is still showing the ${VERSION} view. ${words.refresh}`;
 }
 
 const emptySnapshot = { items: [], live: [] };
 const emptyState = {
-  mode: 'library', thread: null, connected: false, notice: '', failure: false, updatesFailed: false,
+  mode: 'library', dig: null, connected: false, notice: '', failure: false, updatesFailed: false,
   current: null, document: null, evidence: null, assessment: null, inspectionOpen: false, detailsOpen: false, callsOpen: false, returnFile: null, returnView: '/library',
   aboutReturn: '/library', usageDays: 30,
 };
@@ -31,7 +27,7 @@ const emptyState = {
 export function useLibraryController(host: DigHost, router: any, view: string) {
   const queries = useQueryClient();
   const snapshotQuery = useQuery({ queryKey: ['library'], queryFn: () => host.call('library_snapshot'), enabled: false });
-  const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: () => host.call('settings.read'), enabled: false });
+  const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: () => host.call('view_settings'), enabled: false });
   const sourcesQuery = useQuery({ queryKey: ['sources'], queryFn: () => host.call('source_info'), enabled: false });
   const snapshot: any = snapshotQuery.data ?? emptySnapshot;
   const catalog = useMemo(() => createCatalog(snapshot.sources), [snapshot.sources]);
@@ -53,7 +49,6 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
     let evidenceOrigin: { focus: Element | null; scroll: number; reopen: boolean } | null = null;
     let readerOrigin: { focus: Element | null; scroll: number } | null = null;
     let noticedVersion = false;
-    let noticedReplaced = false;
     const update = (patch: any) => {
       if (!alive) return;
       const next = { ...latest.current.state, ...patch };
@@ -76,7 +71,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
         || (currentView === '/about' && ['/sources', '/settings'].includes(latest.current.state.aboutReturn));
       const wantsSources = currentView === '/sources' || currentView === '/about';
       await Promise.all([
-        wantsSettings ? read('settings', 'settings.read') : null,
+        wantsSettings ? read('settings', 'view_settings') : null,
         wantsSources ? read('sources', 'source_info') : null,
       ]);
     };
@@ -108,9 +103,7 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
           if (added.length) notify(`Saved to this dig: ${added.map(latest.current.catalog.fileLabel).join(', ')}. Open its tab to read it.`);
         }
       }
-      if (!noticedReplaced && value.replaced && typeof value.version === 'string') {
-        noticedReplaced = true; noticedVersion = true; notify(replacedMessage(value));
-      } else if (!noticedVersion && typeof value.version === 'string' && value.version !== VERSION) {
+      if (!noticedVersion && typeof value.version === 'string' && value.version !== VERSION) {
         noticedVersion = true;
         notify(versionMessage(value));
       }
@@ -330,7 +323,8 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
       });
     };
     const saveSetting = (key: string, value: unknown) => {
-      const work = saving.then(async () => (await host.call('settings.update', { set: { [key]: value } })).values);
+      // The settings tool's logic: the same file, the same checks, and the hosts told that the tools changed.
+      const work = saving.then(async () => (await host.call('view_settings', { set: { [key]: value } })).values);
       saving = work.catch(() => {});
       return work.then(async values => {
         // A save that overlaps an old poll queues a second snapshot/read after that poll completes.
@@ -339,24 +333,17 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
         return values;
       }).catch((error: any) => { notify(`Not saved: ${error.message}`, true); throw error; });
     };
-    const editKeys = async (source?: string) => {
-      let path: string | null = null;
+    // Keys are typed into the one-time page the service serves, never into this view: it opens in the browser, and
+    // saving it changes readiness here on the next update.
+    const enterKeys = async (source?: string) => {
+      let address: string | null = null;
       try {
-        const prepared = await host.call('prepare_keys_file', source ? { source } : {});
-        path = prepared.path;
-        const added = !prepared.added.length ? '' : prepared.added.length > 4 ? ` Added ${prepared.added.length} empty lines.` : ` Added empty lines for ${prepared.added.join(', ')}.`;
-        if (!host.canOpenFile()) { notify(`${hostWords(latest.current.snapshot.host).app} cannot open files from this view. Open ${path} in a text editor, fill in the values and save.${added}`); return; }
-        await host.openFile(path!);
-        notify(`Opened keys.env.${added} Fill in the values and save; Dig reloads the file and updates readiness here.`);
-      } catch (error: any) { notify(path ? `${hostWords(latest.current.snapshot.host).app} did not open ${path}: ${error.message}` : `Unable to prepare keys.env: ${error.message}`, true); }
-    };
-    const useEnvironment = async (source: string) => {
-      try {
-        const result = await host.call('use_environment_keys', { source });
-        const { app } = hostWords(latest.current.snapshot.host);
-        notify(result.copied.length ? `Copied ${result.copied.join(', ')} from ${app}’s environment into keys.env.` : `keys.env already matches ${app}’s environment.`);
-        await poll(true);
-      } catch (error: any) { notify(`Unable to copy the key into keys.env: ${error.message}`, true); }
+        const page = await host.call('view_keys', source ? { source } : {});
+        address = typeof page?.address === 'string' ? page.address : null;
+        if (!address) { notify('Every credential the enabled sources use is already set. To replace one, use Enter keys on its source.'); return; }
+        await host.openLink(address);
+        notify(`Opened the key page for ${page.names.join(', ')}. Type the values there and save; readiness updates here. If it did not open, open ${address} in a browser on this computer.`);
+      } catch (error: any) { notify(address ? `The key page did not open: ${error.message}. Open ${address} in a browser on this computer.` : `Unable to make a key page: ${error.message}`, true); }
     };
     const activate = async () => {
       const url = host.readDeepLink();
@@ -381,18 +368,19 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
         await showDig(item, file);
       } catch (error: any) { if (alive && request === navigation) notify(error.message, true); }
     };
-    const setMode = (mode: string, thread: string | null) => {
-      update({ mode, thread });
+    // The trail follows one dig, by the handle the service gives it.
+    const setMode = (mode: string, dig: string | null) => {
+      update({ mode, dig });
       if (['/library', '/trail'].includes(latest.current.view)) void navigate(mode === 'panel' ? '/trail' : '/library');
     };
     return {
-      update, notify, poll, read, refreshPages, showFile, showDig, loadAssessment, inspectRecords, inspectRaw, closeEvidence, go, expand, back, saveSetting, editKeys, useEnvironment, activate,
+      update, notify, poll, read, refreshPages, showFile, showDig, loadAssessment, inspectRecords, inspectRaw, closeEvidence, go, expand, back, saveSetting, enterKeys, activate,
       readerOrigin: () => { readerOrigin = { focus: document.getElementById('reader-evidence'), scroll: globalThis.scrollY ?? 0 }; },
       backAbout: () => navigate(latest.current.state.aboutReturn === '/reader' && !latest.current.state.current ? '/library' : latest.current.state.aboutReturn),
       start: async () => {
         const offResult = host.subscribeResult(result => {
           const value = result?.structuredContent ?? result;
-          if (value?.view === 'panel') setMode('panel', value.thread ?? null);
+          if (value?.view === 'panel') setMode('panel', typeof value.dig === 'string' ? value.dig : null);
         });
         const offActivation = host.subscribeActivation(() => { void activate(); });
         const teardown = () => { offResult(); offActivation(); };
@@ -401,8 +389,8 @@ export function useLibraryController(host: DigHost, router: any, view: string) {
           if (!alive) { teardown(); return teardown; }
           const params = new URLSearchParams(location.search);
           const context = host.getContext();
-          if (host.preview) setMode(params.has('panel') ? 'panel' : 'library', params.get('panel'));
-          else if (context?.toolInfo?.tool?.name === 'open_trail') setMode('panel', latest.current.state.thread);
+          if (host.browser) setMode(context?.toolInfo?.tool?.name === 'open_trail' ? 'panel' : 'library', params.get('dig'));
+          else if (context?.toolInfo?.tool?.name === 'open_trail') setMode('panel', latest.current.state.dig);
           update({ connected: true });
           await poll(true);
           await activate();

@@ -1,5 +1,5 @@
 import { abortableDelay, keptJson } from "../http.js";
-import { failed, outcome } from "../outcome.js";
+import { failed, outcome, setOutsideChat } from "../outcome.js";
 import { knownSecrets, redactText } from "../secrets.js";
 import { youtubeVideoId } from "./video_analyze.js";
 import type { ToolContext, ToolSpec } from "../types.js";
@@ -154,7 +154,7 @@ export const youtube_analyze: ToolSpec = {
     let id: string | undefined, stopped = false, intentionallyRunning = false, body: ReturnType<typeof buildYouTubeRequest> | undefined, last: any;
     try {
       body = buildYouTubeRequest(args);
-      if (!key) return failed("Set GEMINI_API_KEY in Dig's keys.env for YouTube video understanding; existing search/transcript routes remain available");
+      if (!key) return failed(`GEMINI_API_KEY is not set in Dig's keys.env; YouTube video understanding needs it, and the search and transcript routes remain available. ${setOutsideChat()}`);
       let value = await request("", key, ctx, body, ctx.abort, v => { if (validInteractionId(v?.id)) id = v.id; }, body.store ? 90000 : 540000);
       id = value.id; last = value;
       if (body.store && !args.background) value = await poll(id!, value, 480, key, ctx, v => { last = v; });
@@ -188,7 +188,7 @@ export const youtube_analysis_status: ToolSpec = {
       if (!["get", "cancel"].includes(action)) throw new Error("action must be get or cancel");
       number(wait, "waitSeconds", 0, 120);
       if (action === "cancel" && wait !== 0) throw new Error("waitSeconds applies only to get");
-      const key = process.env.GEMINI_API_KEY?.trim(); if (!key) return failed("Set GEMINI_API_KEY in Dig's keys.env to read this analysis");
+      const key = process.env.GEMINI_API_KEY?.trim(); if (!key) return failed(`GEMINI_API_KEY is not set in Dig's keys.env, and reading this analysis needs it. ${setOutsideChat()}`);
       let value = await request(`/${encodeURIComponent(id)}${action === "cancel" ? "/cancel" : ""}`, key, ctx, action === "cancel" ? {} : undefined);
       if (value.id !== id) throw new Error("Google returned a different interaction from the requested ID");
       if (action === "get" && wait > 0) value = await poll(id, value, wait, key, ctx);

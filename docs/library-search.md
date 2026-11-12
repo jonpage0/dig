@@ -1,6 +1,6 @@
 # Library search
 
-Dig searches saved research passages locally through the `library_search` MCP tool. Research Markdown remains authoritative; the index is rebuildable derivative state.
+Dig searches saved research passages locally through the `library_search` tool. Research Markdown remains authoritative; the index is rebuildable derivative state.
 
 ## Scope and authority
 
@@ -16,7 +16,7 @@ Closed object; additional properties rejected. All filters intersect.
 - mode: optional enum hybrid | keyword, default hybrid.
 - file: optional string, 1–4096 units; library-relative or absolute canonical reference accepted by library_read. Must name an indexed report or answer. A question, receipt or original is an error, not an empty search.
 - project: optional existing absolute project directory string, same validation as library_list; canonical comparison against recorded project identity.
-- dig: optional existing dig id string, 1–200 units. Requires project to avoid ambiguous cross-project ids.
+- dig: optional dig handle, as dig_start returned it, 1–400 units. It names its own project, so project is not needed with it. A handle that names no dig is refused with the same sentence as a source call without one.
 - source: optional existing report-source catalog id. Disabled sources' saved reports remain searchable. Saved answers have no source identity and are excluded when source is supplied.
 - after: optional valid UTC ISO timestamp; inclusive document generated/finished time. Reject invalid timestamps. Undated documents do not match this filter.
 - before: optional valid UTC ISO timestamp; exclusive document time. Requires after < before when both exist.
@@ -27,7 +27,7 @@ The tool makes no source-provider call and changes no report, answer or receipt.
 
 ## Successful output
 
-Closed object; every key below is required. structuredContent carries the complete typed result; content is a one-line summary (hit count, files searched, status, mode used and any warning count), as for every Dig tool except `x_images`, whose result is content only. Agents must read originals before relying on a result. Scores are rankings, never confidence probabilities.
+Closed object; every key below is required. structuredContent carries the complete typed result; content is a one-line summary (hit count, files searched, status, mode used and any warning count), as for Dig's other core tools. (Source tools answer with content only.) Agents must read originals before relying on a result. Scores are rankings, never confidence probabilities.
 
 - status: enum complete | partial.
 - mode_requested: enum hybrid | keyword.
@@ -38,7 +38,7 @@ Closed object; every key below is required. structuredContent carries the comple
 - warnings: array of objects {code: enum semantic_disabled | semantic_unavailable | unreadable_file | invalid_metadata | correction_graph | changed_during_search | cache_unavailable, message: nonempty string}. Messages are credential-redacted. Empty when no warning applies.
 - hits: array, length <= limit, of the following closed object:
   - file: canonical library-relative file string; path: canonical absolute file string.
-  - project: recorded absolute project string; dig: string.
+  - project: recorded absolute project string; dig: the dig id string (not the handle; the handle is `<project folder>/<dig id>`).
   - kind: enum report | answer; source: report-source id or null for an answer; method: existing agent name string or null.
   - title: existing report/answer-derived title string; question: original saved question string.
   - at: UTC ISO timestamp string or null; superseded: boolean.
@@ -65,7 +65,7 @@ semantic = false
 
 Its flat native setting is search_semantic, boolean, default false; both settings surfaces map to that same field. Keyword search works immediately. Semantic enablement authorizes a one-time model asset download (about 34 MB plus tokenizer); display that fact and local-only inference before enabling. Existing users are not silently opted in. There is no API credential or model selector. Hybrid is the search input default but honestly falls back to keyword when semantics is off.
 
-The asset manifest is [model asset manifest](../src/search/assets/manifest.json), with pinned URLs, byte counts and SHA-256 hashes checked against the tested files. Its closed shape is {model: string, revision: 40-character git SHA string, files: array of {path: relative string, sha256: 64-character lowercase hex string, bytes: positive integer, url: HTTPS string}}. Integrity-check every asset before use; no model-metadata-selected files or executable code downloads. Store assets under <state>/search/models/<model revision>/, never the package cache. Download into temporary files and atomically publish only verified assets. No execution or dynamic package installation from model metadata. Runtime JS and supported ONNX platform binaries are shipped with the plugin, not downloaded/executed at search time. Unsupported semantic platforms retain keyword mode with an explicit warning. Semantic search is packaged for macOS arm64 only. Limits: four CPU threads, single embedding batch per process, idle model disposal after 60 seconds with no embedding work. No background process survives the MCP server.
+The asset manifest is [model asset manifest](../src/search/assets/manifest.json), with pinned URLs, byte counts and SHA-256 hashes checked against the tested files. Its closed shape is {model: string, revision: 40-character git SHA string, files: array of {path: relative string, sha256: 64-character lowercase hex string, bytes: positive integer, url: HTTPS string}}. Integrity-check every asset before use; no model-metadata-selected files or executable code downloads. Store assets under <state>/search/models/<model revision>/, never the package folder. Download into temporary files and atomically publish only verified assets. No execution or dynamic package installation from model metadata. Runtime JS and supported ONNX platform binaries are shipped with the package, not downloaded/executed at search time. Unsupported semantic platforms retain keyword mode with an explicit warning. Semantic search is packaged for macOS arm64 only. Limits: four CPU threads, single embedding batch per process, idle model disposal after 60 seconds with no embedding work. No background process outlives the service.
 
 ## Disposable index schema and lifecycle
 

@@ -1,14 +1,14 @@
 # Evidence ranking
 
-Evidence ranking is an optional reading aid for a burdensome shortlist of already collected text excerpts. The `evidence_rank` tool uses TypeSafe Jev to suggest an order and, when given a claim, assess how each excerpt relates to it. Every candidate stays available. A few obvious items generally need no extra provider call.
+Evidence ranking is an optional reading aid for a burdensome shortlist of already collected text excerpts. It is the shared `evidence` tool, whose one action, `evidence_rank`, uses TypeSafe Jev to suggest an order and, when given a claim, assess how each excerpt relates to it. Every candidate stays available. A few obvious items generally need no extra provider call.
 
-Enable **Evidence ranking** under **Sources & tools → Shared tools**, then add `TYPESAFE_API_KEY` to Dig’s private keys.env. The [official TypeSafe quickstart](https://docs.typesafe.ai/introduction/quickstart) links to the [console’s key page](https://console.typesafe.ai/keys). Keys stay outside chat. Enabling the helper does not trigger it automatically, and other research works without it.
+Turn on **Evidence ranking** (ask your assistant, or under **Sources & tools → Shared tools** in Dig's views), then enter `TYPESAFE_API_KEY` on the key page the `keys` tool opens, or add it to Dig’s private `keys.env`. The [official TypeSafe quickstart](https://docs.typesafe.ai/introduction/quickstart) links to the [console’s key page](https://console.typesafe.ai/keys). Keys stay outside chat. Enabling the helper does not trigger it automatically, and other research works without it.
 
 Ask in the conversation:
 
 > Use Dig’s optional evidence-ranking helper to suggest a reading order for these excerpts against my question. Keep every candidate, highlight relevant contradictions, and identify which original sources still need reading.
 
-The helper uses the pinned `jev-1.13.0` provider model. That is separate from the Codex model conducting the research; there is no Evidence ranking worker-model setting. It can run directly with an explicit project and optional dig, or support a source method using snippets already obtained from its assigned source.
+The helper uses the pinned `jev-1.13.0` provider model. That is separate from the model conducting the research; there is no Evidence ranking worker-model setting. A call names the dig, `action: "evidence_rank"` and the inputs below in `args`, like any source call. The assistant can call it directly or within a source method, using snippets already obtained from its assigned source; the `evidence-rank` method (read with `method`) says how. It is a paid call, so with a spending ceiling or `ask_above_usd` set Dig may ask you first, and an identical call within ten minutes returns the earlier result.
 
 ## Inputs and boundaries
 
@@ -33,7 +33,7 @@ Relevant contradiction is as useful as relevant support. With a claim, the relat
 
 [TypeSafe’s confidence value](https://docs.typesafe.ai/confidence) summarizes concentration in the returned probability distribution. It is not a probability that the evidence is true. Dig applies no automatic exclusion threshold. The agent decides what to read, preserves contrary evidence and returns to the original shortlist if the ranking is unhelpful or incomplete.
 
-Ranking never replaces Dig’s full-report and original-evidence rules. The initiating thread reads every relied-on report in full and checks load-bearing claims against retained originals. Library snippets are discovery pointers; an absent snippet fact does not prove the full report lacks it. The library skill itself remains read-only and can hand a candidate list back to the initiating thread for an optional ranking call.
+Ranking never replaces Dig’s full-report and original-evidence rules. The initiating thread reads every relied-on report in full and checks load-bearing claims against retained originals. Library snippets are discovery pointers; an absent snippet fact does not prove the full report lacks it. The `library` method itself remains read-only and can hand a candidate list back to the initiating thread for an optional ranking call.
 
 ## Retention and costs
 

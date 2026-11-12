@@ -5,7 +5,7 @@ import { MODULES, type DigModule } from "./modules.js";
  * redacted as they arrive (`redactProviderText`, JSON decoded first, in http.ts
  * and the few tools that read their own), so no tool can cut a credential short
  * before redaction sees it; the native tool
- * boundary (src/server.mjs) redacts every one of them again from tool results,
+ * boundary (src/service/calls.ts and mcp.ts) redacts every one of them again from tool results,
  * from what library tools write, and from call receipts and raw responses.
  */
 

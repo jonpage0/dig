@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ACCOUNTS, ALL_MODULES, moduleAgents, moduleEnvironment, moduleSkills, reportSources } from '../src/providers/modules.ts';
 import { loadConfig, updateConfig, WORKER_TABLES } from '../src/config.mjs';
-import { prepareKeysFile, settingsDocument, sourceInfo } from '../src/catalog.mjs';
+import { settingsDocument, sourceInfo } from '../src/catalog.mjs';
+import { wrapperFiles } from '../scripts/wrappers.mjs';
 import { recordCall, saveReport, startDig, listLibrary } from '../src/library.mjs';
 import { frontMatter } from '../src/ui/markdown.mjs';
 import { report } from './report-fixture.mjs';
@@ -29,7 +30,7 @@ test('YouTube video analysis is a full source method with a packaged hidden skil
     assert.ok(reportSources(ALL_MODULES).includes('youtube'));
     assert.ok(!reportSources(ALL_MODULES).includes('youtube-video'));
     assert.match(await readFile(method.skillPath, 'utf8'), /agent: "youtube-video"/);
-    assert.match(await readFile(join(method.skillPath, '../agents/openai.yaml'), 'utf8'), /allow_implicit_invocation: false/);
+    assert.match(String((await wrapperFiles()).get('plugins/chatgpt/skills/youtube-video/agents/openai.yaml')), /allow_implicit_invocation: false/);
     assert.deepEqual(moduleAgents(['video']), [], 'Glimpse remains a standalone utility, not a research method');
   } finally {
     await rm(state, { recursive: true, force: true });
@@ -62,9 +63,7 @@ test('Gemini is an optional YouTube credential with its own account and does not
     assert.ok(!moduleEnvironment(ALL_MODULES).includes('GOOGLE_API_KEY'), 'The Gemini credential has one canonical name');
     const account = ACCOUNTS.find(account => account.keys.flat().includes('GEMINI_API_KEY'));
     assert.equal(account.signup, 'https://aistudio.google.com/apikey');
-    const prepared = await prepareKeysFile('youtube', state);
-    assert.ok(prepared.added.includes('GEMINI_API_KEY'));
-    assert.match(await readFile(prepared.path, 'utf8'), /^GEMINI_API_KEY=$/m);
+    assert.ok(sourceInfo(config, 'youtube').sources[0].credentials.some(credential => credential.name === 'GEMINI_API_KEY'), 'the key page and keys.env take GEMINI_API_KEY for YouTube');
   } finally {
     for (const [name, value] of Object.entries(saved)) if (value === undefined) delete process.env[name]; else process.env[name] = value;
     await rm(state, { recursive: true, force: true });

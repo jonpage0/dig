@@ -1,32 +1,30 @@
 import { build } from 'esbuild';
 import { build as viteBuild } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { relative } from 'node:path';
+import { chmod, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, relative } from 'node:path';
 import { Script } from 'node:vm';
-import { ALL_MODULES, MODULES, moduleEnvironment } from '../src/providers/modules.ts';
-import { GLYPHS, tileSvg } from '../src/glyphs.mjs';
+import { MODULES } from '../src/providers/modules.ts';
 import { VERSION } from '../src/version.mjs';
 import { logoSprite } from './logo-sprite.mjs';
+import { wrapperFiles } from './wrappers.mjs';
 
-for (const manifest of ['package.json', 'plugin/.codex-plugin/plugin.json', 'plugin/.claude-plugin/plugin.json']) {
-  const { version } = JSON.parse(await readFile(manifest, 'utf8'));
-  if (version !== VERSION) throw new Error(`${manifest} is version ${version}; src/version.mjs is ${VERSION}`);
+// The files that carry Dig's version besides src/version.mjs; the host wrappers take theirs from it.
+const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
+for (const [file, version] of [['package.json', JSON.parse(await readFile('package.json', 'utf8')).version], ['package-lock.json', lock.version], ['package-lock.json (packages[""])', lock.packages?.['']?.version]]) {
+  if (version !== VERSION) throw new Error(`${file} is version ${version}; src/version.mjs is ${VERSION}`);
 }
 
-await mkdir('plugin/dist', { recursive: true });
 await import('./search-runtime.mjs');
 if (process.platform !== 'darwin' || process.arch !== 'arm64') console.log(`Skipped the packaged search-runtime load check: it runs only on darwin/arm64, not ${process.platform}/${process.arch}.`);
-// Skill icons (agents/openai.yaml icon_small/icon_large) are generated from the one glyph table.
-await mkdir('plugin/assets/skills', { recursive: true });
-// Cleared first, so a glyph removed from the table leaves no stale icon behind.
-for (const file of await readdir('plugin/assets/skills')) if (file.endsWith('.svg')) await rm(`plugin/assets/skills/${file}`);
-for (const name of Object.keys(GLYPHS)) await writeFile(`plugin/assets/skills/${name}.svg`, tileSvg(name));
-// Every package the bundles include, by its node_modules root, so its license travels with the plugin.
+// Every package the bundles include, by its node_modules root, so its license travels with the package.
 const bundled = new Set();
 const collectInput = input => { const clean = input.replace(/^\0/, '').split('?')[0]; const at = clean.lastIndexOf('node_modules/'); if (at < 0) return; const name = /^((?:@[^/]+\/)?[^/]+)/.exec(clean.slice(at + 13))[1]; const root = `${clean.slice(0, at)}node_modules/${name}`; bundled.add(root.startsWith('/') ? relative(process.cwd(), root) : root); };
 const collect = result => { for (const input of Object.keys(result.metafile.inputs)) collectInput(input); };
-collect(await build({ entryPoints: ['src/server.mjs'], outfile: 'plugin/dist/server.mjs', bundle: true, platform: 'node', format: 'esm', target: 'node22', metafile: true, banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" } }));
+// The `dig` command (the service and its stdio front), runnable as plain Node without the TypeScript loader.
+await mkdir('dist', { recursive: true });
+collect(await build({ entryPoints: ['src/service/cli.ts'], outfile: 'dist/dig.mjs', bundle: true, platform: 'node', format: 'esm', target: 'node22', metafile: true, banner: { js: "#!/usr/bin/env node\nimport { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" } }));
+await chmod('dist/dig.mjs', 0o755);
 const hostStylesUrl = new URL(import.meta.resolve('@openai/mcp-extensions/app/styles.css'));
 // Each MCP App remains one self-contained HTML resource. Vite handles React and
 // Tailwind; final packaging refuses extra chunks or separately served assets.
@@ -75,11 +73,12 @@ for (const surface of ['library', 'card']) {
     .replace('<!--LOGO_SPRITE-->', () => sprite)
     .replace('<!--APP_SCRIPT-->', () => `<script>${chunks[0].code.replace(/<\/script/gi, '<\\/script')}</script>`);
   new Script(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
-  await writeFile(`plugin/dist/${surface}.html`, html);
+  // The service serves the page, as an MCP App and in a browser, from beside its own bundle.
+  await writeFile(`dist/${surface}.html`, html);
 }
-await writeFile('plugin/LICENSE', await readFile('LICENSE', 'utf8'));
-await writeFile('plugin/OpenAI-MCP-Extensions-LICENSE', await readFile(new URL('./LICENSE', hostStylesUrl)));
-await writeFile('plugin/ReUI-LICENSE', await readFile('src/frontend/shared/ReUI-LICENSE.md'));
+// The notices sit at the package root, beside LICENSE and Lucide-LICENSE.
+await writeFile('OpenAI-MCP-Extensions-LICENSE', await readFile(new URL('./LICENSE', hostStylesUrl)));
+await writeFile('ReUI-LICENSE', await readFile('src/frontend/shared/ReUI-LICENSE.md'));
 // Tailwind transforms its stylesheet before Vite's JS module inventory sees it.
 collectInput('node_modules/tailwindcss/index.css');
 // The MIT permission text, from Dig's own MIT license, for a bundled MIT package that ships no license file.
@@ -92,12 +91,11 @@ for (const root of [...bundled].sort()) {
   let text;
   if (files.length) text = (await Promise.all(files.map(file => readFile(`${root}/${file}`, 'utf8')))).map(t => t.trim()).join('\n\n');
   else if (pkg.license === 'MIT' && authorOf(pkg)) text = `The package ships no license file; its package.json declares MIT, by ${authorOf(pkg)}.\n\nCopyright (c) ${authorOf(pkg)}\n\n${MIT_TERMS}`;
-  else throw new Error(`${pkg.name} is bundled but ships no license file; its notice must travel with the plugin`);
+  else throw new Error(`${pkg.name} is bundled but ships no license file; its notice must travel with the package`);
   notices.push(`## ${pkg.name} ${pkg.version}\n\nLicense: ${pkg.license ?? 'see below'}\n\n\`\`\`\`text\n${text.replace(/[ \t]+$/gm, '')}\n\`\`\`\`\n`);
 }
-await writeFile('plugin/THIRD_PARTY_NOTICES.md', `# Third-party notices\n\nDig's bundled server and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).\n\nLocal semantic search additionally uses ONNX Runtime Node/Common 1.30.0 (Microsoft, MIT); Search-Runtime-LICENSE and Search-Runtime-ThirdPartyNotices.txt carry its runtime notices. Only the accepted macOS arm64 binding is included.\n\nThe selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.\n\nDig's icon glyphs are Lucide icons (ISC License, Copyright (c) 2026 Lucide Icons and Contributors); their notice ships as Lucide-LICENSE.\n\n${notices.join('\n')}`);
-await writeFile('plugin/.mcp.json', `${JSON.stringify({ mcpServers: { dig: {
-  command: 'node', args: ['./dist/server.mjs'], cwd: '.', startup_timeout_sec: 30, tool_timeout_sec: 600,
-  env_vars: ['DIG_STATE_DIR', 'PAPER_SEARCH_MCP_ENV_FILE', ...moduleEnvironment(ALL_MODULES)],
-} } }, null, 2)}\n`);
-console.log('Built standalone server, native library and saved-research card resources.');
+await writeFile('THIRD_PARTY_NOTICES.md', `# Third-party notices\n\nDig's bundled service (dist/dig.mjs) and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).\n\nLocal semantic search additionally uses ONNX Runtime Node/Common 1.30.0 (Microsoft, MIT); Search-Runtime-LICENSE and Search-Runtime-ThirdPartyNotices.txt carry its runtime notices. Only the accepted macOS arm64 binding is included.\n\nThe selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.\n\nDig's icon glyphs are Lucide icons (ISC License, Copyright (c) 2026 Lucide Icons and Contributors); their notice ships as Lucide-LICENSE.\n\n${notices.join('\n')}`);
+// The host wrappers are build output: plugins/ is replaced as a whole, so nothing in it is kept by hand.
+await rm('plugins', { recursive: true, force: true });
+for (const [path, contents] of await wrapperFiles()) { await mkdir(dirname(path), { recursive: true }); await writeFile(path, contents); }
+console.log('Built the dig command, the library and saved-research card views, and the host wrappers.');

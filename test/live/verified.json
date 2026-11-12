@@ -17,15 +17,15 @@
   },
   "dataforseo_docs_index": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "dataforseo_docs_read": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "dataforseo_docs_sections": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "dataforseo_request": {
     "at": "2026-11-12",
@@ -33,15 +33,15 @@
   },
   "deepwiki_ask_question": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "deepwiki_read_wiki_contents": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "deepwiki_read_wiki_structure": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "evidence_rank": {
     "at": "2026-11-12",
@@ -65,15 +65,15 @@
   },
   "github_inspect": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "github_read": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "github_search": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "google_ad_library": {
     "at": "2026-11-12",
@@ -81,11 +81,11 @@
   },
   "hackernews": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "hackernews_read": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "instagram_read": {
     "at": "2026-11-12",
@@ -101,11 +101,11 @@
   },
   "papers_semantic_scholar_recommendations": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "papers_semantic_scholar_relations": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "papers_semantic_scholar_search": {
     "at": "2026-11-11",
@@ -113,15 +113,15 @@
   },
   "polymarket": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "polymarket_history": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "polymarket_resolution": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "reddit": {
     "at": "2026-11-12",
@@ -181,11 +181,11 @@
   },
   "wayback_read": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "wayback_snapshots": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "x_count_posts": {
     "at": "2026-11-12",
@@ -217,7 +217,7 @@
   },
   "youtube": {
     "at": "2026-11-12",
-    "version": "0.13.0"
+    "version": "1.0.0"
   },
   "youtube_comments": {
     "at": "2026-11-12",

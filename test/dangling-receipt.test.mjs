@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, symlink, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, symlink, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.mjs';
 import { startDig, recordCall, projectFolder, finishDig, listLibrary } from '../src/library.mjs';
 
-test('dangling receipt links cannot create an outside file, and unanswered digs remain visibly unanswered', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'dig-native-dangling-'));
+test('dangling receipt links cannot create an outside file, and unanswered digs remain visibly unanswered', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'dig-native-dangling-')); t.after(() => rm(root, { recursive: true, force: true }));
   const c = await loadConfig(root); const dig = await startDig(c, root, 'Denied research', 'thread-denied');
   const session = join(c.library, projectFolder(root), 'sessions', 'thread-denied');
   await mkdir(session, { recursive: true });

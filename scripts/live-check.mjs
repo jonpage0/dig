@@ -1,28 +1,32 @@
-// Calls each provider tool once for real through the built server, saves what came back and records when each tool
-// last worked. The manifest is test/live/checks.mjs; captures go to verification/live (ignored) unless --out says
-// otherwise; test/live/verified.json is the tracked record. Keyless by default: without --keys the server runs with no
-// credentials, and a keys.env given with --keys is copied into a temporary state folder that is removed at the end.
+// Calls each provider action once for real through the service, as a host does, saves what came back and records when
+// each action last worked. It starts `dig mcp` (and so the service) on a free port with a temporary state folder, starts
+// one dig, and calls each action through its source's tool under that dig. The manifest is test/live/checks.mjs (by
+// action name, the name receipts record); captures go to verification/live (ignored) unless --out says otherwise;
+// test/live/verified.json is the tracked record. Keyless by default: without --keys the service runs with no
+// credentials, and a keys.env given with --keys is copied into the temporary state folder, which is removed at the end.
+// Nothing in the run makes the service ask the person before a paid call: its config.toml sets no [spend] ceiling or
+// ask_above_usd, and the client declares no way to be asked, so no call waits for an answer.
+import { spawnSync } from 'node:child_process';
 import { access, chmod, copyFile, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { Client } from '@modelcontextprotocol/client';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 
 await import('./typescript.mjs');
 const { providerTools } = await import('../src/providers/index.ts');
 const { MODULES } = await import('../src/providers/modules.ts');
 const { costSummary } = await import('../src/providers/library/cost.ts');
 const { costAmounts } = await import('../src/ui/format.mjs');
-const { projectFolder } = await import('../src/library.mjs');
 const { CHECKS, SKIPPED, EXPENSIVE } = await import('../test/live/checks.mjs');
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const SERVER = join(root, 'plugin/dist/server.mjs');
+const DIG = join(root, 'dist/dig.mjs');
 const VERIFIED = join(root, 'test/live/verified.json');
-const SESSION = 'live-check';
 const TIMEOUT_MS = 15 * 60_000;
 const WORKED = ['success', 'partial', 'empty'];
 
@@ -75,7 +79,7 @@ if (options.list) {
 if (unlisted.length && !tools.length && !sources.length) console.error(`Not in test/live/checks.mjs (add a check or a skip reason): ${unlisted.join(', ')}`);
 if (!run.length) fail('Nothing selected to run.');
 if (paid.length && !options.keys) fail(`Paid tools need --keys <keys.env>: ${paid.join(', ')}`);
-try { await access(SERVER); } catch { fail(`The built server is missing (${SERVER}). Run npm run build first.`); }
+try { await access(DIG); } catch { fail(`The dig command is missing (${DIG}). Run npm run build first.`); }
 const out = resolve(options.out ?? join(root, 'verification/live'));
 
 // The temporary state folder holds credentials when --keys is given: it is removed however the run ends.
@@ -84,6 +88,12 @@ const removeState = () => rmSync(state, { recursive: true, force: true });
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => { removeState(); process.exit(130); });
 const rows = []; const verified = [];
 let version = null;
+const port = await new Promise((done, failed) => { const server = createServer(); server.once('error', failed); server.listen(0, '127.0.0.1', () => { const { port } = server.address(); server.close(() => done(port)); }); });
+let env = null;
+// The service outlives `dig mcp` until it is idle, so it is stopped here, before its state folder is removed.
+const stopService = () => { if (env) spawnSync(process.execPath, [DIG, 'stop'], { env, stdio: 'ignore', timeout: 30_000 }); };
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.prependListener(signal, stopService);
+console.log('Spending questions: none. This run sets no [spend] ceiling or ask_above_usd, so the service asks nothing before a paid call and no call waits for an answer.');
 try {
   await chmod(state, 0o700);
   const project = join(state, 'project'); const home = join(state, 'home');
@@ -96,28 +106,39 @@ try {
   }
   // HOME points into the state folder, so a local program such as gh finds no login of its own: credentials come
   // only from --keys.
-  const transport = new StdioClientTransport({ command: process.execPath, args: [SERVER], cwd: join(root, 'plugin'), env: { DIG_STATE_DIR: state, PATH: process.env.PATH, HOME: home }, stderr: 'ignore' });
+  env = { DIG_STATE_DIR: state, DIG_PORT: String(port), PATH: process.env.PATH, HOME: home };
   const client = new Client({ name: 'dig-live-check', version: '1' });
-  await client.connect(transport);
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [DIG, 'mcp'], env, stderr: 'ignore' }));
   try {
     version = client.getServerVersion()?.version ?? null;
-    const call = (name, args) => client.callTool({ name, arguments: args, _meta: { threadId: SESSION } }, undefined, { timeout: TIMEOUT_MS });
+    const call = (name, args) => client.callTool({ name, arguments: args }, { timeout: TIMEOUT_MS });
+    const textOf = result => result?.content?.find(part => part.type === 'text')?.text ?? '';
     const readWhole = async file => {
       let offset = 0; let text = '';
       do { const part = (await call('library_read', { file, offset })).structuredContent; text += part.text; offset = part.nextOffset; } while (offset !== null);
       return text;
     };
+    const { dig } = (await call('dig_start', { project, question: 'Does each provider action still work?' })).structuredContent;
+    const sessions = `${dig.split('/')[0]}/sessions/${dig.split('/')[1]}`;
+    const receiptOf = async id => (await readWhole(`${sessions}/calls.jsonl`)).trim().split('\n').map(line => JSON.parse(line)).find(entry => entry.id === id) ?? null;
     await mkdir(out, { recursive: true });
     for (const tool of run) {
       const { args } = checks.get(tool); const begin = Date.now();
       process.stdout.write(`${tool} … `);
       let result; let error = null;
-      try { result = await call(tool, { ...args, project }); } catch (e) { error = e.message; }
-      const value = result?.structuredContent; const receipt = value?.call ?? null;
-      const status = value?.status ?? 'failed';
-      const text = value?.text ?? result?.content?.find(part => part.type === 'text')?.text ?? error ?? '';
+      try {
+        result = await call(moduleOf(tool).id.replaceAll('-', '_'), { dig, action: tool, args });
+        // A slow action that outlasts the service's inline wait answers with its job; the job is followed, never re-sent.
+        const job = /still running as job (job-[A-Za-z0-9_-]{22})/.exec(textOf(result))?.[1];
+        while (job && /^(?:Job job-\S+ \(.+\) is working|.+ is still running as job job-)/.test(textOf(result))) result = await call('job', { id: job, wait: true });
+      } catch (e) { error = e.message; }
+      // The first line of a call's result: source, action, status, then its receipt id.
+      const head = /^.+? · [a-z0-9_]+ · ([a-z]+) · (?:receipt (c-\S+) · )?/.exec(textOf(result).split('\n', 1)[0]);
+      const receipt = head?.[2] ? await receiptOf(head[2]) : null;
+      const status = head?.[1] ?? 'failed';
+      const text = textOf(result).split('\n\n').slice(head ? 1 : 0).join('\n\n') || error || '';
       let responses = [];
-      if (receipt?.raw) responses = JSON.parse(await readWhole(`${projectFolder(project)}/sessions/${SESSION}/${receipt.raw}`)).responses;
+      if (receipt?.raw) responses = JSON.parse(await readWhole(`${sessions}/${receipt.raw}`)).responses;
       if (receipt) {
         const capture = { tool, args, at: receipt.at, version, status, ms: receipt.ms, cost: receipt.cost, ...(receipt.knownCost ? { knownCost: receipt.knownCost } : {}), responses };
         const worked = WORKED.includes(status);
@@ -133,6 +154,7 @@ try {
   console.error(`Live check stopped: ${error.message}`);
   process.exitCode = 1;
 } finally {
+  stopService();
   await rm(state, { recursive: true, force: true });
 }
 

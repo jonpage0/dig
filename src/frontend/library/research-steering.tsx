@@ -45,10 +45,10 @@ export function ResearchSteering({ host, item, library, triggerLabel = 'Steer re
       <p className="research-steering-question">{open ? context.current.item?.title : item?.title}</p>
       <details className="research-steering-context"><summary>Instruction and saved references</summary><pre tabIndex={0}>{prompt}</pre></details>
       <div className="research-steering-actions">
-        {host.canDraft() && !host.preview && <Button size="sm" disabled={busy} onClick={() => { void draft(); }}>{busy ? 'Placing draft…' : 'Draft in conversation'}</Button>}
+        {host.canDraft() && <Button size="sm" disabled={busy} onClick={() => { void draft(); }}>{busy ? 'Placing draft…' : 'Draft in conversation'}</Button>}
         <Button variant="outline" size="sm" disabled={busy} onClick={() => { void copy(); }}>Copy instruction</Button>
       </div>
-      {(!host.canDraft() || host.preview) && <p className="research-steering-note">Composer drafts are unavailable here. Copy the instruction into your conversation.</p>}
+      {!host.canDraft() && <p className="research-steering-note">Composer drafts are unavailable here. Copy the instruction into your conversation.</p>}
       {notice && <p className="research-steering-note" role="status">{notice}</p>}
     </Dialog>
   </>;

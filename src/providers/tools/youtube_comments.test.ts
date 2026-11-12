@@ -153,7 +153,7 @@ describe("youtube_comments", () => {
 		expect(await comments.execute({ url: "dQw4w9WgXcQ", order: "oldest" }, context)).toBe("ERROR: order must be one of top, newest");
 		expect(await comments.execute({ url: "dQw4w9WgXcQ", limit: 0 }, context)).toBe("ERROR: limit must be a positive whole number.");
 		delete process.env.SCRAPECREATORS_API_KEY;
-		expect(await comments.execute({ url: "dQw4w9WgXcQ" }, context)).toBe("ERROR: SCRAPECREATORS_API_KEY not set. Get a key at https://scrapecreators.com");
+		expect(await comments.execute({ url: "dQw4w9WgXcQ" }, context)).toBe("ERROR: SCRAPECREATORS_API_KEY is not set in Dig's keys.env. Get a key at https://scrapecreators.com. The user sets it outside chat, on the page Dig's keys tool opens or in keys.env.");
 		expect(mock.calls).toHaveLength(0);
 	});
 

@@ -3,7 +3,7 @@ import type { DigHost } from '../shared/host';
 import { Button, Dialog } from '../shared/components';
 import { Frame, FramePanel } from '../shared/frame';
 import { absTime, costShort, costTotal } from '../../ui/format.mjs';
-import { cardDetails, compactTitle, digLink, readRetained, savedResult } from './model';
+import { cardDetails, compactTitle, readRetained, savedResult } from './model';
 import type { ResearchCard, RetainedRead, SavedResult } from './model';
 
 type View = { status: 'loading' | 'waiting' | 'ready' | 'error'; saved?: SavedResult; card?: ResearchCard; error?: string };
@@ -44,11 +44,7 @@ export function CardApp({ host, initialResult }: { host: DigHost; initialResult?
   useEffect(() => {
     alive.current = true;
     const unsubscribe = host.subscribeResult(result => void show(result));
-    void host.start().then(() => {
-      if (!alive.current || initialResult !== undefined || !host.preview) return;
-      const file = new URLSearchParams(window.location.search).get('file');
-      if (file) void show({ file });
-    }).catch(error => { if (alive.current) setNotice(`Dig could not connect: ${error.message}`); });
+    void host.start().catch(error => { if (alive.current) setNotice(`Dig could not connect: ${error.message}`); });
     return () => { alive.current = false; generation.current++; navigation.current++; unsubscribe(); host.dispose(); };
   }, [host, show]);
   useEffect(() => { if (initialResult !== undefined) void show(initialResult); }, [initialResult, show]);
@@ -66,13 +62,8 @@ export function CardApp({ host, initialResult }: { host: DigHost; initialResult?
     const version = generation.current, interaction = ++navigation.current;
     const current = () => alive.current && version === generation.current && interaction === navigation.current;
     const file = view.card?.file ?? view.saved.file, path = view.card?.path ?? view.saved.path;
-    const link = digLink(view.card?.link ?? view.saved.link);
     setNotice('');
-    if (link) {
-      try { await host.openLink(link); return; }
-      catch { if (!current()) return; }
-    }
-    // A host without Dig deep links still opens the same retained file on demand.
+    // The saved file is read here, by its library file, page by page.
     await host.requestDisplayMode('fullscreen').catch(() => null);
     if (!current()) return;
     setReader({ status: 'loading' });

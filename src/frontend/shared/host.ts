@@ -3,7 +3,8 @@ import { OpenAIExtensions } from '@openai/mcp-extensions/app';
 import { VERSION } from '../../version.mjs';
 
 export type DigHost = {
-  preview: boolean;
+  /** Served by Dig's service in a browser (through a one-time address): the same tools through /api, without a host's own actions. */
+  browser: boolean;
   start(): Promise<void>;
   dispose(): void;
   call(name: string, args?: Record<string, unknown>): Promise<any>;
@@ -29,17 +30,19 @@ function assertAccepted(result: any, fallback: string) {
   if (result?.isError) throw new Error(result.content?.find((part: any) => part.type === 'text')?.text || fallback);
 }
 
-/** Native requests never fall through to HTTP. Browser preview uses its read-only local adapter. */
+/** Requests in a host never fall through to HTTP. The page the service serves in a browser (marked on its root
+ * element) calls the service's /api with its session cookie. */
 export function createDigHost(name: string, options: HostOptions = {}): DigHost {
   const params = new URLSearchParams(globalThis.location?.search ?? '');
-  const preview = params.has('preview');
+  const surface = globalThis.document?.getElementById('root')?.dataset;
+  const browser = surface?.digBrowser !== undefined;
   const results = new Set<(result: any) => void>();
   const activations = new Set<(context: any) => void>();
   let app: any;
   let extensions: any;
   let startTask: Promise<void> | undefined;
   let disposed = false;
-  let previewContext: any = {};
+  let browserContext: any = {};
   const apply = (context: any) => {
     if (context?.theme) applyDocumentTheme(context.theme);
     if (context?.styles?.variables) applyHostStyleVariables(context.styles.variables);
@@ -55,19 +58,19 @@ export function createDigHost(name: string, options: HostOptions = {}): DigHost 
   };
   const requireNative = () => {
     if (disposed) throw new Error('This Dig view has closed.');
-    if (preview) throw new Error('This action is available in the host, not the read-only browser preview.');
+    if (browser) throw new Error('This action is available in a host that shows Dig’s views, not in the browser.');
     if (!app) throw new Error('Dig has not connected to the host yet.');
   };
   const host: DigHost = {
-    preview,
+    browser,
     start() {
       if (disposed) return Promise.reject(new Error('This Dig view has closed.'));
       if (startTask) return startTask;
       startTask = (async () => {
-        if (preview) {
-          const theme = params.get('theme');
+        if (browser) {
+          const theme = params.get('theme') ?? (globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : null);
           if (theme === 'dark' || theme === 'light') apply({ theme });
-          previewContext = { toolInfo: { tool: { name: params.has('panel') ? 'open_trail' : 'open_library' } } };
+          browserContext = { toolInfo: { tool: { name: params.has('panel') || surface?.digSurface === 'trail' ? 'open_trail' : 'open_library' } } };
           return;
         }
         app = options.appFactory?.() ?? new App({ name, version: VERSION });
@@ -91,10 +94,15 @@ export function createDigHost(name: string, options: HostOptions = {}): DigHost 
     async call(name, args = {}) {
       if (disposed) throw new Error('This Dig view has closed.');
       let result;
-      if (preview) {
-        if (!/^[a-z][a-z0-9_.]*$/.test(name)) throw new Error('Invalid Dig preview operation.');
-        const response = await fetch(`/api/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
-        if (!response.ok) throw new Error(`Dig preview request failed (${response.status}).`);
+      if (browser) {
+        if (!/^[a-z][a-z0-9_.]*$/.test(name)) throw new Error('Invalid Dig operation.');
+        const response = await fetch(`/api/${name}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+        if (!response.ok) {
+          // The service's answer says how to open Dig again, with the command it was started with.
+          if (response.status === 401) throw new Error(`This browser session has ended. ${await response.text().then(text => text.trim(), () => '') || 'Ask the assistant to open Dig\'s library again.'}`);
+          const failed: any = await response.json().catch(() => null);
+          throw new Error(failed?.content?.find?.((part: any) => part.type === 'text')?.text || failed?.error || `Dig request failed (${response.status}).`);
+        }
         result = await response.json();
       } else {
         requireNative();
@@ -104,14 +112,15 @@ export function createDigHost(name: string, options: HostOptions = {}): DigHost 
       return result?.structuredContent ?? result;
     },
     async openLink(url) {
-      requireNative();
       let parsed: URL;
       try { parsed = new URL(url); } catch { throw new Error('This link is invalid.'); }
-      if (!['http:', 'https:', 'codex:'].includes(parsed.protocol)) throw new Error('This link type cannot be opened by Dig.');
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('This link type cannot be opened by Dig.');
+      if (browser && !disposed) { window.open(parsed.href, '_blank', 'noopener,noreferrer'); return; }
+      requireNative();
       assertAccepted(await app.openLink({ url }), 'The host did not open this link.');
     },
     async requestDisplayMode(mode) {
-      if (preview) return null;
+      if (browser) return null;
       requireNative();
       const context = app.getHostContext();
       if (!context?.availableDisplayModes?.includes(mode)) return context?.displayMode ?? null;
@@ -135,17 +144,18 @@ export function createDigHost(name: string, options: HostOptions = {}): DigHost 
         _meta: { 'openai/message': { target: 'active', send: false } },
       }), 'The host did not place this draft in the composer.');
     },
-    getContext() { return preview ? previewContext : app?.getHostContext() ?? {}; },
+    getContext() { return browser ? browserContext : app?.getHostContext() ?? {}; },
+    // A reader address (`/read?file=…`) given to the page itself; in a host there is none.
     readDeepLink() {
-      const raw = preview ? params.get('path') : extensions?.deepLink?.getCurrent()?.url;
+      const raw = browser ? params.get('path') : null;
       if (typeof raw !== 'string' || !raw.startsWith('/') || raw.startsWith('//')) return null;
       try {
         const parsed = new URL(raw, 'https://dig.invalid');
         return parsed.origin === 'https://dig.invalid' ? `${parsed.pathname}${parsed.search}${parsed.hash}` : null;
       } catch { return null; }
     },
-    canOpenFile() { return !preview && !disposed && Boolean(extensions?.files); },
-    canDraft() { return !preview && !disposed && Boolean(extensions?.message); },
+    canOpenFile() { return !browser && !disposed && Boolean(extensions?.files); },
+    canDraft() { return !browser && !disposed && Boolean(extensions?.message); },
     subscribeResult(callback) { results.add(callback); return () => { results.delete(callback); }; },
     subscribeActivation(callback) { activations.add(callback); return () => { activations.delete(callback); }; },
   };

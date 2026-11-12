@@ -230,7 +230,7 @@ describe("commerce_history Nexscope provider", () => {
 		delete process.env.NEXSCOPE_API_KEY;
 		const missingKey = await history.execute({ asin: "B0DGHMNQ5Z" }, context);
 		expect(missingKey).toBe(
-			"ERROR: Commerce history lookup failed: NEXSCOPE_API_KEY not set",
+			"ERROR: Commerce history lookup failed: NEXSCOPE_API_KEY is not set in Dig's keys.env. The user sets it outside chat, on the page Dig's keys tool opens or in keys.env.",
 		);
 	});
 

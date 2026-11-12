@@ -62,9 +62,11 @@ function config(input, state) {
   for (const key of ['web_search', 'code_execution']) if (typeof x[key] !== 'boolean') throw new Error(`x.${key} must be boolean`);
   const search = { semantic: false, ...table(input.search, 'search', ['semantic']) };
   if (typeof search.semantic !== 'boolean') throw new Error('search.semantic must be boolean');
-  // `[spend] dig_ceiling_usd`: an optional ceiling, in US dollars, on what one dig's calls may record before its paid calls are refused.
-  const spend = { dig_ceiling_usd: null, ...table(input.spend, 'spend', ['dig_ceiling_usd']) };
-  if (spend.dig_ceiling_usd !== null && (typeof spend.dig_ceiling_usd !== 'number' || !Number.isFinite(spend.dig_ceiling_usd) || spend.dig_ceiling_usd <= 0)) throw new Error('spend.dig_ceiling_usd must be a positive number of US dollars');
+  // `[spend] dig_ceiling_usd`: an optional ceiling, in US dollars, on what one dig's calls may record before its paid
+  // calls are refused, or the person is asked whether to raise it. `ask_above_usd`: an optional amount at or above which
+  // the person is asked before a paid call, judged by what the action has typically cost in this library.
+  const spend = { dig_ceiling_usd: null, ask_above_usd: null, ...table(input.spend, 'spend', ['dig_ceiling_usd', 'ask_above_usd']) };
+  for (const key of ['dig_ceiling_usd', 'ask_above_usd']) if (spend[key] !== null && (typeof spend[key] !== 'number' || !Number.isFinite(spend[key]) || spend[key] <= 0)) throw new Error(`spend.${key} must be a positive number of US dollars`);
   const workers = {};
   for (const [name, entry] of Object.entries(table(input.workers, 'workers', WORKER_TABLES))) {
     const fields = Object.entries(table(entry, `workers.${name}`, WORKER_FIELDS)).map(([field, value]) => [field, workerValue(`workers.${name}.${field}`, field, value)]);
@@ -85,7 +87,7 @@ export async function loadConfig(state = stateDirectory()) {
   return config(input, state);
 }
 // `[workers]` and `[spend]` are written only when they hold something, so a file without them stays as before.
-const serialized = c => `# Dig native settings. Native controls edit this file.\n${TOML.stringify({ library: c.library, keep_raw: c.keep_raw, sources: c.sources, x: c.x, search: c.search, ...(c.spend.dig_ceiling_usd !== null ? { spend: c.spend } : {}), ...(Object.keys(c.workers).length ? { workers: c.workers } : {}) })}`;
+const serialized = c => { const spend = Object.fromEntries(Object.entries(c.spend).filter(([, value]) => value !== null)); return `# Dig native settings. Native controls edit this file.\n${TOML.stringify({ library: c.library, keep_raw: c.keep_raw, sources: c.sources, x: c.x, search: c.search, ...(Object.keys(spend).length ? { spend } : {}), ...(Object.keys(c.workers).length ? { workers: c.workers } : {}) })}`; };
 export async function initializeConfig(state = stateDirectory()) {
   const c = await loadConfig(state);
   await mkdir(state, { recursive: true });
@@ -93,7 +95,7 @@ export async function initializeConfig(state = stateDirectory()) {
   return loadConfig(state);
 }
 /**
- * Applies flat settings fields (`set`, as Codex's settings page and Dig's controls send them) to config.toml. A
+ * Applies flat settings fields (`set`, as the settings tool and Dig's settings view send them) to config.toml. A
  * worker field is stored only when it differs from what its table would inherit, so echoing the value a control
  * shows stores nothing and a method keeps following the Dig-wide suggestion until it is given its own. Only the
  * fields in `set` are compared; values written by hand stay as they are.
@@ -101,11 +103,13 @@ export async function initializeConfig(state = stateDirectory()) {
 export async function updateConfig(set, state = stateDirectory()) {
   const current = await loadConfig(state);
   const workerKeys = WORKER_TABLES.flatMap(name => WORKER_FIELDS.map(field => [workerSetting(name, field), name, field]));
-  const allowed = ['library', 'keep_raw', 'search_semantic', 'spend_dig_ceiling_usd', ...MODULES.map(m => sourceSetting(m.id)), ...Object.keys(X_DEFAULTS).map(k => `x_${k}`), ...workerKeys.map(([key]) => key)];
+  const allowed = ['library', 'keep_raw', 'search_semantic', 'spend_dig_ceiling_usd', 'spend_ask_above_usd', ...MODULES.map(m => sourceSetting(m.id)), ...Object.keys(X_DEFAULTS).map(k => `x_${k}`), ...workerKeys.map(([key]) => key)];
   for (const key of Object.keys(set)) if (!allowed.includes(key)) throw new Error(`Unknown setting: ${key}`);
   for (const m of MODULES) if (set[sourceSetting(m.id)] !== undefined && typeof set[sourceSetting(m.id)] !== 'boolean') throw new Error(`${sourceSetting(m.id)} must be boolean`);
   const ceiling = set.spend_dig_ceiling_usd;
   if (ceiling !== undefined && (typeof ceiling !== 'number' || !Number.isFinite(ceiling) || ceiling < 0)) throw new Error('spend_dig_ceiling_usd must be a number of US dollars, 0 for no ceiling');
+  const askAbove = set.spend_ask_above_usd;
+  if (askAbove !== undefined && (typeof askAbove !== 'number' || !Number.isFinite(askAbove) || askAbove < 0)) throw new Error('spend_ask_above_usd must be a number of US dollars, 0 to stop asking');
   const workers = Object.fromEntries(Object.entries(current.workers).map(([name, entry]) => [name, { ...entry }]));
   const touched = workerKeys.filter(([key]) => set[key] !== undefined);
   for (const [key, name, field] of touched) (workers[name] ??= {})[field] = workerValue(key, field, set[key]);
@@ -119,8 +123,8 @@ export async function updateConfig(set, state = stateDirectory()) {
     sources: { enabled: MODULES.filter(m => set[sourceSetting(m.id)] ?? current.sources.enabled.includes(m.id)).map(m => m.id) },
     x: Object.fromEntries(Object.keys(X_DEFAULTS).map(k => [k, set[`x_${k}`] ?? current.x[k]])),
     workers, search: { semantic: set.search_semantic ?? current.search.semantic },
-    // 0 removes the ceiling.
-    spend: { dig_ceiling_usd: ceiling === undefined ? current.spend.dig_ceiling_usd : ceiling || null },
+    // 0 removes the ceiling, or the amount to ask at.
+    spend: { dig_ceiling_usd: ceiling === undefined ? current.spend.dig_ceiling_usd : ceiling || null, ask_above_usd: askAbove === undefined ? current.spend.ask_above_usd : askAbove || null },
   }, state);
   await mkdir(state, { recursive: true });
   const temporary = `${current.path}.${crypto.randomUUID()}.tmp`;
@@ -139,9 +143,9 @@ const startingValues = new WeakMap();
 /** The starting environment's values for catalog names. Server-side only: never returned, logged or saved. */
 export const environmentValues = (env = process.env) => startingValues.get(env) ?? new Map();
 /**
- * Applies keys.env to `env`, the one place Dig takes credentials from. A credential Codex passed in from its own
- * environment is set aside and used only once the user copies it into keys.env (Settings → Use existing key); it
- * stays redacted. For other catalog names (base URLs, timeouts, contact email) a keys.env value wins and the
+ * Applies keys.env to `env`, the one place Dig takes credentials from. A credential in the environment Dig started
+ * with is set aside and used only once the user sets it in keys.env (by hand or on the keys tool's page); it stays
+ * redacted. For other catalog names (base URLs, timeouts, contact email) a keys.env value wins and the
  * environment's value is the fallback. Safe to call again whenever the file changes: the file is read whole before
  * anything is applied, so an unreadable file leaves the previous values in place. Every secret-shaped value loaded is
  * registered for redaction for the life of the process, so a key rotated or removed while a request that used it is

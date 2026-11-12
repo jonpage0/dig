@@ -88,7 +88,7 @@ test('a failed committed value restores saved text but never replaces newer typi
   assert.match(ui.element.textContent, /Not saved: again/);
 });
 
-test('invalid numeric and empty values do not save; browser-preview controls are disabled', async t => {
+test('invalid numeric and empty values do not save; a control without a save is disabled', async t => {
   const calls = [];
   const save = async (key, value) => { calls.push([key, value]); return { [key]: value }; };
   const ui = await mount(t, SourceSetting, { settingKey: 'limit', schema: { type: 'integer', title: 'Limit', minimum: 1, maximum: 9 }, value: 3, save });
@@ -123,16 +123,16 @@ test('accounts count aliases and required groups without rendering credential va
     { label: 'YouTube', credentials: [{ name: 'GOOGLE_API_KEY', available: true, required: false, value: 'NEVER_RENDER_SECRET' }], prerequisites: [{ name: 'yt-dlp', available: true }] },
     { label: 'DataForSEO', credentials: [{ name: 'DATAFORSEO_USERNAME', available: true, required: true }, { name: 'DATAFORSEO_PASSWORD', available: false, required: true }], prerequisites: [{ name: 'yt-dlp', available: true }] },
   ];
-  const ui = await mount(t, AccountsPanel, { sources, keysPath: '/state/keys.env', preview: true });
+  const ui = await mount(t, AccountsPanel, { sources, keysPath: '/state/keys.env' });
   const disclosure = ui.element.querySelector('.source-accounts-trigger');
   await click(disclosure);
   assert.equal(disclosure.getAttribute('aria-expanded'), 'true');
-  assert.equal($('edit-keys').disabled, true);
+  assert.equal($('enter-keys').disabled, true);
   assert.doesNotMatch(ui.element.textContent, /NEVER_RENDER_SECRET/);
   assert.match(ui.element.querySelector('[data-account=dataforseo]').textContent, /partly set/);
   assert.match(ui.element.querySelector('[data-account=google-gemini]').textContent, /set/);
   assert.equal(ui.element.querySelectorAll('.source-local-tools li').length, 1);
-  await ui.render({ sources: sources.map(source => ({ ...source })), keysPath: '/state/keys.env', preview: true });
+  await ui.render({ sources: sources.map(source => ({ ...source })), keysPath: '/state/keys.env' });
   assert.equal(disclosure.getAttribute('aria-expanded'), 'true');
   assert.match(ui.element.textContent, /Presence|present/);
 });

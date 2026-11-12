@@ -6,6 +6,12 @@ export interface DigModule {
   label: string;
   description: string;
   tools: readonly string[];
+  /**
+   * Actions that can run past 30 seconds (a provider's documented latency, a poll loop, a long request or process
+   * timeout). The service runs every call to one as a job that does not hold the connection: a task for a client that
+   * declares the Tasks extension, else a job handle after a bounded wait.
+   */
+  slow?: readonly string[];
   skills?: readonly string[];
   /** Instructions for a shared utility, discoverable through source_info without creating a source method. */
   helperSkill?: string;
@@ -20,8 +26,7 @@ export interface DigModule {
   requires?: readonly string[];
   /**
    * Names in `env` that are settings rather than credentials, such as a contact email. The Sources page lists
-   * them with their purpose, and Edit keys.env offers each as an empty line. Presence only: values are never
-   * returned.
+   * them with their purpose; they are set in keys.env. Presence only: values are never returned.
    */
   envSettings?: readonly { name: string; label: string; purpose: string }[];
   /** Agents that assist a source agent but have no source tools of their own. */
@@ -75,6 +80,7 @@ export const MODULES = [
       "deepwiki_read_wiki_contents",
       "deepwiki_ask_question",
     ],
+    slow: ["deepwiki_ask_question"],
     about: "Generated documentation for public GitHub repositories: browse a repository's wiki or ask a question about its code. Answers are generated from the code and can be wrong, so load-bearing claims get checked in the repository itself.",
     providers: [{ name: "DeepWiki", url: "https://deepwiki.com" }],
     billing: "Free. No account or key.",
@@ -116,6 +122,7 @@ export const MODULES = [
     label: "Exa",
     description: "Web documents, extraction and similarity",
     tools: ["exa_search", "exa_contents", "exa_similar", "exa_research"],
+    slow: ["exa_research"],
     env: ["EXA_API_KEY"],
     keys: ["EXA_API_KEY"],
     credential: "EXA_API_KEY",
@@ -134,6 +141,7 @@ export const MODULES = [
       "perplexity_research",
       "perplexity_reason",
     ],
+    slow: ["perplexity_research", "perplexity_reason"],
     env: ["PERPLEXITY_API_KEY", "PERPLEXITY_TIMEOUT_MS"],
     keys: ["PERPLEXITY_API_KEY"],
     credential: "PERPLEXITY_API_KEY",
@@ -158,6 +166,7 @@ export const MODULES = [
       "papers_fulltext_read",
       "papers_pdf_download",
     ],
+    slow: ["papers_multi_search", "papers_sections", "papers_fulltext_read", "papers_pdf_download"],
     env: [
       "SEMANTIC_SCHOLAR_API_KEY",
       "OPENALEX_API_KEY",
@@ -187,6 +196,7 @@ export const MODULES = [
     label: "YouTube",
     description: "Video discovery, saved transcripts and focused Gemini video analysis",
     tools: ["youtube", "youtube_transcript", "youtube_comments", "youtube_analyze", "youtube_analysis_status"],
+    slow: ["youtube", "youtube_analyze", "youtube_analysis_status"],
     skills: ["youtube", "youtube-video"],
     helpers: ["youtube-summarizer"],
     env: ["OPENCODE_RESEARCH_GOOGLE_API_KEY", "SCRAPECREATORS_API_KEY", "GEMINI_API_KEY"],
@@ -204,6 +214,7 @@ export const MODULES = [
     label: "Video analysis",
     description: "Inspect a supplied video or bounded clip with Elorian Glimpse, directly or alongside source research",
     tools: ["video_analyze"],
+    slow: ["video_analyze"],
     skills: [],
     helperSkill: "video-analyze",
     env: ["ELORIAN_API_KEY"],
@@ -233,6 +244,7 @@ export const MODULES = [
     label: "X",
     description: "Posts and discourse: an evidence judge, a breadth finder, a post reader and a tracer, runnable independently",
     tools: ["xsearch", "x_post", "x_search_posts", "x_count_posts", "x_users", "x_follows", "x_news", "x_explore", "x_bookmarks", "x_likes", "x_community", "x_images"],
+    slow: ["xsearch"],
     skills: ["x-judge", "x-breadth", "x-post", "x-trace"],
     env: ["XAI_API_KEY", "X_BEARER_TOKEN", "X_CONSUMER_KEY", "X_CONSUMER_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET", "TIKHUB_API_KEY", "TIKHUB_BASE_URL"],
     keys: ["XAI_API_KEY", "X_BEARER_TOKEN"],
@@ -441,6 +453,7 @@ export const MODULES = [
       "dataforseo_docs_read",
       "dataforseo_request",
     ],
+    slow: ["dataforseo_request"],
     env: ["DATAFORSEO_USERNAME", "DATAFORSEO_PASSWORD"],
     keys: ["DATAFORSEO_USERNAME", "DATAFORSEO_PASSWORD"],
     credential:

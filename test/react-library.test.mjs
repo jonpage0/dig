@@ -22,7 +22,7 @@ const settle = async () => {
   await React.act(async () => { for (let i = 0; i < 6; i++) await new Promise(resolve => setTimeout(resolve, 0)); });
 };
 const report = id => `p/digs/${id}/hackernews.md`;
-const item = (id, extra = {}) => ({ id, title: `Question ${id}`, project: `/project/${id}`, status: 'report saved', startedAt: new Date().toISOString(), snippet: `Summary of ${id}`, session: 'thread-1', files: [`p/digs/${id}/dig.md`, report(id)], reports: [report(id)], reportDetails: [{ file: report(id), source: 'hackernews', method: 'hackernews', status: 'complete' }], calls: [], answer: null, sources: ['hackernews'], methods: ['hackernews'], ...extra });
+const item = (id, extra = {}) => ({ id, title: `Question ${id}`, project: `/project/${id}`, status: 'report saved', startedAt: new Date().toISOString(), snippet: `Summary of ${id}`, session: id, dig: `project-a/${id}`, files: [`p/digs/${id}/dig.md`, report(id)], reports: [report(id)], reportDetails: [{ file: report(id), source: 'hackernews', method: 'hackernews', status: 'complete' }], calls: [], answer: null, sources: ['hackernews'], methods: ['hackernews'], ...extra });
 const snapshotOf = items => ({ version: VERSION, items, live: [], library: '/library', configPath: '/state/config.toml', keepRaw: true, enabledSources: ['hackernews'], sources: [{ id: 'hackernews', label: 'Hacker News' }, { id: 'commerce', label: 'Commerce' }] });
 const rawCall = { id: 'call-1', at: new Date().toISOString(), ms: 900, tool: 'hackernews', source: 'hackernews', status: 'success', args: { query: 'sqlite' }, cost: [], session: 't', rawFile: 'p/sessions/t/raw/call-1.json', claimedBy: report('A') };
 const byKey = key => [...document.querySelectorAll('[data-key]')].find(node => node.dataset.key === key);
@@ -45,7 +45,7 @@ function scriptedHost(initial, extra = {}) {
   const resultHandlers = new Set(); const activationHandlers = new Set();
   let value = initial; let revision = 0; let currentSettings = settings();
   const host = {
-    preview: false, reads, calls, context: {}, link: null,
+    reads, calls, context: {}, link: null,
     start: async () => { assert.ok(resultHandlers.size); assert.ok(activationHandlers.size); },
     dispose() {}, getContext: () => host.context, readDeepLink: () => host.link,
     canOpenFile: () => true, canDraft: () => true, openFile: async () => {}, openLink: async () => {}, draft: async () => {},
@@ -76,8 +76,8 @@ function scriptedHost(initial, extra = {}) {
         });
       }
       if (name === 'saved_research') { const file = args.file.slice((value.library + '/').length); return { file, path: args.file, kind: file.endsWith('/answer.md') ? 'answer' : 'report', title: 'Retained report', label: 'Hacker News report', findings: [], contradictions: [], followUps: [], schemaWarnings: [] }; }
-      if (name === 'settings.read') return currentSettings;
-      if (name === 'settings.update') { currentSettings = { ...currentSettings, values: { ...currentSettings.values, ...args.set } }; revision++; return { values: currentSettings.values }; }
+      if (name === 'view_settings' && args.set) { currentSettings = { ...currentSettings, values: { ...currentSettings.values, ...args.set } }; revision++; return currentSettings; }
+      if (name === 'view_settings') return currentSettings;
       if (name === 'source_info') return { keysPath: '/state/keys.env', configPath: '/state/config.toml', sources: [{ id: 'hackernews', label: 'Hacker News', enabled: currentSettings.values.hackernews_enabled, readiness: { status: 'ready' }, credentials: [], prerequisites: [] }] };
       throw new Error(`Unexpected tool: ${name}`);
     },
@@ -173,12 +173,12 @@ test('settings refresh keeps draft DOM and focus; a save overlapping a poll gets
   blockNext = true; host.setSnapshot(snapshotOf([]));
   await ui.poll();
   await click(toggle);
-  assert.ok(host.calls.some(call => call.name === 'settings.update'));
+  assert.ok(host.calls.some(call => call.name === 'view_settings' && call.args.set));
   await React.act(async () => blocked.resolve({ ...snapshotOf([]), keepRaw: true }));
   await settle();
   assert.equal($('setting-library'), field);
   assert.equal(field.value, '/my/unfinished/draft');
-  const saves = host.calls.findIndex(call => call.name === 'settings.update');
+  const saves = host.calls.findIndex(call => call.name === 'view_settings' && call.args.set);
   assert.ok(host.calls.slice(saves + 1).filter(call => call.name === 'library_snapshot').length >= 1);
   assert.match(toggle.parentElement.textContent, /Saved/);
 });
@@ -240,63 +240,61 @@ test('a newer installed Dig is named with the same words in the notice and on Ab
   assert.equal(document.querySelector('.installation-version-message').textContent, expected);
 });
 
-function keysHost(canOpen, snapshot = {}) {
-  let environment = 'unused'; const opened = [];
+function keysHost(snapshot = {}, { refuse = false } = {}) {
+  let set = false; const opened = [];
   const host = scriptedHost({ ...snapshotOf([]), ...snapshot }, {
-    call(name) {
-      if (name === 'source_info') return { keysPath: '/state/keys.env', configPath: '/state/config.toml', sources: [{ id: 'hackernews', label: 'Hacker News', enabled: true, readiness: { status: 'ready' }, credentials: [{ name: 'HN_TOKEN', required: true, available: environment === 'same', environment }], prerequisites: [] }] };
-      if (name === 'prepare_keys_file') return { path: '/state/keys.env', added: ['HN_TOKEN'], created: true };
-      if (name === 'use_environment_keys') { environment = 'same'; return { path: '/state/keys.env', copied: ['HN_TOKEN'] }; }
+    call(name, args) {
+      if (name === 'source_info') return { keysPath: '/state/keys.env', configPath: '/state/config.toml', sources: [{ id: 'hackernews', label: 'Hacker News', enabled: true, readiness: { status: 'ready' }, credentials: [{ name: 'HN_TOKEN', required: true, available: set, environment: 'unused' }], prerequisites: [] }] };
+      if (name === 'view_keys') return set && !args.source ? { address: null, names: [] } : { address: 'http://127.0.0.1:47811/keys/one-time', expiresAt: '2026-11-12T20:00:00.000Z', names: ['HN_TOKEN'] };
     },
-    host: { canOpenFile: () => canOpen, openFile: async path => { opened.push(path); } },
+    host: { openLink: async url => { if (refuse) throw new Error('Host refused'); opened.push(url); set = true; } },
   });
   return { host, opened };
 }
 
-test('Edit keys.env prepares and opens the file, and copying an environment key refreshes readiness', async t => {
-  const { host, opened } = keysHost(true);
+test('Enter keys opens the one-time key page the service makes; no key line or environment copy remains', async t => {
+  const { host, opened } = keysHost();
   await mount(t, host);
   await click($('nav-sources'));
+  assert.equal(byKey('env:hackernews'), undefined);
+  assert.doesNotMatch($('sources').textContent, /environment|Edit keys\.env|Use existing key/);
   await click(byKey('keys:hackernews'));
-  assert.deepEqual(host.calls.filter(call => call.name === 'prepare_keys_file').map(call => call.args), [{ source: 'hackernews' }]);
-  assert.deepEqual(opened, ['/state/keys.env']);
-  assert.equal($('notice').textContent, 'Opened keys.env. Added empty lines for HN_TOKEN. Fill in the values and save; Dig reloads the file and updates readiness here.');
-  assert.equal(byKey('env:hackernews').textContent, 'Use existing key');
-  const reads = host.calls.filter(call => call.name === 'source_info').length;
-  await click(byKey('env:hackernews'));
-  assert.deepEqual(host.calls.filter(call => call.name === 'use_environment_keys').map(call => call.args), [{ source: 'hackernews' }]);
-  assert.equal($('notice').textContent, 'Copied HN_TOKEN from Codex’s environment into keys.env.');
-  assert.ok(host.calls.filter(call => call.name === 'source_info').length > reads, 'Copying re-reads source readiness');
-  assert.equal(byKey('env:hackernews'), undefined, 'Once keys.env matches the environment there is nothing to copy');
+  assert.deepEqual(host.calls.filter(call => call.name === 'view_keys').map(call => call.args), [{ source: 'hackernews' }]);
+  assert.deepEqual(opened, ['http://127.0.0.1:47811/keys/one-time']);
+  assert.equal($('notice').textContent, 'Opened the key page for HN_TOKEN. Type the values there and save; readiness updates here. If it did not open, open http://127.0.0.1:47811/keys/one-time in a browser on this computer.');
+  assert.ok(!host.calls.some(call => ['prepare_keys_file', 'use_environment_keys'].includes(call.name)));
+  await click($('enter-keys'));
+  assert.deepEqual(host.calls.filter(call => call.name === 'view_keys').at(-1).args, {});
+  assert.equal($('notice').textContent, 'Every credential the enabled sources use is already set. To replace one, use Enter keys on its source.');
 });
 
-test('Edit keys.env on a host without a file opener names the prepared path instead', async t => {
-  const { host, opened } = keysHost(false);
+test('a host that will not open the key page leaves its address in the notice', async t => {
+  const { host, opened } = keysHost({}, { refuse: true });
   await mount(t, host);
   await click($('nav-sources'));
   await click(byKey('keys:hackernews'));
-  assert.deepEqual(host.calls.filter(call => call.name === 'prepare_keys_file').map(call => call.args), [{ source: 'hackernews' }]);
   assert.deepEqual(opened, []);
-  assert.equal($('notice').textContent, 'Codex cannot open files from this view. Open /state/keys.env in a text editor, fill in the values and save. Added empty lines for HN_TOKEN.');
+  assert.equal($('notice').textContent, 'The key page did not open: Host refused. Open http://127.0.0.1:47811/keys/one-time in a browser on this computer.');
 });
 
-test('in Claude Code the notices, keys messages and About name Claude Code and its /dig: skills', async t => {
-  const { host } = keysHost(false, { host: 'claude-code', version: '9.9.9' });
+test('in Claude Code the notices and About name Claude Code and Dig’s methods by name', async t => {
+  const { host } = keysHost({ host: 'claude-code', version: '9.9.9' });
   await mount(t, host);
   assert.equal($('notice').textContent, `Dig 9.9.9 is installed, but Claude Code is still showing the ${VERSION} view. Right-click Dig in the sidebar and choose Refresh to load the new one.`);
-  await click($('nav-sources'));
-  assert.match($('sources').textContent, /Claude Code’s environment has a key that Dig isn’t using\./);
-  await click(byKey('keys:hackernews'));
-  assert.equal($('notice').textContent, 'Claude Code cannot open files from this view. Open /state/keys.env in a text editor, fill in the values and save. Added empty lines for HN_TOKEN.');
-  await click(byKey('env:hackernews'));
-  assert.equal($('notice').textContent, 'Copied HN_TOKEN from Claude Code’s environment into keys.env.');
   await click($('nav-about'));
-  assert.match($('about-body').textContent, /Use \/dig:setup to choose sources, or \/dig:library to find saved research\./);
+  assert.match($('about-body').textContent, /Use Dig’s setup method to choose sources, or Dig’s library method to find saved research\./);
   assert.match($('usage').textContent, /excludes Claude Code model costs/);
-  assert.doesNotMatch(document.body.textContent, /Codex|ChatGPT|\$dig:/);
-  const { replacedMessage } = await import('../src/frontend/library/controller.ts');
-  assert.equal(replacedMessage({ version: '1.0.0', replaced: { version: '2.0.0' }, host: 'claude-code' }), 'Dig 2.0.0 was installed while Claude Code was running. Refresh Dig’s plugin connection, then refresh this view. If the connection still reports Dig 1.0.0, quit and reopen Claude Code as a fallback. This view currently uses Dig 1.0.0.');
-  assert.equal(replacedMessage({ version: '1.0.0', replaced: { version: '2.0.0' } }), 'Dig 2.0.0 was installed while Codex was running. Refresh Dig’s plugin connection, then refresh this view. If the connection still reports Dig 1.0.0, quit and reopen Codex as a fallback. This view currently uses Dig 1.0.0.');
+  assert.doesNotMatch(document.body.textContent, /Codex|ChatGPT|\$dig:|\/dig:/);
+});
+
+test('a host the service does not name, as in a browser, gets no host name in the notices or About', async t => {
+  const { host } = keysHost({ host: 'any', version: '9.9.9' });
+  await mount(t, host);
+  assert.equal($('notice').textContent, `Dig 9.9.9 is installed, but your assistant is still showing the ${VERSION} view. Reload this page to load the new one.`);
+  await click($('nav-about'));
+  assert.match($('about-body').textContent, /Use Dig’s setup method to choose sources, or Dig’s library method to find saved research\./);
+  assert.match($('usage').textContent, /excludes your assistant model costs/);
+  assert.doesNotMatch(document.body.textContent, /Codex|ChatGPT|Claude|\$dig:|\/dig:/);
 });
 
 test('every Sources link, including those in the accounts fold, opens through the host', async t => {
@@ -314,9 +312,9 @@ test('every Sources link, including those in the accounts fold, opens through th
 
 test('conversation trail scopes cost and source setup shares settings without starting research', async t => {
   const mine = item('A', { calls: [{ ...rawCall, cost: [{ unit: 'USD', amount: 0.42 }] }] });
-  const host = scriptedHost({ ...snapshotOf([mine, item('B', { session: 'elsewhere' })]), live: [{ ...rawCall, id: 'elsewhere', session: 'elsewhere', cost: [{ unit: 'USD', amount: 100 }] }] });
+  const host = scriptedHost({ ...snapshotOf([mine, item('B')]), live: [{ ...rawCall, id: 'elsewhere', session: 'elsewhere', dig: 'elsewhere', projectFolder: 'project-a', cost: [{ unit: 'USD', amount: 100 }] }] });
   await mount(t, host);
-  await React.act(async () => host.emitResult({ view: 'panel', thread: 'thread-1' })); await settle();
+  await React.act(async () => host.emitResult({ view: 'panel', dig: 'project-a/A' })); await settle();
   assert.equal($('panel').hidden, false);
   assert.match($('panel-digs').textContent, /Question A/); assert.doesNotMatch($('panel-digs').textContent, /Question B/);
   assert.match(document.querySelector('.activity-footer').textContent, /0\.42/); assert.doesNotMatch($('panel').textContent, /100\.00/);
@@ -325,7 +323,7 @@ test('conversation trail scopes cost and source setup shares settings without st
   assert.match($('sources-summary').textContent, /1 of 1/);
   await click($('nav-about')); await click($('about-back'));
   assert.equal($('sources').hidden, false);
-  assert.deepEqual([...new Set(host.calls.map(call => call.name))].sort(), ['library_revision', 'library_snapshot', 'settings.read', 'source_info']);
+  assert.deepEqual([...new Set(host.calls.map(call => call.name))].sort(), ['library_revision', 'library_snapshot', 'source_info', 'view_settings']);
 });
 
 test('Start here is discoverable without replacing the overview or starting research, and About returns to it', async t => {
@@ -483,9 +481,9 @@ test('closed or superseded evidence never reopens; report outline focuses actual
   assert.doesNotMatch($('document').textContent, /LATE EVIDENCE/);
 });
 
-test('read errors pause visible updates without retrying; reload resumes and replacement notice names the connection', async t => {
+test('read errors pause visible updates without retrying; reload resumes', async t => {
   let fail = true;
-  const host = scriptedHost({ ...snapshotOf([]), replaced: { version: '99.0.0' } }, { call(name) {
+  const host = scriptedHost(snapshotOf([]), { call(name) {
     if (name === 'library_revision' && fail) return Promise.reject(new Error('offline fixture'));
   } });
   await mount(t, host);
@@ -494,9 +492,6 @@ test('read errors pause visible updates without retrying; reload resumes and rep
   fail = false;
   await click($('reload'));
   assert.equal($('reload').hidden, true);
-  await click($('nav-about'));
-  assert.match($('about-body').textContent, /99\.0\.0 was installed/);
-  assert.match($('about-body').textContent, /Refresh Dig’s plugin connection/);
 });
 
 test('the library path note and text draft survive About and external settings changes', async t => {
@@ -512,7 +507,7 @@ test('the library path note and text draft survive About and external settings c
   await ui.poll();
   assert.match($('setting-library-note').textContent, /not a folder/);
   assert.equal(field.value, '/still/typing');
-  assert.equal(host.calls.some(call => call.name === 'settings.update'), false);
+  assert.equal(host.calls.some(call => call.name === 'view_settings' && call.args.set), false);
 });
 
 test('a different selected library clears old document, evidence and queries before reusing matching relative names', async t => {
@@ -569,24 +564,24 @@ test('paged reads pin canonical paths and reject changed identity or inconsisten
 });
 
 
-test('thread resource starts in compact activity before the host delivers its result', async t => {
+test('trail resource starts in compact activity before the host delivers its result', async t => {
   const host = scriptedHost(snapshotOf([item('A')]));
   await mount(t, host, { trail: true });
   assert.equal($('panel').hidden, false);
   assert.equal($('browse').hidden, true);
   assert.ok(document.querySelector('.dig-library.is-conversation'));
-  assert.match($('panel').textContent, /Conversation not identified/);
-  await React.act(async () => host.emitResult({ view: 'panel', thread: 'thread-1' })); await settle();
+  assert.match($('panel').textContent, /No dig selected/);
+  await React.act(async () => host.emitResult({ view: 'panel', dig: 'project-a/A' })); await settle();
   assert.match($('panel-digs').textContent, /Question A/);
   assert.equal($('browse').hidden, true);
 });
 
 
-test('Open library requests fullscreen, while This conversation returns inline; refusal keeps navigation usable', async t => {
+test('Open library requests fullscreen, while This dig returns inline; refusal keeps navigation usable', async t => {
   const modes = [];
   const host = scriptedHost(snapshotOf([]), { host: { requestDisplayMode: async mode => { modes.push(mode); return mode; } } });
   await mount(t, host, { trail: true });
-  await React.act(async () => host.emitResult({ view: 'panel', thread: 'thread-1' })); await settle();
+  await React.act(async () => host.emitResult({ view: 'panel', dig: 'project-a/A' })); await settle();
   const open = () => [...$('panel').querySelectorAll('button')].find(node => node.textContent.includes('Open library'));
   await click(open());
   assert.deepEqual(modes, ['fullscreen']); assert.equal($('browse').hidden, false);

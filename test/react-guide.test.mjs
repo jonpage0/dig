@@ -147,12 +147,12 @@ test('the illustrative walkthrough switches evidence views locally and keeps the
   assert.deepEqual(ui.requests, []);
 });
 
-test('the guide names the host it runs in: Codex by default, Claude Code and its /dig: skills there', async t => {
+test('the guide names the host it runs in: Codex by default, and Claude Code with Dig’s methods by name there', async t => {
   const ui = await mount(t);
   assert.match(ui.element.textContent, /ask \$dig:setup for help getting started/);
   assert.match(ui.element.textContent, /bill separately from your ChatGPT or Codex plan\./);
   await ui.render({ host: 'claude-code' });
-  assert.match(ui.element.textContent, /ask \/dig:setup for help getting started/);
+  assert.match(ui.element.textContent, /ask Dig’s setup method for help getting started/);
   assert.match(ui.element.textContent, /bill separately from your Claude Code plan\./);
-  assert.doesNotMatch(ui.element.textContent, /Codex|ChatGPT|\$dig:/);
+  assert.doesNotMatch(ui.element.textContent, /Codex|ChatGPT|\$dig:|\/dig:/);
 });

@@ -124,7 +124,8 @@ function LibraryShell({ host }: { host: DigHost }) {
   const enabled = Array.isArray(app.snapshot.enabledSources) ? app.snapshot.enabledSources : null;
   const outbound = (event: React.MouseEvent) => {
     const anchor = (event.target as HTMLElement)?.closest<HTMLAnchorElement>('a[data-external]');
-    if (!anchor || host.preview) return;
+    // In a browser a link opens as the page says; in a host the host opens it.
+    if (!anchor || host.browser) return;
     event.preventDefault();
     const url = httpUrl(anchor.href);
     if (!url) { app.notify('This link is not an HTTP or HTTPS address.', true); return; }
@@ -134,7 +135,7 @@ function LibraryShell({ host }: { host: DigHost }) {
     <header className="masthead">
       <div className="brand"><h1>Dig</h1><p className="tagline" id="tagline">{app.mode === 'panel' ? 'Research trail' : 'Research state'}</p></div>
       <nav className="nav" aria-label="Dig views">
-        <Button variant="ghost" id="nav-trail" hidden={app.mode !== 'panel'} aria-current={view === '/trail' ? 'page' : 'false'} onClick={() => { void app.go('/trail'); }}>This conversation</Button>
+        <Button variant="ghost" id="nav-trail" hidden={app.mode !== 'panel'} aria-current={view === '/trail' ? 'page' : 'false'} onClick={() => { void app.go('/trail'); }}>This dig</Button>
         <Button variant="ghost" id="nav-library" aria-current={view === '/library' ? 'page' : 'false'} onClick={() => { void app.go('/library'); }}>Library</Button>
         <details ref={navMore} key={app.mode} className="nav-more" open={app.mode === 'panel' ? undefined : true}
           onClick={event => { if (app.mode === 'panel' && (event.target as Element).closest('button')) event.currentTarget.open = false; }}
@@ -157,10 +158,10 @@ function LibraryShell({ host }: { host: DigHost }) {
     <Reader app={app} host={host} hidden={view !== '/reader'} />
     <SourcesPage app={app} host={host} hidden={view !== '/sources'} />
     <GuidePage hidden={view !== '/guide'} onNavigate={path => { void app.go(path); }} host={app.snapshot.host} />
-    <SettingsPage app={app} host={host} hidden={view !== '/settings'} />
+    <SettingsPage app={app} hidden={view !== '/settings'} />
     <AboutPage app={app} host={host} hidden={view !== '/about'} />
     <footer className="foot">
-      <span id="host-state">{!app.connected ? 'Connecting…' : host.preview ? 'Browser preview (read-only)' : app.mode === 'panel' ? 'Conversation panel' : 'Native library'}</span>
+      <span id="host-state">{!app.connected ? 'Connecting…' : host.browser ? 'In a browser' : app.mode === 'panel' ? 'Conversation panel' : 'Native library'}</span>
       <span id="live-state">{app.connected ? app.updatesFailed ? 'Updates paused' : 'Updates automatically' : ''}</span>
       <span id="source-status">{enabled ? app.catalog.size ? `${enabled.length} of ${app.catalog.size} ${app.catalog.groupLabel().toLowerCase()} on` : `${plural(enabled.length, 'source')} on` : ''}</span>
       <span id="retention">{app.snapshotLoaded ? app.snapshot.keepRaw ? 'Original responses retained' : 'Original responses not retained' : ''}</span>

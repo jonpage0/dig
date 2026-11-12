@@ -1,15 +1,14 @@
 {
   "name": "dig",
-  "version": "0.15.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "license": "MIT",
   "scripts": {
     "build": "node --import ./scripts/typescript.mjs scripts/build.mjs",
-    "test": "node --conditions=development --import ./scripts/typescript.mjs --test test/*.test.mjs src/providers/*.test.ts src/providers/tools/*.test.ts",
+    "test": "node --conditions=development --import ./scripts/typescript.mjs --test test/*.test.mjs test/service/*.test.mjs test/service/*.test.ts src/providers/*.test.ts src/providers/tools/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check": "npm run build && npm run typecheck && npm test",
-    "preview": "node --import ./scripts/typescript.mjs scripts/preview.mjs",
     "smoke": "node scripts/smoke.mjs",
     "live-check": "node scripts/live-check.mjs"
   },
@@ -20,8 +19,10 @@
     "@base-ui/react": "1.9.0",
     "@huggingface/tokenizers": "0.2.0",
     "@iarna/toml": "2.2.5",
-    "@modelcontextprotocol/ext-apps": "1.7.5",
-    "@modelcontextprotocol/sdk": "1.32.1",
+    "@modelcontextprotocol/client": "2.4.0",
+    "@modelcontextprotocol/ext-apps": "2.1.0",
+    "@modelcontextprotocol/node": "2.1.2",
+    "@modelcontextprotocol/server": "2.4.0",
     "@openai/mcp-extensions": "0.2.0",
     "@sinclair/typebox": "0.34.52",
     "@tanstack/react-query": "5.104.5",
@@ -35,6 +36,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",
@@ -45,5 +47,10 @@
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
     "vite": "8.3.4"
+  },
+  "overrides": {
+    "@openai/mcp-extensions": {
+      "@modelcontextprotocol/ext-apps": "$@modelcontextprotocol/ext-apps"
+    }
   }
 }

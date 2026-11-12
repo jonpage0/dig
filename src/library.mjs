@@ -67,7 +67,8 @@ function digPath(config, project, dig) {
   if (!token(dig)) throw new Error('Invalid dig id');
   return join(config.library, projectFolder(project), 'digs', dig);
 }
-export async function startDig(config, project, question, session = SESSION_UNAVAILABLE, { planned = [], refreshes, mode = 'composed' } = {}) {
+// `ownSession` makes the dig its own session (its id), as the service files a dig's receipts under sessions/<dig id>.
+export async function startDig(config, project, question, session = SESSION_UNAVAILABLE, { planned = [], refreshes, mode = 'composed', ownSession = false } = {}) {
   session = safeSegment(session, SESSION_UNAVAILABLE);
   if (!question.trim()) throw new Error('The original question is required');
   if (!(await stat(await realpath(project))).isDirectory()) throw new Error('project must be an existing directory');
@@ -77,6 +78,7 @@ export async function startDig(config, project, question, session = SESSION_UNAV
   const base = `${at.slice(0, 10)}-${at.slice(11, 16).replace(':', '')}-${slug(question)}`;
   for (let n = 1; n < 1000; n++) {
     const dig = n === 1 ? base : `${base}-${n}`;
+    if (ownSession) session = dig;
     const path = join(await directory(config, [projectFolder(project), 'digs']), dig);
     try { await mkdir(path); } catch (e) { if (e.code === 'EEXIST') continue; throw e; }
     await writeFile(join(path, 'dig.md'), `---\ndig: ${quote(dig)}\nquestion: ${quote(question)}\nproject: ${quote(resolve(project))}\nmode: ${mode}\nstarted_at: ${quote(at)}\nsession: ${quote(session)}\n${planned.length ? `planned: ${JSON.stringify(planned)}\n` : ''}${refreshes ? `refreshes: ${quote(refreshes)}\n` : ''}---\n# ${question.replaceAll('\n', ' ')}\n`, { flag: 'wx' });
@@ -325,8 +327,8 @@ export async function readLibraryFile(config, file, offset = 0, limit = 60000) {
 const SECRET_NAME_PARTS = new Set(['key', 'apikey', 'token', 'secret', 'password', 'passwd', 'credential', 'credentials', 'authorization', 'auth', 'cookie']);
 // Known credential values are already redacted from args by value. By name, an argument the tool's own input schema
 // declares (`declared`: Polymarket's token_id, paging tokens) is kept whatever it is called; undeclared names and every
-// nested name that looks like a credential are dropped.
-function withoutSecrets(value, declared = []) {
+// nested name that looks like a credential are dropped. A receipt's `args` are this of the call's redacted arguments.
+export function withoutSecrets(value, declared = []) {
   if (Array.isArray(value)) return value.map(item => withoutSecrets(item));
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value)

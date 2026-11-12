@@ -5,9 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ACCOUNTS, ALL_MODULES, moduleAgents, moduleEnvironment, moduleSkills, reportSources } from '../src/providers/modules.ts';
 import { loadConfig, loadKeys, updateConfig, WORKER_TABLES } from '../src/config.mjs';
-import { prepareKeysFile, settingsDocument, sourceInfo } from '../src/catalog.mjs';
+import { settingsDocument, sourceInfo } from '../src/catalog.mjs';
+import { wrapperFiles } from '../scripts/wrappers.mjs';
 import { listLibrary, recordCall, saveReport, startDig } from '../src/library.mjs';
 import { report } from './report-fixture.mjs';
+
+// A method's agents/openai.yaml, which only the generated ChatGPT wrapper carries.
+const hostFile = async name => String((await wrapperFiles()).get(`plugins/chatgpt/skills/${name}/agents/openai.yaml`));
 
 test('evidence ranking is independently disabled by default and discovers guidance without a report method', async () => {
   const state = await mkdtemp(join(tmpdir(), 'dig-evidence-catalog-'));
@@ -44,8 +48,7 @@ test('evidence ranking uses the one private credential file and has a unique pro
     const accounts = ACCOUNTS.filter(account => account.keys.flat().includes('TYPESAFE_API_KEY'));
     assert.equal(accounts.length, 1);
     assert.equal(accounts[0].signup, 'https://console.typesafe.ai/keys');
-    const prepared = await prepareKeysFile('evidence', state);
-    assert.deepEqual(prepared.added, ['TYPESAFE_API_KEY']);
+    const prepared = { path: join(state, 'keys.env') };
     const env = { TYPESAFE_API_KEY: 'synthetic-environment-typesafe-key' };
     loadKeys(env, state);
     assert.equal(env.TYPESAFE_API_KEY, undefined, 'An inherited key is not automatically used');
@@ -54,7 +57,6 @@ test('evidence ranking uses the one private credential file and has a unique pro
     assert.equal(env.TYPESAFE_API_KEY, 'synthetic-file-typesafe-key');
     const info = sourceInfo(await loadConfig(state), 'evidence').sources[0];
     assert.deepEqual(info.credentials.map(({ name, required }) => ({ name, required })), [{ name: 'TYPESAFE_API_KEY', required: true }]);
-    assert.doesNotMatch(JSON.stringify(prepared), /synthetic-/);
   } finally {
     await rm(state, { recursive: true, force: true });
   }
@@ -104,7 +106,7 @@ test('the Wayback Machine is a keyless free web source with one method, both too
     assert.equal(info.kind, 'source'); assert.deepEqual(info.credentials, []); assert.deepEqual(info.methods.map(m => m.name), ['wayback']);
     const skill = await readFile(info.methods[0].skillPath, 'utf8');
     assert.match(skill, /^---\nname: wayback\n/); assert.match(skill, /wayback_snapshots/); assert.match(skill, /wayback_read/); assert.match(skill, /source: "wayback"/);
-    assert.match(await readFile(join(info.methods[0].skillPath, '../agents/openai.yaml'), 'utf8'), /icon_small: "\.\.\/\.\.\/assets\/skills\/history\.svg"/);
+    assert.match(await hostFile('wayback'), /icon_small: "\.\.\/\.\.\/assets\/skills\/history\.svg"/);
   } finally {
     await rm(state, { recursive: true, force: true });
   }
@@ -131,8 +133,9 @@ test('Google ads and LinkedIn ads are ScrapeCreators market sources after Facebo
       const info = sourceInfo(config, id).sources[0];
       assert.equal(info.enabled, false); assert.deepEqual(info.methods.map(m => m.name), [id]);
       const skill = await readFile(info.methods[0].skillPath, 'utf8');
-      assert.match(skill, new RegExp(`^---\\nname: ${id}\\n`)); assert.match(skill, new RegExp(tool)); assert.match(skill, new RegExp(`source: "${id}"`)); assert.match(skill, /disable-model-invocation: true/);
-      assert.match(await readFile(join(info.methods[0].skillPath, '../agents/openai.yaml'), 'utf8'), /icon_small: "\.\.\/\.\.\/assets\/skills\/megaphone\.svg"/);
+      assert.match(skill, new RegExp(`^---\\nname: ${id}\\n`)); assert.match(skill, new RegExp(tool)); assert.match(skill, new RegExp(`source: "${id}"`));
+      const host = await hostFile(id);
+      assert.match(host, /icon_small: "\.\.\/\.\.\/assets\/skills\/megaphone\.svg"/); assert.match(host, /allow_implicit_invocation: false/);
     }
     assert.equal(MODULES.find(m => m.id === 'linkedin-ads').logo, 'linkedin');
     const youtube = MODULES.find(m => m.id === 'youtube');
@@ -159,10 +162,10 @@ test('X trace is a fourth X method with its own skill, glyph and worker suggesti
     assert.deepEqual(workerGuidance(config, 'x-trace'), { ...workerGuidance(config, 'x-judge') });
     const method = sourceInfo(config, 'x').sources[0].methods.find(entry => entry.name === 'x-trace');
     const skill = await readFile(method.skillPath, 'utf8');
-    assert.match(skill, /^---\nname: x-trace\n/); assert.match(skill, /`agent: "x-trace"`/); assert.match(skill, /disable-model-invocation: true/);
+    assert.match(skill, /^---\nname: x-trace\n/); assert.match(skill, /`agent: "x-trace"`/); assert.match(await hostFile('x-trace'), /allow_implicit_invocation: false/);
     // The method judges by who is speaking, works to a budget in X's two read units, and keeps Grok to one pass.
     assert.match(skill, /Do not rank candidates by likes\./); assert.match(skill, /about 300 post reads and 60 account reads/); assert.match(skill, /Run at most one `xsearch` pass in a trace/);
-    assert.match(await readFile(new URL('../plugin/skills/x-trace/agents/openai.yaml', import.meta.url), 'utf8'), /skills\/waypoints\.svg/);
+    assert.match(await hostFile('x-trace'), /skills\/waypoints\.svg/);
     assert.ok(settingsDocument(config).schema.properties.x_trace_worker_model);
     const project = join(state, 'project'); await (await import('node:fs/promises')).mkdir(project);
     const saved = await saveReport(config, { project, source: 'x', agent: 'x-trace', content: report, question: 'Who is behind this thread?' });

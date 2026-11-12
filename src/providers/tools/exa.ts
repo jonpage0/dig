@@ -23,12 +23,12 @@
  * by `maxAgeHours`; deprecated `highlights.numSentences` is replaced by `maxCharacters`.
  */
 import { requestJson } from "../http.js"
-import { metered } from "../outcome.js"
+import { metered, setOutsideChat } from "../outcome.js"
 import { knownSecrets, redactText } from "../secrets.js"
 import type { KeepRaw, ToolContext, ToolSpec } from "../types.js"
 
 const EXA_BASE = "https://api.exa.ai"
-const MISSING_KEY = "ERROR: EXA_API_KEY env var not set. Get a key at https://dashboard.exa.ai"
+const MISSING_KEY = `ERROR: EXA_API_KEY is not set in Dig's keys.env. Get a key at https://dashboard.exa.ai. ${setOutsideChat()}`
 
 /** Research-preview flag for Dynamic Highlights; sent only when the caller opts in. */
 const DYNAMIC_HIGHLIGHTS_BETA = "dynamic-highlights-2026-08-28"

@@ -205,7 +205,7 @@ function RecordedCall({ call, app, host, item, scope }: any) {
     const path = canonicalResearchFile(app.snapshot.library, call.rawFile);
     if (path) void host.openFile(path).catch((error: any) => app.notify?.(`Unable to open the original response: ${error.message}`, true));
   };
-  const canOpen = Boolean(call.rawFile) && (item || (!host.preview && host.canOpenFile?.()));
+  const canOpen = Boolean(call.rawFile) && (item || host.canOpenFile?.());
   return <li className="research-overview-call"><div className="research-overview-call-head"><SourceIcon id={call.source} /><div><strong>{label(app.catalog, call.source)}</strong><span>{call.tool}</span></div><Badge tone={tone(callWord(call.status))}>Call: {callOutcome(call.status)}</Badge></div>
     <p><time dateTime={eventDate(call.at)}>{date(call.at)}</time><span>Recorded call start</span><span>{scope}</span></p>
     {call.error && <p className="research-overview-call-error">Recorded error: {call.error}</p>}

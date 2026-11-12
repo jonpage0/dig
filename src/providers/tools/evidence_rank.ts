@@ -1,5 +1,5 @@
 import { keptJson } from "../http.js";
-import { outcome, failed } from "../outcome.js";
+import { outcome, failed, setOutsideChat } from "../outcome.js";
 import { knownSecrets, redactText } from "../secrets.js";
 import type { ToolSpec } from "../types.js";
 
@@ -100,7 +100,7 @@ export const evidence_rank: ToolSpec = {
     try {
       request = buildEvidenceRequest(args);
       const key = process.env.TYPESAFE_API_KEY?.trim();
-      if (!key) return failure("Set TYPESAFE_API_KEY in Dig's keys.env for optional evidence ranking; ordinary research does not require it");
+      if (!key) return failure(`TYPESAFE_API_KEY is not set in Dig's keys.env; optional evidence ranking needs it, and ordinary research does not. ${setOutsideChat()}`);
       let response: Response;
       try { response = await fetch("https://api.typesafe.ai/v1/systemone", { method: "POST", redirect: "error", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(request.body), signal: AbortSignal.any([ctx.abort, AbortSignal.timeout(30000)]) }); }
       catch { ctx.keep("TypeSafe Jev evidence ranking", "error", "No complete response; no retry was made."); throw new Error("TypeSafe request did not complete; no retry was made"); }

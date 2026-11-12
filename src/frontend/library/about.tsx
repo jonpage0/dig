@@ -2,7 +2,7 @@ import React from 'react';
 import { VERSION } from '../../version.mjs';
 import { Badge, Button } from '../shared/components';
 import { Frame, FrameHeader, FrameTitle, FrameDescription, FramePanel } from '../shared/frame';
-import { replacedMessage, versionMessage } from './controller';
+import { versionMessage } from './controller';
 import { hostWords } from '../../ui/host.mjs';
 import type { DigHost } from '../shared/host';
 
@@ -19,10 +19,10 @@ export function AboutPage({ app, host, hidden }: { app: any; host: DigHost; hidd
   const words = hostWords(snapshot.host);
   const info = app.sources;
   const server = typeof snapshot.version === 'string' ? snapshot.version : null;
-  const canOpen = !host.preview && host.canOpenFile();
+  const canOpen = host.canOpenFile();
   const configPath = info?.configPath ?? snapshot.configPath;
-  const mismatch = Boolean(snapshot.replaced || (server && server !== VERSION));
-  const versionNote = snapshot.replaced && server ? replacedMessage(snapshot) : server && server !== VERSION ? versionMessage(snapshot) : `Dig ${VERSION}.`;
+  const mismatch = Boolean(server && server !== VERSION);
+  const versionNote = mismatch ? versionMessage(snapshot) : `Dig ${VERSION}.`;
   const open = (path: string) => { void host.openFile(path).catch((error: any) => app.notify(`${words.app} did not open ${path}: ${error.message}`, true)); };
   return <section id="about" className="installation-page" hidden={hidden}>
     <header className="installation-heading">
@@ -33,23 +33,23 @@ export function AboutPage({ app, host, hidden }: { app: any; host: DigHost; hidd
       <Frame className="installation-frame" spacing="sm">
         <FrameHeader className="installation-version-heading"><FrameTitle role="heading" aria-level={3}>View &amp; connection</FrameTitle><Badge tone={mismatch ? 'partial' : server ? 'success' : 'muted'}>{mismatch ? 'Refresh needed' : server ? 'Versions match' : 'Connection not read yet'}</Badge></FrameHeader>
         <FramePanel className="installation-version-panel">
-          <dl className="installation-versions"><div><dt>This view</dt><dd>{VERSION}</dd></div><div><dt>Running connection</dt><dd>{server || 'Not read yet'}</dd></div><div><dt>Surface</dt><dd>{host.preview ? 'Browser preview' : 'Native plugin'}</dd></div></dl>
+          <dl className="installation-versions"><div><dt>This view</dt><dd>{VERSION}</dd></div><div><dt>Running connection</dt><dd>{server || 'Not read yet'}</dd></div><div><dt>Surface</dt><dd>{host.browser ? 'Browser' : 'Host view'}</dd></div></dl>
           <p className="installation-version-message" data-attention={mismatch || undefined}>{versionNote}</p>
         </FramePanel>
       </Frame>
 
       <Frame className="installation-frame" spacing="sm">
-        <FrameHeader className="installation-frame-heading"><FrameTitle role="heading" aria-level={3}>Where your things live</FrameTitle><FrameDescription>Research, settings, and keys stay outside the installed plugin package.</FrameDescription></FrameHeader>
+        <FrameHeader className="installation-frame-heading"><FrameTitle role="heading" aria-level={3}>Where your things live</FrameTitle><FrameDescription>Research, settings, and keys stay apart from Dig’s program files.</FrameDescription></FrameHeader>
         <FramePanel className="installation-paths">
           <StorageRow label="Research library" description="Saved reports and retained evidence" value={snapshot.library} />
-          <StorageRow label="Settings file" description="One file shared with the host’s plugin settings" value={configPath} action={canOpen && configPath ? <Button variant="outline" size="sm" aria-label="Open settings file" onClick={() => open(configPath)}>Open</Button> : undefined} />
-          {info?.keysPath && <StorageRow label="Keys file" description="Provider credentials, never displayed here" value={info.keysPath} action={<Button variant="outline" size="sm" disabled={host.preview} onClick={() => { void app.editKeys(); }}>Edit keys.env</Button>} />}
+          <StorageRow label="Settings file" description="One file, edited by these pages and Dig’s settings tool" value={configPath} action={canOpen && configPath ? <Button variant="outline" size="sm" aria-label="Open settings file" onClick={() => open(configPath)}>Open</Button> : undefined} />
+          {info?.keysPath && <StorageRow label="Keys file" description="Provider credentials, never displayed here" value={info.keysPath} action={<Button variant="outline" size="sm" onClick={() => { void app.enterKeys(); }}>Enter keys</Button>} />}
         </FramePanel>
       </Frame>
 
       <div className="installation-principles">
         <section><p className="installation-eyebrow">Evidence</p><h3>Readable by design</h3><p>Source reports remain in the library; original responses are kept when retention is enabled and saving succeeds. Research runs in the conversation; this view reads the saved record and never starts research. Provider content is evidence, never instructions.</p></section>
-        <section><p className="installation-eyebrow">Privacy</p><h3>Keys stay on your computer</h3><p>Provider keys stay in <code>keys.env</code>, outside the conversation. These controls send source names; Dig copies values on its own side, and the host opens the file for editing.</p></section>
+        <section><p className="installation-eyebrow">Privacy</p><h3>Keys stay on your computer</h3><p>Provider keys stay in <code>keys.env</code>, outside the conversation. Enter keys opens a page Dig serves on this computer; what you type there goes straight to the file, never through this view or the conversation.</p></section>
         <section><p className="installation-eyebrow">Usage</p><h3>Reported costs, honest limits</h3><p>Amounts come from retained provider receipts, with their original units. They exclude the host’s model usage and are not a reconciled bill. Unreported cost stays unknown, never free.</p></section>
       </div>
 

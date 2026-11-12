@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initializeConfig, loadConfig, updateConfig, workerGuidance } from '../src/config.mjs';
 import { sourceInfo, settingsValues, settingsDocument } from '../src/catalog.mjs';
 
-test('[workers] stores only suggestions that differ from what a method inherits, and X methods keep their own', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-workers-'));
+test('[workers] stores only suggestions that differ from what a method inherits, and X methods keep their own', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-workers-')); t.after(() => rm(state, { recursive: true, force: true }));
   const file = join(state, 'config.toml');
   await initializeConfig(state);
   await updateConfig({ worker_model: 'gpt-6.1-sol', x_judge_worker_effort: 'high' }, state);
@@ -39,8 +39,8 @@ test('[workers] stores only suggestions that differ from what a method inherits,
   assert.deepEqual((await updateConfig({ keep_raw: false }, state)).workers.reddit, { model: 'gpt-7-sol' });
 });
 
-test('[spend] holds an optional per-dig ceiling in US dollars; 0 removes it and a file without one is written back without it', async () => {
-  const state = await mkdtemp(join(tmpdir(), 'dig-spend-'));
+test('[spend] holds an optional per-dig ceiling in US dollars; 0 removes it and a file without one is written back without it', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-spend-')); t.after(() => rm(state, { recursive: true, force: true }));
   const file = join(state, 'config.toml');
   assert.equal((await initializeConfig(state)).spend.dig_ceiling_usd, null);
   await updateConfig({ keep_raw: false }, state);

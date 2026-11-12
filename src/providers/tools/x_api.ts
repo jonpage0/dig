@@ -34,9 +34,8 @@
  *   - TIKHUB_API_KEY (optional; the TikHub reads above)
  *   - TIKHUB_BASE_URL (optional; defaults to https://api.tikhub.io)
  */
-import { hostOf, hostWords } from "../../ui/host.mjs"
 import { abortableDelay, keptText } from "../http.js"
-import { failed, outcome, type OutcomeStatus, type ToolOutcome } from "../outcome.js"
+import { failed, outcome, setOutsideChat, type OutcomeStatus, type ToolOutcome } from "../outcome.js"
 import type { ReceiptCost } from "../library/types.js"
 import { knownSecrets, redactValue } from "../secrets.js"
 import type { RetainedResponse, ToolContext, ToolSpec } from "../types.js"
@@ -154,7 +153,7 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 const count = (value: number, one: string, many: string) => `${value.toLocaleString("en-US")} ${value === 1 ? one : many}`
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const bearerToken = () => process.env[KEY]?.trim() || null
-const missingKey = () => hostOf(process.env.DIG_HOST) === "codex" ? `${KEY} is not set in Dig's keys.env. The user creates an app at console.x.com and adds its Bearer Token outside the chat (Dig Settings → Edit keys.env), or copies one Codex's environment already has (Dig Settings → X → Use existing key).` : `${KEY} is not set in Dig's keys.env. The user creates an app at console.x.com and adds its Bearer Token outside the chat by editing keys.env directly (${hostWords(process.env.DIG_HOST).skill("setup")} gives the exact line), or copies one ${hostWords(process.env.DIG_HOST).app}'s environment already has into keys.env by hand.`
+const missingKey = () => `${KEY} is not set in Dig's keys.env. The user creates an app at console.x.com and copies its Bearer Token. ${setOutsideChat()}`
 /** The four sign-in keys from keys.env, or the names that are missing. */
 function userKeys(): UserKeys | { missing: string[] } {
 	const [consumerKey, consumerSecret, accessToken, accessTokenSecret] = USER_KEY_NAMES.map((name) => process.env[name]?.trim() ?? "")
@@ -164,7 +163,7 @@ function userKeys(): UserKeys | { missing: string[] } {
 const andList = (items: readonly string[]) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`)
 /** Why a read that X serves only to a signed-in account cannot run, naming the missing sign-in keys. */
 const missingUserKeys = (what: string, missing: string[]) =>
-	`${what} needs X sign-in, and ${andList(missing)} ${missing.length === 1 ? "is" : "are"} not set in Dig's keys.env. Sign-in takes four keys from the X app's Keys and tokens page at console.x.com: its Consumer Key and Secret (X_CONSUMER_KEY, X_CONSUMER_SECRET) and an Access Token and Secret for the user's own account (X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET). The user adds them outside the chat (Dig Settings → Edit keys.env); signed-in reads act as that account.`
+	`${what} needs X sign-in, and ${andList(missing)} ${missing.length === 1 ? "is" : "are"} not set in Dig's keys.env. Sign-in takes four keys from the X app's Keys and tokens page at console.x.com: its Consumer Key and Secret (X_CONSUMER_KEY, X_CONSUMER_SECRET) and an Access Token and Secret for the user's own account (X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET). ${setOutsideChat(true)} Signed-in reads act as that account.`
 
 /** X ids are snowflakes: milliseconds since this epoch, shifted left 22 bits. */
 const SNOWFLAKE_EPOCH = 1288834974657n
@@ -1062,7 +1061,7 @@ const anyExtras = (extras: Extras) => extras.thread || extras.replies > 0 || ext
 /** Reads one post through TikHub because the X API could not (`reason`), labelled "via TikHub". */
 async function tikhubFallback(id: string, reason: string, extras: Extras, ctx: CallContext): Promise<ToolOutcome> {
 	const apiKey = tikhubKey()
-	if (!apiKey) return failed(`X post ${id} could not be read: ${reason}. The TikHub fallback needs TIKHUB_API_KEY, which is not set in Dig's keys.env either.`)
+	if (!apiKey) return failed(`X post ${id} could not be read: ${reason}. The TikHub fallback needs TIKHUB_API_KEY, which is not set in Dig's keys.env either. ${setOutsideChat()}`)
 	const detail = await tikhubGet("fetch_tweet_detail", { tweet_id: id }, TIKHUB_LABEL, apiKey, ctx)
 	if ("error" in detail) return failed(`X post ${id} could not be read through the X API (${reason}) or TikHub (${detail.error}).`)
 	// Only TikHub's own copy of the requested post, with its text or media, counts as reading it.
@@ -2103,7 +2102,7 @@ export const community: ToolSpec = {
 		const recent = args.sort !== "relevant"
 		const token = bearerToken()
 		const apiKey = tikhubKey()
-		if (!token && !apiKey) return failed(`x_community reads a Community's details with ${KEY} or through TikHub, and its posts through TikHub; neither ${KEY} nor TIKHUB_API_KEY is set in Dig's keys.env.`)
+		if (!token && !apiKey) return failed(`x_community reads a Community's details with ${KEY} or through TikHub, and its posts through TikHub; neither ${KEY} nor TIKHUB_API_KEY is set in Dig's keys.env. ${setOutsideChat(true)}`)
 		const failures: string[] = []
 		let name: string | null = null
 		let details: string[] = []
@@ -2140,7 +2139,7 @@ export const community: ToolSpec = {
 		let postLines: string[] = []
 		let postsRead = 0
 		if (wanted > 0) {
-			if (!apiKey) failures.push("the Community's posts: Dig reads them through TikHub, which needs TIKHUB_API_KEY, and it is not set in Dig's keys.env")
+			if (!apiKey) failures.push(`the Community's posts: Dig reads them through TikHub, which needs TIKHUB_API_KEY, and it is not set in Dig's keys.env; the user sets it outside chat, on the page Dig's keys tool opens or in keys.env`)
 			else {
 				const result = await tikhubCommunityPosts(id, wanted, recent ? "Recency" : "Relevance", apiKey, context)
 				postsRead = result.posts.length

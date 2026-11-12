@@ -20,9 +20,9 @@ import { openAlexAmount, openAlexNoCharge } from "./papers.js";
 // reports no cost, so it is unknown. The other connectors keep their existing
 // no-charge policy, which this cost reporting did not re-audit.
 
-// Bundled assets ship in plugin/bridges/papers/; these resolve from the
-// bundled server, plugin/dist/server.mjs.
-const BRIDGE_ASSETS = new URL("../bridges/papers/", import.meta.url);
+// The bridge's setup and patches ship in the package's bridges/papers/: beside
+// dist/ for the bundled service (dist/dig.mjs), three folders up from here.
+const BRIDGE_ASSETS = ["../bridges/papers/", "../../../bridges/papers/"].map((p) => new URL(p, import.meta.url)).find((url) => existsSync(new URL("setup.mjs", url))) ?? new URL("../bridges/papers/", import.meta.url);
 const BRIDGE_SETUP = fileURLToPath(new URL("setup.mjs", BRIDGE_ASSETS));
 
 /** Downloaded PDFs are shared across projects in `<library>/papers/` (docs/architecture.md). */
@@ -397,7 +397,7 @@ export const pdf_download: ToolSpec = openAlexUnknown({
 			const paperId = String(args.paperId ?? "").trim();
 			if (!source || !paperId) return "ERROR: source and paperId are required";
 			const savePath = String(args.savePath ?? "").trim();
-			// A relative savePath belongs to the project the call was made for, never the server's working directory (the installed plugin).
+			// A relative savePath belongs to the project the call was made for, never the service's working directory.
 			if (savePath && !path.isAbsolute(savePath) && !path.isAbsolute(context.directory)) return "ERROR: a relative savePath needs the call's project directory; give an absolute savePath or omit it to use the library";
 			const target = !savePath ? downloadsDir() : path.resolve(context.directory, savePath);
 			const roots = [...(path.isAbsolute(context.directory) ? [context.directory] : []), stateDirectory()];

@@ -36,10 +36,10 @@ test('coverage counts saved methods and retained bundles without inventing evide
   assert.equal(result.cost.byUnit.USD, .5);
 });
 
-test('conversation costs include named-dig worker receipts and only its own unassigned receipts', () => {
-  const own = { ...call, session: 'parent', cost: [{ unit: 'credits', amount: 3 }], knownCost: undefined };
-  const other = { ...call, session: 'elsewhere', cost: [{ unit: 'USD', amount: 99 }] };
-  const result = projectConversation({ items: [item, { ...item, id: 'other', session: 'elsewhere' }], live: [own, other] }, 'parent');
+test('a dig\'s trail costs include its workers\' receipts and only unassigned receipts that name it', () => {
+  const own = { ...call, projectFolder: 'project-p', dig: 'a', cost: [{ unit: 'credits', amount: 3 }], knownCost: undefined };
+  const other = { ...call, projectFolder: 'project-p', dig: 'elsewhere', cost: [{ unit: 'USD', amount: 99 }] };
+  const result = projectConversation({ items: [{ ...item, dig: 'project-p/a' }, { ...item, id: 'other', dig: 'project-p/other' }], live: [own, other] }, 'project-p/a');
   assert.equal(result.digs.length, 1);
   assert.equal(result.calls.length, 2);
   assert.equal(result.cost.byUnit.USD, .25);

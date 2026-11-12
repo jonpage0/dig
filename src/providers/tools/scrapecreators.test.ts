@@ -597,7 +597,7 @@ describe("scrapecreators tools", () => {
 		mock.restore();
 		restore = undefined;
 		delete process.env.SCRAPECREATORS_API_KEY;
-		expect(await telegram.execute({ kind: "channel", handle: "durov" }, context)).toBe("ERROR: SCRAPECREATORS_API_KEY not set. Get a key at https://scrapecreators.com");
+		expect(await telegram.execute({ kind: "channel", handle: "durov" }, context)).toBe("ERROR: SCRAPECREATORS_API_KEY is not set in Dig's keys.env. Get a key at https://scrapecreators.com. The user sets it outside chat, on the page Dig's keys tool opens or in keys.env.");
 	});
 
 	test("a request that got no response is sent once, and its text and receipt both leave the cost unknown", async () => {

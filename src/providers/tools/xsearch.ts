@@ -1,7 +1,7 @@
 /**
  * X.com Search Tool via xAI Agent Tools API
  *
- * Self-contained xsearch tool for the dig plugin.
+ * Self-contained xsearch tool for Dig.
  * Uses the xAI Responses API with x_search agent tool for real-time X.com data.
  * Model and depth come from the [x] table in Dig's native config.toml; reasoning
  * effort is sent when the model supports it, and dropped if the API rejects it.
@@ -12,13 +12,12 @@
  * Supports handle filtering, date ranges, image/video understanding,
  * and multi-turn chaining via previous_response_id.
  */
-import { hostOf, hostWords } from "../../ui/host.mjs"
 import { Lexer, type Token, type Tokens } from "marked"
 import type { KeepRaw, ToolSpec } from "../types.js"
 import { loadConfig } from "../runtime-config.js"
 import { abortableDelay, keptJson, keptText } from "../http.js"
 import { knownSecrets, redactProviderText } from "../secrets.js"
-import { failed, metered, outcome } from "../outcome.js"
+import { failed, metered, outcome, setOutsideChat } from "../outcome.js"
 
 const API_BASE = "https://api.x.ai/v1"
 /** xAI reports cost in ticks of 1e-10 USD. */
@@ -508,7 +507,7 @@ export const search = metered({
 
     const apiKey = process.env.XAI_API_KEY
     if (!apiKey) {
-      return failed(hostOf(process.env.DIG_HOST) === "codex" ? "ERROR: XAI_API_KEY is not set in Dig's keys.env. The user adds it outside the chat (Dig Settings → Edit keys.env), or copies one Codex's environment already has (Dig Settings → X → Use existing key)." : `ERROR: XAI_API_KEY is not set in Dig's keys.env. The user adds it outside the chat by editing keys.env directly (${hostWords(process.env.DIG_HOST).skill("setup")} gives the exact line), or copies one ${hostWords(process.env.DIG_HOST).app}'s environment already has into keys.env by hand.`)
+      return failed(`ERROR: XAI_API_KEY is not set in Dig's keys.env. ${setOutsideChat()}`)
     }
 
     if (args.recoverResponseId) {

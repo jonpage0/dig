@@ -4,7 +4,7 @@
  */
 import { USER_AGENT } from "../../version.mjs"
 import { keptJson, keptText } from "../http.js"
-import { outcome } from "../outcome.js"
+import { outcome, setOutsideChat } from "../outcome.js"
 import { knownSecrets, redactText } from "../secrets.js"
 import type { SourceToolResult, ToolContext, ToolSpec } from "../types.js"
 
@@ -112,7 +112,7 @@ function safeMessage(error: unknown): string {
 async function makeApiRequest(endpoint: string, body: Record<string, unknown>, ctx: ToolContext): Promise<Record<string, unknown>> {
   if (ctx.abort.aborted) throw new Error("Perplexity request cancelled by caller")
   const key = process.env.PERPLEXITY_API_KEY
-  if (!key) throw new Error("PERPLEXITY_API_KEY not set. Get a key at https://docs.perplexity.ai")
+  if (!key) throw new Error(`PERPLEXITY_API_KEY is not set in Dig's keys.env. Get a key at https://docs.perplexity.ai. ${setOutsideChat()}`)
   const timeoutMs = integer(Number(process.env.PERPLEXITY_TIMEOUT_MS ?? "300000"), "PERPLEXITY_TIMEOUT_MS", 2_147_483_647)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)

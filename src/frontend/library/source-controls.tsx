@@ -183,8 +183,8 @@ function KeyNames({ groups }: { groups: string[][] }) {
 }
 
 /** Presence is derived from source_info names/booleans. Credential values are never rendered. */
-export function AccountsPanel({ sources, keysPath, editKeys, preview }: {
-  sources: any[]; keysPath?: string; editKeys?: () => unknown; preview: boolean;
+export function AccountsPanel({ sources, keysPath, enterKeys }: {
+  sources: any[]; keysPath?: string; enterKeys?: () => unknown;
 }) {
   const [open, setOpen] = useState(false);
   const available = Array.isArray(sources) ? sources : [];
@@ -207,7 +207,7 @@ export function AccountsPanel({ sources, keysPath, editKeys, preview }: {
     <Frame spacing="sm">
     <FrameHeader className="source-accounts-header">
       <div><h3 id="keys-title">Accounts and keys</h3><p className="source-accounts-summary">{set} of {accounts.length} accounts set{missing ? ` · ${missing} local tool${missing === 1 ? '' : 's'} missing` : ''}</p></div>
-      <Button id="edit-keys" variant="outline" size="sm" disabled={preview || !keysPath || !editKeys} onClick={() => { void editKeys?.(); }}>Edit keys.env</Button>
+      <Button id="enter-keys" variant="outline" size="sm" title="Type the missing keys of the enabled sources into a page on this computer" disabled={!keysPath || !enterKeys} onClick={() => { void enterKeys?.(); }}>Enter keys</Button>
     </FrameHeader>
     <FramePanel>
     <p className="source-accounts-intro">One provider key can serve several sources. Keys stay in <code>keys.env</code>, outside the conversation.</p>

@@ -1,6 +1,6 @@
 // Dig's icon glyphs: Lucide icons (ISC License, Copyright (c) 2026 Lucide Icons and Contributors; the full
-// notice ships as Lucide-LICENSE at the plugin root). One table feeds the sidebar entrypoint icon, the skill
-// tiles that the build writes to plugin/assets/skills/, composer-mention icons and the saved-research card.
+// notice ships as Lucide-LICENSE at the package root). One table feeds the sidebar entrypoint icon, the method
+// tiles the ChatGPT wrapper carries (scripts/wrappers.mjs), the views and the saved-research card.
 
 /** Glyph name → its 24×24 stroke shapes as [tag, attributes]. */
 export const GLYPHS = {

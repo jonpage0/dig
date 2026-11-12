@@ -17,7 +17,7 @@
  */
 import { USER_AGENT } from "../../version.mjs"
 import { keptJson, keptText } from "../http.js"
-import { free, metered, outcome } from "../outcome.js"
+import { free, metered, outcome, setOutsideChat } from "../outcome.js"
 import type { ToolSpec } from "../types.js"
 
 /**
@@ -536,7 +536,7 @@ function formatOpenAlexWorks(works: OpenAlexWork[], header: string): string {
 function semanticAccess(): string {
   return providerKey("SEMANTIC_SCHOLAR_API_KEY")
     ? "API key configured; introductory key limit is 1 request/second across endpoints."
-    : "No Semantic Scholar API key configured: using the shared anonymous pool, which may be heavily throttled. Set SEMANTIC_SCHOLAR_API_KEY or PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY for dedicated access."
+    : `No Semantic Scholar API key configured: using the shared anonymous pool, which may be heavily throttled. SEMANTIC_SCHOLAR_API_KEY or PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY in Dig's keys.env gives dedicated access. ${setOutsideChat()}`
 }
 
 function numericHeader(response: Response, name: string): number | undefined {

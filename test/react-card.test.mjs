@@ -1,9 +1,9 @@
 import { test, afterEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
-import { cardDetails, compactTitle, digLink, readRetained, webLink } from '../src/frontend/card/model.ts';
+import { cardDetails, compactTitle, readRetained, webLink } from '../src/frontend/card/model.ts';
 
-const window = new Window({ url: 'http://localhost/?preview=1' });
+const window = new Window({ url: 'http://localhost/' });
 for (const name of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'DocumentFragment', 'MutationObserver', 'ResizeObserver', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame']) {
   const value = name === 'window' ? window : name === 'getComputedStyle' || name.endsWith('AnimationFrame') ? window[name].bind(window) : window[name];
   Object.defineProperty(globalThis, name, { configurable: true, value });
@@ -32,7 +32,7 @@ function fakeHost(overrides = {}) {
   const calls = [], drafts = [], links = [], files = [];
   let subscriber;
   const host = {
-    preview: false, calls, drafts, links, files,
+    calls, drafts, links, files,
     start: async () => {}, dispose() {}, getContext: () => ({}), readDeepLink: () => null,
     canOpenFile: () => true, canDraft: () => true, requestDisplayMode: async () => null,
     subscribeResult(callback) { subscriber = callback; return () => { subscriber = null; }; },
@@ -65,8 +65,6 @@ test('bounded evidence reading rejects inconsistent pagination and mismatched fi
   assert.throws(() => cardDetails(card(), 'different.md'), /different or unreadable/);
   assert.equal(webLink('https://user:secret@example.com'), null);
   assert.equal(webLink('data:text/html,test'), null);
-  assert.equal(digLink('codex://plugins/other@app/app/open_library?path=%2Fread%3Ffile%3Dx'), null);
-  assert.match(digLink('codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dx'), /^codex:/);
 });
 
 test('legacy relative evidence pins its first canonical path before requesting later pages', async () => {
@@ -166,17 +164,11 @@ test('new tool results supersede delayed card metadata and close old reads', asy
   assert.match(body(),/New report/);assert.doesNotMatch(body(),/Make the cancellation policy clear/);
 });
 
-test('Open follows the exact native Dig link without a provider call', async () => {
-  const link='codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport';
-  const host=fakeHost();await render(host,{file,path:'/library/report.md',card:card({link})});await click('Open');
-  assert.deepEqual(host.links,[link]);assert.deepEqual(host.calls,[]);assert.equal(document.querySelector('[role="dialog"]'),null);
-});
-
-test('a rejected Dig link opens the same canonical report completely and asks for fullscreen', async () => {
+test('Open reads the same canonical report completely by its library file, asks for fullscreen and follows no reader link', async () => {
   const first='# Report\n',last='Original <b>literal</b> research.';const modes=[];
-  const host=fakeHost({openLink:async url=>{host.links.push(url);throw Error('Unsupported link');},requestDisplayMode:async mode=>{modes.push(mode);return null;},call:async(name,args)=>{host.calls.push({name,args});return{file,path:'/library/report.md',offset:args.offset,text:args.offset?last:first,nextOffset:args.offset?null:first.length,totalCharacters:first.length+last.length};}});
+  const host=fakeHost({requestDisplayMode:async mode=>{modes.push(mode);return null;},call:async(name,args)=>{host.calls.push({name,args});return{file,path:'/library/report.md',offset:args.offset,text:args.offset?last:first,nextOffset:args.offset?null:first.length,totalCharacters:first.length+last.length};}});
   await render(host,{file,path:'/library/report.md',card:card({link:'codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport'})});await click('Open');
-  assert.deepEqual(modes,['fullscreen']);assert.deepEqual(host.calls.map(x=>x.args.file),['/library/report.md','/library/report.md']);
+  assert.deepEqual(host.links,[]);assert.deepEqual(modes,['fullscreen']);assert.deepEqual(host.calls.map(x=>x.args.file),['/library/report.md','/library/report.md']);
   assert.equal(document.querySelector('pre').textContent,first+last);assert.equal(document.querySelector('pre b'),null);assert.match(body(),/Complete retained file/);
 });
 
@@ -187,12 +179,11 @@ test('closing the fallback reader ignores a delayed page and stops pagination', 
   assert.doesNotMatch(body(),/stale/);assert.equal(host.calls.length,1);
 });
 
-test('a late navigation failure cannot open a replaced card or displace a newer reader', async () => {
-  const rejected=[];const host=fakeHost({openLink:()=>new Promise((_resolve,reject)=>rejected.push(reject))});
-  const link='codex://plugins/dig@dig/app/open_library?path=%2Fread%3Ffile%3Dreport';
-  await render(host,{file,path:'/library/report.md',card:card({link})});await click('Open');
-  const next='project/digs/next/youtube.md';await act(async()=>host.emit({file:next,path:'/library/next.md',card:card({file:next,path:'/library/next.md',title:'New research',link})}));
-  await act(async()=>rejected[0](Error('Old navigation rejected')));
+test('a late display-mode answer cannot open a replaced card or displace a newer reader', async () => {
+  const pending=[];const host=fakeHost({requestDisplayMode:()=>new Promise(resolve=>pending.push(resolve))});
+  await render(host,{file,path:'/library/report.md',card:card()});await click('Open');
+  const next='project/digs/next/youtube.md';await act(async()=>host.emit({file:next,path:'/library/next.md',card:card({file:next,path:'/library/next.md',title:'New research'})}));
+  await act(async()=>pending[0](null));
   assert.match(body(),/New research/);assert.equal(document.querySelector('[role="dialog"]'),null);assert.deepEqual(host.calls,[]);
 });
 

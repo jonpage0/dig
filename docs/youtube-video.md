@@ -2,19 +2,19 @@
 
 Dig’s optional YouTube video method analyzes selected public YouTube videos and saves a complete source report with timestamped findings. **Gemini 3.8 Flash is the standard provider. Gemini 4 Argon is the next choice for harder reasoning.** Use the separate [Glimpse tool](video-analysis.md) when a focused visual need warrants it, or when you explicitly choose that provider. A useful answer does not require running every model.
 
-For discovery and claims that captions can establish, the existing `$dig:youtube` transcript method remains available. For deeper analysis of a supplied video, ask:
+For discovery and claims that captions can establish, use the `youtube` transcript method. For deeper analysis of a supplied video, ask:
 
-> Use $dig:youtube-video to explain this demonstration. Start with Flash. Identify the video URL and original-video timestamp for every important observation, distinguish what is shown from what is said, and save the report.
+> Use Dig's youtube-video method to explain this demonstration. Start with Flash. Identify the video URL and original-video timestamp for every important observation, distinguish what is shown from what is said, and save the report.
 
-Questions stay in the host conversation. The YouTube card describes the capabilities and setup; it has no separate video-entry or search form.
+Questions stay in the host conversation. The YouTube entry on the Sources & tools page describes the capabilities and setup; it has no separate video-entry or search form.
 
 ## Setup
 
-Enable **YouTube** on **Sources & tools**, then add `GEMINI_API_KEY` to Dig’s private `keys.env` using **Edit keys.env**. Get the key from [Google AI Studio](https://aistudio.google.com/apikey). Never paste it into chat.
+Turn on **YouTube**, then enter `GEMINI_API_KEY` on the key page the `keys` tool opens (or **Enter keys** on YouTube in Dig's views), or add it to Dig’s private `keys.env`. Get the key from [Google AI Studio](https://aistudio.google.com/apikey). Never paste it into chat.
 
 This is separate from `OPENCODE_RESEARCH_GOOGLE_API_KEY`, the optional Google Cloud key for YouTube Data API search metadata. Dig accepts only `GEMINI_API_KEY` for Gemini. The video-understanding route needs no local yt-dlp, ffmpeg or ffprobe. A missing Gemini key does not disable existing discovery or transcript routes.
 
-The tools are `youtube_analyze` and `youtube_analysis_status`. The `youtube-video` method uses them to write a standard report under the YouTube source. The tools can also answer directly without creating a dig or report; direct calls still take an explicit absolute `project` for their retained evidence.
+The actions are `youtube_analyze` and `youtube_analysis_status`, on the `youtube` tool: a call names the dig, the action and its arguments in `args`. The `youtube-video` method uses them to write a standard report under the YouTube source. They can also answer directly, without a report, under a dig like any call.
 
 ## Select videos and inspection controls
 
@@ -30,9 +30,9 @@ The first `youtube_analyze` request needs a `question` and `videos`, an array of
 
 Agentic processing rejects explicit interval and FPS controls. A supported URL format does not establish that its video is public or readable. Prefer a relevant interval when it answers the question, and a whole video when its full arc matters. Higher sampling or resolution uses more provider context and does not guarantee that every event was understood.
 
-The provider model is `gemini-3.8-flash` by default; choose `gemini-4-argon` explicitly for Argon. This choice is separate from the Codex worker model suggested in Dig’s settings. `thinking` defaults to `low` and can request `minimal`, `low`, `medium` or `high`; Google can reject unsupported model/option combinations. `maxTokens` defaults to 4096 and accepts 128–16384. It is an output limit, not a spending cap.
+The provider model is `gemini-3.8-flash` by default; choose `gemini-4-argon` explicitly for Argon. This choice is separate from the worker model suggested in Dig’s settings. `thinking` defaults to `low` and can request `minimal`, `low`, `medium` or `high`; Google can reject unsupported model/option combinations. `maxTokens` defaults to 4096 and accepts 128–16384. It is an output limit, not a spending cap.
 
-`responseSchema` requests JSON-shaped findings using Google’s supported JSON Schema subset. Dig returns parsed output in `structuredAnswer`, without repeating the full JSON in the prose text. A valid structure does not establish that its claims or timestamps are correct.
+`responseSchema` requests JSON-shaped findings using Google’s supported JSON Schema subset. The result's text does not repeat the JSON: it says the answer is in `structuredAnswer`, which is in the result's `Details:` block (cut at 20,000 characters) and in the call's retained original response, which the result links. A valid structure does not establish that its claims or timestamps are correct.
 
 ## Grounding and evidence
 
@@ -50,20 +50,22 @@ For a follow-up, pass the returned interaction ID as `previousInteractionId` wit
 
 The default call waits for Google’s analysis for up to 480 seconds. If it is still running, Dig returns a partial result with its interaction ID and running status. `background: true` returns the ID promptly while Google continues.
 
-Continue with `youtube_analysis_status`:
+`youtube_analyze` and `youtube_analysis_status` are slow actions, so each call runs as a job in Dig's service, not in the connection. A host that supports MCP tasks follows it as a task; in any other host, if the call is still running after 40 seconds the result names the job, and the assistant asks the `job` tool for the result rather than calling again. A dropped connection does not stop the job, and an identical call attaches to it or, within ten minutes of its end, returns its result, so the analysis is not paid for twice. If the service stops while the job runs, the job is marked failed on the next start with its cost unknown, and it is not sent again.
+
+Continue with the `youtube_analysis_status` action. Its own arguments go inside `args`, so its `action` below is not the tool's:
 
 - `interactionId`: the exact ID returned for this task and account.
 - `action: "get"`: read the result; this is the default.
 - `waitSeconds`: optionally wait from 0 to 120 seconds on a get.
 - `action: "cancel"`: request cancellation; do not combine it with a wait.
 
-Status reads do not launch generation again. Preserve an unfinished interaction’s ID instead of starting another analysis because it is slow. An intentionally returned background interaction continues running. Interrupting a foreground waiter requests cancellation when its started interaction is known; a connection failure can leave cancellation unconfirmed. Dig has no separate persistent job store, and Google’s interaction availability follows its account retention.
+Status reads do not launch generation again. Preserve an unfinished interaction’s ID instead of starting another analysis because it is slow. An intentionally returned background interaction continues running. Cancelling the job (`job` with `cancel: true`) while it waits requests cancellation of its started interaction at Google; a connection failure can leave that unconfirmed. Dig's job covers only the call itself: an interaction Google still holds after the call has returned is continued with `youtube_analysis_status`, not with `job`, and its availability follows Google's account retention.
 
 ## Storage and cost
 
 Google interaction storage defaults to `store: true` for follow-up context, polling and background results. To opt out of that provider history, set `store: false` on a foreground first request without `previousInteractionId`. Google requires storage when continuing a previous interaction. A completed request without provider storage can return no interaction ID; that is expected, and there is no provider-history resume or follow-up mechanism for it.
 
-Dig’s retention is separate: ordinary receipts retain the call and its outcome, and original responses are saved when raw retention is enabled and storage succeeds. A missing raw reference or `retentionError` is an evidence gap. This route sends Google the selected public video references and the question; it does not upload local project media.
+Dig’s retention is separate: ordinary receipts retain the call and its outcome, and original responses are saved when raw retention is enabled and storage succeeds. A result without a link to its original, or whose first line says the receipt was not saved, is an evidence gap. This route sends Google the selected public video references and the question; it does not upload local project media.
 
 Google reports token usage without an authoritative per-call dollar charge, so Dig records the cost as unknown. The usage returned by status reads is cumulative for that interaction, not a fresh amount to add to the previous read. It can include tool-use prompts and thinking. Repeated status calls are distinct Dig receipts, but their repeated token totals must not be presented as repeated inference or estimated cash charges.
 

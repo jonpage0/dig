@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { loadConfig } from "../runtime-config.js"
 import { keptText } from "../http.js"
 import { knownSecrets, redactText } from "../secrets.js"
-import { outcome } from "../outcome.js"
+import { outcome, setOutsideChat } from "../outcome.js"
 import type { ToolSpec } from "../types.js"
 
 /** Cached open-access files, metered separately from metadata search. */
@@ -17,7 +17,7 @@ export const content: ToolSpec = {
       const format = args.format ?? "xml"
       if (!["pdf", "xml"].includes(format)) throw new Error("format must be pdf or xml")
       const key = process.env.PAPER_SEARCH_MCP_OPENALEX_API_KEY?.trim() || process.env.OPENALEX_API_KEY?.trim()
-      if (!key) throw new Error("An OPENALEX_API_KEY is required for cached full text")
+      if (!key) throw new Error(`OPENALEX_API_KEY is not set in Dig's keys.env, and cached full text needs it. ${setOutsideChat()}`)
       const folder = join(loadConfig().library, "papers")
       mkdirSync(folder, {recursive:true})
       const file = join(folder, `openalex-${workId}.${format}`)
