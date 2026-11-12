@@ -45,3 +45,15 @@ test('a follows read lists the accounts X returned as account rows, without the 
   assert.deepEqual(read.items[0].meta, ['1K followers', '42 posts', 'verified blue']);
   assert.deepEqual(readX({ ...call, args: { handle: 'NASA', direction: 'followers', cursor: 'next' } }, [lookup, list]).action, ['listed accounts following @NASA', '(next page)']);
 });
+
+test('a pictures call reads each kept note as a picture by its link, saying how many were shown and that none is retained', () => {
+  const call = { tool: 'x_images', status: 'partial', args: { images: ['https://pbs.twimg.com/media/A.jpg', 'https://pbs.twimg.com/media/B.jpg'], size: 'large' } };
+  const read = readX(call, ['[picture not retained] https://pbs.twimg.com/media/A.jpg?name=large · image/jpeg · 92,711 bytes · shown', '[picture not retained] https://pbs.twimg.com/media/B.jpg?name=large · no media type · size unknown · not shown: the host answered HTTP 404']);
+  assert.deepEqual(read.action, ['looked at', '2 X pictures', '(large)']);
+  assert.equal(read.result, '1 of 2 pictures shown; pictures are not retained');
+  assert.deepEqual(read.items.map(item => [item.kind, item.title, item.url, item.meta]), [
+    ['image', 'A.jpg', 'https://pbs.twimg.com/media/A.jpg?name=large', ['shown', 'image/jpeg', '92,711 bytes']],
+    ['image', 'B.jpg', 'https://pbs.twimg.com/media/B.jpg?name=large', ['not shown: the host answered HTTP 404', 'no media type', 'size unknown']],
+  ]);
+  assert.deepEqual(readX({ ...call, status: 'failed' }, []).action[0], 'tried to look at');
+});

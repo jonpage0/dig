@@ -1,6 +1,7 @@
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 globalThis.fetch = async (url, init) => {
   const target = new URL(url);
   // xAI reports a US-dollar cost (1e-10 USD ticks). Each request is noted in the state folder, so a test can show that a refused call sent none.
@@ -28,6 +29,8 @@ globalThis.fetch = async (url, init) => {
       steps: [{ type: 'model_output', content: [{ type: 'text', text: `At 00:10 the door closes. Synthetic provider echo ${process.env.GEMINI_API_KEY}` }] }],
     });
   }
+  // X's image host: a 1×1 PNG for every picture, except a link whose path says redirect, which is sent elsewhere.
+  if (target.hostname === 'pbs.twimg.com') return target.pathname.includes('redirect') ? new Response(null, { status: 302, headers: { location: 'https://example.com/' } }) : new Response(Buffer.from(PIXEL, 'base64'), { headers: { 'content-type': 'image/png' } });
   const query = new URL(url).searchParams.get('query');
   if (query === 'failure') return new Response(JSON.stringify({ error: 'Test provider outage' }), { status: 503 });
   if (query === 'malformed') return new Response(JSON.stringify({ message: 'not a search response' }));

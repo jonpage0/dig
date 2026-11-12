@@ -1629,6 +1629,22 @@ export function createSchemas(
       },
       { additionalProperties: false },
     ),
+    x_images: T.Object(
+      {
+        images: T.Array(T.String(), {
+          minItems: 1,
+          maxItems: 4,
+          description:
+            "1-4 X image links, https://pbs.twimg.com/..., as x_post, x_search_posts and the other X tools print them after Media: (a photo's link, or a video's preview link). Pictures are returned in this order.",
+        }),
+        size: enumSchema(
+          T,
+          ["small", "medium", "large"],
+          "X's own sized variant of a photo: small, medium (default) or large. A video's preview image comes in one size whatever is asked.",
+        ),
+      },
+      { additionalProperties: false },
+    ),
     x_community: T.Object(
       {
         community: T.String({

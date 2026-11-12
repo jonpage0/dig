@@ -27,7 +27,7 @@ The tool makes no source-provider call and changes no report, answer or receipt.
 
 ## Successful output
 
-Closed object; every key below is required. structuredContent carries the complete typed result; content is a one-line summary (hit count, files searched, status, mode used and any warning count), as for every Dig tool. Agents must read originals before relying on a result. Scores are rankings, never confidence probabilities.
+Closed object; every key below is required. structuredContent carries the complete typed result; content is a one-line summary (hit count, files searched, status, mode used and any warning count), as for every Dig tool except `x_images`, whose result is content only. Agents must read originals before relying on a result. Scores are rankings, never confidence probabilities.
 
 - status: enum complete | partial.
 - mode_requested: enum hybrid | keyword.

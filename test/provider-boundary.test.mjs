@@ -60,7 +60,7 @@ test('the X API tools are listed under X with their argument names, record the p
     await client.connect(transport);
     const tools = (await client.listTools()).tools;
     const argumentsOf = name => Object.keys(tools.find(t => t.name === name).inputSchema.properties).filter(key => !['project', 'dig'].includes(key)).sort();
-    assert.deepEqual(Object.fromEntries(['x_post', 'x_search_posts', 'x_count_posts', 'x_users', 'x_follows', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community'].map(name => [name, argumentsOf(name)])), {
+    assert.deepEqual(Object.fromEntries(['x_post', 'x_search_posts', 'x_count_posts', 'x_users', 'x_follows', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community', 'x_images'].map(name => [name, argumentsOf(name)])), {
       x_post: ['posts', 'quotes', 'replies', 'reposters', 'thread'],
       x_search_posts: ['archive', 'end_time', 'limit', 'query', 'sort', 'start_time'],
       x_count_posts: ['archive', 'end_time', 'granularity', 'query', 'start_time'],
@@ -71,9 +71,10 @@ test('the X API tools are listed under X with their argument names, record the p
       x_bookmarks: ['folder', 'limit', 'match'],
       x_likes: ['limit', 'match'],
       x_community: ['community', 'posts', 'sort'],
+      x_images: ['images', 'size'],
     });
     const source = (await client.callTool({ name: 'source_info', arguments: { source: 'x' } })).structuredContent.sources[0];
-    assert.deepEqual(source.tools, ['xsearch', 'x_post', 'x_search_posts', 'x_count_posts', 'x_users', 'x_follows', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community']);
+    assert.deepEqual(source.tools, ['xsearch', 'x_post', 'x_search_posts', 'x_count_posts', 'x_users', 'x_follows', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community', 'x_images']);
     const read = await client.callTool({ name: 'x_post', arguments: { project: root, posts: ['https://x.com/fixture/status/20'] }, _meta: { threadId: 'x-worker' } });
     assert.equal(read.structuredContent.status, 'success');
     const reads = [{ amount: 1, unit: 'X post reads' }, { amount: 1, unit: 'X account reads' }];

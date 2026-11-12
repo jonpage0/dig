@@ -18,6 +18,8 @@ export interface ToolOutcome {
   status: OutcomeStatus;
   text: string;
   details?: Record<string, unknown>;
+  /** Pictures for the model to look at (base64 data and media type), only from a tool whose spec sets `returnsImages`. */
+  images?: { data: string; mimeType: string }[];
 }
 export function outcome(
   status: OutcomeStatus,

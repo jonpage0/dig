@@ -91,6 +91,8 @@ Dig only reads, so the app's **Read** permission is enough, and with it the toke
 
 `x_community` reads one Community by id or link: its details from X's API and its posts through TikHub, which needs `TIKHUB_API_KEY`.
 
+`x_images` shows your assistant the pictures in posts, from the image links the other X tools print. It needs no key and costs nothing: it fetches only from X's public image host. The pictures are not kept; a note of each one's link, type and size is.
+
 X has four research methods: **X judge** (`$dig:x-judge`) weighs claims by reach and kind of source and reads every post it relies on; **X breadth** (`$dig:x-breadth`) finds as many distinct posts, accounts and angles as it can without judging them; **X post** (`$dig:x-post`) reads particular posts and reports what surrounds them; **X trace** (`$dig:x-trace`) starts from a post, an account or a claim and works outward through X's own API: the thread, the people replying, their profiles and recent posts, and what they point to. It weighs each voice by who it is and what it knows, not by likes, works to a budget of post reads and account reads, and uses Grok for at most one pass.
 
 ## Facebook and Facebook ads

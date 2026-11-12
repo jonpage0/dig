@@ -4,10 +4,11 @@
 // x_news, x_explore, x_bookmarks, x_likes, x_community) return X's own objects: posts with their authors and public counts,
 // accounts (looked up, or who an account follows and who follows it), count buckets, News stories, trends, Spaces and
 // Communities. TikHub stands in for some: x_post's fallback copy of one post, Communities search without sign-in, and a
-// Community's details and posts (x_community).
+// Community's details and posts (x_community). x_images keeps no picture, only a note per picture in its place: the
+// link, the media type, the size in bytes and whether the picture was shown.
 // Adapted from Dig's dashboard/ui/evidence/x.ts (MIT, same author).
 import { compact, num, plural, shortDate } from '../format.mjs';
-import { excerpt, failedCall, ITEM_NOUNS, noItems, numv, obj, objs, query, scope, str, strs } from './read.mjs';
+import { attempted, excerpt, failedCall, ITEM_NOUNS, noItems, numv, obj, objs, query, scope, str, strs } from './read.mjs';
 
 const POST_URL = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status\/(\d+)/;
 const ACCOUNT_URL = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/i\/user\/(\d+)/;
@@ -262,7 +263,21 @@ function readXApi(call, bodies) {
   return { action: apiAction(call), result, items };
 }
 
+const PICTURE_NOTE = /^\[picture not retained\] (\S+) · ([^·]+) · ([^·]+) · (.+)$/;
+/** x_images: each picture by its link, from the note kept in place of its bytes. */
+function readImages(call, bodies) {
+  const notes = bodies.map(body => (typeof body === 'string' ? PICTURE_NOTE.exec(body) : null)).filter(Boolean);
+  const items = notes.map(([, url, type, size, result]) => ({ kind: 'image', key: url, title: url.split('?')[0].split('/').at(-1) || url, url, meta: [result, type, size] }));
+  const shown = notes.filter(note => note[4] === 'shown').length;
+  return {
+    action: [attempted(call.status, 'looked at', 'look at'), plural(strs(call.args.images).length, 'X picture'), ...scope([str(call.args.size)])],
+    result: failedCall(call) ? undefined : notes.length ? `${num(shown)} of ${plural(notes.length, 'picture')} shown; pictures are not retained` : noItems(call),
+    items,
+  };
+}
+
 export function readX(call, bodies) {
+  if (call.tool === 'x_images') return readImages(call, bodies);
   if (call.tool !== 'xsearch') return readXApi(call, bodies);
   const a = call.args; const only = handles(a.handles); const not = handles(a.excludeHandles);
   const { posts, fetched } = readPosts(bodies); const cited = posts.length;

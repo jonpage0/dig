@@ -92,6 +92,7 @@ export const SKIPPED = [
   { tool: 'x_community', reason: 'Needs a Community id that x_explore returns.' },
   { tool: 'x_bookmarks', reason: 'Reads the signed-in account’s bookmarks: needs an X sign-in.' },
   { tool: 'x_likes', reason: 'Reads the signed-in account’s likes: needs an X sign-in.' },
+  { tool: 'x_images', reason: 'Needs an image link that another call returns (x_post or x_search_posts).' },
 ];
 
 /** Deep-research and model-analysis calls: run only when named with --tool. */

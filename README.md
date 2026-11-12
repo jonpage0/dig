@@ -63,7 +63,7 @@ To add keys in Claude Code, edit `~/.local/share/dig/keys.env` directly, or run 
 
 Ask a question in Codex. Your assistant chooses useful enabled sources, reads their reports and important originals, and explains the findings. Dig presents the saved research state for you to observe and steer; full records are available when you want to inspect a particular point.
 
-**25 sources · 30 research methods · 80 tools, including two optional shared helpers**
+**25 sources · 30 research methods · 81 tools, including two optional shared helpers**
 
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
 | :---: | --- | --- |
@@ -75,7 +75,7 @@ Ask a question in Codex. Your assistant chooses useful enabled sources, reads th
 | <img src="docs/logos/ycombinator.svg" width="22" height="22" alt=""> | **Hacker&nbsp;News** | Developer stories and discussion |
 | <img src="plugin/assets/skills/graduation-cap.svg" width="22" height="22" alt=""> | **Papers** | Semantic Scholar, OpenAlex and 18 more indexes; full text, PDFs and section extraction |
 | <img src="docs/logos/youtube.svg" width="22" height="22" alt=""> | **YouTube** | Video discovery, saved transcripts, comments and optional Gemini video understanding |
-| <img src="docs/logos/x.svg" width="22" height="22" alt=""> | **X** | Exact posts, threads, accounts and who follows whom; Grok for search by meaning, images and video |
+| <img src="docs/logos/x.svg" width="22" height="22" alt=""> | **X** | Exact posts, threads, accounts, who follows whom and the pictures in posts; Grok for search by meaning, images and video |
 | <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **Reddit** | Threads, comments and collapsed replies |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok** | Videos, captions and transcripts |
 | <img src="docs/logos/instagram.svg" width="22" height="22" alt=""> | **Instagram** | Reels, accounts and transcripts |
@@ -105,7 +105,7 @@ Good to know:
 
 - **You choose the sources.** Run one directly (`$dig:reddit` in Codex, `/dig:reddit` in Claude Code) or let Codex combine several.
 - **Public research by default.** Optional X sign-in reads your own bookmarks and likes. Video analysis can upload a local project clip you select. Coverage varies by platform.
-- **X has two ways in.** X's API returns the posts themselves; Grok adds search by meaning and reads images and videos. Four methods use them: X judge weighs claims, X breadth finds as many angles as it can, X post inspects one post, and X trace follows a conversation outward and weighs who is speaking.
+- **X has two ways in.** X's API returns the posts themselves, and your assistant can look at the pictures in them; Grok adds search by meaning and reads images and videos. Four methods use them: X judge weighs claims, X breadth finds as many angles as it can, X post inspects one post, and X trace follows a conversation outward and weighs who is speaking.
 
 ## Findings in the conversation
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.0 — 2026-11-12
+
+- Add `x_images`: the model looks at the pictures in X posts itself. Pass it the image links an X read printed; it returns the pictures, makes no X API request and costs nothing. It keeps a note in place of each picture.
+- The X methods send image questions to `x_images` and keep Grok for video and for what keyword search cannot find.
+
 ## 0.14.0 — 2026-11-12
 
 - Add X trace, a fourth X method: it starts from a post, an account or a claim and works outward through the thread, the people replying, their profiles and what they point to, weighing each voice by who it is and what it knows, not by engagement. It works to a budget of reads and uses Grok for at most one pass.

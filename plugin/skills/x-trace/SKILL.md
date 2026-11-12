@@ -24,6 +24,7 @@ Use only this plugin's `dig` MCP server. Another Dig edition's server, skills, C
 
 - `source_info` with `source: "x"` for enablement and readiness;
 - X's own API, which needs `X_BEARER_TOKEN`: `x_post` (a post with its thread, replies, quote posts and reposters), `x_users` (profiles, an account's recent posts, posts mentioning it), `x_follows` (who an account follows, and who follows it), `x_search_posts` (every X search operator) and `x_count_posts` (how much, and when); `x_community` and `x_explore` when the trail leads into a Community or a List;
+- `x_images`, which needs no key: the pictures in posts, for you to look at;
 - Grok's X search, which needs `XAI_API_KEY`: `xsearch`, for the one-off uses named below;
 - `research_save` with `source: "x"` and `agent: "x-trace"`.
 
@@ -84,7 +85,7 @@ Grok is not part of the walk. Run at most one `xsearch` pass in a trace, and onl
 
 Run it without `depth`, so the user's `[x]` depth applies, and label it `passLabel: "pass-1"`. A post Grok cites is a lead until `x_post` has read it, and what Grok says media show is Grok's description: label it so. When a pass fails saying its stream was cut, read it once with `recoverResponseId` set to the response id it names; if xAI holds nothing under the id, the pass was dropped, and sending it again is a new pass.
 
-For an image, X's API returns its link and, when the poster wrote one, its description. Use the description when there is one. When what an image shows is load-bearing and it has none, say so; the one Grok pass may be spent on it, naming the post's link and asking what the image shows, with any text in it quoted.
+For an image, X's API returns its link and, when the poster wrote one, its description. When what an image shows is load-bearing, look at it with `x_images`, passing the image link the post read printed. What you say it shows is your own reading: label it so in the report, and quote any text in the image exactly. If the pictures did not reach you (the result has no image you can see), say so and do not describe the image. The Grok pass is for seeds by meaning and for what a video shows, not for images.
 
 ## Optional video inspection
 

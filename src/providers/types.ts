@@ -49,6 +49,13 @@ export interface ToolSpec {
 		/** An explicit no-charge policy for this source selection, independent of execution outcome. */
 		noCharge?: (args: any) => boolean;
 	};
+	/**
+	 * The tool returns pictures for the model to look at: its outcome may carry `images`, which no other tool may set.
+	 * The server registers it without an output schema and answers with `content` only (one text block, then the
+	 * pictures), because a host that has `structuredContent` hands the model that in place of `content`, and the
+	 * pictures would never reach it. The pictures never reach the receipt, the retained original or redaction.
+	 */
+	returnsImages?: boolean;
 	// biome-ignore lint/suspicious/noExplicitAny: arguments are validated against the shared TypeBox registry before dispatch.
 	execute: (args: any, ctx: ToolContext) => Promise<SourceToolResult>;
 }
