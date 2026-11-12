@@ -39533,15 +39533,15 @@ var MODULES = [
   {
     id: "x",
     label: "X",
-    description: "Posts and discourse: an evidence judge, a breadth finder and a post reader, runnable independently",
-    tools: ["xsearch", "x_post", "x_search_posts", "x_count_posts", "x_users", "x_news", "x_explore", "x_bookmarks", "x_likes", "x_community"],
-    skills: ["x-judge", "x-breadth", "x-post"],
+    description: "Posts and discourse: an evidence judge, a breadth finder, a post reader and a tracer, runnable independently",
+    tools: ["xsearch", "x_post", "x_search_posts", "x_count_posts", "x_users", "x_follows", "x_news", "x_explore", "x_bookmarks", "x_likes", "x_community"],
+    skills: ["x-judge", "x-breadth", "x-post", "x-trace"],
     env: ["XAI_API_KEY", "X_BEARER_TOKEN", "X_CONSUMER_KEY", "X_CONSUMER_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET", "TIKHUB_API_KEY", "TIKHUB_BASE_URL"],
     keys: ["XAI_API_KEY", "X_BEARER_TOKEN"],
     credential: "XAI_API_KEY for xsearch; X_BEARER_TOKEN for the X API tools; optional X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET) for people search, Communities search, bookmarks and likes; TIKHUB_API_KEY optional, for x_post's single-post fallback, Communities search without sign-in and a Community's details and posts",
-    about: "Posts and discussion on X, read two ways: X's own API returns the posts, accounts, counts, News stories, trends, Spaces, Communities and Lists themselves, and xAI's Grok searches X live, by keyword and by meaning, watches the videos and reads the images in the posts it finds, and writes up what it finds with links to the posts. Signing in with your own X account adds people and Communities search and reading your bookmarks and likes. Three methods: X judge weighs claims by reach and kind of source; X breadth finds as many distinct posts and angles as it can without judging them; X post reads particular posts exactly, with their thread, reactions, author, spread and origin.",
+    about: "Posts and discussion on X, read two ways: X's own API returns the posts, accounts, who an account follows and who follows it, counts, News stories, trends, Spaces, Communities and Lists themselves, and xAI's Grok searches X live, by keyword and by meaning, watches the videos and reads the images in the posts it finds, and writes up what it finds with links to the posts. Signing in with your own X account adds people and Communities search and reading your bookmarks and likes. Four methods: X judge weighs claims by reach and kind of source; X breadth finds as many distinct posts and angles as it can without judging them; X post reads particular posts exactly, with their thread, reactions, author, spread and origin; X trace starts from a post, an account or a claim and works outward through the people in the conversation, weighing each voice by who it is and what it knows, not by engagement.",
     providers: [{ name: "X API", url: "https://docs.x.com/x-api/introduction" }, { name: "xAI API", url: "https://x.ai/api" }, TIKHUB],
-    billing: "The X API is pay-per-use from credits in your X developer account; X does not report each call's charge, so Dig shows those calls' cost as unknown. xAI is paid per request in US dollars from your xAI account, and Dig records the cost xAI reports. TikHub, used for a single post the X API cannot read, Communities search without sign-in and a Community's details and posts, shows as unknown too.",
+    billing: "The X API is pay-per-use from credits in your X developer account and bills reads per resource returned, but reports no call's charge. So for the tools that read posts and accounts (x_post, x_search_posts, x_users, x_follows, x_bookmarks, x_likes) Dig records what X returned, as X post reads and X account reads: counts, not money, never converted. X charges a resource once per UTC day, so its bill can be lower than the reads recorded; Dig does not know which reads were repeats. Counts, News, trends, Spaces, Lists and Communities show as unknown. xAI is paid per request in US dollars from your xAI account, and Dig records the cost xAI reports. TikHub, used for a single post the X API cannot read, Communities search without sign-in and a Community's details and posts, shows as unknown too.",
     logo: "x"
   },
   {
@@ -39767,7 +39767,7 @@ var ACCOUNTS = [
   { id: "core", name: "CORE", signup: "https://core.ac.uk/services/api#form", keys: ["PAPER_SEARCH_MCP_CORE_API_KEY"], billing: "Used by the Papers bridge\u2019s CORE search, which also works without a key." },
   { id: "google", name: "Google Cloud (YouTube Data API)", signup: "https://console.cloud.google.com/apis/credentials", keys: ["OPENCODE_RESEARCH_GOOGLE_API_KEY"], billing: "Uses your YouTube Data API quota. Adds Data API search metadata; transcripts need yt-dlp." },
   { id: "google-gemini", name: "Google Gemini", signup: "https://aistudio.google.com/apikey", keys: ["GEMINI_API_KEY"], billing: "Optional YouTube video analysis through Gemini. Token usage is shown when returned; no per-call charge is reported, so Dig records cost as unknown." },
-  { id: "x-api", name: "X API", signup: "https://console.x.com", keys: ["X_BEARER_TOKEN"], optional: ["X_CONSUMER_KEY", "X_CONSUMER_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET"], billing: `Pay-per-use credits from your X developer account. The optional sign-in keys (the app's Consumer Key and Secret and an Access Token and Secret for your own account) let Dig search people and Communities and read your bookmarks and likes as that account. ${UNKNOWN_COST}` },
+  { id: "x-api", name: "X API", signup: "https://console.x.com", keys: ["X_BEARER_TOKEN"], optional: ["X_CONSUMER_KEY", "X_CONSUMER_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET"], billing: `Pay-per-use credits from your X developer account. The optional sign-in keys (the app's Consumer Key and Secret and an Access Token and Secret for your own account) let Dig search people and Communities and read your bookmarks and likes as that account. X reports no per-request amount and bills reads per resource returned, so Dig records the posts and accounts each call read (X post reads and X account reads), not money. X charges a resource once per UTC day, so its bill can be lower than the reads recorded; Dig does not know which reads were repeats. Counts, News, trends, Spaces, Lists and Communities show as unknown.` },
   { id: "xai", name: "xAI", signup: "https://console.x.ai/team/default/api-keys", keys: ["XAI_API_KEY"], billing: "Paid per request in US dollars, which Dig records." },
   { id: "scrapecreators", name: "ScrapeCreators", signup: "https://app.scrapecreators.com", keys: ["SCRAPECREATORS_API_KEY"], billing: "ScrapeCreators credits per request, which Dig records." },
   { id: "tikhub", name: "TikHub", signup: "https://user.tikhub.io/dashboard/api", keys: ["TIKHUB_API_KEY"], billing: `Paid from your TikHub account. ${UNKNOWN_COST}` },
@@ -39912,7 +39912,7 @@ function stateDirectory(env = process.env) {
 }
 var sourceSetting = (id) => `${id.replaceAll("-", "_")}_enabled`;
 var X_DEFAULTS = { model: "grok-4.7", depth: "standard", web_search: false, code_execution: false };
-var WORKER_DEFAULTS = { default: { model: "gpt-6.1-sol", effort: "medium" }, "x-breadth": { model: "gpt-6-luna", effort: "high" }, "x-judge": { model: "gpt-6-astra", effort: "high" } };
+var WORKER_DEFAULTS = { default: { model: "gpt-6.1-sol", effort: "medium" }, "x-breadth": { model: "gpt-6-luna", effort: "high" }, "x-judge": { model: "gpt-6-astra", effort: "high" }, "x-trace": { model: "gpt-6-astra", effort: "high" } };
 var WORKER_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 var WORKER_TABLES = ["default", ...moduleAgents(ALL_MODULES).map((agent) => agent.name)];
 var WORKER_FIELDS = ["model", "effort"];
@@ -41391,7 +41391,7 @@ var basename = (path2) => String(path2 ?? "").split("/").filter(Boolean).at(-1) 
 var LEGACY_CREDITS = "credits";
 var unitName = (unit, shown2) => {
   const name2 = unit === LEGACY_CREDITS ? "ScrapeCreators credits" : unit;
-  return shown2 === 1 ? name2.replace(/credits$/, "credit") : name2;
+  return shown2 === 1 ? name2.replace(/(credit|read)s$/, "$1") : name2;
 };
 var USD_DIGITS = 4;
 var LARGE_USD_DIGITS = 2;
@@ -42232,8 +42232,8 @@ var settingsFields = {
   library: { schema: external_exports.string().min(1), title: "Research library", description: "Absolute directory outside the plugin cache. Changing it selects a library; it does not move research." },
   keep_raw: { schema: external_exports.boolean(), title: "Retain original provider responses" },
   spend_dig_ceiling_usd: { schema: external_exports.number().min(0), title: "Spending ceiling per dig (US dollars)", description: "Once the calls in one dig have recorded this much in provider-reported costs, Dig refuses that dig\u2019s further paid calls before any request is sent; 0 means no ceiling. It counts only costs providers report in US dollars, not provider credits or costs a provider did not report." },
-  worker_model: { schema: external_exports.string().min(1), title: "Source worker model", description: `The Codex model Dig suggests for source workers, ${WORKER_DEFAULTS.default.model} unless you change it. The conversation chooses each worker\u2019s model and may choose another; Dig does not check that your account offers it. Each method follows this until it has its own suggestion on the Sources & tools page; X judge and X breadth start with their own.` },
-  worker_effort: { schema: external_exports.enum(WORKER_EFFORTS), title: "Source worker effort", description: `The reasoning effort Dig suggests for source workers, ${WORKER_DEFAULTS.default.effort} unless you change it. Each method follows this until it has its own suggestion on the Sources & tools page; X judge and X breadth start with their own.` },
+  worker_model: { schema: external_exports.string().min(1), title: "Source worker model", description: `The Codex model Dig suggests for source workers, ${WORKER_DEFAULTS.default.model} unless you change it. The conversation chooses each worker\u2019s model and may choose another; Dig does not check that your account offers it. Each method follows this until it has its own suggestion on the Sources & tools page; X judge, X breadth and X trace start with their own.` },
+  worker_effort: { schema: external_exports.enum(WORKER_EFFORTS), title: "Source worker effort", description: `The reasoning effort Dig suggests for source workers, ${WORKER_DEFAULTS.default.effort} unless you change it. Each method follows this until it has its own suggestion on the Sources & tools page; X judge, X breadth and X trace start with their own.` },
   ...Object.fromEntries(MODULES.map((m3) => [sourceSetting(m3.id), { schema: external_exports.boolean(), title: `Enable ${m3.label}`, description: m3.description }])),
   x_model: { schema: external_exports.string().min(1), title: "X provider model", description: "xAI retrieval model, not the Codex source-worker model." },
   x_depth: { schema: external_exports.enum(["quick", "standard", "max", "ultra"]), title: "Starting X search depth", description: "X passes use this depth unless a pass needs another: X judge may run one max pass for a nuanced or disputed question, X breadth one max pass for a final sweep, and a quick existence check runs quick. A max or ultra starting depth applies to every pass." },
@@ -42322,7 +42322,8 @@ var GLYPHS = {
   "shopping-cart": [["path", { "d": "m2.05 2.05 1.099-.028a1 1 0 0 1 1.008.815l2.69 14.347A1 1 0 0 0 7.83 18H18" }], ["path", { "d": "M4.563 5h16.435a1 1 0 0 1 .981 1.204l-1.026 6.226A2 2 0 0 1 18.962 14H6.25" }], ["circle", { "cx": "18", "cy": "20", "r": "2" }], ["circle", { "cx": "8", "cy": "20", "r": "2" }]],
   "shovel": [["path", { "d": "M21.56 4.56a1.5 1.5 0 0 1 0 2.122l-.47.47a3 3 0 0 1-4.212-.03 3 3 0 0 1 0-4.243l.44-.44a1.5 1.5 0 0 1 2.121 0z" }], ["path", { "d": "M3 22a1 1 0 0 1-1-1v-3.586a1 1 0 0 1 .293-.707l3.355-3.355a1.205 1.205 0 0 1 1.704 0l3.296 3.296a1.205 1.205 0 0 1 0 1.704l-3.355 3.355a1 1 0 0 1-.707.293z" }], ["path", { "d": "m9 15 7.879-7.878" }]],
   "sliders-horizontal": [["path", { "d": "M10 5H3" }], ["path", { "d": "M12 19H3" }], ["path", { "d": "M14 3v4" }], ["path", { "d": "M16 17v4" }], ["path", { "d": "M21 12h-9" }], ["path", { "d": "M21 19h-5" }], ["path", { "d": "M21 5h-7" }], ["path", { "d": "M8 10v4" }], ["path", { "d": "M8 12H3" }]],
-  "square-play": [["rect", { "x": "3", "y": "3", "width": "18", "height": "18", "rx": "2" }], ["path", { "d": "M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z" }]]
+  "square-play": [["rect", { "x": "3", "y": "3", "width": "18", "height": "18", "rx": "2" }], ["path", { "d": "M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z" }]],
+  "waypoints": [["path", { "d": "m10.586 5.414-5.172 5.172" }], ["path", { "d": "m18.586 13.414-5.172 5.172" }], ["path", { "d": "M6 12h12" }], ["circle", { "cx": "12", "cy": "20", "r": "2" }], ["circle", { "cx": "12", "cy": "4", "r": "2" }], ["circle", { "cx": "20", "cy": "12", "r": "2" }], ["circle", { "cx": "4", "cy": "12", "r": "2" }]]
 };
 var SOURCE_GLYPHS = { "hackernews": "newspaper", "deepwiki": "book-open-text", "polymarket": "chart-candlestick", "github": "folder-git-2", "exa": "scan-search", "perplexity": "globe", "papers": "graduation-cap", "youtube": "square-play", "video": "clapperboard", "x": "scale", "reddit": "messages-square", "tikhub-reddit": "list-tree", "tiktok": "clapperboard", "instagram": "camera", "linkedin": "briefcase-business", "telegram": "send", "threads": "messages-square", "china-social": "languages", "commerce": "shopping-cart", "tiktok-ads": "megaphone", "dataforseo": "chart-no-axes-combined" };
 SOURCE_GLYPHS.facebook = "messages-square";
@@ -42331,7 +42332,7 @@ SOURCE_GLYPHS["google-ads"] = "megaphone";
 SOURCE_GLYPHS["linkedin-ads"] = "megaphone";
 SOURCE_GLYPHS.evidence = "list-tree";
 SOURCE_GLYPHS.wayback = "history";
-var METHOD_GLYPHS = { "x-judge": "scale", "x-breadth": "radar", "x-post": "message-square-quote", "youtube-summarizer": "captions", "youtube-video": "clapperboard", "video-analyze": "clapperboard" };
+var METHOD_GLYPHS = { "x-judge": "scale", "x-breadth": "radar", "x-post": "message-square-quote", "x-trace": "waypoints", "youtube-summarizer": "captions", "youtube-video": "clapperboard", "video-analyze": "clapperboard" };
 METHOD_GLYPHS["evidence-rank"] = "list-tree";
 var glyphFor = (source, method) => METHOD_GLYPHS[method] ?? SOURCE_GLYPHS[source] ?? "shovel";
 var escape2 = (value) => String(value).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -42340,7 +42341,7 @@ var monochromeSvg = (name2) => `<svg xmlns="http://www.w3.org/2000/svg" width="2
 var svgDataUri = (svg) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
 
 // src/version.mjs
-var VERSION = "0.13.0";
+var VERSION = "0.14.0";
 var USER_AGENT = `dig/${VERSION}`;
 
 // src/surfaces.mjs
@@ -53500,6 +53501,26 @@ var dataItems = (body) => {
   return Array.isArray(body.data) ? recs(body.data) : single ? [single] : [];
 };
 var nextToken = (body) => str(rec(body.meta)?.next_token);
+var POST_READS = "X post reads";
+var ACCOUNT_READS = "X account reads";
+var VIA_TIKHUB = "via TikHub";
+function xReads(response) {
+  if (typeof response.status !== "number" || response.label.includes(VIA_TIKHUB)) return null;
+  const body = rec(response.body);
+  if (!body) return { posts: 0, accounts: 0 };
+  const inc = rec(body.includes);
+  const data = dataItems(body);
+  const accounts = data.filter((item) => str(item.username) !== null);
+  const posts = data.filter((item) => str(item.username) === null && (typeof item.text === "string" || rec(item.note_post) || rec(item.note_tweet)));
+  return { posts: posts.length + recs(inc?.posts).length + recs(inc?.tweets).length, accounts: accounts.length + recs(inc?.users).length };
+}
+var X_READS = {
+  charge(response) {
+    const reads = xReads(response);
+    return reads === null ? { cost: null } : { cost: [{ amount: reads.posts, unit: POST_READS }, { amount: reads.accounts, unit: ACCOUNT_READS }] };
+  }
+};
+var READS_NOTE = "X reports no per-call charge, so the cost is recorded as the posts and accounts X returned (X post reads and X account reads), not money";
 var fullText = (post2) => str(rec(post2.note_post)?.text) ?? str(rec(post2.note_tweet)?.text) ?? str(post2.text) ?? "";
 var textEntities = (post2) => rec(rec(post2.note_post)?.entities) ?? rec(rec(post2.note_tweet)?.entities) ?? rec(post2.entities);
 var references = (post2) => recs(post2.referenced_posts ?? post2.referenced_tweets);
@@ -54038,7 +54059,8 @@ function byId(a, b2) {
   return x2 < y2 ? -1 : x2 > y2 ? 1 : 0;
 }
 var post = {
-  description: "Read X posts by link or id through the X API: each post's exact full text (long posts and X Article text included), author (name, handle, verified status, followers), time, permalink, public counts (likes, reposts, replies, quotes, bookmarks, impressions), media, poll, the post it quotes or replies to, edit history, language, links and context annotations. Optionally each post's thread by its author, replies from its conversation, quote posts and reposters (conversation reads use recent search for conversations under 7 days old, and full-archive search from the conversation's first post for older ones; when X has more than was read, the result says so and gives the x_search_posts call that reads on from the oldest post read). Requires X_BEARER_TOKEN; when one post is requested and the X API cannot serve it (token missing, auth, credits, rate limit, server or network failure), the post is read through TikHub (TIKHUB_API_KEY) and labelled via TikHub. X saying the post is missing, protected or suspended is reported, never read through TikHub. X reports no per-call charge, so the cost is recorded as unknown.",
+  description: `Read X posts by link or id through the X API: each post's exact full text (long posts and X Article text included), author (name, handle, verified status, followers), time, permalink, public counts (likes, reposts, replies, quotes, bookmarks, impressions), media, poll, the post it quotes or replies to, edit history, language, links and context annotations. Optionally each post's thread by its author, replies from its conversation, quote posts and reposters (conversation reads use recent search for conversations under 7 days old, and full-archive search from the conversation's first post for older ones; when X has more than was read, the result says so and gives the x_search_posts call that reads on from the oldest post read). Requires X_BEARER_TOKEN; when one post is requested and the X API cannot serve it (token missing, auth, credits, rate limit, server or network failure), the post is read through TikHub (TIKHUB_API_KEY) and labelled via TikHub. X saying the post is missing, protected or suspended is reported, never read through TikHub. ${READS_NOTE}; a post read through TikHub makes the cost unknown.`,
+  billing: X_READS,
   async execute(args, context) {
     const inputs = Array.isArray(args.posts) ? args.posts.map(String) : [];
     const invalid2 = inputs.filter((input) => !postId(input));
@@ -54100,7 +54122,8 @@ function timeWindow(start, end) {
 }
 var startTime = (args, archive) => str(args.start_time) ?? (archive ? ARCHIVE_START : null);
 var search_posts = {
-  description: "Search X posts with X's own search syntax (every operator passes through: from:, to:, conversation_id:, is:reply, has:media, lang:, min_likes: and the rest). archive false searches the last 7 days; true searches the full archive, from 2006-03-21 unless start_time says otherwise (X's own default there is the last 30 days), at one request per second, so pages are spaced. Pages internally up to limit (default 25, max 500; at most 50 pages), each page kept as its own original response; returns each post with author, time, permalink, nonzero public counts and full text. Requires X_BEARER_TOKEN. X reports no per-call charge, so the cost is recorded as unknown.",
+  description: `Search X posts with X's own search syntax (every operator passes through: from:, to:, conversation_id:, is:reply, has:media, lang:, min_likes: and the rest). archive false searches the last 7 days; true searches the full archive, from 2006-03-21 unless start_time says otherwise (X's own default there is the last 30 days), at one request per second, so pages are spaced. Pages internally up to limit (default 25, max 500; at most 50 pages), each page kept as its own original response; returns each post with author, time, permalink, nonzero public counts and full text. Requires X_BEARER_TOKEN. ${READS_NOTE}.`,
+  billing: X_READS,
   async execute(args, context) {
     const token2 = bearerToken();
     if (!token2) return failed(missingKey());
@@ -54198,7 +54221,8 @@ async function userTimeline(user, kind, wanted, inc, ctx, token2) {
   };
 }
 var users = {
-  description: "Read X accounts through the X API, by handles (1-100, with or without @) or a people search query (letters, digits, underscores, apostrophes and spaces; 25 accounts). Profiles carry name, handle, bio, location, link, join date, verification and public counts; posts and mentions (0-100 each) add each account's most recent posts and posts mentioning it. Handles, posts and mentions use X_BEARER_TOKEN. People search needs X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET), because X serves it only to a signed-in account; it runs as that account. X reports no per-call charge, so the cost is recorded as unknown.",
+  description: `Read X accounts through the X API, by handles (1-100, with or without @) or a people search query (letters, digits, underscores, apostrophes and spaces; 25 accounts). Profiles carry name, handle, bio, location, link, join date, verification and public counts; posts and mentions (0-100 each) add each account's most recent posts and posts mentioning it. Handles, posts and mentions use X_BEARER_TOKEN. People search needs X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET), because X serves it only to a signed-in account; it runs as that account. ${READS_NOTE}.`,
+  billing: X_READS,
   async execute(args, context) {
     const handles = Array.isArray(args.handles) ? args.handles.map((handle) => String(handle).trim().replace(/^@/, "")) : [];
     const query = typeof args.query === "string" ? args.query.trim() : "";
@@ -54249,6 +54273,73 @@ var users = {
       ...blocks.flatMap((block4) => ["", "---", "", ...block4])
     ];
     return outcome(status, bounded3(lines.join("\n")), { returned: found.map((user) => String(user.username ?? user.id)), missing, failures });
+  }
+};
+var FOLLOWS_LIMIT = 50;
+var FOLLOWS_PAGE = { min: 1, max: 1e3 };
+var DIRECTIONS = ["following", "followers"];
+function formatFollow(user) {
+  const handle = handleOf(user);
+  const m3 = rec(user.public_metrics);
+  const flags = [verifiedText(user), user.protected === true ? "protected" : null].filter(Boolean);
+  const counts = [];
+  const add = (value, one, many) => {
+    const n = num2(value);
+    if (n !== null) counts.push(count(n, one, many));
+  };
+  add(m3?.followers_count, "follower", "followers");
+  add(m3?.following_count, "following", "following");
+  add(m3?.post_count ?? m3?.tweet_count, "post", "posts");
+  const joined = str(user.created_at);
+  const body = [
+    ...str(user.description) ? [`Bio: ${user.description}`] : [],
+    [str(user.location) ? `Location: ${user.location}` : null, joined ? `Joined ${joined.slice(0, 10)}` : null].filter(Boolean).join(" \xB7 "),
+    counts.join(" \xB7 ")
+  ].filter((line) => line !== "");
+  return [`- ${handle ? `@${handle}` : `user ${String(user.id ?? "")}`} \u2014 ${str(user.name) ?? "(no name)"}${flags.length ? ` (${flags.join(", ")})` : ""}`, ...body.map((line) => `  ${line}`)];
+}
+var follows = {
+  description: `List who an X account follows (direction following) or who follows it (direction followers) through the X API, to see which community an account belongs to and who pays attention to it. Takes one handle (with or without @); returns one page of up to limit accounts (default 50, max 1000), each with name, handle, verification, bio, location, join date, follower, following and post counts, and the account's own totals. When X has more, the result gives the cursor and the exact call that reads the next page; Dig never reads further pages itself. Requires X_BEARER_TOKEN. X bills every account returned, so ask for no more than the question needs. ${READS_NOTE}.`,
+  billing: X_READS,
+  async execute(args, context) {
+    const handle = String(args.handle ?? "").trim().replace(/^@/, "");
+    if (!HANDLE.test(handle)) return failed(`Not an X handle: "${handle}". A handle has 1-15 letters, digits or underscores.`);
+    const direction = DIRECTIONS.includes(args.direction) ? args.direction : null;
+    if (!direction) return failed("direction must be following (the accounts this account follows) or followers (the accounts that follow it).");
+    const limit3 = clamp(Number(args.limit ?? FOLLOWS_LIMIT), FOLLOWS_PAGE.min, FOLLOWS_PAGE.max);
+    const cursor = typeof args.cursor === "string" ? args.cursor.trim() : "";
+    const token2 = bearerToken();
+    if (!token2) return failed(missingKey());
+    const lookup = await xGet("/2/users/by", { "user.fields": USER_FIELDS.join(","), usernames: handle }, "account lookup", context, token2);
+    if (!lookup.ok) {
+      if (lookup.resource.length) {
+        const refused = refusedLookup([handle], lookup, ["account", "accounts"], "@", null);
+        return outcome(refused.status, refused.text, { direction, returned: 0, missing: refused.missing });
+      }
+      return failed(lookup.message);
+    }
+    const user = dataItems(lookup.body).find((item) => String(item.username ?? "").toLowerCase() === handle.toLowerCase());
+    if (!user || !str(user.id)) {
+      const none = noneReturned([handle], lookup.resources, ["account", "accounts"], "@");
+      return outcome(none.status, none.text, { direction, returned: 0, missing: none.missing });
+    }
+    const id = String(user.id);
+    const name2 = handleOf(user) ?? handle;
+    const total2 = num2(rec(user.public_metrics)?.[direction === "following" ? "following_count" : "followers_count"]);
+    const label = direction === "following" ? `accounts @${name2} follows` : `followers of @${name2}`;
+    const answer = await xRead(`/2/users/${id}/${direction}`, { "user.fields": USER_FIELDS.join(","), max_results: limit3, pagination_token: cursor || void 0 }, label, context, token2);
+    const head = (returned) => `${direction === "following" ? `Accounts @${name2} follows` : `Accounts following @${name2}`} on X: ${returned.toLocaleString("en-US")} returned${total2 === null ? "" : ` of ${total2.toLocaleString("en-US")} in all`}.`;
+    const details2 = (returned, next2) => ({ account: name2, id, direction, returned, next: next2, ...total2 === null ? {} : { total: total2 } });
+    if (!answer.ok) {
+      if (answered(answer.resource, id)) return outcome("empty", [head(0), `Not returned: @${name2}${user.protected === true ? " (protected)" : ""} \u2014 ${problemList(answer.resource)}`].join("\n"), details2(0, null));
+      return failed(answer.message);
+    }
+    const accounts = dataItems(answer.body);
+    const next = nextToken(answer.body);
+    const more = next ? ["", `X has more. Next page: x_follows with handle "${name2}", direction "${direction}", limit ${limit3} and cursor "${next}".`] : [];
+    const problems = [lookup.problem, answer.problem].filter((problem) => problem !== null);
+    if (!accounts.length && !problems.length) return outcome("empty", [head(0), "", "X returned no accounts.", ...more].join("\n"), details2(0, next));
+    return withProblem(problems.join(" | ") || null, [head(accounts.length), "", ...accounts.flatMap(formatFollow), ...more].join("\n"), details2(accounts.length, next));
   }
 };
 function stringLists(value, path2 = "") {
@@ -54475,7 +54566,7 @@ var LIKES_PAGE = { min: 5, max: 100 };
 var LOOKUP_IDS = 100;
 var FOLDER_PAGES = 10;
 var FOLDER_PAGE_MAX = 100;
-var OWNED_READS = "X bills reads of the signed-in account's own bookmarks and liked posts as Owned Reads; Dig still records the cost as unknown, because X reports no per-call charge.";
+var OWNED_READS = `X bills reads of the signed-in account's own bookmarks and liked posts as Owned Reads. ${READS_NOTE}.`;
 var matchWords = (value) => (typeof value === "string" ? value.toLowerCase().split(/\s+/).filter(Boolean) : []).map((word) => ({ word, pattern: new RegExp(`(?<![\\p{L}\\p{N}])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "iu") }));
 function matchText(post2, inc) {
   const author = authorOf(post2, inc);
@@ -54583,6 +54674,7 @@ async function lookupPosts(ids, inc, ctx, token2) {
 }
 var bookmarks = {
   description: `Read the signed-in account's X bookmarks, newest first: limit posts (1-800, default 50), or those of one bookmark folder (folder: its name, matched case-insensitively, or its numeric id). match keeps only posts in which every one of its words starts a word (case-insensitive; "ai" matches AI, AI's and #AI but not brainstorm, "agent" matches agents) in their text, long-form text, author's handle or name, links' addresses, or the text of a post they quote or repost; X has no search inside bookmarks, so Dig filters what it read and says how many posts it read and how many match. Needs X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET) and reads as that account; a folder lists post ids only, so its posts are read through the post lookup with X_BEARER_TOKEN. ${OWNED_READS} A folder's posts are priced as ordinary post lookups.`,
+  billing: X_READS,
   async execute(args, context) {
     const folder = typeof args.folder === "string" ? args.folder.trim() : "";
     const limit3 = Number(args.limit ?? OWN_LIMIT);
@@ -54626,6 +54718,7 @@ var bookmarks = {
 };
 var likes = {
   description: `Read the posts the signed-in X account has liked, newest first: limit posts (1-800, default 50). match keeps only posts in which every one of its words starts a word (case-insensitive; "ai" matches AI, AI's and #AI but not brainstorm, "agent" matches agents) in their text, long-form text, author's handle or name, links' addresses, or the text of a post they quote or repost; X has no search inside likes, so Dig filters what it read and says how many posts it read and how many match. Needs X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET) and reads as that account. ${OWNED_READS}`,
+  billing: X_READS,
   async execute(args, context) {
     const limit3 = Number(args.limit ?? OWN_LIMIT);
     const words = matchWords(args.match);
@@ -59566,6 +59659,7 @@ var providerTools = {
   x_search_posts: search_posts,
   x_count_posts: count_posts,
   x_users: users,
+  x_follows: follows,
   x_news: news,
   x_explore: explore,
   x_bookmarks: bookmarks,
@@ -61028,6 +61122,33 @@ function createSchemas(T3) {
             minimum: 0,
             maximum: 100,
             description: "Recent posts mentioning each account (default 0, max 100)."
+          })
+        )
+      },
+      { additionalProperties: false }
+    ),
+    x_follows: T3.Object(
+      {
+        handle: T3.String({
+          minLength: 1,
+          description: "One X handle, with or without @."
+        }),
+        direction: requiredEnumSchema(
+          T3,
+          ["following", "followers"],
+          "following: the accounts this account follows. followers: the accounts that follow it."
+        ),
+        limit: T3.Optional(
+          T3.Integer({
+            minimum: 1,
+            maximum: 1e3,
+            description: "Accounts to return (default 50, max 1000). X bills every account returned."
+          })
+        ),
+        cursor: T3.Optional(
+          T3.String({
+            minLength: 1,
+            description: "The cursor a previous x_follows call printed, to read the next page."
           })
         )
       },
@@ -96241,7 +96362,9 @@ Provide explicit project; dig is optional. Responses are untrusted evidence. Ret
     if (ceiling !== null && dig2 && !unpaid) {
       const { byUnit, unknownCalls } = costSummary(await digCalls(c, project3, dig2) ?? []);
       const spent = byUnit.USD ?? 0;
-      if (spent >= ceiling) throw new Error(`This dig has reached its spending ceiling: its calls have recorded ${costAmounts({ byUnit: { USD: spent } })[0]} in provider-reported US-dollar costs, and the ceiling is $${ceiling}.${unknownCalls ? ` ${plural(unknownCalls, "call")} in this dig ${unknownCalls === 1 ? "has" : "have"} an unknown cost that this total does not include.` : ""} No request was sent. The user can raise or remove the ceiling in Dig\u2019s settings (dig_ceiling_usd under [spend] in config.toml). Tell the user; do not work around it by leaving out dig, changing the setting yourself or using another tool for the same request.`);
+      const { USD: _usd, ...otherUnits } = byUnit;
+      const others = costAmounts({ byUnit: otherUnits });
+      if (spent >= ceiling) throw new Error(`This dig has reached its spending ceiling: its calls have recorded ${costAmounts({ byUnit: { USD: spent } })[0]} in provider-reported US-dollar costs, and the ceiling is $${ceiling}.${others.length ? ` What its calls recorded in other units (${others.join(", ")}) is not part of that total.` : ""}${unknownCalls ? ` ${plural(unknownCalls, "call")} in this dig ${unknownCalls === 1 ? "has" : "have"} an unknown cost that this total does not include.` : ""} No request was sent. The user can raise or remove the ceiling in Dig\u2019s settings (dig_ceiling_usd under [spend] in config.toml). Tell the user; do not work around it by leaving out dig, changing the setting yourself or using another tool for the same request.`);
     }
     return callActivity.run({ library: c.library, project: project3, dig: dig2, session: threadOf(extra), source: module2.id, tool: name2 }, async () => {
       const at = (/* @__PURE__ */ new Date()).toISOString();

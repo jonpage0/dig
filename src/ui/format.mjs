@@ -69,7 +69,7 @@ export const COST_CAVEAT = 'Provider-reported usage, not a reconciled invoice.';
 const LEGACY_CREDITS = 'credits';
 const unitName = (unit, shown) => {
   const name = unit === LEGACY_CREDITS ? 'ScrapeCreators credits' : unit;
-  return shown === 1 ? name.replace(/credits$/, 'credit') : name;
+  return shown === 1 ? name.replace(/(credit|read)s$/, '$1') : name;
 };
 const USD_DIGITS = 4; const LARGE_USD_DIGITS = 2; const LARGE_USD = 10; const UNIT_DIGITS = 2;
 // Amount in its own unit: dollars keep four decimals under $10 so small charges stay visible, and a positive

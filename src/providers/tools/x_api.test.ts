@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { expect } from "expect";
 import { executeSource } from "../outcome.js";
 import type { ToolContext } from "../types.js";
-import { bookmarks, community, count_posts, explore, likes, news, post, search_posts, users } from "./x_api.js";
+import { bookmarks, community, count_posts, explore, follows, likes, news, post, search_posts, users } from "./x_api.js";
 import { percent, signatureBase, USER_KEY_NAMES } from "./x_oauth.js";
 
 const TOKEN = "AAAAAAAAAAAAAAAAAAAAAx-test-bearer%3Dtoken";
@@ -121,7 +121,8 @@ describe("x_post", () => {
 		expect(result.text).toContain("> The first version, before an edit.");
 		expect(result.text).toContain("Quoting @X (X, verified business) · 2026-10-05 18:53 UTC");
 		expect(result.text).toContain("> The quoted post.");
-		expect(result.details?.cost).toBeNull();
+		// The post, the two posts and two accounts X expanded with it.
+		expect(result.details?.cost).toEqual([{ amount: 3, unit: "X post reads" }, { amount: 2, unit: "X account reads" }]);
 		expect(result.details?.knownCost).toBeUndefined();
 		expect(kept.map((response) => response.label)).toEqual(["post lookup"]);
 	});
@@ -139,7 +140,7 @@ describe("x_post", () => {
 		expect(empty.status).toBe("empty");
 		expect(empty.text).toContain(`Not returned: ${POST_ID} — Not Found Error`);
 		expect(tikhubCalls()).toHaveLength(0);
-		expect(empty.details?.cost).toBeNull();
+		expect(empty.details?.cost).toEqual([]);
 	});
 
 	test("an X failure while reading several posts fails with X's error and does not fall back", async () => {
@@ -294,7 +295,8 @@ describe("x_search_posts", () => {
 		expect(result.text).toContain("25 posts over 3 pages; X has more beyond limit 25.");
 		expect(result.text).toContain("post 24");
 		expect(result.text).not.toContain("post 25");
-		expect(result.details?.cost).toBeNull();
+		// X returned 30 posts over three pages, though the call shows 25.
+		expect(result.details?.cost).toEqual([{ amount: 30, unit: "X post reads" }, { amount: 3, unit: "X account reads" }]);
 	});
 
 	test("a later page that fails keeps the earlier posts as partial; no matches is empty", async () => {
@@ -400,7 +402,7 @@ test("x_users looks handles up, names the ones X reports missing, and reads each
 	expect(result.text).toContain("Location: Earth · Joined 2006-03-21");
 	expect(result.text).toContain("6,500,000 followers · 4,000 following · 29,000 posts · 30,000 lists");
 	expect(result.text).toContain("A recent post");
-	expect(result.details?.cost).toBeNull();
+	expect(result.details?.cost).toEqual([{ amount: 2, unit: "X account reads" }, { amount: 1, unit: "X post reads" }]);
 });
 
 describe("a rate-limit, credit or sign-in failure stops the call's further reads", () => {
@@ -537,7 +539,7 @@ test("an HTTP 403 saying the requested post is protected is reported, never read
 	expect(tikhubCalls()).toHaveLength(0);
 	expect(result.status).toBe("empty");
 	expect(result.text).toBe(`X API: 0 posts of 1 requested.\nNot returned: ${POST_ID} — Authorization Error: Sorry, you are not authorized to see this protected post.`);
-	expect(result.details?.cost).toBeNull();
+	expect(result.details?.cost).toEqual([]);
 });
 
 describe("full-archive time window and pacing", () => {
@@ -824,7 +826,7 @@ describe("X sign-in", () => {
 		expect(search.headers.authorization).not.toContain(TOKEN);
 		expect(result.status).toBe("success");
 		expect(result.text).toContain("@maker_one — Maker One");
-		expect(result.details?.cost).toBeNull();
+		expect(result.details?.cost).toEqual([{ amount: 1, unit: "X account reads" }]);
 	});
 
 	test("a read that needs sign-in fails before any request, naming the sign-in keys that are missing", async () => {
@@ -855,7 +857,8 @@ describe("X sign-in", () => {
 		expect(result.status).toBe("success");
 		expect(result.text.split("\n", 1)[0]).toBe("X bookmarks of @dig_tester: 3 posts read.");
 		expect(result.text.indexOf("First bookmark")).toBeLessThan(result.text.indexOf("Third bookmark"));
-		expect(result.details?.cost).toBeNull();
+		// The signed-in account, then each page's posts and the author X expanded with them.
+		expect(result.details?.cost).toEqual([{ amount: 3, unit: "X account reads" }, { amount: 3, unit: "X post reads" }]);
 
 		calls = [];
 		const again = await executeSource(bookmarks, { limit: 1 }, context());
@@ -1235,5 +1238,190 @@ describe("X Communities", () => {
 		expect(full.text).toContain(`Community: https://x.com/i/communities/${COMMUNITY}`);
 		const listed = await executeSource(search_posts, { query: "community" }, context());
 		expect(listed.text).toContain(`  In a community\n  Community: https://x.com/i/communities/${COMMUNITY}`);
+	});
+});
+
+describe("x_follows", () => {
+	const NASA = { id: "11348282", username: "NASA", name: "NASA", verified: true, verified_type: "government", public_metrics: { followers_count: 89_000_000, following_count: 300, post_count: 74_000, listed_count: 99_000 } };
+	const followed = (n: number) => Array.from({ length: n }, (_, i) => ({ id: String(500 + i), username: `follow_${i}`, name: `Follow ${i}`, description: `Bio ${i}`, location: "Houston", created_at: "2010-01-02T03:04:05.000Z", verified: i === 0, verified_type: i === 0 ? "blue" : "none", public_metrics: { followers_count: 1_000 + i, following_count: 10, post_count: 42, listed_count: 3, like_count: 9 }, pinned_post_id: "123" }));
+	const serve = (list: unknown, lookup: unknown = { data: NASA }) => installFetch((url) => (url.pathname === "/2/users/by" ? json(lookup) : json(list)));
+
+	for (const direction of ["following", "followers"] as const) test(`${direction}: looks the handle up, then sends one ${direction} request with max_results limit and the profile reads' user fields`, async () => {
+		serve({ data: followed(3), meta: { result_count: 3, next_token: "7140dibdnow9c7btw4dwcrp8nwx7a2mvqb73sxfqjslfn" } }, { data: [NASA] });
+		const result = await executeSource(follows, { handle: "@NASA", direction, limit: 3 }, context());
+		expect(xCalls().map((call) => call.url.pathname)).toEqual(["/2/users/by", `/2/users/${NASA.id}/${direction}`]);
+		const [lookup, list] = xCalls();
+		expect(lookup.url.searchParams.get("usernames")).toBe("NASA");
+		expect(list.url.searchParams.get("max_results")).toBe("3");
+		expect(list.url.searchParams.get("user.fields")).toBe(lookup.url.searchParams.get("user.fields"));
+		expect(list.url.searchParams.get("user.fields")?.split(",")).toEqual(expect.arrayContaining(["description", "location", "public_metrics", "verified", "created_at"]));
+		expect(list.url.searchParams.get("pagination_token")).toBeNull();
+		expect(list.headers.authorization).toBe(`Bearer ${TOKEN}`);
+		expect(kept.map((response) => response.label)).toEqual(["account lookup", direction === "following" ? "accounts @NASA follows" : "followers of @NASA"]);
+		expect(result.status).toBe("success");
+		expect(result.details).toMatchObject({ direction, returned: 3, next: "7140dibdnow9c7btw4dwcrp8nwx7a2mvqb73sxfqjslfn" });
+	});
+
+	test("the text names the account, the direction, the count returned and the total, then each account and the call that reads on", async () => {
+		serve({ data: followed(2), meta: { result_count: 2, next_token: "7140dibdnow9c7btw4dwcrp8nwx7a2mvqb73sxfqjslfn" } });
+		const following = await executeSource(follows, { handle: "NASA", direction: "following", limit: 2 }, context());
+		expect(following.text).toBe([
+			"Accounts @NASA follows on X: 2 returned of 300 in all.",
+			"",
+			"- @follow_0 — Follow 0 (verified blue)",
+			"  Bio: Bio 0",
+			"  Location: Houston · Joined 2010-01-02",
+			"  1,000 followers · 10 following · 42 posts",
+			"- @follow_1 — Follow 1",
+			"  Bio: Bio 1",
+			"  Location: Houston · Joined 2010-01-02",
+			"  1,001 followers · 10 following · 42 posts",
+			"",
+			'X has more. Next page: x_follows with handle "NASA", direction "following", limit 2 and cursor "7140dibdnow9c7btw4dwcrp8nwx7a2mvqb73sxfqjslfn".',
+		].join("\n"));
+		serve({ data: followed(1), meta: { result_count: 1 } });
+		const followers = await executeSource(follows, { handle: "NASA", direction: "followers", limit: 1 }, context());
+		expect(followers.status).toBe("success");
+		expect(followers.text.split("\n", 1)[0]).toBe("Accounts following @NASA on X: 1 returned of 89,000,000 in all.");
+		expect(followers.text).not.toContain("Next page");
+	});
+
+	test("a cursor is sent as pagination_token, and the next page's cursor is printed", async () => {
+		serve({ data: followed(1), meta: { result_count: 1, next_token: "8150dibdnow9c7btw4dwcrp8nwx7a2mvqb73sxfqjslfn" } });
+		const result = await executeSource(follows, { handle: "NASA", direction: "followers", limit: 1, cursor: "7140dibdnow9c7btw4dwcrp8nwx7a2mvqb73sxfqjslfn" }, context());
+		expect(xCalls()[1].url.searchParams.get("pagination_token")).toBe("7140dibdnow9c7btw4dwcrp8nwx7a2mvqb73sxfqjslfn");
+		expect(result.text).toContain('cursor "8150dibdnow9c7btw4dwcrp8nwx7a2mvqb73sxfqjslfn"');
+		expect(result.status).toBe("success");
+	});
+
+	test("limit is sent as max_results at its bounds and defaults to 50", async () => {
+		for (const [limit, sent] of [[1, "1"], [1000, "1000"], [undefined, "50"]] as const) {
+			calls = [];
+			serve({ data: followed(1) });
+			await executeSource(follows, { handle: "NASA", direction: "following", ...(limit === undefined ? {} : { limit }) }, context());
+			expect(xCalls()[1].url.searchParams.get("max_results")).toBe(sent);
+		}
+	});
+
+	test("an account that follows nobody is empty", async () => {
+		serve({ meta: { result_count: 0 } }, { data: [{ ...NASA, public_metrics: { ...NASA.public_metrics, following_count: 0 } }] });
+		const result = await executeSource(follows, { handle: "NASA", direction: "following" }, context());
+		expect(result.status).toBe("empty");
+		expect(result.text).toBe("Accounts @NASA follows on X: 0 returned of 0 in all.\n\nX returned no accounts.");
+	});
+
+	test("a missing account is X's answer and sends no list request; a protected account's refusal answers for it", async () => {
+		serve({ data: [] }, { errors: [{ value: "ghost_account", detail: "Could not find user with usernames: [ghost_account].", title: "Not Found Error", resource_type: "user", parameter: "usernames", resource_id: "ghost_account", type: "https://api.x.com/2/problems/resource-not-found" }] });
+		const missing = await executeSource(follows, { handle: "ghost_account", direction: "followers" }, context());
+		expect(missing.status).toBe("empty");
+		expect(missing.text).toBe("X API: 0 accounts of 1 requested.\nNot returned: @ghost_account — Not Found Error: Could not find user with usernames: [ghost_account].");
+		expect(xCalls()).toHaveLength(1);
+
+		calls = [];
+		const locked = { ...NASA, protected: true };
+		serve({ errors: [{ type: "https://api.x.com/2/problems/not-authorized-for-resource", title: "Authorization Error", detail: `Sorry, you are not authorized to see the user with id: [${NASA.id}].`, resource_type: "user", resource_id: NASA.id, parameter: "id" }] }, { data: [locked] });
+		const refused = await executeSource(follows, { handle: "NASA", direction: "following" }, context());
+		expect(xCalls()).toHaveLength(2);
+		expect(refused.status).toBe("empty");
+		expect(refused.text).toBe(`Accounts @NASA follows on X: 0 returned of 300 in all.\nNot returned: @NASA (protected) — Authorization Error: Sorry, you are not authorized to see the user with id: [${NASA.id}].`);
+	});
+
+	test("a rate limit on the list and a credit failure on the lookup fail with X's message", async () => {
+		installFetch((url) => (url.pathname === "/2/users/by" ? json({ data: [NASA] }) : json({ title: "Too Many Requests" }, 429, { "x-rate-limit-reset": "1791349200" })));
+		const limited = await executeSource(follows, { handle: "NASA", direction: "followers" }, context());
+		expect(limited.status).toBe("failed");
+		expect(limited.text).toBe("ERROR: X API rate limit reached (HTTP 429) for followers of @NASA: Too Many Requests. The limit resets at 2026-10-07T05:00:00.000Z (x-rate-limit-reset). Dig does not wait or retry.");
+
+		calls = [];
+		installFetch(() => json({ title: "Payment Required", detail: "Your enrolled account does not have any credits" }, 402));
+		const broke = await executeSource(follows, { handle: "NASA", direction: "followers" }, context());
+		expect(broke.status).toBe("failed");
+		expect(broke.text).toBe("ERROR: X API account lookup needs credits in the X developer account (HTTP 402): Payment Required: Your enrolled account does not have any credits");
+		expect(xCalls()).toHaveLength(1);
+	});
+
+	test("no token, a bad handle or a bad direction fails before any request", async () => {
+		delete process.env.X_BEARER_TOKEN;
+		expect((await executeSource(follows, { handle: "NASA", direction: "following" }, context())).text).toMatch(/^ERROR: X_BEARER_TOKEN is not set in Dig's keys\.env\./);
+		process.env.X_BEARER_TOKEN = TOKEN;
+		expect((await executeSource(follows, { handle: "not a handle", direction: "following" }, context())).text).toBe('ERROR: Not an X handle: "not a handle". A handle has 1-15 letters, digits or underscores.');
+		expect((await executeSource(follows, { handle: "NASA", direction: "friends" }, context())).text).toBe("ERROR: direction must be following (the accounts this account follows) or followers (the accounts that follow it).");
+		expect(calls).toHaveLength(0);
+	});
+});
+
+describe("what each X API call read, as its cost", () => {
+	const POSTS = "X post reads";
+	const ACCOUNTS = "X account reads";
+	const page = (start: number, size: number) => Array.from({ length: size }, (_, i) => ({ id: String(3_000_000 + start + i), text: `post ${start + i}`, author_id: AUTHOR_ID }));
+
+	test("a search of two pages records the posts and included accounts and posts of both", async () => {
+		installFetch((url) => json(url.searchParams.get("next_token")
+			? { data: page(10, 5), includes: { users: [author] }, meta: { result_count: 5 } }
+			: { data: page(0, 10), includes: { users: [author, quotedAuthor], tweets: [includes.posts[0]] }, meta: { result_count: 10, next_token: "p2" } }));
+		const result = await executeSource(search_posts, { query: "dig", limit: 15 }, context());
+		expect(result.details?.cost).toEqual([{ amount: 16, unit: POSTS }, { amount: 3, unit: ACCOUNTS }]);
+	});
+
+	test("a post read with replies and reposters adds every X response", async () => {
+		const now = BigInt(Date.now() - 1288834974657) << 22n;
+		const id = String(now);
+		installFetch((url) => {
+			if (url.pathname === "/2/tweets") return json({ data: [{ ...apiPost, id, conversation_id: id }], includes });
+			if (url.pathname === "/2/tweets/search/recent") return json({ data: page(0, 4), includes: { users: [author] } });
+			return json({ data: [author, quotedAuthor, { id: "9", username: "third" }] });
+		});
+		const result = await executeSource(post, { posts: [id], replies: 2, reposters: 3 }, context());
+		expect(xCalls()).toHaveLength(3);
+		// Lookup: 1 post, 2 included posts, 2 accounts; replies: 4 posts, 1 account; reposters: 3 accounts.
+		expect(result.details?.cost).toEqual([{ amount: 7, unit: POSTS }, { amount: 6, unit: ACCOUNTS }]);
+	});
+
+	test("a profile read records the account and the post X expanded with it", async () => {
+		installFetch(() => json({ data: [{ ...author, pinned_post_id: POST_ID }], includes: { posts: [apiPost] } }));
+		const result = await executeSource(users, { handles: ["jack"] }, context());
+		expect(result.details?.cost).toEqual([{ amount: 1, unit: POSTS }, { amount: 1, unit: ACCOUNTS }]);
+	});
+
+	test("x_follows records the account looked up and every account returned", async () => {
+		installFetch((url) => json(url.pathname === "/2/users/by" ? { data: [author] } : { data: [quotedAuthor, { id: "9", username: "third" }], meta: { result_count: 2 } }));
+		const result = await executeSource(follows, { handle: "jack", direction: "followers", limit: 2 }, context());
+		expect(result.details?.cost).toEqual([{ amount: 3, unit: ACCOUNTS }]);
+	});
+
+	test("an empty search and a refused request record no charge, not an unknown one", async () => {
+		installFetch(() => json({ meta: { result_count: 0 } }));
+		expect((await executeSource(search_posts, { query: "nothing" }, context())).details?.cost).toEqual([]);
+		installFetch(() => json({ title: "Unauthorized", detail: "Unauthorized" }, 401));
+		const refused = await executeSource(search_posts, { query: "refused" }, context());
+		expect(refused.status).toBe("failed");
+		expect(refused.details?.cost).toEqual([]);
+		expect(refused.details?.knownCost).toBeUndefined();
+	});
+
+	test("a request that got no response leaves the total unknown and keeps the earlier pages' reads", async () => {
+		installFetch((url) => {
+			if (url.searchParams.get("next_token")) throw new TypeError("fetch failed");
+			return json({ data: page(0, 10), includes: { users: [author] }, meta: { next_token: "p2" } });
+		});
+		const result = await executeSource(search_posts, { query: "dig", limit: 20 }, context());
+		expect(result.status).toBe("partial");
+		expect(result.details?.cost).toBeNull();
+		expect(result.details?.knownCost).toEqual([{ amount: 10, unit: POSTS }, { amount: 1, unit: ACCOUNTS }]);
+	});
+
+	test("a post read through TikHub is unknown, beside the X lookup that failed", async () => {
+		installFetch((url) => (url.host === "api.tikhub.io" ? json(tikhubDetail) : json({ title: "Service Unavailable" }, 503)));
+		const result = await executeSource(post, { posts: [POST_ID] }, context());
+		expect(result.details?.via).toBe("TikHub");
+		expect(result.details?.cost).toBeNull();
+		expect(result.details?.knownCost).toBeUndefined();
+	});
+
+	test("x_count_posts, x_news, x_explore and x_community declare no billing, so their cost stays unknown", async () => {
+		for (const tool of [count_posts, news, explore, community]) expect(tool.billing).toBeUndefined();
+		for (const tool of [post, search_posts, users, follows, bookmarks, likes]) expect(tool.billing).toBeDefined();
+		installFetch(() => json({ data: [{ start: "2026-10-01T00:00:00.000Z", end: "2026-10-02T00:00:00.000Z", post_count: 3 }], meta: { total_post_count: 3 } }));
+		expect((await executeSource(count_posts, { query: "dig" }, context())).details?.cost).toBeNull();
 	});
 });

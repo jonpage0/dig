@@ -1490,6 +1490,35 @@ export function createSchemas(
       },
       { additionalProperties: false },
     ),
+    x_follows: T.Object(
+      {
+        handle: T.String({
+          minLength: 1,
+          description: "One X handle, with or without @.",
+        }),
+        direction: requiredEnumSchema(
+          T,
+          ["following", "followers"],
+          "following: the accounts this account follows. followers: the accounts that follow it.",
+        ),
+        limit: T.Optional(
+          T.Integer({
+            minimum: 1,
+            maximum: 1000,
+            description:
+              "Accounts to return (default 50, max 1000). X bills every account returned.",
+          }),
+        ),
+        cursor: T.Optional(
+          T.String({
+            minLength: 1,
+            description:
+              "The cursor a previous x_follows call printed, to read the next page.",
+          }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     x_news: T.Object(
       {
         query: T.Optional(

@@ -30,6 +30,7 @@ export const GLYPHS = {
   "shovel": [["path",{"d":"M21.56 4.56a1.5 1.5 0 0 1 0 2.122l-.47.47a3 3 0 0 1-4.212-.03 3 3 0 0 1 0-4.243l.44-.44a1.5 1.5 0 0 1 2.121 0z"}],["path",{"d":"M3 22a1 1 0 0 1-1-1v-3.586a1 1 0 0 1 .293-.707l3.355-3.355a1.205 1.205 0 0 1 1.704 0l3.296 3.296a1.205 1.205 0 0 1 0 1.704l-3.355 3.355a1 1 0 0 1-.707.293z"}],["path",{"d":"m9 15 7.879-7.878"}]],
   "sliders-horizontal": [["path",{"d":"M10 5H3"}],["path",{"d":"M12 19H3"}],["path",{"d":"M14 3v4"}],["path",{"d":"M16 17v4"}],["path",{"d":"M21 12h-9"}],["path",{"d":"M21 19h-5"}],["path",{"d":"M21 5h-7"}],["path",{"d":"M8 10v4"}],["path",{"d":"M8 12H3"}]],
   "square-play": [["rect",{"x":"3","y":"3","width":"18","height":"18","rx":"2"}],["path",{"d":"M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"}]],
+  "waypoints": [["path",{"d":"m10.586 5.414-5.172 5.172"}],["path",{"d":"m18.586 13.414-5.172 5.172"}],["path",{"d":"M6 12h12"}],["circle",{"cx":"12","cy":"20","r":"2"}],["circle",{"cx":"12","cy":"4","r":"2"}],["circle",{"cx":"20","cy":"12","r":"2"}],["circle",{"cx":"4","cy":"12","r":"2"}]],
 };
 /** Report source id → glyph; a method can override its source's glyph (X judge and X breadth differ). */
 const SOURCE_GLYPHS = {"hackernews":"newspaper","deepwiki":"book-open-text","polymarket":"chart-candlestick","github":"folder-git-2","exa":"scan-search","perplexity":"globe","papers":"graduation-cap","youtube":"square-play","video":"clapperboard","x":"scale","reddit":"messages-square","tikhub-reddit":"list-tree","tiktok":"clapperboard","instagram":"camera","linkedin":"briefcase-business","telegram":"send","threads":"messages-square","china-social":"languages","commerce":"shopping-cart","tiktok-ads":"megaphone","dataforseo":"chart-no-axes-combined"};
@@ -39,7 +40,7 @@ SOURCE_GLYPHS["google-ads"] = "megaphone";
 SOURCE_GLYPHS["linkedin-ads"] = "megaphone";
 SOURCE_GLYPHS.evidence = "list-tree";
 SOURCE_GLYPHS.wayback = "history";
-const METHOD_GLYPHS = {"x-judge":"scale","x-breadth":"radar","x-post":"message-square-quote","youtube-summarizer":"captions","youtube-video":"clapperboard","video-analyze":"clapperboard"};
+const METHOD_GLYPHS = {"x-judge":"scale","x-breadth":"radar","x-post":"message-square-quote","x-trace":"waypoints","youtube-summarizer":"captions","youtube-video":"clapperboard","video-analyze":"clapperboard"};
 METHOD_GLYPHS["evidence-rank"] = "list-tree";
 /** @returns {keyof typeof GLYPHS} */
 export const glyphFor = (source, method) => METHOD_GLYPHS[method] ?? SOURCE_GLYPHS[source] ?? 'shovel';

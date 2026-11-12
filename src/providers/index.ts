@@ -31,7 +31,7 @@ import { search as commerce_search, product as commerce_product, history as comm
 import { search as exa_search, contents as exa_contents, similar as exa_similar, research as exa_research } from "./tools/exa.js";
 import { ask as perplexity_ask, search as perplexity_search, research as perplexity_research, reason as perplexity_reason } from "./tools/perplexity.js";
 import { search as xsearch } from "./tools/xsearch.js";
-import { post as x_post, search_posts as x_search_posts, count_posts as x_count_posts, users as x_users, news as x_news, explore as x_explore, bookmarks as x_bookmarks, likes as x_likes, community as x_community } from "./tools/x_api.js";
+import { post as x_post, search_posts as x_search_posts, count_posts as x_count_posts, users as x_users, follows as x_follows, news as x_news, explore as x_explore, bookmarks as x_bookmarks, likes as x_likes, community as x_community } from "./tools/x_api.js";
 import { tiktok as scrapecreators_tiktok, instagram as scrapecreators_instagram, linkedin as scrapecreators_linkedin, telegram as scrapecreators_telegram } from "./tools/scrapecreators.js";
 import { facebook as scrapecreators_facebook, facebook_events as scrapecreators_facebook_events } from "./tools/facebook.js";
 import { library as facebook_ad_library } from "./tools/facebook_ads.js";
@@ -99,6 +99,7 @@ export const providerTools: Record<string, ToolSpec> = {
 	x_search_posts,
 	x_count_posts,
 	x_users,
+	x_follows,
 	x_news,
 	x_explore,
 	x_bookmarks,

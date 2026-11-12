@@ -1,9 +1,10 @@
 // X. xsearch (xAI's Grok searching X) reports how many posts it read (`usage.num_sources_used`) but returns only the
 // posts its answer cites, as `url_citation` annotations and `citations`; neither carries post metrics, so metrics come
-// only from numbers Grok states beside a post. The X API tools (x_post, x_search_posts, x_count_posts, x_users, x_news,
-// x_explore, x_bookmarks, x_likes, x_community) return X's own objects: posts with their authors and public counts,
-// accounts, count buckets, News stories, trends, Spaces and Communities. TikHub stands in for some: x_post's fallback
-// copy of one post, Communities search without sign-in, and a Community's details and posts (x_community).
+// only from numbers Grok states beside a post. The X API tools (x_post, x_search_posts, x_count_posts, x_users, x_follows,
+// x_news, x_explore, x_bookmarks, x_likes, x_community) return X's own objects: posts with their authors and public counts,
+// accounts (looked up, or who an account follows and who follows it), count buckets, News stories, trends, Spaces and
+// Communities. TikHub stands in for some: x_post's fallback copy of one post, Communities search without sign-in, and a
+// Community's details and posts (x_community).
 // Adapted from Dig's dashboard/ui/evidence/x.ts (MIT, same author).
 import { compact, num, plural, shortDate } from '../format.mjs';
 import { excerpt, failedCall, ITEM_NOUNS, noItems, numv, obj, objs, query, scope, str, strs } from './read.mjs';
@@ -215,7 +216,9 @@ function readApiItems(call, bodies) {
     for (const item of found) if (item?.key && !items.has(`${item.kind}:${item.key}`)) items.set(`${item.kind}:${item.key}`, item);
   }
   // Bookmark and like reads also keep the signed-in account and folder listings; only their posts are evidence items.
+  // A follows read also keeps the lookup of the account whose list it is; only the listed accounts are.
   const all = [...items.values()];
+  if (call.tool === 'x_follows') return all.filter(item => item.key !== `@${(str(call.args.handle) ?? '').replace(/^@/, '').toLowerCase()}`);
   return call.tool === 'x_bookmarks' || call.tool === 'x_likes' ? all.filter(item => item.kind === 'post') : all;
 }
 
@@ -235,6 +238,7 @@ function apiAction(call) {
     case 'x_search_posts': return ['searched X posts for', ...query(str(a.query)), ...scope([...when, str(a.sort) === 'relevancy' ? 'most relevant first' : undefined])];
     case 'x_count_posts': return ['counted X posts for', ...query(str(a.query)), ...scope([...when, `per ${str(a.granularity) ?? 'day'}`])];
     case 'x_users': return [...(strs(a.handles).length ? ['looked up X accounts', handles(a.handles).join(' ')] : ['searched X accounts for', ...query(str(a.query))]), ...scope([n(a.posts) ? `${plural(n(a.posts), 'recent post')} each` : undefined, n(a.mentions) ? `${plural(n(a.mentions), 'mention')} each` : undefined])];
+    case 'x_follows': { const who = handles([str(a.handle) ?? '']).join(''); return [a.direction === 'followers' ? `listed accounts following ${who}` : `listed accounts ${who} follows`, ...scope([n(a.limit) ? `up to ${plural(n(a.limit), 'account')}` : undefined, str(a.cursor) ? 'next page' : undefined])]; }
     case 'x_news': return str(a.id) ? [`read X News story ${str(a.id)}`] : ['searched X News for', ...query(str(a.query)), ...scope([n(a.max_age_hours) ? `last ${plural(n(a.max_age_hours), 'hour')}` : undefined])];
     case 'x_explore': {
       if (a.kind === 'trends') return [`read X trends ${(n(a.woeid) ?? WORLDWIDE_WOEID) === WORLDWIDE_WOEID ? 'worldwide' : `for WOEID ${n(a.woeid)}`}`];

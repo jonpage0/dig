@@ -15,7 +15,7 @@ const X_DEFAULTS = { model: 'grok-4.7', depth: 'standard', web_search: false, co
  * Dig's built-in guidance for the Codex worker that runs a source method: `default` covers every method without its
  * own entry. Guidance, not an enforced pin: the initiating thread chooses each worker's model and effort.
  */
-export const WORKER_DEFAULTS = { default: { model: 'gpt-6.1-sol', effort: 'medium' }, 'x-breadth': { model: 'gpt-6-luna', effort: 'high' }, 'x-judge': { model: 'gpt-6-astra', effort: 'high' } };
+export const WORKER_DEFAULTS = { default: { model: 'gpt-6.1-sol', effort: 'medium' }, 'x-breadth': { model: 'gpt-6-luna', effort: 'high' }, 'x-judge': { model: 'gpt-6-astra', effort: 'high' }, 'x-trace': { model: 'gpt-6-astra', effort: 'high' } };
 /** Codex's reasoning effort names (Codex 0.160). Whether a model accepts one is the host's and account's concern. */
 export const WORKER_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 /** `[workers.<name>]` tables: `default` and every catalog method, helpers included. */

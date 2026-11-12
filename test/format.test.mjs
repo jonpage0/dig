@@ -23,6 +23,11 @@ test('display ordering preserves separate legacy unit entries and positive amoun
   assert.equal(costShort({ byUnit: {}, unknownCalls: 0 }, 0), '');
 });
 
+test('X read counts are singular for one, like credits', () => {
+  assert.deepEqual(costAmounts({ byUnit: { 'X post reads': 25, 'X account reads': 1, 'ScrapeCreators credits': 1 } }), ['1 ScrapeCreators credit', '1 X account read', '25 X post reads']);
+  assert.equal(costShort({ byUnit: { 'X post reads': 1 }, unknownCalls: 0 }, 1), '1 X post read');
+});
+
 test('a call receipt’s outcome has one wording on every page', () => {
   assert.deepEqual(['success', 'partial', 'empty', 'failed', 'cancelled', 'skipped', 'running', undefined].map(callOutcome), ['Succeeded', 'Partial', 'Empty', 'Failed', 'Stopped', 'Skipped', 'Unknown outcome', 'Unknown outcome']);
 });

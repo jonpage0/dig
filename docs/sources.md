@@ -26,7 +26,7 @@ Dig reads keys only from `keys.env` in Dig's folder (`~/.local/share/dig/keys.en
 | Perplexity | Cited answers on current facts | `PERPLEXITY_API_KEY` | |
 | Papers | Scholarly papers, citations and full text | Optional: `SEMANTIC_SCHOLAR_API_KEY`, `OPENALEX_API_KEY`, `NCBI_API_KEY` and others | The Papers bridge (`git`, `uv`) for federated search, full text, PDFs and section extraction |
 | YouTube | Video discovery, saved transcripts, comments and Gemini video understanding | Optional by route: `OPENCODE_RESEARCH_GOOGLE_API_KEY`, `SCRAPECREATORS_API_KEY`, `GEMINI_API_KEY` | `yt-dlp` for keyless search/local captions; no local video tools for Gemini |
-| X | Posts, threads, accounts, search, counts, X News, Communities | `XAI_API_KEY` (Grok's X search) and `X_BEARER_TOKEN` (X's API); optional sign-in keys and `TIKHUB_API_KEY` | |
+| X | Posts, threads, accounts and who follows whom, search, counts, X News, Communities | `XAI_API_KEY` (Grok's X search) and `X_BEARER_TOKEN` (X's API); optional sign-in keys and `TIKHUB_API_KEY` | |
 | Reddit | Threads and comments | `SCRAPECREATORS_API_KEY` | |
 | TikHub Reddit | A thread's first page of comments with up to 8 collapsed-reply continuations per call, and subreddit context | `TIKHUB_API_KEY` | |
 | TikTok, Instagram, LinkedIn, Telegram | Public posts and profiles | `SCRAPECREATORS_API_KEY` | |
@@ -70,13 +70,13 @@ Some videos' captions need yt-dlp's proof-of-origin token plugin; without it, yt
 
 ## X
 
-X has two ways in. `XAI_API_KEY` lets Grok search X and interpret what it finds. `X_BEARER_TOKEN` reads X's own API: posts by link with their thread, replies, quotes and reposters; recent and full-archive search (back to March 2006) and post counts (a full-archive count needs a start time); accounts with their posts and mentions; X News; trends, Spaces, Communities and Lists. To get the token:
+X has two ways in. `XAI_API_KEY` lets Grok search X and interpret what it finds. `X_BEARER_TOKEN` reads X's own API: posts by link with their thread, replies, quotes and reposters; recent and full-archive search (back to March 2006) and post counts (a full-archive count needs a start time); accounts with their posts and mentions; who an account follows and who follows it (`x_follows`, one page per call); X News; trends, Spaces, Communities and Lists. To get the token:
 
 1. Create a pay-per-use developer account at [console.x.com](https://console.x.com) and add credits.
 2. Set a spending limit there, because X does not report what each call costs.
 3. Create an app and copy its Bearer Token into `keys.env` as `X_BEARER_TOKEN`.
 
-The X card reads ready with both keys and partly ready with one. Dig records X API costs as unknown and never estimates them. If a single post can't be read through X's API (no token, no credits, a rate limit or an outage) and `TIKHUB_API_KEY` is set, Dig reads it through TikHub instead and says so.
+The X card reads ready with both keys and partly ready with one. X bills reads per post or account returned but reports no charge, so for the tools that read posts and accounts Dig records what X returned, as X post reads and X account reads; these are counts, not money, and X's bill can be lower, since X charges a resource once per UTC day. Counts, X News, trends, Spaces, Lists and Communities record an unknown cost. Dig never estimates a price. `x_follows` returns every account it is asked for, and X bills each one, so ask it for no more than you need. If a single post can't be read through X's API (no token, no credits, a rate limit or an outage) and `TIKHUB_API_KEY` is set, Dig reads it through TikHub instead and says so.
 
 ### Optional: sign in as your own X account
 
@@ -91,7 +91,7 @@ Dig only reads, so the app's **Read** permission is enough, and with it the toke
 
 `x_community` reads one Community by id or link: its details from X's API and its posts through TikHub, which needs `TIKHUB_API_KEY`.
 
-X has three research methods: **X judge** (`$dig:x-judge`) weighs claims by reach and kind of source and reads every post it relies on; **X breadth** (`$dig:x-breadth`) finds as many distinct posts, accounts and angles as it can without judging them; **X post** (`$dig:x-post`) reads particular posts and reports what surrounds them.
+X has four research methods: **X judge** (`$dig:x-judge`) weighs claims by reach and kind of source and reads every post it relies on; **X breadth** (`$dig:x-breadth`) finds as many distinct posts, accounts and angles as it can without judging them; **X post** (`$dig:x-post`) reads particular posts and reports what surrounds them; **X trace** (`$dig:x-trace`) starts from a post, an account or a claim and works outward through X's own API: the thread, the people replying, their profiles and recent posts, and what they point to. It weighs each voice by who it is and what it knows, not by likes, works to a budget of post reads and account reads, and uses Grok for at most one pass.
 
 ## Facebook and Facebook ads
 

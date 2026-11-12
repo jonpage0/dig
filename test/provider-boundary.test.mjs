@@ -48,7 +48,7 @@ test('the native boundary retains provider costs honestly and redacts credential
   } finally { await client.close(); }
 });
 
-test('the X API tools are listed under X with their argument names, record an unknown cost, and keep the Bearer Token out of results, receipts and raw bodies', async () => {
+test('the X API tools are listed under X with their argument names, record the posts and accounts X returned as the cost, and keep the Bearer Token out of results, receipts and raw bodies', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dig-native-x-api-'));
   const state = join(root, 'state'); await mkdir(state);
   const secret = 'x-bearer-native-secret%3Dvalue';
@@ -60,11 +60,12 @@ test('the X API tools are listed under X with their argument names, record an un
     await client.connect(transport);
     const tools = (await client.listTools()).tools;
     const argumentsOf = name => Object.keys(tools.find(t => t.name === name).inputSchema.properties).filter(key => !['project', 'dig'].includes(key)).sort();
-    assert.deepEqual(Object.fromEntries(['x_post', 'x_search_posts', 'x_count_posts', 'x_users', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community'].map(name => [name, argumentsOf(name)])), {
+    assert.deepEqual(Object.fromEntries(['x_post', 'x_search_posts', 'x_count_posts', 'x_users', 'x_follows', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community'].map(name => [name, argumentsOf(name)])), {
       x_post: ['posts', 'quotes', 'replies', 'reposters', 'thread'],
       x_search_posts: ['archive', 'end_time', 'limit', 'query', 'sort', 'start_time'],
       x_count_posts: ['archive', 'end_time', 'granularity', 'query', 'start_time'],
       x_users: ['handles', 'mentions', 'posts', 'query'],
+      x_follows: ['cursor', 'direction', 'handle', 'limit'],
       x_news: ['id', 'limit', 'max_age_hours', 'query'],
       x_explore: ['kind', 'limit', 'list', 'query', 'state', 'woeid'],
       x_bookmarks: ['folder', 'limit', 'match'],
@@ -72,22 +73,23 @@ test('the X API tools are listed under X with their argument names, record an un
       x_community: ['community', 'posts', 'sort'],
     });
     const source = (await client.callTool({ name: 'source_info', arguments: { source: 'x' } })).structuredContent.sources[0];
-    assert.deepEqual(source.tools, ['xsearch', 'x_post', 'x_search_posts', 'x_count_posts', 'x_users', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community']);
+    assert.deepEqual(source.tools, ['xsearch', 'x_post', 'x_search_posts', 'x_count_posts', 'x_users', 'x_follows', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community']);
     const read = await client.callTool({ name: 'x_post', arguments: { project: root, posts: ['https://x.com/fixture/status/20'] }, _meta: { threadId: 'x-worker' } });
     assert.equal(read.structuredContent.status, 'success');
-    assert.equal(read.structuredContent.call.cost, null);
+    const reads = [{ amount: 1, unit: 'X post reads' }, { amount: 1, unit: 'X account reads' }];
+    assert.deepEqual(read.structuredContent.call.cost, reads);
     assert.equal(read.structuredContent.call.knownCost, undefined);
     assert.match(read.structuredContent.text, /Retained post accidentally echoes \[redacted\]/);
     assert.equal(JSON.stringify(read).includes(secret), false);
     const { live } = (await client.callTool({ name: 'library_list', arguments: { project: root } })).structuredContent;
-    assert.deepEqual(live.map(call => [call.tool, call.cost]), [['x_post', null]]);
+    assert.deepEqual(live.map(call => [call.tool, call.cost]), [['x_post', reads]]);
     const raw = (await client.callTool({ name: 'library_read', arguments: { file: live[0].rawFile } })).structuredContent;
     assert.match(raw.text, /\[redacted\]/);
     assert.equal(raw.text.includes(secret), false);
   } finally { await client.close(); }
 });
 
-test('signed-in X reads keep all four sign-in keys out of results, receipts and raw bodies, and record an unknown cost', async () => {
+test('signed-in X reads keep all four sign-in keys out of results, receipts and raw bodies, and record the posts and accounts X returned', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dig-native-x-signin-'));
   const state = join(root, 'state'); await mkdir(state);
   const keys = { X_CONSUMER_KEY: 'consumer-key-native-fixture', X_CONSUMER_SECRET: 'consumer-secret-native-fixture', X_ACCESS_TOKEN: '99-access-token-native-fixture', X_ACCESS_TOKEN_SECRET: 'access-token-secret-native-fixture' };
@@ -104,7 +106,8 @@ test('signed-in X reads keep all four sign-in keys out of results, receipts and 
     assert.equal(read.structuredContent.status, 'success');
     assert.match(read.structuredContent.text, /^X posts liked by @signed_in_fixture: 1 post read\./);
     assert.match(read.structuredContent.text, /Liked post accidentally echoes \[redacted\] \[redacted\] \[redacted\] \[redacted\]/);
-    assert.equal(read.structuredContent.call.cost, null);
+    // The signed-in account, then the liked post and its author.
+    assert.deepEqual(read.structuredContent.call.cost, [{ amount: 2, unit: 'X account reads' }, { amount: 1, unit: 'X post reads' }]);
     assert.equal(read.structuredContent.call.knownCost, undefined);
     const { live } = (await client.callTool({ name: 'library_list', arguments: { project: root } })).structuredContent;
     const raw = (await client.callTool({ name: 'library_read', arguments: { file: live[0].rawFile } })).structuredContent;

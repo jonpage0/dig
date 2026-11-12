@@ -142,3 +142,31 @@ test('Google ads and LinkedIn ads are ScrapeCreators market sources after Facebo
     await rm(state, { recursive: true, force: true });
   }
 });
+
+test('X trace is a fourth X method with its own skill, glyph and worker suggestion, and its saved report is an X report', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-x-trace-catalog-'));
+  try {
+    const { glyphFor, GLYPHS } = await import('../src/glyphs.mjs');
+    const { workerGuidance } = await import('../src/config.mjs');
+    const methods = moduleAgents(ALL_MODULES).filter(agent => agent.module === 'x' && !agent.helper);
+    assert.deepEqual(methods.map(agent => agent.name), ['x-judge', 'x-breadth', 'x-post', 'x-trace']);
+    assert.ok(moduleSkills(ALL_MODULES).includes('x-trace'));
+    assert.ok(methods.at(-1).tools.includes('x_follows') && methods.at(-1).tools.includes('x_post') && methods.at(-1).tools.includes('research_save'));
+    assert.equal(glyphFor('x', 'x-trace'), 'waypoints'); assert.ok(GLYPHS.waypoints);
+    assert.ok(WORKER_TABLES.includes('x-trace'));
+    const config = await loadConfig(state);
+    // Judging who is speaking is the method's whole work, so it starts with the judge's suggestion.
+    assert.deepEqual(workerGuidance(config, 'x-trace'), { ...workerGuidance(config, 'x-judge') });
+    const method = sourceInfo(config, 'x').sources[0].methods.find(entry => entry.name === 'x-trace');
+    const skill = await readFile(method.skillPath, 'utf8');
+    assert.match(skill, /^---\nname: x-trace\n/); assert.match(skill, /`agent: "x-trace"`/); assert.match(skill, /disable-model-invocation: true/);
+    // The method judges by who is speaking, works to a budget in X's two read units, and keeps Grok to one pass.
+    assert.match(skill, /Do not rank candidates by likes\./); assert.match(skill, /about 300 post reads and 60 account reads/); assert.match(skill, /Run at most one `xsearch` pass in a trace/);
+    assert.match(await readFile(new URL('../plugin/skills/x-trace/agents/openai.yaml', import.meta.url), 'utf8'), /skills\/waypoints\.svg/);
+    assert.ok(settingsDocument(config).schema.properties.x_trace_worker_model);
+    const project = join(state, 'project'); await (await import('node:fs/promises')).mkdir(project);
+    const saved = await saveReport(config, { project, source: 'x', agent: 'x-trace', content: report, question: 'Who is behind this thread?' });
+    assert.match(saved.report, /^x-trace\.md$/);
+    assert.equal((await listLibrary(config)).items[0].methods[0], 'x-trace');
+  } finally { await rm(state, { recursive: true, force: true }); }
+});

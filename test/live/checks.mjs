@@ -47,6 +47,7 @@ export const CHECKS = [
   { tool: 'x_search_posts', args: { query: 'from:NASA', limit: 1 }, note: 'X’s search reads at least 10 posts per page.' },
   { tool: 'x_count_posts', args: { query: 'from:NASA', granularity: 'day' } },
   { tool: 'x_users', args: { handles: ['NASA'] } },
+  { tool: 'x_follows', args: { handle: 'NASA', direction: 'following', limit: 5 } },
   { tool: 'x_news', args: { query: 'NASA', limit: 1 } },
   { tool: 'x_explore', args: { kind: 'trends', woeid: 1, limit: 3 } },
   { tool: 'reddit', args: { query: 'sqlite', limit: 1, includeComments: false } },

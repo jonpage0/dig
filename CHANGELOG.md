@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.0 — 2026-11-12
+
+- Add X trace, a fourth X method: it starts from a post, an account or a claim and works outward through the thread, the people replying, their profiles and what they point to, weighing each voice by who it is and what it knows, not by engagement. It works to a budget of reads and uses Grok for at most one pass.
+- Add `x_follows`: who an account follows, and who follows it.
+- Record what each X API call read, as post reads and account reads, where its cost was unknown. The counts are not money; X bills reads per post and account returned.
+- Name what a dig recorded in other units when the spending ceiling refuses a call.
+- X judge and X breadth: when a cut Grok pass is not stored, say that it is lost and that running it again is a new pass.
+
 ## 0.13.0 — 2026-11-10
 
 - Add the Wayback Machine as a free source: list the Internet Archive's captures of a page and read what the page said on a given date.

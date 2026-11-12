@@ -1,0 +1,10 @@
+interface:
+  display_name: "Dig · X trace"
+  short_description: "Follow an X conversation outward and weigh who is speaking"
+  icon_small: "../../assets/skills/waypoints.svg"
+  icon_large: "../../assets/skills/waypoints.svg"
+  brand_color: "#2d68aa"
+  default_prompt: "Use $dig:x-trace to follow this X conversation outward and tell me who is speaking and what they know."
+policy:
+  # Reached through the dig skill's source_info routing or an explicit $dig:x-trace mention.
+  allow_implicit_invocation: false

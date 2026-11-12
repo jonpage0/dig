@@ -13,8 +13,12 @@
  * data dictionary still shows the earlier spellings (`tweet.fields`, `note_tweet`, `referenced_tweets`,
  * `retweet_count`, `includes.tweets`), so responses are read in either.
  *
- * X reports no per-call charge, so these tools declare no billing policy and every receipt records the cost as
- * unknown. Requests are never retried and never follow a redirect, and full-archive requests share one pacing gate in
+ * X reports no per-call charge. X bills reads per resource returned, so x_post, x_search_posts, x_users, x_follows,
+ * x_bookmarks and x_likes record what X returned instead (xReads): the posts and the accounts, in "X post reads" and "X
+ * account reads". These counts are not money and are never converted. X charges a resource once per UTC day, so its
+ * bill can be lower than the reads recorded; Dig does not know which reads were repeats. x_count_posts, x_news,
+ * x_explore and x_community declare no billing, so their cost is unknown: X bills counts and trends per request and
+ * prices no News, Spaces, Lists or Communities reads. Requests are never retried and never follow a redirect, and full-archive requests share one pacing gate in
  * the server process. Every response's problems are classified where it arrives (xGet), keeping problems that name a
  * missing, protected or suspended resource apart from the rest. A lookup by id or handle takes a requested item named
  * that way as the item's answer; every other read treats no data beside any problem as a failed read. Other problems
@@ -33,8 +37,9 @@
 import { hostOf, hostWords } from "../../ui/host.mjs"
 import { abortableDelay, keptText } from "../http.js"
 import { failed, outcome, type OutcomeStatus, type ToolOutcome } from "../outcome.js"
+import type { ReceiptCost } from "../library/types.js"
 import { knownSecrets, redactValue } from "../secrets.js"
-import type { ToolContext, ToolSpec } from "../types.js"
+import type { RetainedResponse, ToolContext, ToolSpec } from "../types.js"
 import { oauthHeader, signedQuery, USER_KEY_NAMES, type UserKeys } from "./x_oauth.js"
 
 /** Cancellation plus the raw-response capture of the tool call. */
@@ -437,6 +442,43 @@ const dataItems = (body: Json): Json[] => {
 	return Array.isArray(body.data) ? recs(body.data) : single ? [single] : []
 }
 const nextToken = (body: Json) => str(rec(body.meta)?.next_token)
+
+// ---------------------------------------------------------------------------
+// What a call read
+// ---------------------------------------------------------------------------
+
+export const POST_READS = "X post reads"
+export const ACCOUNT_READS = "X account reads"
+/** Every TikHub response is kept under a label carrying this; X API responses never are. */
+const VIA_TIKHUB = "via TikHub"
+/**
+ * The posts and accounts one kept X API response returned: post objects in `data` and in `includes.posts` (X's
+ * reference spelling) or `includes.tweets`, account objects in `data` and in `includes.users`. In `data`, an object
+ * with a `username` is an account and one with text is a post; anything else (a bookmark folder, a folder's bare post
+ * ids) is neither. X reports no charge, and bills reads per resource returned, so this is what Dig records as the
+ * call's cost: counts, not money, never converted, and not deduplicated across responses, though X charges a resource
+ * once per UTC day and its bill can be lower; Dig does not know which reads were repeats. Null (unknown) for a response
+ * read through TikHub, and for a request that got no response (kept with a non-HTTP status). A response without data,
+ * such as a refusal, counts nothing.
+ */
+export function xReads(response: RetainedResponse): { posts: number; accounts: number } | null {
+	if (typeof response.status !== "number" || response.label.includes(VIA_TIKHUB)) return null
+	const body = rec(response.body)
+	if (!body) return { posts: 0, accounts: 0 }
+	const inc = rec(body.includes)
+	const data = dataItems(body)
+	const accounts = data.filter((item) => str(item.username) !== null)
+	const posts = data.filter((item) => str(item.username) === null && (typeof item.text === "string" || rec(item.note_post) || rec(item.note_tweet)))
+	return { posts: posts.length + recs(inc?.posts).length + recs(inc?.tweets).length, accounts: accounts.length + recs(inc?.users).length }
+}
+/** The billing the six post and account tools share; executeSource adds the responses up. */
+const X_READS: ToolSpec["billing"] = {
+	charge(response): ReceiptCost {
+		const reads = xReads(response)
+		return reads === null ? { cost: null } : { cost: [{ amount: reads.posts, unit: POST_READS }, { amount: reads.accounts, unit: ACCOUNT_READS }] }
+	},
+}
+const READS_NOTE = "X reports no per-call charge, so the cost is recorded as the posts and accounts X returned (X post reads and X account reads), not money"
 
 /** The full text: a long post's note text, else its text, verbatim. */
 const fullText = (post: Json) => str(rec(post.note_post)?.text) ?? str(rec(post.note_tweet)?.text) ?? str(post.text) ?? ""
@@ -1171,7 +1213,8 @@ export const post: ToolSpec = {
 	description:
 		"Read X posts by link or id through the X API: each post's exact full text (long posts and X Article text included), author (name, handle, verified status, followers), time, permalink, public counts (likes, reposts, replies, quotes, bookmarks, impressions), media, poll, the post it quotes or replies to, edit history, language, links and context annotations. " +
 		"Optionally each post's thread by its author, replies from its conversation, quote posts and reposters (conversation reads use recent search for conversations under 7 days old, and full-archive search from the conversation's first post for older ones; when X has more than was read, the result says so and gives the x_search_posts call that reads on from the oldest post read). " +
-		"Requires X_BEARER_TOKEN; when one post is requested and the X API cannot serve it (token missing, auth, credits, rate limit, server or network failure), the post is read through TikHub (TIKHUB_API_KEY) and labelled via TikHub. X saying the post is missing, protected or suspended is reported, never read through TikHub. X reports no per-call charge, so the cost is recorded as unknown.",
+		`Requires X_BEARER_TOKEN; when one post is requested and the X API cannot serve it (token missing, auth, credits, rate limit, server or network failure), the post is read through TikHub (TIKHUB_API_KEY) and labelled via TikHub. X saying the post is missing, protected or suspended is reported, never read through TikHub. ${READS_NOTE}; a post read through TikHub makes the cost unknown.`,
+	billing: X_READS,
 	async execute(args, context) {
 		const inputs: string[] = Array.isArray(args.posts) ? args.posts.map(String) : []
 		const invalid = inputs.filter((input) => !postId(input))
@@ -1244,7 +1287,8 @@ const startTime = (args: { start_time?: unknown }, archive: boolean) => str(args
 export const search_posts: ToolSpec = {
 	description:
 		"Search X posts with X's own search syntax (every operator passes through: from:, to:, conversation_id:, is:reply, has:media, lang:, min_likes: and the rest). archive false searches the last 7 days; true searches the full archive, from 2006-03-21 unless start_time says otherwise (X's own default there is the last 30 days), at one request per second, so pages are spaced. " +
-		"Pages internally up to limit (default 25, max 500; at most 50 pages), each page kept as its own original response; returns each post with author, time, permalink, nonzero public counts and full text. Requires X_BEARER_TOKEN. X reports no per-call charge, so the cost is recorded as unknown.",
+		`Pages internally up to limit (default 25, max 500; at most 50 pages), each page kept as its own original response; returns each post with author, time, permalink, nonzero public counts and full text. Requires X_BEARER_TOKEN. ${READS_NOTE}.`,
+	billing: X_READS,
 	async execute(args, context) {
 		const token = bearerToken()
 		if (!token) return failed(missingKey())
@@ -1359,7 +1403,8 @@ async function userTimeline(user: Json, kind: "tweets" | "mentions", wanted: num
 export const users: ToolSpec = {
 	description:
 		"Read X accounts through the X API, by handles (1-100, with or without @) or a people search query (letters, digits, underscores, apostrophes and spaces; 25 accounts). Profiles carry name, handle, bio, location, link, join date, verification and public counts; posts and mentions (0-100 each) add each account's most recent posts and posts mentioning it. " +
-		"Handles, posts and mentions use X_BEARER_TOKEN. People search needs X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET), because X serves it only to a signed-in account; it runs as that account. X reports no per-call charge, so the cost is recorded as unknown.",
+		`Handles, posts and mentions use X_BEARER_TOKEN. People search needs X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET), because X serves it only to a signed-in account; it runs as that account. ${READS_NOTE}.`,
+	billing: X_READS,
 	async execute(args, context) {
 		const handles: string[] = Array.isArray(args.handles) ? args.handles.map((handle: unknown) => String(handle).trim().replace(/^@/, "")) : []
 		const query = typeof args.query === "string" ? args.query.trim() : ""
@@ -1415,6 +1460,87 @@ export const users: ToolSpec = {
 			...blocks.flatMap((block) => ["", "---", "", ...block]),
 		]
 		return outcome(status, bounded(lines.join("\n")), { returned: found.map((user) => String(user.username ?? user.id)), missing, failures })
+	},
+}
+
+// ---------------------------------------------------------------------------
+// x_follows
+// ---------------------------------------------------------------------------
+
+/** Accounts one x_follows call returns by default; X's following and followers endpoints take 1 to 1000 per request. */
+const FOLLOWS_LIMIT = 50
+const FOLLOWS_PAGE = { min: 1, max: 1000 }
+const DIRECTIONS = ["following", "followers"] as const
+type Direction = (typeof DIRECTIONS)[number]
+
+/** An account in a following or followers list: the profile kept to name, handle, verification, bio, location, join date and counts. */
+function formatFollow(user: Json): string[] {
+	const handle = handleOf(user)
+	const m = rec(user.public_metrics)
+	const flags = [verifiedText(user), user.protected === true ? "protected" : null].filter(Boolean)
+	const counts: string[] = []
+	const add = (value: unknown, one: string, many: string) => {
+		const n = num(value)
+		if (n !== null) counts.push(count(n, one, many))
+	}
+	add(m?.followers_count, "follower", "followers")
+	add(m?.following_count, "following", "following")
+	add(m?.post_count ?? m?.tweet_count, "post", "posts")
+	const joined = str(user.created_at)
+	const body = [
+		...(str(user.description) ? [`Bio: ${user.description}`] : []),
+		[str(user.location) ? `Location: ${user.location}` : null, joined ? `Joined ${joined.slice(0, 10)}` : null].filter(Boolean).join(" · "),
+		counts.join(" · "),
+	].filter((line) => line !== "")
+	return [`- ${handle ? `@${handle}` : `user ${String(user.id ?? "")}`} — ${str(user.name) ?? "(no name)"}${flags.length ? ` (${flags.join(", ")})` : ""}`, ...body.map((line) => `  ${line}`)]
+}
+
+export const follows: ToolSpec = {
+	description:
+		"List who an X account follows (direction following) or who follows it (direction followers) through the X API, to see which community an account belongs to and who pays attention to it. Takes one handle (with or without @); returns one page of up to limit accounts (default 50, max 1000), each with name, handle, verification, bio, location, join date, follower, following and post counts, and the account's own totals. When X has more, the result gives the cursor and the exact call that reads the next page; Dig never reads further pages itself. " +
+		`Requires X_BEARER_TOKEN. X bills every account returned, so ask for no more than the question needs. ${READS_NOTE}.`,
+	billing: X_READS,
+	async execute(args, context) {
+		const handle = String(args.handle ?? "").trim().replace(/^@/, "")
+		if (!HANDLE.test(handle)) return failed(`Not an X handle: "${handle}". A handle has 1-15 letters, digits or underscores.`)
+		const direction: Direction | null = DIRECTIONS.includes(args.direction) ? args.direction : null
+		if (!direction) return failed("direction must be following (the accounts this account follows) or followers (the accounts that follow it).")
+		const limit = clamp(Number(args.limit ?? FOLLOWS_LIMIT), FOLLOWS_PAGE.min, FOLLOWS_PAGE.max)
+		const cursor = typeof args.cursor === "string" ? args.cursor.trim() : ""
+		const token = bearerToken()
+		if (!token) return failed(missingKey())
+		// The handle resolves to its account as x_users looks handles up, without the expansions: their posts would be read, and billed, unshown.
+		const lookup = await xGet("/2/users/by", { "user.fields": USER_FIELDS.join(","), usernames: handle }, "account lookup", context, token)
+		if (!lookup.ok) {
+			if (lookup.resource.length) {
+				const refused = refusedLookup([handle], lookup, ["account", "accounts"], "@", null)
+				return outcome(refused.status, refused.text, { direction, returned: 0, missing: refused.missing })
+			}
+			return failed(lookup.message)
+		}
+		const user = dataItems(lookup.body).find((item) => String(item.username ?? "").toLowerCase() === handle.toLowerCase())
+		if (!user || !str(user.id)) {
+			const none = noneReturned([handle], lookup.resources, ["account", "accounts"], "@")
+			return outcome(none.status, none.text, { direction, returned: 0, missing: none.missing })
+		}
+		const id = String(user.id)
+		const name = handleOf(user) ?? handle
+		const total = num(rec(user.public_metrics)?.[direction === "following" ? "following_count" : "followers_count"])
+		const label = direction === "following" ? `accounts @${name} follows` : `followers of @${name}`
+		const answer = await xRead(`/2/users/${id}/${direction}`, { "user.fields": USER_FIELDS.join(","), max_results: limit, pagination_token: cursor || undefined }, label, context, token)
+		const head = (returned: number) => `${direction === "following" ? `Accounts @${name} follows` : `Accounts following @${name}`} on X: ${returned.toLocaleString("en-US")} returned${total === null ? "" : ` of ${total.toLocaleString("en-US")} in all`}.`
+		const details = (returned: number, next: string | null) => ({ account: name, id, direction, returned, next, ...(total === null ? {} : { total }) })
+		if (!answer.ok) {
+			// X refusing the list while naming the account (protected or suspended) answers the read, as a lookup's refusal does.
+			if (answered(answer.resource, id)) return outcome("empty", [head(0), `Not returned: @${name}${user.protected === true ? " (protected)" : ""} — ${problemList(answer.resource)}`].join("\n"), details(0, null))
+			return failed(answer.message)
+		}
+		const accounts = dataItems(answer.body)
+		const next = nextToken(answer.body)
+		const more = next ? ["", `X has more. Next page: x_follows with handle "${name}", direction "${direction}", limit ${limit} and cursor "${next}".`] : []
+		const problems = [lookup.problem, answer.problem].filter((problem): problem is string => problem !== null)
+		if (!accounts.length && !problems.length) return outcome("empty", [head(0), "", "X returned no accounts.", ...more].join("\n"), details(0, next))
+		return withProblem(problems.join(" | ") || null, [head(accounts.length), "", ...accounts.flatMap(formatFollow), ...more].join("\n"), details(accounts.length, next))
 	},
 }
 
@@ -1683,7 +1809,7 @@ const LOOKUP_IDS = 100
 const FOLDER_PAGES = 10
 /** The most folders or folder post ids X returns per request. A full page without a next token may not be all there is. */
 const FOLDER_PAGE_MAX = 100
-const OWNED_READS = "X bills reads of the signed-in account's own bookmarks and liked posts as Owned Reads; Dig still records the cost as unknown, because X reports no per-call charge."
+const OWNED_READS = `X bills reads of the signed-in account's own bookmarks and liked posts as Owned Reads. ${READS_NOTE}.`
 
 /**
  * `match`'s words, each as a pattern that matches at the start of a word, case-insensitively: after the start of the
@@ -1840,6 +1966,7 @@ export const bookmarks: ToolSpec = {
 	description:
 		"Read the signed-in account's X bookmarks, newest first: limit posts (1-800, default 50), or those of one bookmark folder (folder: its name, matched case-insensitively, or its numeric id). match keeps only posts in which every one of its words starts a word (case-insensitive; \"ai\" matches AI, AI's and #AI but not brainstorm, \"agent\" matches agents) in their text, long-form text, author's handle or name, links' addresses, or the text of a post they quote or repost; X has no search inside bookmarks, so Dig filters what it read and says how many posts it read and how many match. " +
 		`Needs X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET) and reads as that account; a folder lists post ids only, so its posts are read through the post lookup with X_BEARER_TOKEN. ${OWNED_READS} A folder's posts are priced as ordinary post lookups.`,
+	billing: X_READS,
 	async execute(args, context) {
 		const folder = typeof args.folder === "string" ? args.folder.trim() : ""
 		const limit = Number(args.limit ?? OWN_LIMIT)
@@ -1887,6 +2014,7 @@ export const likes: ToolSpec = {
 	description:
 		"Read the posts the signed-in X account has liked, newest first: limit posts (1-800, default 50). match keeps only posts in which every one of its words starts a word (case-insensitive; \"ai\" matches AI, AI's and #AI but not brainstorm, \"agent\" matches agents) in their text, long-form text, author's handle or name, links' addresses, or the text of a post they quote or repost; X has no search inside likes, so Dig filters what it read and says how many posts it read and how many match. " +
 		`Needs X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET) and reads as that account. ${OWNED_READS}`,
+	billing: X_READS,
 	async execute(args, context) {
 		const limit = Number(args.limit ?? OWN_LIMIT)
 		const words = matchWords(args.match)
