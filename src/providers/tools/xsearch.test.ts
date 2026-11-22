@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, test } from "node:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect } from "expect";
@@ -213,8 +213,9 @@ test("the default model receives the requested depth as reasoning effort", async
 		return Response.json({ error: { message: "stop after the request" } });
 	}) as typeof fetch;
 	await executeSource(search, { query: "depth" }, context);
+	await executeSource(search, { query: "depth", depth: "standard" }, context);
 	await executeSource(search, { query: "depth", depth: "max" }, context);
-	expect(bodies.map((body) => [body.model, body.reasoning?.effort])).toEqual([["grok-4.7", "medium"], ["grok-4.7", "high"]]);
+	expect(bodies.map((body) => [body.model, body.reasoning?.effort])).toEqual([["grok-4.7", "low"], ["grok-4.7", "medium"], ["grok-4.7", "high"]]);
 });
 
 test("a write-up that cites posts by number is flagged; links, references, code and years are not", async () => {
@@ -594,6 +595,8 @@ test("mode 'semantic' sends the semantic-only system prompt, defaults depth to q
 	expect(Value.Check(schema, { query: "q", mode: "semantic" })).toBe(true);
 	expect(Value.Check(schema, { query: "q", mode: "keyword" })).toBe(false);
 
+	// Configure [x] depth = "standard" so this test proves mode: "semantic" overrides a deeper config default down to quick.
+	writeFileSync(join(root, "config.toml"), '[x]\ndepth = "standard"\n');
 	const bodies: any[] = [];
 	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
 		bodies.push(JSON.parse(String(init?.body)));

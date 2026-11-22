@@ -2,6 +2,12 @@
 
 Below, `dig` stands for `node <checkout>/dist/dig.mjs`: nothing installs a `dig` command, and on macOS and Linux that name is the DNS lookup tool.
 
+## 1.2.1 — 2026-11-22
+
+- **Worked X playbooks and cheat sheets in every X method.** Added concrete JSON `x` tool call playbooks and operator/pitfall checklists across `x-judge` (action cheat sheet, historical discourse + screenshots, breaking <24 h + volume, and targeted video verification), `x-breadth` (6–8 pass allocation sequence), `x-post` (4-step post-inspection sequence), and `x-trace` (3-round trace within the default read budget), while deduplicating repeated prose so every X `SKILL.md` stays comfortably under Antigravity's 24,000-byte load cap. Added `x_web_search` to `x-judge`'s `QUICK` path and updated the X UI source guide.
+- **Default `[x] depth` set to `quick`.** Fresh installs now start `[x] depth` at `quick` (still configurable to `standard`, `max`, or `ultra` in `config.toml` or via `settings`), keeping routine `grok-4.7` passes below xAI's 200k cumulative-token 2× billing cliff out of the box.
+- **Sharper `tools/list` first-sentence descriptions.** Updated the `x_web_search` (`>24 h` scope + `Media:` links), `x_images` (free, no key, `Media:` links), and `xsearch` (`mode: "semantic"`, opt-in `media: true`) first sentences so direct callers see the tiering immediately in `tools/list`.
+
 ## 1.2.0 — 2026-11-22
 
 - **X web search (`x_web_search`).** Added ScrapeCreators-backed Google-indexed public X post search (`GET /v1/twitter/search/posts`, optional `SCRAPECREATORS_API_KEY`, 1 credit per request, pages 1–11), returning ~8–10 live-hydrated posts per page with full text (including `note_tweet`), engagement metrics, views, bookmarks, quotes and `Media:` links (compatible with `x_images` and `video_analyze`) with zero X API post-read fees.

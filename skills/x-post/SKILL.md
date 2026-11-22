@@ -49,6 +49,29 @@ X's API bills each post and account it returns from the user's X developer credi
 
 X's search operators include `from:`, `to:`, `conversation_id:`, `in_reply_to_tweet_id:`, `quotes_of_tweet_id:`, `is:reply`, `is:quote`, `is:verified`, `has:media`, `has:links`, `url:`, `lang:`, `min_likes:N`, `min_replies:N` and `min_reposts:N`, with parentheses and `OR`. Since May 4, 2026, X's search leaves reposts out of keyword matches (a `from:` search still returns an account's reposts), so `reposters` is how to see who reposted; recent search covers seven days and `archive: true` reaches back to 2006.
 
+### Worked post-inspection sequence
+
+Every example below is a call to the `x` tool.
+
+1. **Read the supplied post(s), author thread, and initial reactions** (add `reposters: 25` when who amplified it matters; for viral posts, follow with `x_search_posts` using `conversation_id:<id>` or `quotes_of_tweet_id:<id>` and `sort: "relevancy"`):
+```json
+{ "dig": "<dig>", "action": "x_post", "args": { "posts": ["https://x.com/author/status/123"], "thread": true, "replies": 20, "quotes": 20 } }
+```
+2. **Check the author's standing and recent pattern:**
+```json
+{ "dig": "<dig>", "action": "x_users", "args": { "handles": ["author"], "posts": 15, "mentions": 10 } }
+```
+3. **Inspect useful media immediately** — free `x_images` (`size: "large"` for screenshots/charts) on returned `Media:` photo URLs, and a targeted `xsearch` (`media: true`, `depth: "quick"`) naming only the 1–5 video post links when the post's substance is in a video:
+```json
+{ "dig": "<dig>", "action": "x_images", "args": { "images": ["https://pbs.twimg.com/media/EXAMPLE.jpg"], "size": "large" } }
+{ "dig": "<dig>", "action": "xsearch", "args": { "query": "Describe what the video in https://x.com/author/status/123 shows, quote on-screen text verbatim, and note anything unclear.", "media": true, "depth": "quick", "passLabel": "pass-1" } }
+```
+4. **Measure spread and hunt earlier origin** (omit `end_time` on `x_count_posts` to count through now; pass `end_time` before the post's timestamp on `x_search_posts` to find earlier instances; add `x_web_search` for cheap historical mentions >24 h old when `SCRAPECREATORS_API_KEY` is set):
+```json
+{ "dig": "<dig>", "action": "x_count_posts", "args": { "query": "\"<distinctive phrase or url>\"", "granularity": "hour" } }
+{ "dig": "<dig>", "action": "x_search_posts", "args": { "query": "\"<distinctive phrase or url>\"", "archive": true, "end_time": "2026-11-10T14:00:00Z", "sort": "recency", "limit": 25 } }
+```
+
 Classify the post's own claim as the judge does: **OFFICIAL** (vendor, staff member or documentation), **FIRST-HAND** (a named user describing their own experience), **REPEATED CLAIM** (echoed without a primary source) or **SPECULATION** (theory, mechanism or sentiment). Say what would confirm or refute it, but do not rule on a wider dispute the posts do not settle.
 
 Never fabricate a post, handle, quote, metric, date or URL. A number that appears only in Grok's text is Grok's statement; label it.

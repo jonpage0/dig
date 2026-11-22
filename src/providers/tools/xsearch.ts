@@ -488,7 +488,7 @@ function getServerSideToolUsage(response: ResponsesResponse): Record<string, num
 
 export const search = metered({
   description:
-    "Search X.com (Twitter) for real-time posts and discussions using xAI Agent Tools API. " +
+    "Search X.com via Grok (xAI): semantic lead mode (mode: \"semantic\"), targeted video/image reads (media: true, default off), or discourse synthesis. " +
     "Returns synthesized findings with citations to X posts, and can report per-post public " +
     "metrics (likes, reposts, quotes, replies, bookmarks, views) when asked for them. " +
     "Supports X search operators in the query, handle filtering, date ranges, multimedia " +

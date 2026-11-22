@@ -10,7 +10,7 @@ export function stateDirectory(env = process.env) {
   return resolve(env.DIG_STATE_DIR || join(homedir(), '.local', 'share', 'dig'));
 }
 export const sourceSetting = id => `${id.replaceAll('-', '_')}_enabled`;
-const X_DEFAULTS = { model: 'grok-4.7', depth: 'standard', web_search: false, code_execution: false };
+const X_DEFAULTS = { model: 'grok-4.7', depth: 'quick', web_search: false, code_execution: false };
 /**
  * Dig's built-in guidance for the Codex worker that runs a source method: `default` covers every method without its
  * own entry. Guidance, not an enforced pin: the initiating thread chooses each worker's model and effort.

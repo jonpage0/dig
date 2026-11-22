@@ -55,7 +55,7 @@ const bytes = (n: number) => `${n.toLocaleString("en-US")} bytes`
 export const images = free({
   returnsImages: true,
   description:
-    `Look at the pictures in X posts. Give 1 to ${MAX_IMAGES} image links as x_post, x_search_posts and the other X tools print them after "Media:" (https://${HOST}/..., a photo's link or a video's preview link): each picture is fetched from X's image host and returned to you as an image, in the order given, after a text naming each link, whether it is shown, its media type and its size in bytes. ` +
+    `Look at 1-${MAX_IMAGES} pictures in X posts for free (no key) from returned Media: links. Give 1 to ${MAX_IMAGES} image links as x_post, x_search_posts and the other X tools print them after "Media:" (https://${HOST}/..., a photo's link or a video's preview link): each picture is fetched from X's image host and returned to you as an image, in the order given, after a text naming each link, whether it is shown, its media type and its size in bytes. ` +
     "size picks X's own sized variant of a photo: small, medium (default) or large; a video's preview image comes in one size. A picture that is redirected, is not a JPEG, PNG, WebP or GIF image, or is larger than 4 MB is not shown, with the reason. " +
     "Makes no X API request; no key and no charge. The pictures are not kept: a note of each one's link, media type and size stands in their place. What you say a picture shows is your own reading of it. For what a video shows, use xsearch.",
   async execute(args, ctx): Promise<ToolOutcome> {

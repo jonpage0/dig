@@ -250,7 +250,7 @@ function boundedResult(status: OutcomeStatus, lines: string[], details: Record<s
 
 export const web_search = creditMetered({
 	description:
-		"Search Google-indexed public X posts through ScrapeCreators (/v1/twitter/search/posts), returning ~8-10 live-hydrated posts per page with text, engagement, views, bookmarks and media URLs (zero X API post-read fees). " +
+		"Search Google-indexed public X posts (>24 h old) via ScrapeCreators (/v1/twitter/search/posts), returning ~8-10 live-hydrated posts/page with metrics, views, bookmarks and Media: links (zero X API reads). " +
 		"Best for broad or historical topic discovery (>24 h old); recent (<24 h) posts, exact X search operators, counts and thread reads need x_search_posts and x_post. " +
 		"One request per call; pass the returned cursor (pages 1-11) for the next page. Requires SCRAPECREATORS_API_KEY; 1 credit per request.",
 	async execute(args: WebSearchArgs, ctx: ToolContext) {

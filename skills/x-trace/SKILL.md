@@ -58,6 +58,28 @@ Work in rounds. Each round reads something, chooses whom or what to look at next
 
 **Stop** when the question is answered, when a round adds no new voice or strand, or at the budget. Most traces take three or four rounds.
 
+### Worked 3-round trace (within the default 300 post / 60 account budget)
+
+Every example below is a call to the `x` tool.
+
+- **Round 1 — Read the seed and surface substantive replies/quotes:**
+```json
+{ "dig": "<dig>", "action": "x_post", "args": { "posts": ["https://x.com/seed_author/status/123"], "thread": true, "replies": 30, "quotes": 20 } }
+```
+  (If starting from an unlinked claim instead of a post URL, find seeds with `x_web_search` for historical claims >24 h old or `x_search_posts` for recent/exact terms; spend your single allowed `xsearch` pass with `mode: "semantic"` only when the wording cannot be guessed.)
+- **Round 2 — Batch-check who the substantive voices are, plus early track record on the key 1–2 accounts** (chosen for specific detail, dissent, or author engagement — never likes):
+```json
+{ "dig": "<dig>", "action": "x_users", "args": { "handles": ["voice_a", "voice_b", "voice_c"], "posts": 10 } }
+{ "dig": "<dig>", "action": "x_search_posts", "args": { "query": "from:voice_a (<topic term>)", "archive": true, "end_time": "2026-10-01T00:00:00Z", "limit": 20 } }
+```
+- **Round 3 — Follow shared links across threads, verify origin timing, and check network standing only on accounts that decide the answer:**
+```json
+{ "dig": "<dig>", "action": "x_search_posts", "args": { "query": "url:\"example.com/report\"", "sort": "relevancy", "limit": 25 } }
+{ "dig": "<dig>", "action": "x_count_posts", "args": { "query": "\"<distinctive phrase>\"", "archive": true, "start_time": "2026-10-01T00:00:00Z", "granularity": "day" } }
+{ "dig": "<dig>", "action": "x_follows", "args": { "handle": "voice_a", "direction": "following", "limit": 25 } }
+```
+  Inspect any load-bearing screenshot immediately with `x_images` (`size: "large"`, free), or a load-bearing video with your single allowed `xsearch` pass (`media: true`, `depth: "quick"`, `passLabel: "pass-1"`) naming only those 1–5 video post links.
+
 ## Weigh who is speaking
 
 For each voice that matters to the answer, establish these from what you read, and say what you could not establish. A profile's own words are a claim about itself, not proof.
