@@ -46,6 +46,7 @@ export const CHECKS = [
   { tool: 'xsearch', args: { query: 'from:NASA Artemis', depth: 'quick', enableWebSearch: false } },
   { tool: 'x_post', args: { posts: ['20'] }, note: 'Jack Dorsey’s first post, "just setting up my twttr".' },
   { tool: 'x_search_posts', args: { query: 'from:NASA', limit: 1 }, note: 'X’s search reads at least 10 posts per page.' },
+  { tool: 'x_web_search', args: { query: 'NASA Artemis' } },
   { tool: 'x_count_posts', args: { query: 'from:NASA', granularity: 'day' } },
   { tool: 'x_users', args: { handles: ['NASA'] } },
   { tool: 'x_follows', args: { handle: 'NASA', direction: 'following', limit: 5 } },

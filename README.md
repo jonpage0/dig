@@ -94,9 +94,9 @@ then install `dig` from `dig-local` in Codex's plugin browser.
 
 ## Sources
 
-**25 sources and 2 shared tools · 30 research methods · 81 actions · 39 tools the model sees, with every source on**
+**25 sources and 2 shared tools · 30 research methods · 82 actions · 39 tools the model sees, with every source on**
 
-Each source and each shared tool is one tool, named after it (`hackernews`, `x`, `papers`, `google_ads`). A call names one of its actions, such as `x_post` or `papers_openalex_search`. With every source on, the model sees those 27 tools, 11 of Dig's own and `open_library`: a tool list of about 136,000 characters. A host that shows Dig's views also gets the views' own tools.
+Each source and each shared tool is one tool, named after it (`hackernews`, `x`, `papers`, `google_ads`). A call names one of its actions, such as `x_post` or `papers_openalex_search`. With every source on, the model sees those 27 tools, 11 of Dig's own and `open_library`: a tool list of about 135,000 characters. A host that shows Dig's views also gets the views' own tools.
 
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
 | :---: | --- | --- |
@@ -108,7 +108,7 @@ Each source and each shared tool is one tool, named after it (`hackernews`, `x`,
 | <img src="docs/logos/ycombinator.svg" width="22" height="22" alt=""> | **Hacker&nbsp;News** | Developer stories and discussion |
 |  | **Papers** | Semantic Scholar, OpenAlex and 18 more indexes; full text, PDFs and section extraction |
 | <img src="docs/logos/youtube.svg" width="22" height="22" alt=""> | **YouTube** | Video discovery, saved transcripts, comments and optional Gemini video understanding |
-| <img src="docs/logos/x.svg" width="22" height="22" alt=""> | **X** | Exact posts, threads, accounts, who follows whom and the pictures in posts; Grok for search by meaning, images and video |
+| <img src="docs/logos/x.svg" width="22" height="22" alt=""> | **X** | Exact posts, threads, accounts, who follows whom, web-indexed search and the pictures in posts; Grok for search by meaning, images and video |
 | <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **Reddit** | Threads, comments and collapsed replies |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok** | Videos, captions and transcripts |
 | <img src="docs/logos/instagram.svg" width="22" height="22" alt=""> | **Instagram** | Reels, accounts and transcripts |

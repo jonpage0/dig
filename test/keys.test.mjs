@@ -16,11 +16,11 @@ test('the accounts list names every credential a source reports, each under exac
   assert.deepEqual(owned.toSorted(), [...reported].toSorted());
 });
 
-test('X is ready with both its xAI and X API keys, partly ready with one, and needs setup with neither; the sign-in and TikHub keys are optional', async t => {
+test('X is ready with both its xAI and X API keys, partly ready with one, and needs setup with neither; the sign-in, TikHub and ScrapeCreators keys are optional', async t => {
   const state = await mkdtemp(join(tmpdir(), 'dig-keys-x-readiness-')); t.after(() => rm(state, { recursive: true, force: true })); await initializeConfig(state);
   const config = { ...(await loadConfig(state)), sources: { enabled: ['x'] } };
   const signIn = ['X_CONSUMER_KEY', 'X_CONSUMER_SECRET', 'X_ACCESS_TOKEN', 'X_ACCESS_TOKEN_SECRET'];
-  const names = ['XAI_API_KEY', 'X_BEARER_TOKEN', ...signIn, 'TIKHUB_API_KEY'];
+  const names = ['XAI_API_KEY', 'X_BEARER_TOKEN', ...signIn, 'TIKHUB_API_KEY', 'SCRAPECREATORS_API_KEY'];
   const saved = Object.fromEntries(names.map(name => [name, process.env[name]]));
   const x = keys => {
     for (const name of names) if (keys.includes(name)) process.env[name] = `${name.toLowerCase()}-fixture-value`; else delete process.env[name];
@@ -29,14 +29,14 @@ test('X is ready with both its xAI and X API keys, partly ready with one, and ne
   try {
     const both = x(['XAI_API_KEY', 'X_BEARER_TOKEN']);
     assert.equal(both.readiness.status, 'ready');
-    assert.deepEqual(both.credentials.map(c => [c.name, c.required]), [['XAI_API_KEY', true], ['X_BEARER_TOKEN', true], ...signIn.map(name => [name, false]), ['TIKHUB_API_KEY', false]]);
-    const xApiOnly = x(['X_BEARER_TOKEN', ...signIn, 'TIKHUB_API_KEY']);
+    assert.deepEqual(both.credentials.map(c => [c.name, c.required]), [['XAI_API_KEY', true], ['X_BEARER_TOKEN', true], ...signIn.map(name => [name, false]), ['TIKHUB_API_KEY', false], ['SCRAPECREATORS_API_KEY', false]]);
+    const xApiOnly = x(['X_BEARER_TOKEN', ...signIn, 'TIKHUB_API_KEY', 'SCRAPECREATORS_API_KEY']);
     assert.equal(xApiOnly.readiness.status, 'partial');
     assert.match(xApiOnly.readiness.message, /^Missing XAI_API_KEY in Dig’s keys\.env\./);
     const xaiOnly = x(['XAI_API_KEY']);
     assert.equal(xaiOnly.readiness.status, 'partial');
     assert.match(xaiOnly.readiness.message, /^Missing X_BEARER_TOKEN in Dig’s keys\.env\./);
-    assert.equal(x(['TIKHUB_API_KEY', ...signIn]).readiness.status, 'setup-required');
+    assert.equal(x(['TIKHUB_API_KEY', 'SCRAPECREATORS_API_KEY', ...signIn]).readiness.status, 'setup-required');
   } finally {
     for (const [name, value] of Object.entries(saved)) if (value === undefined) delete process.env[name]; else process.env[name] = value;
   }

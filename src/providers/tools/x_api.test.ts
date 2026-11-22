@@ -101,9 +101,17 @@ describe("x_post", () => {
 		const [lookup] = xCalls();
 		expect(`${lookup.url.origin}${lookup.url.pathname}`).toBe("https://api.x.com/2/tweets");
 		expect(lookup.url.searchParams.get("ids")).toBe(POST_ID);
-		expect(lookup.url.searchParams.get("post.fields")?.split(",")).toEqual(expect.arrayContaining(["note_post", "article", "public_metrics", "context_annotations", "entities", "conversation_id"]));
+		const postFields = lookup.url.searchParams.get("post.fields")?.split(",") ?? [];
+		expect(postFields).toEqual(expect.arrayContaining(["note_post", "article", "public_metrics", "entities", "conversation_id"]));
+		for (const dropped of ["context_annotations", "edit_controls", "display_text_range", "media_metadata", "paid_partnership"]) {
+			expect(postFields).not.toContain(dropped);
+		}
 		expect(lookup.url.searchParams.get("post.fields")).not.toMatch(/non_public_metrics|organic_metrics|promoted_metrics/);
-		expect(lookup.url.searchParams.get("expansions")?.split(",")).toEqual(expect.arrayContaining(["author_id", "referenced_posts", "attachments.media_keys", "attachments.poll_ids", "edit_history_post_ids"]));
+		const expansions = lookup.url.searchParams.get("expansions")?.split(",") ?? [];
+		expect(expansions).toEqual(expect.arrayContaining(["author_id", "referenced_posts", "attachments.media_keys", "attachments.poll_ids"]));
+		for (const dropped of ["edit_history_post_ids", "in_reply_to_user_id"]) {
+			expect(expansions).not.toContain(dropped);
+		}
 		expect(lookup.headers.authorization).toBe(`Bearer ${TOKEN}`);
 		expect(Object.keys(lookup.headers).sort()).toEqual(["accept", "authorization"]);
 		expect(lookup.redirect).toBe("manual");
@@ -319,12 +327,25 @@ describe("x_search_posts", () => {
 		expect(result.text.split("\n", 1)[0]).toBe("ERROR: X API rate limit reached (HTTP 429) for recent search: Too Many Requests. The limit resets at 2026-10-07T05:00:00.000Z (x-rate-limit-reset). Dig does not wait or retry.");
 	});
 
-	test("full-archive pages go to search/all at most one a second", async () => {
+	test("full-archive pages go to search/all at most one a second and allow up to 500 posts per page without context annotations", async () => {
 		installFetch((url) => json({ data: page(url.searchParams.get("next_token") ? 10 : 0, 10), meta: url.searchParams.get("next_token") ? {} : { next_token: "p2" } }));
 		const result = await executeSource(search_posts, { query: "dig", archive: true, limit: 20 }, context());
 		expect(xCalls().map((call) => call.url.pathname)).toEqual(["/2/tweets/search/all", "/2/tweets/search/all"]);
 		expect(xCalls()[1].at - xCalls()[0].at).toBeGreaterThanOrEqual(1000);
 		expect(result.status).toBe("success");
+
+		calls = [];
+		installFetch(() => json({ data: page(0, 250), meta: { result_count: 250 } }));
+		const wide = await executeSource(search_posts, { query: "dig", archive: true, limit: 250 }, context());
+		expect(wide.status).toBe("success");
+		expect(xCalls()).toHaveLength(1);
+		expect(xCalls()[0].url.searchParams.get("max_results")).toBe("250");
+
+		calls = [];
+		installFetch(() => json({ data: page(0, 100), meta: { result_count: 100 } }));
+		const recent = await executeSource(search_posts, { query: "dig", archive: false, limit: 250 }, context());
+		expect(recent.status).toBe("success");
+		expect(xCalls()[0].url.searchParams.get("max_results")).toBe("100");
 	});
 
 	test("the Bearer Token is required, and a token echoed by X is redacted from the result", async () => {

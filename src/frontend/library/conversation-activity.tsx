@@ -4,7 +4,7 @@ import { costShort, plural } from '../../ui/format.mjs';
 import { projectConversationActivity } from './research-state';
 import { SourceIcon } from './source-icon';
 
-const toolLabel = (tool: string) => ({ xsearch: 'Semantic search', x_search_posts: 'Post search', x_post: 'Reading posts',
+const toolLabel = (tool: string) => ({ xsearch: 'Semantic search', x_search_posts: 'Post search', x_web_search: 'Web search', x_post: 'Reading posts',
   exa_search: 'Search', exa_contents: 'Reading pages', youtube_analyze: 'Video analysis', video_analyze: 'Video analysis' } as Record<string, string>)[tool] || tool.replace(/_/g, ' ');
 
 /** How long a job has run: seconds under two minutes, then minutes. */

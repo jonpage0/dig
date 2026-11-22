@@ -1092,20 +1092,20 @@ export function createSchemas(
         search_context_size: enumSchema(
           T,
           ["low", "medium", "high"],
-          "Named search context budget. Agent preset token budgets take precedence; Search API forbids combining this with explicit budgets.",
+          "Context budget; preset budgets take precedence.",
         ),
         max_tokens: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 1000000,
-            description: "Total search context token budget.",
+            description: "Total context tokens.",
           }),
         ),
         max_tokens_per_page: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 1000000,
-            description: "Search context tokens per page.",
+            description: "Tokens per page.",
           }),
         ),
       },
@@ -1188,20 +1188,20 @@ export function createSchemas(
         search_context_size: enumSchema(
           T,
           ["low", "medium", "high"],
-          "Named search context budget. Agent preset token budgets take precedence; Search API forbids combining this with explicit budgets.",
+          "Context budget; Search API forbids combining with explicit budgets.",
         ),
         max_tokens: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 1000000,
-            description: "Total search context token budget.",
+            description: "Total context tokens.",
           }),
         ),
         max_tokens_per_page: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 1000000,
-            description: "Search context tokens per page.",
+            description: "Tokens per page.",
           }),
         ),
       },
@@ -1249,20 +1249,20 @@ export function createSchemas(
         search_context_size: enumSchema(
           T,
           ["low", "medium", "high"],
-          "Named search context budget. Agent preset token budgets take precedence; Search API forbids combining this with explicit budgets.",
+          "Context budget; preset budgets take precedence.",
         ),
         max_tokens: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 1000000,
-            description: "Total search context token budget.",
+            description: "Total context tokens.",
           }),
         ),
         max_tokens_per_page: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 1000000,
-            description: "Search context tokens per page.",
+            description: "Tokens per page.",
           }),
         ),
       },
@@ -1310,20 +1310,20 @@ export function createSchemas(
         search_context_size: enumSchema(
           T,
           ["low", "medium", "high"],
-          "Named search context budget. Agent preset token budgets take precedence; Search API forbids combining this with explicit budgets.",
+          "Context budget; preset budgets take precedence.",
         ),
         max_tokens: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 1000000,
-            description: "Total search context token budget.",
+            description: "Total context tokens.",
           }),
         ),
         max_tokens_per_page: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 1000000,
-            description: "Search context tokens per page.",
+            description: "Tokens per page.",
           }),
         ),
       },
@@ -1338,19 +1338,24 @@ export function createSchemas(
         T.String({ description: "Previous response id for chaining." }),
       ),
       recoverResponseId: T.Optional(
-        T.String({ minLength: 1, description: "Read a stored pass by response id without searching (free). Pass the original query for the record; other arguments are ignored." }),
+        T.String({ minLength: 1, description: "Read a stored pass by id without searching (free). Pass original query; other args ignored." }),
       ),
-      handles: T.Optional(T.Array(T.String(), { maxItems: 20, description: "Limit to at most 20 handles, without @. Mutually exclusive with excludeHandles." })),
-      excludeHandles: T.Optional(T.Array(T.String(), { maxItems: 20, description: "Exclude at most 20 handles, without @. Mutually exclusive with handles." })),
+      handles: T.Optional(T.Array(T.String(), { maxItems: 20, description: "At most 20 handles without @. Exclusive with excludeHandles." })),
+      excludeHandles: T.Optional(T.Array(T.String(), { maxItems: 20, description: "Exclude at most 20 handles without @. Exclusive with handles." })),
       fromDate: T.Optional(T.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Inclusive start date, YYYY-MM-DD at 00:00 UTC." })),
-      toDate: T.Optional(T.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Exclusive end date, YYYY-MM-DD at 00:00 UTC. To include a whole day, use the following date." })),
+      toDate: T.Optional(T.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Exclusive end date, YYYY-MM-DD at 00:00 UTC (use next day to include a full day)." })),
+      mode: enumSchema(
+        T,
+        ["standard", "semantic"],
+        "standard (default): full X research. semantic: 2-4 x_semantic_search calls only (fast low-cost leads; defaults depth to quick).",
+      ),
       depth: enumSchema(
         T,
         ["quick", "standard", "max", "ultra"],
-        "Research depth. Omit it to use the depth in the user's Dig settings ([x] depth).",
+        "Depth (omit for [x] depth setting; semantic mode defaults to quick).",
       ),
       enableWebSearch: T.Optional(
-        T.Boolean({ description: "Add web search alongside X search for this pass. Omit it to use the user's Dig setting ([x] web_search, off unless they turned it on)." }),
+        T.Boolean({ description: "Add web search alongside X (omit for [x] web_search setting, default off)." }),
       ),
       media: T.Optional(T.Boolean({ description: "Grok reads post images/video (default false)." })),
     }),
@@ -1426,6 +1431,21 @@ export function createSchemas(
             maximum: 500,
             description:
               "Posts to return, paged internally (default 25, max 500).",
+          }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    x_web_search: T.Object(
+      {
+        query: T.String({
+          minLength: 1,
+          description: "Keyword/topic query for Google-indexed public X posts via ScrapeCreators.",
+        }),
+        cursor: T.Optional(
+          T.String({
+            minLength: 1,
+            description: "Page cursor from a previous x_web_search response (pages 1-11).",
           }),
         ),
       },
@@ -1605,7 +1625,7 @@ export function createSchemas(
           T.String({
             minLength: 1,
             description:
-              "Keep only posts in which every word starts a word (case-insensitive; ai matches AI and #AI, not brainstorm) in their text, author, links or the post they quote or repost.",
+              "Keep posts matching every word as a case-insensitive word prefix in text, author, links or quoted/reposted post.",
           }),
         ),
       },
@@ -1624,7 +1644,7 @@ export function createSchemas(
           T.String({
             minLength: 1,
             description:
-              "Keep only posts in which every word starts a word (case-insensitive; ai matches AI and #AI, not brainstorm) in their text, author, links or the post they quote or repost.",
+              "Keep posts matching every word as a case-insensitive word prefix in text, author, links or quoted/reposted post.",
           }),
         ),
       },
@@ -1636,12 +1656,12 @@ export function createSchemas(
           minItems: 1,
           maxItems: 4,
           description:
-            "1-4 X image links, https://pbs.twimg.com/..., as x_post, x_search_posts and the other X tools print them after Media: (a photo's link, or a video's preview link). Pictures are returned in this order.",
+            "1-4 https://pbs.twimg.com/... links from Media: lines (photo or video preview). Returned in order.",
         }),
         size: enumSchema(
           T,
           ["small", "medium", "large"],
-          "X's own sized variant of a photo: small, medium (default) or large. A video's preview image comes in one size whatever is asked.",
+          "Photo size: small, medium (default) or large. Video previews ignore size.",
         ),
       },
       { additionalProperties: false },

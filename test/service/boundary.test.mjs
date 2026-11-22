@@ -94,9 +94,10 @@ test('the x tool lists every X API action with its argument names; reads record 
     try {
       const x = (await client.listTools()).tools.find(tool => tool.name === 'x');
       const argumentsOf = action => Object.keys(x.inputSchema.properties.args.anyOf.find(branch => branch.title === action).properties).sort();
-      assert.deepEqual(Object.fromEntries(['x_post', 'x_search_posts', 'x_count_posts', 'x_users', 'x_follows', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community', 'x_images'].map(action => [action, argumentsOf(action)])), {
+      assert.deepEqual(Object.fromEntries(['x_post', 'x_search_posts', 'x_web_search', 'x_count_posts', 'x_users', 'x_follows', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community', 'x_images'].map(action => [action, argumentsOf(action)])), {
         x_post: ['posts', 'quotes', 'replies', 'reposters', 'thread'],
         x_search_posts: ['archive', 'end_time', 'limit', 'query', 'sort', 'start_time'],
+        x_web_search: ['cursor', 'query'],
         x_count_posts: ['archive', 'end_time', 'granularity', 'query', 'start_time'],
         x_users: ['handles', 'mentions', 'posts', 'query'],
         x_follows: ['cursor', 'direction', 'handle', 'limit'],
@@ -107,7 +108,7 @@ test('the x tool lists every X API action with its argument names; reads record 
         x_community: ['community', 'posts', 'sort'],
         x_images: ['images', 'size'],
       });
-      const actions = ['xsearch', 'x_post', 'x_search_posts', 'x_count_posts', 'x_users', 'x_follows', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community', 'x_images'];
+      const actions = ['xsearch', 'x_post', 'x_search_posts', 'x_web_search', 'x_count_posts', 'x_users', 'x_follows', 'x_news', 'x_explore', 'x_bookmarks', 'x_likes', 'x_community', 'x_images'];
       assert.deepEqual(x.inputSchema.properties.action.enum, actions);
       assert.deepEqual((await call('source_info', { source: 'x' })).structuredContent.sources[0].tools, actions);
       const read = await call('x', 'x_post', { posts: ['https://x.com/fixture/status/20'] });

@@ -57,3 +57,28 @@ test('a pictures call reads each kept note as a picture by its link, saying how 
   ]);
   assert.deepEqual(readX({ ...call, status: 'failed' }, []).action[0], 'tried to look at');
 });
+
+test('x_web_search reads ScrapeCreators posts with via ScrapeCreators, and xsearch semantic mode shows in scope', () => {
+  const call = { tool: 'x_web_search', status: 'success', args: { query: 'Discord Components V2', cursor: '2' } };
+  const body = {
+    success: true,
+    credits_charged: 1,
+    posts: [{
+      rest_id: '2022496971895025679',
+      url: 'https://x.com/advaithj1/status/2022496971895025679',
+      views: { count: '24665' },
+      core: { user_results: { result: { core: { screen_name: 'advaithj1', name: 'advaith' } } } },
+      legacy: { created_at: 'Sat Feb 14 02:23:48 +0000 2026', full_text: 'Components V2 modals', favorite_count: 617, retweet_count: 42 },
+    }],
+    cursor: '3',
+  };
+  const read = readX(call, [body]);
+  assert.deepEqual(read.action, ['searched X web index for', { query: 'Discord Components V2' }, '(page 2)']);
+  assert.equal(read.result, '1 post via ScrapeCreators');
+  assert.equal(read.items[0].url, 'https://x.com/advaithj1/status/2022496971895025679');
+  assert.equal(read.items[0].title, 'advaith @advaithj1');
+  assert.ok(read.items[0].meta.includes('via ScrapeCreators'));
+  assert.ok(read.items[0].meta.includes('617 likes'));
+  assert.ok(read.items[0].meta.includes('24.7K views'));
+  assert.ok(readX(xsearch({ mode: 'semantic', depth: 'quick' }), []).action.at(-1).includes('semantic only'));
+});

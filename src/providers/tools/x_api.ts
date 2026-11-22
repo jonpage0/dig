@@ -66,10 +66,11 @@ const ARCHIVE_START = "2006-03-21T00:00:00Z"
  */
 const SNOWFLAKE_FIRST_DAY_MS = 24 * 60 * 60 * 1000
 /**
- * Search pages hold 10 to 100 posts here: recent search allows at most 100, and full-archive search returns at most 100
- * per page when context annotations are requested.
+ * Recent search allows 10 to 100 posts per page; full-archive search allows 10 to 500 per page because Dig does not
+ * request `context_annotations`.
  */
 const SEARCH_PAGE = { min: 10, max: 100 }
+const ARCHIVE_SEARCH_PAGE = { min: 10, max: 500 }
 /** Enough pages for the largest limit, so a run of empty pages that keep a next token still ends. */
 const MAX_SEARCH_PAGES = 50
 /** Count pages followed before reporting that more buckets remain. */
@@ -90,18 +91,19 @@ const TRENDS_LIMIT = 20
 const PEOPLE_SEARCH_RESULTS = 25
 const WORLDWIDE_WOEID = 1
 
-// Fields for public app-only reads: each reference list without the user-context metrics (non_public, organic,
-// promoted), the authenticated user's relationship fields, the Community Notes program fields, the promoted-only
-// `scopes` and the deprecated `source`. User fields also leave out `parody`, `subscriber_count` and
+// Public app-only fields Dig actually formats or uses: leaves out user-context/promoted/Community Notes/deprecated
+// fields plus bloated unused metadata (`context_annotations`, which also caps full-archive search at 100/page instead
+// of 500, `display_text_range`, `edit_controls`, `media_metadata`, `paid_partnership`) and noisy expansions
+// (`edit_history_post_ids`, `in_reply_to_user_id`). User fields also leave out `parody`, `subscriber_count` and
 // `verified_followers_count`, which X refuses an app-only token on account lookups (not-authorized-for-field).
 const POST_FIELDS = [
-	"article", "article_title", "attachments", "card_uri", "community_id", "context_annotations", "conversation_id",
-	"created_at", "display_text_range", "edit_controls", "entities", "geo", "id", "lang", "media_metadata", "note_post",
-	"paid_partnership", "possibly_sensitive", "public_metrics", "reply_settings", "text", "withheld",
+	"article", "article_title", "attachments", "card_uri", "community_id", "conversation_id",
+	"created_at", "entities", "geo", "id", "lang", "note_post",
+	"possibly_sensitive", "public_metrics", "reply_settings", "text", "withheld",
 ]
 const POST_EXPANSIONS = [
 	"article.cover_media", "article.media_entities", "attachments.media_keys", "attachments.media_source_tweet",
-	"attachments.poll_ids", "author_id", "edit_history_post_ids", "geo.place_id", "in_reply_to_user_id", "referenced_posts",
+	"attachments.poll_ids", "author_id", "geo.place_id", "referenced_posts",
 ]
 const USER_FIELDS = [
 	"created_at", "description", "entities", "id", "is_identity_verified", "location", "name", "profile_banner_url",
@@ -868,7 +870,7 @@ async function readPages(paging: Paging, inc: Includes, ctx: CallContext, auth: 
 
 /** Recent or full-archive search pages; full-archive pages wait for the process's archive slot, a second apart. */
 function searchPages(endpoint: "recent" | "all", params: Params, limit: number, label: string, inc: Includes, ctx: CallContext, token: string): Promise<SearchPages> {
-	return readPages({ path: `/2/tweets/search/${endpoint}`, params, limit, label, cursor: "next_token", size: SEARCH_PAGE, archive: endpoint === "all" }, inc, ctx, token)
+	return readPages({ path: `/2/tweets/search/${endpoint}`, params, limit, label, cursor: "next_token", size: endpoint === "all" ? ARCHIVE_SEARCH_PAGE : SEARCH_PAGE, archive: endpoint === "all" }, inc, ctx, token)
 }
 
 // ---------------------------------------------------------------------------
@@ -1210,7 +1212,7 @@ function byId(a: Json, b: Json): number {
 
 export const post: ToolSpec = {
 	description:
-		"Read X posts by link or id through the X API: each post's exact full text (long posts and X Article text included), author (name, handle, verified status, followers), time, permalink, public counts (likes, reposts, replies, quotes, bookmarks, impressions), media, poll, the post it quotes or replies to, edit history, language, links and context annotations. " +
+		"Read 1-100 X posts by link or id through the X API: full text (long posts and X Articles), author, time, public counts, media, poll, quoted/replied-to post, language and links. " +
 		"Optionally each post's thread by its author, replies from its conversation, quote posts and reposters (conversation reads use recent search for conversations under 7 days old, and full-archive search from the conversation's first post for older ones; when X has more than was read, the result says so and gives the x_search_posts call that reads on from the oldest post read). " +
 		`Requires X_BEARER_TOKEN; when one post is requested and the X API cannot serve it (token missing, auth, credits, rate limit, server or network failure), the post is read through TikHub (TIKHUB_API_KEY) and labelled via TikHub. X saying the post is missing, protected or suspended is reported, never read through TikHub. ${READS_NOTE}; a post read through TikHub makes the cost unknown.`,
 	billing: X_READS,
@@ -1324,7 +1326,8 @@ type Granularity = (typeof GRANULARITIES)[number]
 
 export const count_posts: ToolSpec = {
 	description:
-		`Count X posts matching a query (X search syntax) per minute, hour or day (default day), without reading them: archive false counts the last 7 days; true counts the full archive and needs start_time (end_time optional), since a count from the archive's 2006 start can run past the page limit below. Returns each bucket's count and the total. Follows at most ${MAX_COUNT_PAGES} pages of X's buckets; a count that needs more stops there and is partial, so narrow the window with start_time and end_time. Requires X_BEARER_TOKEN. X reports no per-call charge, so the cost is recorded as unknown.`,
+		`Count X posts matching a query per minute, hour or day (default day) without reading them; archive true counts the full archive and needs start_time. ` +
+		`Returns each bucket's count and the total. Follows at most ${MAX_COUNT_PAGES} pages of X's buckets; a count that needs more stops there and is partial, so narrow the window with start_time and end_time. Requires X_BEARER_TOKEN. X reports no per-call charge, so the cost is recorded as unknown.`,
 	async execute(args, context) {
 		const token = bearerToken()
 		if (!token) return failed(missingKey())
@@ -1401,8 +1404,8 @@ async function userTimeline(user: Json, kind: "tweets" | "mentions", wanted: num
 
 export const users: ToolSpec = {
 	description:
-		"Read X accounts through the X API, by handles (1-100, with or without @) or a people search query (letters, digits, underscores, apostrophes and spaces; 25 accounts). Profiles carry name, handle, bio, location, link, join date, verification and public counts; posts and mentions (0-100 each) add each account's most recent posts and posts mentioning it. " +
-		`Handles, posts and mentions use X_BEARER_TOKEN. People search needs X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET), because X serves it only to a signed-in account; it runs as that account. ${READS_NOTE}.`,
+		"Read X accounts through the X API by 1-100 handles or signed-in people search (query), optionally with recent posts and mentions. " +
+		`Profiles carry name, handle, bio, location, link, join date, verification and public counts; posts and mentions (0-100 each) add each account's most recent posts and posts mentioning it. Handles, posts and mentions use X_BEARER_TOKEN. People search needs X sign-in (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET), because X serves it only to a signed-in account; it runs as that account. ${READS_NOTE}.`,
 	billing: X_READS,
 	async execute(args, context) {
 		const handles: string[] = Array.isArray(args.handles) ? args.handles.map((handle: unknown) => String(handle).trim().replace(/^@/, "")) : []
@@ -1709,8 +1712,8 @@ async function tikhubCommunitySearch(query: string, wanted: number, apiKey: stri
 
 export const explore: ToolSpec = {
 	description:
-		"Explore X through the X API by kind: trends (woeid, default 1 = worldwide; limit up to 50, default 20), spaces (query; state live, scheduled or all, default all; limit), communities (query; limit) or list (a List id or link; limit, default 25), each limit up to 100 and default 25 unless stated. " +
-		"Arguments that do not belong to the kind are refused. Trends, Spaces and Lists use X_BEARER_TOKEN. Communities search runs signed in when X sign-in is set (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET), because X serves it only to a signed-in account; otherwise it is read through TikHub (TIKHUB_API_KEY) and labelled via TikHub. Each Community comes with its link, which x_community reads. X and TikHub report no per-call charge, so the cost is recorded as unknown.",
+		"Explore X by kind: trends (woeid), spaces (query, state), communities (query) or list (List id/link). " +
+		"Trends cap at 50 (default 20); spaces, communities and list cap at 100 (default 25). Arguments that do not belong to the kind are refused. Trends, Spaces and Lists use X_BEARER_TOKEN. Communities search runs signed in when X sign-in is set (X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET), because X serves it only to a signed-in account; otherwise it is read through TikHub (TIKHUB_API_KEY) and labelled via TikHub. Each Community comes with its link, which x_community reads. X and TikHub report no per-call charge, so the cost is recorded as unknown.",
 	async execute(args, context) {
 		const kind: Kind = args.kind
 		if (!Object.hasOwn(KINDS, kind)) return failed(`kind must be one of ${Object.keys(KINDS).join(", ")}.`)
@@ -2093,7 +2096,8 @@ async function tikhubCommunityPosts(id: string, wanted: number, ranking: string,
 
 export const community: ToolSpec = {
 	description:
-		"Read one X Community by id or link (https://x.com/i/communities/<id>, as posts and Communities searches show it): its details (name, description, members, access and join policy, or TikHub's topic and rules) and up to posts of its posts (0-500, default 25; 0 reads details only). sort recent (default) reads TikHub's Recency ranking and shows the posts read newest first by their own time; TikHub's ranking is not strictly by time, so a newer post may sit on a later page. sort relevant reads TikHub's Relevance ranking and keeps its order. " +
+		"Read one X Community by id or link: its details and up to 500 posts via TikHub (default 25; 0 reads details only). " +
+		"sort recent (default) reads TikHub's Recency ranking and shows the posts read newest first by their own time; TikHub's ranking is not strictly by time, so a newer post may sit on a later page. sort relevant reads TikHub's Relevance ranking and keeps its order. " +
 		"Details come from X's Community lookup with X_BEARER_TOKEN, or through TikHub (TIKHUB_API_KEY) without it. X's API has no Community timeline for an app, so the posts are always read through TikHub, labelled via TikHub; without TIKHUB_API_KEY the call returns the details and says the posts need it. Members are not read. X and TikHub report no per-call charge, so the cost is recorded as unknown.",
 	async execute(args, context) {
 		const id = communityId(String(args.community ?? ""))

@@ -129,14 +129,25 @@ function dateRange(fromDate?: string, toDate?: string): string {
   ].join("; ")
 }
 
+export type XSearchMode = "standard" | "semantic"
+
 function buildSystemMessage(options: {
   fromDate?: string
   toDate?: string
   webSearchEnabled: boolean
+  mode: XSearchMode
 }): string {
   const today = new Date().toISOString().split("T")[0]
 
-  let message = `You are an X.com search specialist. Current Date: ${today} (UTC).
+  let message = options.mode === "semantic"
+    ? `You are an X.com semantic lead finder. Current Date: ${today} (UTC).
+
+SEMANTIC SEED MODE:
+1. Use ONLY x_semantic_search (2 to 4 calls in 1 parallel round). Do NOT call x_keyword_search, x_thread_fetch, or x_user_search.
+2. Stop immediately after that first round and return a concise bullet list of up to 20 distinct relevant X posts.
+3. Cite every post inline with its full link (https://x.com/<handle>/status/<id>) and a 1-sentence note on what it says or why it matches. Never cite a post by number, such as [3] or [post:12]: numbers do not reach the reader as links.
+4. If no posts match, state clearly "No results found" and explain why. Never fabricate posts.`
+    : `You are an X.com search specialist. Current Date: ${today} (UTC).
 
 Your job:
 1. Use the x_search tool to find relevant X.com posts
@@ -540,6 +551,13 @@ export const search = metered({
       return outcome(incomplete ? "partial" : "success", result)
     }
 
+    if (args.mode !== undefined && args.mode !== "standard" && args.mode !== "semantic") {
+      return failed("ERROR: mode must be 'standard' or 'semantic'")
+    }
+    const mode: XSearchMode = args.mode ?? "standard"
+    if (mode === "semantic" && args.previousResponseId) {
+      return failed("ERROR: mode 'semantic' cannot be chained with previousResponseId; start a fresh semantic pass.")
+    }
     if (args.handles?.length && args.excludeHandles?.length) {
       return failed("ERROR: Cannot use both 'handles' and 'excludeHandles' - choose one")
     }
@@ -591,12 +609,12 @@ export const search = metered({
     if (!args.previousResponseId) {
       input.push({
         role: "system",
-        content: buildSystemMessage({ fromDate: args.fromDate, toDate: args.toDate, webSearchEnabled }),
+        content: buildSystemMessage({ fromDate: args.fromDate, toDate: args.toDate, webSearchEnabled, mode }),
       })
     }
     input.push({ role: "user", content: queryWithContext })
 
-    const depth: XSearchDepth = args.depth ?? xConfig.depth
+    const depth: XSearchDepth = args.depth ?? (mode === "semantic" ? "quick" : xConfig.depth)
     const selectedModel = xConfig.model
     const requestBody: ResponsesRequest = {
       model: selectedModel,
@@ -660,6 +678,7 @@ export const search = metered({
       result += "\n\n---\n**Search Parameters:**\n"
       result += `- Query: ${args.query}\n`
       result += `- Model: ${selectedModel}\n`
+      result += `- Mode: ${mode}\n`
       result += `- Depth: ${depth}${requestBody.reasoning ? ` (requested effort: ${requestBody.reasoning.effort})` : " (effort not sent; provider default applies)"}\n`
       result += "- Billing: every pass is paid, and a deeper pass costs more; the receipt records the charge xAI reported.\n"
       result += `- Tools: ${activeTools}\n`

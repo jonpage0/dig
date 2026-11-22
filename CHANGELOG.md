@@ -2,6 +2,13 @@
 
 Below, `dig` stands for `node <checkout>/dist/dig.mjs`: nothing installs a `dig` command, and on macOS and Linux that name is the DNS lookup tool.
 
+## 1.2.0 — 2026-11-22
+
+- **X web search (`x_web_search`).** Added ScrapeCreators-backed Google-indexed public X post search (`GET /v1/twitter/search/posts`, optional `SCRAPECREATORS_API_KEY`, 1 credit per request, pages 1–11), returning ~8–10 live-hydrated posts per page with full text (including `note_tweet`), engagement metrics, views, bookmarks, quotes and `Media:` links (compatible with `x_images` and `video_analyze`) with zero X API post-read fees.
+- **Fast semantic-only Grok lead mode (`xsearch` `mode: "semantic"`).** Added `mode: "standard" | "semantic"` to `xsearch`. `mode: "semantic"` restricts Grok to 2–4 `x_semantic_search` calls in one parallel round and defaults `depth` to `quick` (unless explicitly overridden) to stay far below xAI's 200k cumulative-token 2× billing tier while harvesting Grok's semantic discovery.
+- **Trimmed X API v2 post fields & faster full-archive paging.** Dropped unused bloated fields (`context_annotations`, `edit_controls`, `display_text_range`, `media_metadata`, `paid_partnership`) and noisy expansions (`edit_history_post_ids`, `in_reply_to_user_id`) from X API v2 requests in `x_api.ts`, cutting raw JSON bloat and unneeded included resources and unlocking up to 500 posts per page on full-archive search (`/2/tweets/search/all`) instead of 100.
+- **Sharper X media and orchestration methods.** Updated `x-judge`, `x-breadth`, `x-post` and `x-trace` to pair `x_web_search` (cheap broad historical discovery >24 h old), `x_search_posts` (last-24 h, exact operators, archive windows and verification), and `xsearch` (`mode: "semantic"` / `depth: "quick"`), and to pull relevant media without hesitation (`x_images` for images; targeted `xsearch(media: true, depth: "quick")` naming only the 1–5 specific video post links for videos).
+
 ## 1.1.0 — 2026-11-22
 
 - **X search cost controls.** `xsearch` now leaves Grok image and video understanding off by default (opt in with `media: true` when a pass needs Grok to watch video or inspect images; `x_images` remains the free path for images) and surfaces `Posts fetched` and `Users fetched` in the summary line without duplicating them under server-side tool usage. The four X methods document opt-in `media: true` and the X-API-first workflow.

@@ -138,6 +138,29 @@ function apiPost(p, users) {
     meta: [dated(p.created_at) ?? postDate(id), counted(m.like_count, 'likes'), counted(m.repost_count ?? m.retweet_count, 'reposts'), counted(m.reply_count, 'replies'), counted(m.quote_count, 'quotes'), counted(m.impression_count, 'views')].filter(Boolean),
   };
 }
+/** ScrapeCreators /v1/twitter/search/posts hydrated GraphQL post (x_web_search). */
+function scrapecreatorsPost(raw) {
+  const p = obj(raw?.tweet) ?? raw;
+  const legacy = obj(p?.legacy) ?? {};
+  const url = str(p?.url) ?? str(raw?.url);
+  const urlMatch = url ? POST_URL.exec(url) : null;
+  const id = str(p?.rest_id) ?? str(legacy.id_str) ?? str(p?.id_str) ?? str(p?.id) ?? urlMatch?.[2];
+  const note = obj(obj(obj(p?.note_tweet)?.note_tweet_results)?.result);
+  const text = str(note?.text) ?? str(legacy.full_text) ?? str(p?.full_text) ?? str(p?.text);
+  if (!id || text === undefined) return undefined;
+  const user = obj(obj(obj(p?.core)?.user_results)?.result);
+  const uCore = obj(user?.core);
+  const uLegacy = obj(user?.legacy);
+  const urlHandle = urlMatch?.[1] && urlMatch[1].toLowerCase() !== 'i' ? urlMatch[1] : undefined;
+  const handle = str(uCore?.screen_name) ?? str(uLegacy?.screen_name) ?? str(user?.screen_name) ?? urlHandle;
+  const name = str(uCore?.name) ?? str(uLegacy?.name) ?? str(user?.name);
+  return {
+    kind: 'post', key: id,
+    title: [name, handle ? `@${handle}` : undefined].filter(Boolean).join(' ') || `Post ${id}`,
+    url: permalink(id, handle), excerpt: excerpt(text, POST_EXCERPT),
+    meta: ['via ScrapeCreators', dated(legacy.created_at ?? p?.created_at) ?? postDate(id), counted(legacy.favorite_count, 'likes'), counted(legacy.retweet_count, 'reposts'), counted(legacy.reply_count, 'replies'), counted(legacy.quote_count, 'quotes'), counted(obj(p?.views)?.count ?? p?.views, 'views')].filter(Boolean),
+  };
+}
 /** TikHub's fetch_tweet_detail copy of one post (x_post's fallback). */
 function tikhubPost(p) {
   const id = str(p.id) ?? str(p.tweet_id);
@@ -212,8 +235,9 @@ function readApiItems(call, bodies) {
   for (const body of bodies) {
     const b = obj(body);
     if (!b) continue;
-    const tikhub = numv(b.code) === 200 && obj(b.data) ? tikhubItems(b.data) : undefined;
-    const found = tikhub ?? (Array.isArray(b.data) ? objs(b.data) : obj(b.data) ? [obj(b.data)] : []).map(d => (communities && str(d.id) && str(d.name) ? community(d) : apiItem(d, users)));
+    const sc = call.tool === 'x_web_search' && Array.isArray(b.posts) ? objs(b.posts).map(scrapecreatorsPost) : undefined;
+    const tikhub = !sc && numv(b.code) === 200 && obj(b.data) ? tikhubItems(b.data) : undefined;
+    const found = sc ?? tikhub ?? (Array.isArray(b.data) ? objs(b.data) : obj(b.data) ? [obj(b.data)] : []).map(d => (communities && str(d.id) && str(d.name) ? community(d) : apiItem(d, users)));
     for (const item of found) if (item?.key && !items.has(`${item.kind}:${item.key}`)) items.set(`${item.kind}:${item.key}`, item);
   }
   // Bookmark and like reads also keep the signed-in account and folder listings; only their posts are evidence items.
@@ -237,6 +261,7 @@ function apiAction(call) {
   switch (call.tool) {
     case 'x_post': { const posts = strs(a.posts); return [posts.length === 1 ? 'read X post' : `read ${plural(posts.length, 'X post')}`, ...(posts.length === 1 ? [posts[0]] : []), ...scope(asked)]; }
     case 'x_search_posts': return ['searched X posts for', ...query(str(a.query)), ...scope([...when, str(a.sort) === 'relevancy' ? 'most relevant first' : undefined])];
+    case 'x_web_search': return ['searched X web index for', ...query(str(a.query)), ...scope([str(a.cursor) ? `page ${str(a.cursor)}` : undefined])];
     case 'x_count_posts': return ['counted X posts for', ...query(str(a.query)), ...scope([...when, `per ${str(a.granularity) ?? 'day'}`])];
     case 'x_users': return [...(strs(a.handles).length ? ['looked up X accounts', handles(a.handles).join(' ')] : ['searched X accounts for', ...query(str(a.query))]), ...scope([n(a.posts) ? `${plural(n(a.posts), 'recent post')} each` : undefined, n(a.mentions) ? `${plural(n(a.mentions), 'mention')} each` : undefined])];
     case 'x_follows': { const who = handles([str(a.handle) ?? '']).join(''); return [a.direction === 'followers' ? `listed accounts following ${who}` : `listed accounts ${who} follows`, ...scope([n(a.limit) ? `up to ${plural(n(a.limit), 'account')}` : undefined, str(a.cursor) ? 'next page' : undefined])]; }
@@ -257,9 +282,11 @@ function apiAction(call) {
 function readXApi(call, bodies) {
   const items = readApiItems(call, bodies);
   const buckets = items.filter(item => item.kind === 'bucket');
+  const via = items.some(item => item.meta.includes('via ScrapeCreators')) ? ' via ScrapeCreators'
+    : items.some(item => item.meta.includes('via TikHub')) ? ' via TikHub' : '';
   const result = failedCall(call) ? undefined
     : buckets.length ? `${plural(buckets.reduce((sum, b) => sum + b.count, 0), 'post')} counted in ${plural(buckets.length, 'time bucket')}`
-      : items.length ? `${tally(items)}${items.some(item => item.meta.includes('via TikHub')) ? ' via TikHub' : ''}` : noItems(call);
+      : items.length ? `${tally(items)}${via}` : noItems(call);
   return { action: apiAction(call), result, items };
 }
 
@@ -282,7 +309,7 @@ export function readX(call, bodies) {
   const a = call.args; const only = handles(a.handles); const not = handles(a.excludeHandles);
   const { posts, fetched } = readPosts(bodies); const cited = posts.length;
   return {
-    action: ['searched X for', ...query(str(a.query)), ...scope([dateWindow(str(a.fromDate), str(a.toDate)), str(a.depth) ? `${str(a.depth)} depth` : undefined, only.length ? `only ${only.join(' ')}` : undefined, not.length ? `not ${not.join(' ')}` : undefined, a.enableWebSearch === true ? 'plus the web' : undefined, str(a.previousResponseId) ? 'following up' : undefined])],
+    action: ['searched X for', ...query(str(a.query)), ...scope([dateWindow(str(a.fromDate), str(a.toDate)), str(a.mode) === 'semantic' ? 'semantic only' : undefined, str(a.depth) ? `${str(a.depth)} depth` : undefined, only.length ? `only ${only.join(' ')}` : undefined, not.length ? `not ${not.join(' ')}` : undefined, a.enableWebSearch === true ? 'plus the web' : undefined, str(a.previousResponseId) ? 'following up' : undefined])],
     result: failedCall(call) ? undefined : fetched === undefined ? (cited ? `${plural(cited, 'post')} cited` : noItems(call)) : `${plural(fetched, 'post')} read, ${num(cited)} cited`,
     items: posts,
   };

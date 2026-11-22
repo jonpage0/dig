@@ -587,3 +587,44 @@ test("Posts fetched and Users fetched are surfaced prominently without duplicati
 	expect(neither.text).not.toContain("Users fetched:");
 	expect(neither.text).toContain("**Server-side tool usage:**\n- x_search_calls: 2\n");
 });
+
+test("mode 'semantic' sends the semantic-only system prompt, defaults depth to quick, respects explicit depth, and refuses chaining", async () => {
+	const schema = createSchemas(Type).xsearch;
+	expect(Value.Check(schema, { query: "q", mode: "standard" })).toBe(true);
+	expect(Value.Check(schema, { query: "q", mode: "semantic" })).toBe(true);
+	expect(Value.Check(schema, { query: "q", mode: "keyword" })).toBe(false);
+
+	const bodies: any[] = [];
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		bodies.push(JSON.parse(String(init?.body)));
+		return Response.json(complete());
+	}) as typeof fetch;
+
+	const standard = await executeSource(search, { query: "normal query" }, context);
+	expect(standard.status).toBe("success");
+	expect(standard.text).toContain("- Mode: standard");
+	expect(bodies.at(-1).reasoning).toEqual({ effort: "medium" });
+	expect(bodies.at(-1).input[0].content).not.toContain("SEMANTIC SEED MODE");
+
+	const semantic = await executeSource(search, { query: "semantic leads", mode: "semantic" }, context);
+	expect(semantic.status).toBe("success");
+	expect(semantic.text).toContain("- Mode: semantic");
+	expect(semantic.text).toContain("- Depth: quick (requested effort: low)");
+	expect(bodies.at(-1).reasoning).toEqual({ effort: "low" });
+	expect(bodies.at(-1).input[0].content).toContain("SEMANTIC SEED MODE");
+	expect(bodies.at(-1).input[0].content).toContain("Use ONLY x_semantic_search");
+
+	const explicitDepth = await executeSource(search, { query: "semantic deeper", mode: "semantic", depth: "standard" }, context);
+	expect(explicitDepth.status).toBe("success");
+	expect(bodies.at(-1).reasoning).toEqual({ effort: "medium" });
+
+	const chained = await executeSource(search, { query: "follow up", mode: "semantic", previousResponseId: "r-prior" }, context);
+	expect(chained.status).toBe("failed");
+	expect(chained.text).toContain("mode 'semantic' cannot be chained with previousResponseId");
+	expect(bodies).toHaveLength(3);
+
+	const badMode = await executeSource(search, { query: "bad", mode: "keyword" }, context);
+	expect(badMode.status).toBe("failed");
+	expect(badMode.text).toContain("mode must be 'standard' or 'semantic'");
+	expect(bodies).toHaveLength(3);
+});
