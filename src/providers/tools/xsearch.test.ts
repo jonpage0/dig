@@ -496,3 +496,94 @@ test("a JSON 200 from a server that ignored the stream is read as before", async
 	expect(result.text).toContain("A readable finding.");
 	expect(result.details?.cost).toEqual([{ amount: 0.005, unit: "USD" }]);
 });
+
+test("max_turns is not sent in the request body or printed in Search Parameters", async () => {
+	const bodies: any[] = [];
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		bodies.push(JSON.parse(String(init?.body)));
+		return Response.json(complete());
+	}) as typeof fetch;
+
+	const result = await executeSource(search, { query: "default depth" }, context);
+	expect(result.status).toBe("success");
+	expect(bodies.at(-1).max_turns).toBeUndefined();
+	expect(result.text).not.toContain("Max turns:");
+});
+
+test("media understanding is off by default, enabled only when media is true, and validated by the schema", async () => {
+	const schema = createSchemas(Type).xsearch;
+	expect(Value.Check(schema, { query: "q" })).toBe(true);
+	expect(Value.Check(schema, { query: "q", media: false })).toBe(true);
+	expect(Value.Check(schema, { query: "q", media: true })).toBe(true);
+	expect(Value.Check(schema, { query: "q", media: "yes" })).toBe(false);
+
+	const bodies: any[] = [];
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		bodies.push(JSON.parse(String(init?.body)));
+		return Response.json(complete());
+	}) as typeof fetch;
+
+	const omitted = await executeSource(search, { query: "text only" }, context);
+	expect(omitted.status).toBe("success");
+	expect(bodies.at(-1).tools[0].enable_image_understanding).toBeUndefined();
+	expect(bodies.at(-1).tools[0].enable_video_understanding).toBeUndefined();
+	expect(omitted.text).toContain("- Media understanding: off");
+
+	const explicitFalse = await executeSource(search, { query: "explicit off", media: false }, context);
+	expect(explicitFalse.status).toBe("success");
+	expect(bodies.at(-1).tools[0].enable_image_understanding).toBeUndefined();
+	expect(bodies.at(-1).tools[0].enable_video_understanding).toBeUndefined();
+	expect(explicitFalse.text).toContain("- Media understanding: off");
+
+	const enabled = await executeSource(search, { query: "inspect video", media: true }, context);
+	expect(enabled.status).toBe("success");
+	expect(bodies.at(-1).tools[0].enable_image_understanding).toBe(true);
+	expect(bodies.at(-1).tools[0].enable_video_understanding).toBe(true);
+	expect(enabled.text).toContain("- Media understanding: enabled");
+});
+
+test("Posts fetched and Users fetched are surfaced prominently without duplicating them under Server-side tool usage", async () => {
+	globalThis.fetch = (async () => Response.json(complete({
+		usage: {
+			total_tokens: 1200,
+			cost_in_usd_ticks: 50000000,
+			num_sources_used: 12,
+			num_server_side_tools_used: 4,
+			server_side_tool_usage_details: {
+				x_search_calls: 4,
+				x_posts_fetched: 1234,
+				x_users_fetched: 56,
+			},
+		},
+	}))) as typeof fetch;
+	const both = await executeSource(search, { query: "both counts" }, context);
+	expect(both.status).toBe("success");
+	expect(both.text).toContain("*Sources used: 12 | Server-side tools: 4*\n*Posts fetched: 1,234 | Users fetched: 56*");
+	expect(both.text).toContain("**Server-side tool usage:**\n- x_search_calls: 4\n");
+	expect(both.text).not.toContain("- x_posts_fetched:");
+	expect(both.text).not.toContain("- x_users_fetched:");
+
+	globalThis.fetch = (async () => Response.json(complete({
+		server_side_tool_usage: { x_posts_fetched: 42 },
+	}))) as typeof fetch;
+	const postsOnly = await executeSource(search, { query: "posts only" }, context);
+	expect(postsOnly.text).toContain("*Posts fetched: 42*");
+	expect(postsOnly.text).not.toContain("Users fetched:");
+	expect(postsOnly.text).not.toContain("**Server-side tool usage:**");
+
+	globalThis.fetch = (async () => Response.json(complete({
+		server_side_tool_usage: { x_users_fetched: 7 },
+	}))) as typeof fetch;
+	const usersOnly = await executeSource(search, { query: "users only" }, context);
+	expect(usersOnly.text).toContain("*Users fetched: 7*");
+	expect(usersOnly.text).not.toContain("Posts fetched:");
+	expect(usersOnly.text).not.toContain("**Server-side tool usage:**");
+
+	globalThis.fetch = (async () => Response.json(complete({
+		server_side_tool_usage: { x_search_calls: 2 },
+	}))) as typeof fetch;
+	const neither = await executeSource(search, { query: "neither count" }, context);
+	expect(neither.text).not.toContain("Posts fetched:");
+	expect(neither.text).not.toContain("Users fetched:");
+	expect(neither.text).toContain("**Server-side tool usage:**\n- x_search_calls: 2\n");
+});

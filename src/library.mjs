@@ -75,7 +75,8 @@ export async function startDig(config, project, question, session = SESSION_UNAV
   if (planned.some(name => !methods.some(method => method.name === name))) throw new Error('planned must name source methods from source_info');
   if (refreshes) await assertDig(config, project, refreshes);
   const at = new Date().toISOString();
-  const base = `${at.slice(0, 10)}-${at.slice(11, 16).replace(':', '')}-${slug(question)}`;
+  const baseSlug = slug(question).replace(/-+$/, '') || 'research';
+  const base = `${at.slice(0, 10)}-${at.slice(11, 16).replace(':', '')}-${baseSlug}`;
   for (let n = 1; n < 1000; n++) {
     const dig = n === 1 ? base : `${base}-${n}`;
     if (ownSession) session = dig;

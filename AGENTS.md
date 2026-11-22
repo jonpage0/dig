@@ -4,7 +4,7 @@
 
 ## Layout
 
-- `src/service/`: the service, in TypeScript. `cli.ts` is the `dig` command (`serve`, `mcp`, `status`, `stop`, `open`); `service.ts` the HTTP listener, its access rules, the key page and the views in a browser; `mcp.ts` the MCP server and the core tools; `surface.ts` the source tools derived from the catalog; `calls.ts` the call pipeline (gate, run, result) and dig handles; `jobs.ts` the job store and the Tasks extension; `ask.ts` the spending questions and the key page; `methods.ts` the methods (Skills extension, prompts, the `method` tool); `views.ts` the MCP Apps views.
+- `src/service/`: the service, in TypeScript. `cli.ts` is the `dig` command (`serve`, `mcp`, `status`, `stop`, `open`, `list`, `read`, `search`, `stats`, `version`); `service.ts` the HTTP listener, its access rules, the key page and the views in a browser; `mcp.ts` the MCP server and the core tools; `surface.ts` the source tools derived from the catalog; `calls.ts` the call pipeline (gate, run, result) and dig handles; `jobs.ts` the job store and the Tasks extension; `ask.ts` the spending questions and the key page; `methods.ts` the methods (Skills extension, prompts, the `method` tool); `views.ts` the MCP Apps views.
 - `src/providers/`: the provider layer. `modules.ts` is the catalog of sources, actions, methods, keys and slow actions; `tools/` the provider tools (the actions); `schemas.ts` and its neighbours their argument schemas; `outcome.ts`, `secrets.ts` and `library/` the shared execution, redaction and cost rules.
 - `src/library.mjs`, `src/config.mjs`, `src/catalog.mjs`, `src/search/`: the research library, settings, source readiness and local report search.
 - `src/frontend/` and `src/ui/`: the React views and the plain helpers they share.

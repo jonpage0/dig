@@ -4,9 +4,18 @@
 // on and stop it; `open` opens the views in the default browser, for hosts that render none.
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { SdkHttpError, StreamableHTTPClientTransport, isJSONRPCErrorResponse, isJSONRPCNotification, isJSONRPCRequest, isJSONRPCResponse, isJSONRPCResultResponse, type JSONRPCMessage, type JSONRPCRequest } from '@modelcontextprotocol/client';
-import { stateDirectory } from '../config.mjs';
-import { VERSION } from '../version.mjs';
 import { spawn } from 'node:child_process';
+import { resolve } from 'node:path';
+import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
+import { loadConfig, stateDirectory } from '../config.mjs';
+import { projectFolder, readLibraryFile } from '../library.mjs';
+import { ALL_MODULES, reportSources } from '../providers/modules.ts';
+import { costSummary } from '../providers/library/cost.ts';
+import { searchLibrary } from '../search/search.mjs';
+import { costAmounts, costShort, costTotal, duration, plural, shortDate } from '../ui/format.mjs';
+import { toolHistory, usageOf } from '../ui/usage.mjs';
+import { VERSION } from '../version.mjs';
+import { handleOf, listing, Refusal, resolveHandle } from './calls.ts';
 import { ensureService, health, digCommand, openAddress, portOf, readServiceFile, serve, stopService } from './service.ts';
 
 // How this process was started, so the service it starts runs the same code (and, in tests, the same preloads).
@@ -164,11 +173,170 @@ async function open() {
   try { spawn(file, args, { detached: true, stdio: 'ignore' }).on('error', () => console.error('Could not open a browser; open the address above.')).unref(); } catch { console.error('Could not open a browser; open the address above.'); }
 }
 
+// ---- Read-only local library commands ----------------------------------------------------------------------------
+class ArgError extends Error {}
+const intFlag = (name: string, raw: string | undefined, fallback: number, min: number, max = Number.MAX_SAFE_INTEGER) => {
+  if (raw === undefined) return fallback;
+  if (!/^-?\d+$/.test(raw)) throw new ArgError(`--${name} must be an integer`);
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isSafeInteger(value) || value < min || value > max) throw new ArgError(`--${name} must be between ${min} and ${max}`);
+  return value;
+};
+const parseFlags = <T extends ParseArgsOptionsConfig>(args: string[], options: T) => {
+  try { return parseArgs({ args, options, allowPositionals: true, strict: true }); } catch (error) { throw new ArgError(error instanceof Error ? error.message : String(error)); }
+};
+const str = (value: string | boolean | (string | boolean)[] | undefined) => (typeof value === 'string' ? value : undefined);
+
+async function listCmd(args: string[]) {
+  const { values, positionals } = parseFlags(args, {
+    project: { type: 'string' }, source: { type: 'string' }, query: { type: 'string' },
+    limit: { type: 'string' }, offset: { type: 'string' }, json: { type: 'boolean', default: false },
+  });
+  if (positionals.length) throw new ArgError(`Unexpected argument: ${positionals[0]}`);
+  const limit = intFlag('limit', str(values.limit), 20, 1, 100);
+  const offset = intFlag('offset', str(values.offset), 0, 0);
+  const source = str(values.source);
+  if (source !== undefined && !(ALL_MODULES as readonly string[]).includes(source)) throw new ArgError(`Unknown source: ${source}`);
+  const projectRaw = str(values.project);
+  const project = projectRaw ? resolve(projectRaw) : undefined;
+  const query = str(values.query);
+  const c = await loadConfig();
+  const data = await listing(c);
+  const needle = query?.toLowerCase();
+  const items = data.items.filter(item => (!project || item.project === project) && (!source || item.sources.includes(source) || item.calls.some(call => call.source === source)) && (!needle || [item.title, item.snippet, ...item.reportDetails.map(r => r.summary)].join('\n').toLowerCase().includes(needle)));
+  const live = data.live.filter(call => (!project || call.projectFolder === projectFolder(project)) && (!source || call.source === source));
+  const page = items.slice(offset, offset + limit).map(item => ({ ...item, dig: handleOf(item.project, item.id) }));
+  const nextOffset = offset + limit < items.length ? offset + limit : null;
+  if (values.json === true) {
+    console.log(JSON.stringify({ library: c.library, configPath: c.path, items: page, total: items.length, nextOffset, live: live.slice(0, limit), liveTotal: live.length }, null, 2));
+    return;
+  }
+  console.log(`${page.length} of ${items.length} saved questions${nextOffset === null ? '' : ` (next offset ${nextOffset})`}; ${live.length} unclaimed retrievals.`);
+  for (const item of page) {
+    console.log(`${item.dig}  [${item.status}]  ${item.displayTitle}`);
+    const cost = item.calls.length ? costShort(costSummary(item.calls), item.calls.length) : '';
+    const meta = [`sources: ${item.sources.join(', ') || 'none'}`, `reports: ${item.reportDetails.length}`, `calls: ${item.calls.length}`, ...(item.startedAt ? [shortDate(item.startedAt)] : []), ...(cost ? [cost] : [])];
+    console.log(`  ${meta.join(' · ')}`);
+  }
+}
+
+async function readCmd(args: string[]) {
+  const { values, positionals } = parseFlags(args, {
+    offset: { type: 'string' }, limit: { type: 'string' }, json: { type: 'boolean', default: false },
+  });
+  if (positionals.length !== 1) throw new ArgError('Usage: read <file> [--offset <n>] [--limit <n>] [--json]');
+  const offset = intFlag('offset', str(values.offset), 0, 0);
+  const limit = intFlag('limit', str(values.limit), 60000, 1, 100000);
+  const c = await loadConfig();
+  const data = await readLibraryFile(c, positionals[0], offset, limit);
+  if (values.json === true) { console.log(JSON.stringify(data, null, 2)); return; }
+  process.stdout.write(data.text);
+  if (data.nextOffset !== null) console.error(`\ndig: showing characters ${data.offset}-${data.offset + data.text.length} of ${data.totalCharacters}; continue with --offset ${data.nextOffset}`);
+}
+
+type SearchResult = {
+  status: string; mode_requested: string; mode_used: string; library: string; index_revision: string | null;
+  coverage: { eligible_files: number; searched_files: number; skipped_files: number; semantic_passages: number; lexical_passages: number };
+  warnings: { code: string; message: string }[];
+  hits: { file: string; path: string; project: string; dig: string; kind: string; source: string | null; method: string | null; title: string; question: string; at: string | null; superseded: boolean; heading: string | null; start: number; end: number; excerpt: string; score: number; matched_by: string[]; read: { file: string; offset: number; limit: number } }[];
+};
+const runSearch = searchLibrary as unknown as (c: Awaited<ReturnType<typeof loadConfig>>, args: Record<string, unknown>, options: { signal: AbortSignal }) => Promise<SearchResult>;
+
+async function searchCmd(args: string[]) {
+  const { values, positionals } = parseFlags(args, {
+    mode: { type: 'string' }, source: { type: 'string' }, project: { type: 'string' },
+    dig: { type: 'string' }, limit: { type: 'string' }, json: { type: 'boolean', default: false },
+  });
+  const query = positionals.join(' ').trim();
+  if (!query) throw new ArgError('Usage: search <query> [--mode hybrid|keyword] [--source <id>] [--project <dir>] [--dig <handle>] [--limit <n>] [--json]');
+  const mode = str(values.mode) ?? 'hybrid';
+  if (mode !== 'hybrid' && mode !== 'keyword') throw new ArgError('--mode must be hybrid or keyword');
+  const source = str(values.source);
+  if (source !== undefined && !(reportSources(ALL_MODULES) as readonly string[]).includes(source)) throw new ArgError(`Unknown report source: ${source}`);
+  const limit = intFlag('limit', str(values.limit), 10, 1, 30);
+  const c = await loadConfig();
+  const projectRaw = str(values.project);
+  let project = projectRaw ? resolve(projectRaw) : undefined;
+  let dig: string | undefined;
+  const digArg = str(values.dig);
+  if (digArg) {
+    let resolved;
+    try { resolved = await resolveHandle(c, digArg); } catch (error) { throw new ArgError(error instanceof Refusal ? error.message : 'Invalid dig handle'); }
+    if (project && project !== resolved.project) throw new ArgError('--project does not match --dig');
+    project = resolved.project;
+    dig = resolved.dig;
+  }
+  const result = await runSearch(c, { query, mode, ...(source ? { source } : {}), ...(project ? { project } : {}), ...(dig ? { dig } : {}), limit }, { signal: new AbortController().signal });
+  if (values.json === true) { console.log(JSON.stringify(result, null, 2)); return; }
+  console.log(`${result.hits.length} hit${result.hits.length === 1 ? '' : 's'} in ${result.coverage.searched_files} of ${result.coverage.eligible_files} files (${result.status}, ${result.mode_used}).`);
+  for (const warning of result.warnings) console.log(`Warning (${warning.code}): ${warning.message}`);
+  for (const hit of result.hits) {
+    console.log(`${hit.file} [${hit.kind}${hit.source ? `/${hit.source}` : ''}] (score ${hit.score.toFixed(3)}, offset ${hit.read.offset}, limit ${hit.read.limit})`);
+    if (hit.heading) console.log(`  ## ${hit.heading}`);
+    console.log(`  ${hit.excerpt.replace(/\s+/g, ' ').trim().slice(0, 240)}`);
+  }
+}
+
+type UsageResult = {
+  days: number; start: number; end: number; weekly: boolean; buckets: { start: number; results: number; empty: number; failed: number; total: number }[]; recorded: number;
+  totals: { results: number; empty: number; failed: number; total: number; reports: number; cost: { byUnit: Record<string, number>; unknownCalls: number; freeCalls: number } };
+  sources: { id: string; results: number; empty: number; failed: number; total: number; reports: number; cost: { byUnit: Record<string, number>; unknownCalls: number; freeCalls: number } }[];
+};
+type ToolHistoryRow = { tool: string; source: string | null; calls: number; failed: number; failureRate: number; medianMs: number | null; typicalCost: { amount: number; unit: string }[] | null; pricedCalls: number; unknownCalls: number; freeCalls: number; lastAt: string };
+
+async function statsCmd(args: string[]) {
+  const { values, positionals } = parseFlags(args, { days: { type: 'string' }, json: { type: 'boolean', default: false } });
+  if (positionals.length) throw new ArgError(`Unexpected argument: ${positionals[0]}`);
+  const days = intFlag('days', str(values.days), 0, 0, 36500);
+  const c = await loadConfig();
+  const data = await listing(c);
+  const now = Date.now();
+  const usage = usageOf(data, { days, now }) as UsageResult;
+  const allCalls = [...data.items.flatMap(item => item.calls), ...data.live];
+  const historyDays = days > 0 ? days : Math.max(1, Math.ceil(now / 86_400_000));
+  const tools = toolHistory(allCalls, { days: historyDays, now }) as ToolHistoryRow[];
+  if (values.json === true) {
+    console.log(JSON.stringify({ library: c.library, days, questions: data.items.length, usage, tools }, null, 2));
+    return;
+  }
+  const windowLabel = days > 0 ? `Last ${plural(days, 'day')}` : 'All time';
+  console.log(`Dig library stats (${windowLabel}) · ${c.library}`);
+  console.log(`Questions: ${data.items.length} · Reports: ${usage.totals.reports} · Calls: ${usage.totals.total} (${usage.totals.results} results, ${usage.totals.empty} empty, ${usage.totals.failed} failed)`);
+  const totalCost = costTotal(usage.totals.cost, usage.totals.total);
+  if (totalCost) console.log(`Cost: ${totalCost}`);
+  if (usage.sources.length) {
+    console.log('Sources:');
+    for (const s of usage.sources) {
+      const cost = s.total ? costShort(s.cost, s.total) : '';
+      console.log(`  ${s.id}: ${plural(s.total, 'call')} (${s.results} results, ${s.empty} empty, ${s.failed} failed), ${plural(s.reports, 'report')}${cost ? ` · ${cost}` : ''}`);
+    }
+  }
+  if (tools.length) {
+    console.log('Tools:');
+    for (const row of tools) {
+      const typical = row.typicalCost === null ? '' : row.typicalCost.length ? costAmounts({ byUnit: Object.fromEntries(row.typicalCost.map(e => [e.unit, e.amount])) }).join(' + ') : 'no charge';
+      const parts = [plural(row.calls, 'call') + (row.failed ? ` (${row.failed} failed)` : ''), ...(row.medianMs !== null ? [`median ${duration(row.medianMs)}`] : []), ...(typical ? [`typical ${typical}`] : [])];
+      console.log(`  ${row.tool}: ${parts.join(' · ')}`);
+    }
+  }
+}
+
+async function runCliCommand(name: string, fn: () => Promise<void>) {
+  try { await fn(); } catch (error) {
+    console.error(`dig ${name}: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = error instanceof ArgError ? 2 : 1;
+  }
+}
+
 const command = process.argv[2];
 if (command === 'serve') await serve();
 else if (command === 'mcp') await bridge();
 else if (command === 'status') await status();
 else if (command === 'open') await open();
 else if (command === 'stop') console.log((await stopService()) ? 'Dig stopped.' : 'Dig was not running.');
+else if (command === 'list') await runCliCommand('list', () => listCmd(process.argv.slice(3)));
+else if (command === 'read') await runCliCommand('read', () => readCmd(process.argv.slice(3)));
+else if (command === 'search') await runCliCommand('search', () => searchCmd(process.argv.slice(3)));
+else if (command === 'stats') await runCliCommand('stats', () => statsCmd(process.argv.slice(3)));
 else if (command === '--version' || command === 'version') console.log(VERSION);
-else { console.error(`Usage: ${digCommand()} serve | mcp | status | stop | open [--no-browser]`); process.exitCode = command ? 2 : 0; }
+else { console.error(`Usage: ${digCommand()} serve | mcp | status | stop | open [--no-browser] | list | read <file> | search <query> | stats | version`); process.exitCode = command ? 2 : 0; }

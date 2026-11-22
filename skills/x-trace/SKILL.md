@@ -81,10 +81,10 @@ Never fabricate a post, handle, quote, metric, date or URL. What you did not rea
 
 Grok is not part of the walk. Run at most one `xsearch` pass in a trace, and only for something X's API cannot do:
 
-- finding seeds by meaning, when the claim has no post yet and its wording cannot be guessed;
-- saying what a video in a load-bearing post shows.
+- finding seeds by meaning, when the claim has no post yet and its wording cannot be guessed (leave `media` off);
+- saying what a video in a load-bearing post shows (pass `media: true`).
 
-Run it without `depth`, so the user's `[x]` depth applies, and label it `passLabel: "pass-1"`. `xsearch` is slow: the call may answer with a job handle instead of the result; follow it with `job({ id })` and do not call the action again. A repeat of the same paid call returns the earlier result unless `fresh: true` is passed, which pays again. A post Grok cites is a lead until `x_post` has read it, and what Grok says media show is Grok's description: label it so. When a pass fails saying its stream was cut, read it once with `recoverResponseId` set to the response id it names; if xAI holds nothing under the id, the pass was dropped, and sending it again is a new pass.
+Grok media understanding is off by default to control cost; pass `media: true` only on an `xsearch` pass that inspects post video or images (`x_images` remains the free path for images; completed passes report `Posts fetched` / `Users fetched` when xAI returns them). Run it without `depth`, so the user's `[x]` depth applies, and label it `passLabel: "pass-1"`. `xsearch` is slow: the call may answer with a job handle instead of the result; follow it with `job({ id })` and do not call the action again. A repeat of the same paid call returns the earlier result unless `fresh: true` is passed, which pays again. A post Grok cites is a lead until `x_post` has read it, and what Grok says media show is Grok's description: label it so. When a pass fails saying its stream was cut, read it once with `recoverResponseId` set to the response id it names; if xAI holds nothing under the id, the pass was dropped, and sending it again is a new pass.
 
 For an image, X's API returns its link and, when the poster wrote one, its description. When what an image shows is load-bearing, look at it with `x_images`, passing the image link the post read printed. What you say it shows is your own reading: label it so in the report, and quote any text in the image exactly. If the pictures did not reach you (the result has no image you can see), say so and do not describe the image. The Grok pass is for seeds by meaning and for what a video shows, not for images.
 
@@ -131,7 +131,7 @@ source_card:
 Include all three audit sections even when empty:
 
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`, including handle, quote or claim, URL, and visible metrics;
-- `## Needs Follow-Up` with specific handles, threads, affiliations to confirm outside X, or source pivots, or `None.`;
+- `## Needs Follow-Up` with specific handles, threads, affiliations to confirm outside X, or **cross-source leads** with typed identifiers whenever a load-bearing post points off X (e.g., YouTube URL/video ID for `youtube`/`youtube-video`, arXiv ID or DOI for `papers`, GitHub `owner/repo` for `github`/`deepwiki`, Chinese lab/author handle or platform for `china-social`, Reddit/HN thread link, or advertiser/brand for ad libraries), or `None.`;
 - `## Negative Evidence (when relevant)` with the replies, quotes, searches and windows that turned up nothing, or `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of these audit sections.

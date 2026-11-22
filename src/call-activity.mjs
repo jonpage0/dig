@@ -6,6 +6,10 @@ export function createCallActivity() {
   let revision = 0;
   return {
     get revision() { return revision; },
+    get size() { return calls.size; },
+    all() {
+      return [...calls.values()].map(({ library: _, ...call }) => ({ ...call }));
+    },
     snapshot(library) {
       return [...calls.values()].filter(call => call.library === library).map(({ library: _, ...call }) => ({ ...call }));
     },

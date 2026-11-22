@@ -5,7 +5,7 @@
 import { resolve } from 'node:path';
 import type { CallToolResult, InputRequiredResult } from '@modelcontextprotocol/server';
 import { loadConfig } from '../config.mjs';
-import { assertDig, frontMatter, listLibrary, projectFolder, readLibraryFile, recordCall } from '../library.mjs';
+import { assertDig, frontMatter, listLibrary, projectFolder, readLibraryFile, recordCall, safeSegment, SESSION_UNAVAILABLE } from '../library.mjs';
 import { executeSource, type ToolOutcome } from '../providers/outcome.ts';
 import { knownSecrets, redactRecord, redactText, redactValue } from '../providers/secrets.ts';
 import { costSummary } from '../providers/library/cost.ts';
@@ -20,7 +20,7 @@ type Config = Awaited<ReturnType<typeof loadConfig>>;
 // The library is plain JavaScript whose inferred types are too loose or too narrow here; these say what it returns.
 type Priced = Parameters<typeof costSummary>[0][number];
 export type Receipt = Priced & { id: string; at: string; tool: string; source: string; status: string; dig?: string; raw?: string };
-export interface LibraryItem { id: string; project: string; title: string; displayTitle: string; snippet: string; answer: string | null; startedAt: string | null; finishedAt: string | null; sources: string[]; calls: Receipt[]; reportDetails: { file: string; source: string | null; method: string | null; summary: string; at: string | null }[] }
+export interface LibraryItem { id: string; project: string; title: string; displayTitle: string; snippet: string; status: string; answer: string | null; startedAt: string | null; finishedAt: string | null; sources: string[]; calls: Receipt[]; reportDetails: { file: string; source: string | null; method: string | null; summary: string; at: string | null }[] }
 export const listing = async (c: Config) => (await listLibrary(c)) as unknown as { items: LibraryItem[]; live: (Receipt & { projectFolder: string })[] };
 const record = recordCall as unknown as (c: Config, project: string, dig: string, receipt: Record<string, unknown>) => Promise<Receipt>;
 /** Executing provider calls, in this process only: what `dig status` reports as running and the views will show. */
@@ -54,8 +54,30 @@ export async function resolveHandle(c: Config, handle: unknown): Promise<Dig> {
 /** A dig:// resource URI for a library-relative file, read back through readLibraryFile. */
 export const libraryUri = (file: string) => `dig://library/${encodeURIComponent(file)}`;
 export const refused = (text: string): CallToolResult => ({ content: [{ type: 'text', text }], isError: true });
-// The receipts the library attributes to one dig, or null when the dig is not listed.
-const digCalls = async (c: Config, project: string, dig: string) => (await listing(c)).items.find(item => item.id === dig && item.project === resolve(project))?.calls ?? null;
+/**
+ * The receipts the library attributes to one dig, or null when the dig is not listed.
+ * When dig.md names the dig itself as its session (all Dig 1.0+ digs), reads only this dig's calls.jsonl directly
+ * instead of scanning the full library; falls back to listLibrary only for legacy digs or unreadable dig.md.
+ */
+export async function readDigCalls(c: Config, dig: Dig): Promise<Receipt[] | null> {
+  let session: unknown;
+  try {
+    const meta = (frontMatter as (text: string) => Record<string, unknown>)((await readLibraryFile(c, `${dig.folder}/digs/${dig.dig}/dig.md`, 0, Number.MAX_SAFE_INTEGER)).text);
+    session = meta.session;
+  } catch {
+    return (await listing(c)).items.find(item => item.id === dig.dig && item.project === dig.project)?.calls ?? null;
+  }
+  if (session !== dig.dig) return (await listing(c)).items.find(item => item.id === dig.dig && item.project === dig.project)?.calls ?? null;
+  try {
+    const text = (await readLibraryFile(c, `${dig.folder}/sessions/${safeSegment(dig.dig, SESSION_UNAVAILABLE)}/calls.jsonl`, 0, Number.MAX_SAFE_INTEGER)).text;
+    return text.trim().split('\n').filter(Boolean).flatMap(line => {
+      try { const receipt = JSON.parse(line) as Receipt; return receipt?.dig === dig.dig ? [receipt] : []; } catch { return []; }
+    });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException)?.code === 'ENOENT') return [];
+    throw e;
+  }
+}
 
 /** A call that passed the gate: everything run() needs, nothing sent yet. */
 export interface Prepared { c: Config; tool: SourceTool; action: string; spec: ToolSpec; args: Record<string, unknown>; dig: Dig }
@@ -109,7 +131,7 @@ export async function run({ c, tool, action, spec, args, dig }: Prepared, signal
     } catch (error) { retentionError = redactText(`Evidence receipt not saved: ${error instanceof Error ? error.message : String(error)}`, secrets); }
     // The dig's running cost, from every receipt the library attributes to it. Reading it never fails the call.
     let digCost: Ran['digCost'] = null;
-    try { const calls = await digCalls(c, dig.project, dig.dig); if (calls) digCost = { calls: calls.length, ...costSummary(calls) }; } catch {}
+    try { const calls = await readDigCalls(c, dig); if (calls) digCost = { calls: calls.length, ...costSummary(calls) }; } catch {}
     return { outcome, images: failed ? [] : images ?? [], call, retentionError, digCost };
   });
 }
@@ -124,7 +146,7 @@ export function result({ tool, action, dig }: Prepared, { outcome, images, call,
   const cost = costShort(costSummary([{ cost: details.cost, ...(details.knownCost ? { knownCost: details.knownCost } : {}) } as Parameters<typeof costSummary>[0][number]]), 1);
   const sofar = digCost ? costTotal(digCost, digCost.calls) : null;
   const head = [tool.module.label, action, outcome.status, call ? `receipt ${call.id}` : retentionError ?? 'no receipt saved', `cost: ${cost}`, ...(sofar ? [`dig so far: ${sofar}`] : [])].join(' · ');
-  const sessions = `${dig.folder}/sessions/${dig.dig}`;
+  const sessions = `${dig.folder}/sessions/${safeSegment(dig.dig, SESSION_UNAVAILABLE)}`;
   const links = call ? [
     { type: 'resource_link' as const, uri: libraryUri(`${sessions}/calls.jsonl`), name: 'calls.jsonl', title: `Receipts of dig ${dig.dig}`, description: `This call's receipt is ${call.id}.`, mimeType: 'application/jsonl' },
     ...(call.raw ? [{ type: 'resource_link' as const, uri: libraryUri(`${sessions}/${call.raw}`), name: call.raw.split('/').at(-1) ?? call.raw, title: `Original response of ${call.id}`, mimeType: 'application/json' }] : []),

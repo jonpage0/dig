@@ -67,7 +67,7 @@ source_card:
 Include `## Summary` (answer, scope, assumptions and limits), findings by advertiser or creative pattern, the filters/pages inspected, and these audit sections even when empty:
 
 - `## Evidence Highlights`: Finding | Evidence | Confidence | Useful For, carrying advertiser identity, exact ad URL, creative quotation and returned dates or metrics.
-- `## Needs Follow-Up`: specific advertiser IDs, ad URLs or unanswered questions, or `None.`
+- `## Needs Follow-Up`: specific advertiser IDs, ad URLs, unanswered questions, or cross-source leads a load-bearing finding points to with typed identifiers (destination URL, advertiser/brand, YouTube URL/video ID, X post URL, Reddit/HN thread), or `None.`
 - `## Negative Evidence (when relevant)`: exact empty searches and filters, unavailable fields and coverage limits, or `None.`
 
 Save with `research_save`: `source: "linkedin-ads"`, `agent: "linkedin-ads"`, the `dig` handle and full Markdown `content`. Optional `topic` is lowercase hyphenated, at most 50 characters; `topic_volatility` is `live`, `fast`, `medium`, `slow` or `reference`. The save writes front matter; do not add it yourself. Use `supersedes` only for deliberate same-dig correction. A save error is not a reason to repeat paid retrieval.

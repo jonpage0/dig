@@ -8,6 +8,7 @@ import { Client as LegacyClient } from '@modelcontextprotocol/sdk/client/index.j
 import { StreamableHTTPClientTransport as LegacyHTTP } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { VERSION } from '../../src/version.mjs';
 import { MODULES } from '../../src/providers/modules.ts';
+import { clientHost } from '../../src/service/views.ts';
 import { report } from '../report-fixture.mjs';
 import { DIG, cleanup, connectModern, run, startService, text, workspace } from './helpers.mjs';
 
@@ -138,6 +139,27 @@ test('a client that names itself as Codex gets the views without declaring the e
     for (const name of [...OPENERS, ...APP_ONLY]) assert.ok(names.includes(name), name);
     assert.equal(typeof tools.find(tool => tool.name === 'open_library')._meta?.ui?.resourceUri, 'string');
     await fetch(space.url, { method: 'DELETE', headers: sessioned });
+  } finally { await cleanup(space); }
+});
+
+test('clientHost recognizes Antigravity without mislabeling Gemini CLI or unrelated substrings, and an Antigravity client without UI capability gets no views', async () => {
+  assert.equal(clientHost('antigravity'), 'antigravity');
+  assert.equal(clientHost('agy-cli'), 'antigravity');
+  assert.equal(clientHost('gemini-cli'), 'any');
+  assert.equal(clientHost('pedagogy'), 'any');
+  assert.equal(clientHost('claude-code'), 'claude-code');
+  assert.equal(clientHost('codex-mcp-client'), 'codex');
+
+  const space = await workspace('views-agy-none', { config: CONFIG });
+  try {
+    const service = await startService(space);
+    const client = new LegacyClient({ name: 'antigravity', version: '2.0.0' }, {});
+    await client.connect(new LegacyHTTP(space.url, { requestInit: { headers: { authorization: `Bearer ${service.token}` } } }));
+    const tools = (await client.listTools()).tools;
+    const names = tools.map(tool => tool.name);
+    for (const name of ['open_trail', ...APP_ONLY]) assert.ok(!names.includes(name), name);
+    assert.equal(tools.find(tool => tool.name === 'open_library')?._meta, undefined);
+    await client.close();
   } finally { await cleanup(space); }
 });
 

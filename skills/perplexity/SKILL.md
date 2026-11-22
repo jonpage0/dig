@@ -88,7 +88,7 @@ source_card:
 Do not fabricate `report_path`; the save result supplies the canonical path. Include these sections even when empty:
 
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For` and source title, date, URL, or quote;
-- `## Needs Follow-Up` with a concrete source or query, or `None.`;
+- `## Needs Follow-Up` with a concrete source or query—plus any cross-source lead a load-bearing finding points to, with its typed identifier (YouTube URL/video ID, arXiv/DOI, GitHub `owner/repo`, X post URL, CJK handle/platform, Reddit/HN thread, advertiser/brand)—or `None.`;
 - `## Negative Evidence (when relevant)` with searched angles that produced no useful signal, or `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of these audit sections.

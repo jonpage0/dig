@@ -83,7 +83,7 @@ source_card:
 Include all three audit sections even when empty:
 
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`, naming URL, artifact kind, date, and exact visible field or quote;
-- `## Needs Follow-Up` with a public profile, company, or post URL, or `None.`;
+- `## Needs Follow-Up` with a public profile, company, or post URL—plus any cross-source lead a load-bearing finding points to, with its typed identifier (YouTube URL/video ID, arXiv/DOI, GitHub `owner/repo`, X post URL, Reddit/HN thread, advertiser/brand)—or `None.`;
 - `## Negative Evidence (when relevant)` with missing fields, stale cadence, redaction, or unavailable public artifacts, or `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of these audit sections.

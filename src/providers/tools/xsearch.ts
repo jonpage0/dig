@@ -248,7 +248,7 @@ function numberedCitations(text: string): string[] {
   return proseOf(Lexer.lex(text)).flatMap((prose) => prose.match(marker) ?? [])
 }
 
-type XSearchDepth = "quick" | "standard" | "max" | "ultra"
+export type XSearchDepth = "quick" | "standard" | "max" | "ultra"
 type ReasoningEffort = "low" | "medium" | "high"
 
 function reasoningEffortForDepth(depth: XSearchDepth): ReasoningEffort {
@@ -565,8 +565,11 @@ export const search = metered({
     }
     if (args.fromDate) xSearchTool.from_date = args.fromDate
     if (args.toDate) xSearchTool.to_date = args.toDate
-    xSearchTool.enable_image_understanding = true
-    xSearchTool.enable_video_understanding = true
+    const mediaEnabled = args.media === true
+    if (mediaEnabled) {
+      xSearchTool.enable_image_understanding = true
+      xSearchTool.enable_video_understanding = true
+    }
 
     const tools: ToolConfig[] = [xSearchTool]
 
@@ -593,7 +596,7 @@ export const search = metered({
     }
     input.push({ role: "user", content: queryWithContext })
 
-    const depth = args.depth ?? xConfig.depth
+    const depth: XSearchDepth = args.depth ?? xConfig.depth
     const selectedModel = xConfig.model
     const requestBody: ResponsesRequest = {
       model: selectedModel,
@@ -612,35 +615,24 @@ export const search = metered({
     try {
       let response = await callResponsesApi(apiKey, requestBody, context.abort, keep)
 
-      if (!response.ok) {
+      for (let retries = 0; !response.ok && retries < 2; retries += 1) {
         const errorText = await keptText(response, keep, RAW_LABEL)
-        if (shouldRetryWithoutStorage(response.status, errorText)) {
+        if (shouldRetryWithoutStorage(response.status, errorText) && requestBody.store !== false) {
           if (requestBody.previous_response_id) {
             return fail(`${parseError(response.status, errorText)} (status ${response.status}). The chained request was not retried without its previous response context. To continue, start an explicit new pass with the full question and relevant prior evidence.`)
           }
-          const retryBody: ResponsesRequest = {
-            ...requestBody,
-            store: false,
-          }
-          response = await callResponsesApi(apiKey, retryBody, context.abort, keep)
-          if (response.ok) {
-            requestBody.store = false
-          } else {
-            const retryErrorText = await keptText(response, keep, RAW_LABEL)
-            return fail(`${parseError(response.status, retryErrorText)} (status ${response.status})`)
-          }
+          requestBody.store = false
         } else if (shouldRetryWithoutReasoning(response.status, errorText, requestBody.reasoning != null)) {
-          const retryBody: ResponsesRequest = { ...requestBody, reasoning: undefined }
-          response = await callResponsesApi(apiKey, retryBody, context.abort, keep)
-          if (response.ok) {
-            requestBody.reasoning = undefined
-          } else {
-            const retryErrorText = await keptText(response, keep, RAW_LABEL)
-            return fail(`${parseError(response.status, retryErrorText)} (status ${response.status})`)
-          }
+          requestBody.reasoning = undefined
         } else {
           return fail(`${parseError(response.status, errorText)} (status ${response.status})`)
         }
+        response = await callResponsesApi(apiKey, requestBody, context.abort, keep)
+      }
+
+      if (!response.ok) {
+        const errorText = await keptText(response, keep, RAW_LABEL)
+        return fail(`${parseError(response.status, errorText)} (status ${response.status})`)
       }
 
       // A response sent without storage cannot be read back, so its cut stream is not looked for.
@@ -671,6 +663,7 @@ export const search = metered({
       result += `- Depth: ${depth}${requestBody.reasoning ? ` (requested effort: ${requestBody.reasoning.effort})` : " (effort not sent; provider default applies)"}\n`
       result += "- Billing: every pass is paid, and a deeper pass costs more; the receipt records the charge xAI reported.\n"
       result += `- Tools: ${activeTools}\n`
+      result += `- Media understanding: ${mediaEnabled ? "enabled" : "off"}\n`
       result += `- Store: ${requestBody.store === false ? "false" : "true"}\n`
       result += `- Handles: ${handleList}\n`
       result += `- Excluded Handles: ${excludeList}\n`
@@ -684,6 +677,7 @@ export const search = metered({
       result += "\n---\n"
       result += `**response_id:** ${data.id}\n`
       const usdTotal = passUsd()
+      const serverSideToolUsage = getServerSideToolUsage(data)
       if (data.usage) {
         const costStr = usdTotal != null
           ? ` | $${usdTotal.toFixed(4)}${attempts > 1 ? ` over ${attempts} attempts` : ""}`
@@ -703,13 +697,24 @@ export const search = metered({
           result += `\n*${[sourceStr, toolStr].filter(Boolean).join(" | ")}*`
         }
       }
+      if (serverSideToolUsage && (serverSideToolUsage.x_posts_fetched != null || serverSideToolUsage.x_users_fetched != null)) {
+        const postsStr = serverSideToolUsage.x_posts_fetched != null
+          ? `Posts fetched: ${serverSideToolUsage.x_posts_fetched.toLocaleString()}`
+          : ""
+        const usersStr = serverSideToolUsage.x_users_fetched != null
+          ? `Users fetched: ${serverSideToolUsage.x_users_fetched.toLocaleString()}`
+          : ""
+        result += `\n*${[postsStr, usersStr].filter(Boolean).join(" | ")}*`
+      }
       if (usdTotal == null) {
         result += "\n*Provider cost unavailable; do not estimate it from the number of cited posts or tool calls.*"
       }
-      const serverSideToolUsage = getServerSideToolUsage(data)
-      if (serverSideToolUsage && Object.keys(serverSideToolUsage).length > 0) {
+      const otherServerSideTools = serverSideToolUsage
+        ? Object.entries(serverSideToolUsage).filter(([tool]) => tool !== "x_posts_fetched" && tool !== "x_users_fetched")
+        : []
+      if (otherServerSideTools.length > 0) {
         result += "\n\n**Server-side tool usage:**\n"
-        for (const [tool, count] of Object.entries(serverSideToolUsage)) {
+        for (const [tool, count] of otherServerSideTools) {
           result += `- ${tool}: ${count}\n`
         }
       }

@@ -10,7 +10,7 @@ Dig runs one service per computer, listening on `127.0.0.1` only (port 47811, or
 - **No web page can call it.** A request must name the service's own address (`127.0.0.1` or `localhost` with its port) as its host, and a request that carries an `Origin` is refused unless it comes from the service itself.
 - **The key page** (`/keys/<code>`) needs no token: the code in its address is random, works for one submission and expires after 10 minutes. Its form posts only to itself, shows no key's value, runs no script and loads nothing from elsewhere.
 - **The views in a browser** need a session, which a one-time address gives: it works once, within 5 minutes. `dig open` asks the service for one with the token. `open_library`, called by a client that shows no views, makes one and asks the client to open it for you, or gives it in its result; so any client connected to Dig can get one, and the session gives nothing that client cannot already do with Dig's tools. Opening the address gives that browser a session cookie for 24 hours (or until the service restarts). The views' pages and the requests they make work only with that cookie and only from the service's own address, and they can call only the tools the views use, never a source.
-- **`/health`** answers anyone on the computer with the service's name, version and process id, and nothing else.
+- **`/health`** answers anyone on the computer with the service's name, version, build fingerprint and process id, and nothing else.
 
 ## Your host's permissions
 

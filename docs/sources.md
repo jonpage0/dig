@@ -83,7 +83,7 @@ The `youtube` method researches discovery and transcripts; the `youtube-video` m
 
 ## X
 
-X has two ways in. `XAI_API_KEY` lets Grok search X (`xsearch`) and interpret what it finds. `X_BEARER_TOKEN` reads X's own API: posts by link with their thread, replies, quotes and reposters (`x_post`); recent and full-archive search back to March 2006 (`x_search_posts`) and post counts (`x_count_posts`, a full-archive count needs a start time); accounts with their posts and mentions (`x_users`); who an account follows and who follows it (`x_follows`, one page per call); X News (`x_news`); trends, Spaces, Communities and Lists (`x_explore`, `x_community`). To get the token:
+X has two ways in. `XAI_API_KEY` lets Grok search X (`xsearch`) and interpret what it finds. Grok image and video understanding are off by default on `xsearch` to control cost (pass `media: true` when a pass needs Grok to watch video or inspect images; `x_images` stays the free path for images), and completed passes report `Posts fetched` and `Users fetched` when xAI returns them. `X_BEARER_TOKEN` reads X's own API: posts by link with their thread, replies, quotes and reposters (`x_post`); recent and full-archive search back to March 2006 (`x_search_posts`) and post counts (`x_count_posts`, a full-archive count needs a start time); accounts with their posts and mentions (`x_users`); who an account follows and who follows it (`x_follows`, one page per call); X News (`x_news`); trends, Spaces, Communities and Lists (`x_explore`, `x_community`). To get the token:
 
 1. Create a pay-per-use developer account at [console.x.com](https://console.x.com) and add credits.
 2. Set a spending limit there, because X does not report what each call costs.

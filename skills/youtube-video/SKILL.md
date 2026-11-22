@@ -88,7 +88,7 @@ Include these sections:
 - `## Video Evidence`: `Video | Interval or timestamp | Visible observation | Speech claim | Inference | Confidence`. Keep a claim's source and timestamp together; mark missing evidence as unavailable.
 - `## Analysis Method`: provider model and mode, inputs and clip bounds, sampling/resolution when supplied, any grounding, continuation identifiers, supporting Glimpse calls, and why an additional model or pass was needed.
 - `## Evidence Highlights`: `Finding | Evidence | Confidence | Useful For`, with the original video URL, precise claim, call ID and retained original or transcript reference.
-- `## Needs Follow-Up`: exact outstanding questions, clips, transcript checks or unfinished operations, or `None.`.
+- `## Needs Follow-Up`: exact outstanding questions, clips, transcript checks, unfinished operations, or cross-source leads a load-bearing finding points to with typed identifiers (arXiv/DOI, GitHub `owner/repo`, X post URL, CJK handle/platform, Reddit/HN thread, advertiser/brand), or `None.`.
 - `## Negative Evidence (when relevant)`: distinguish completed analysis with no relevant observation from coverage gaps, access failures and incomplete jobs, or write `None.`.
 
 Call `research_save` with the `dig` handle, `source: "youtube"`, `agent: "youtube-video"` and the complete Markdown as `content`. Optional `topic` is lowercase and hyphenated, at most 50 characters; use `topic_volatility` when known. Do not write YAML front matter yourself or create a separate summary file. The save is write-once; use `supersedes` only for a deliberate correction in the same dig, and fix save-argument errors without repeating provider calls.

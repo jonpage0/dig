@@ -70,3 +70,26 @@ test('[spend] holds an optional per-dig ceiling in US dollars; 0 removes it and 
   assert.deepEqual([fields.schema.properties.spend_dig_ceiling_usd.type, fields.schema.properties.spend_dig_ceiling_usd.minimum], ['number', 0]);
   assert.deepEqual(fields.layout.find(group => group.title === 'Library').items.map(item => item.property), ['library', 'keep_raw', 'spend_dig_ceiling_usd', 'search_semantic']);
 });
+
+test('concurrent updateConfig calls are serialized without clobbering each other', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-config-concurrent-')); t.after(() => rm(state, { recursive: true, force: true }));
+  await initializeConfig(state);
+  await Promise.all([
+    updateConfig({ keep_raw: false }, state),
+    updateConfig({ search_semantic: true }, state),
+  ]);
+  const loaded = await loadConfig(state);
+  assert.equal(loaded.keep_raw, false);
+  assert.equal(loaded.search.semantic, true);
+  // A rejected update in the queue does not block subsequent valid updates.
+  const [bad, good] = await Promise.allSettled([
+    updateConfig({ x_depth: 'invalid' }, state),
+    updateConfig({ hackernews_enabled: false }, state),
+  ]);
+  assert.equal(bad.status, 'rejected');
+  assert.equal(good.status, 'fulfilled');
+  const after = await loadConfig(state);
+  assert.deepEqual(after.sources.enabled, []);
+  assert.equal(after.keep_raw, false);
+  assert.equal(after.search.semantic, true);
+});

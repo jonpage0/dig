@@ -133,7 +133,7 @@ source_card:
 Include all three audit sections even when empty:
 
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`, each row naming the repository, the tool and window or the file path and commit SHA it came from;
-- `## Needs Follow-Up` with a repository, file, package registry, or comparison that needs a direct check, or `None.`;
+- `## Needs Follow-Up` with a repository, file, package registry, or comparison that needs a direct check—plus any cross-source lead a load-bearing finding points to, with its typed identifier (arXiv/DOI, YouTube URL/video ID, X post URL, CJK handle/platform, Reddit/HN thread)—or `None.`;
 - `## Negative Evidence (when relevant)` with query formulations that completed and returned nothing on target, lanes that could not be filled, and — labelled as coverage gaps — rate-limited or unavailable sections, anonymous-mode gaps, and capped or partial sections; a coverage gap records what was not examined and is never proof that a repository, activity, or review does not exist. Otherwise `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of these audit sections.

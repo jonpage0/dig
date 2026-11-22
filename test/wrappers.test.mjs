@@ -19,12 +19,13 @@ test('plugins/ holds exactly the generated wrappers, byte for byte, and nothing 
   for (const [path, contents] of generated) assert.ok(Buffer.from(contents).equals(await readFile(path)), `${path} differs from what the build generates`);
 });
 
-test('every method has its ChatGPT copy and generated host file; the Claude wrapper carries no methods', async () => {
+test('every method has its ChatGPT and Antigravity copies and generated host file; the Claude wrapper carries no methods', async () => {
   const generated = await wrapperFiles();
   const methods = (await readdir('skills', { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name);
   assert.ok(methods.length >= 30);
   for (const name of methods) {
     assert.equal(String(generated.get(`plugins/chatgpt/skills/${name}/SKILL.md`)), await readFile(`skills/${name}/SKILL.md`, 'utf8'), name);
+    assert.ok(generated.has(`plugins/antigravity/skills/${name}/SKILL.md`), `antigravity ${name}`);
     const yaml = String(generated.get(`plugins/chatgpt/skills/${name}/agents/openai.yaml`));
     assert.match(yaml, /^interface:\n  display_name: "Dig(?: · [^"]+)?"\n  short_description: "[^"]{1,90}"\n  icon_small: "\.\.\/\.\.\/assets\/skills\/([a-z0-9-]+)\.svg"\n  icon_large: "\.\.\/\.\.\/assets\/skills\/\1\.svg"\n  brand_color: "#2d68aa"\n  default_prompt: "[^"]+"\n/, name);
     const icon = /icon_small: "\.\.\/\.\.\/(assets\/skills\/[a-z0-9-]+\.svg)"/.exec(yaml)[1];
@@ -34,6 +35,10 @@ test('every method has its ChatGPT copy and generated host file; the Claude wrap
   assert.match(String(generated.get('plugins/chatgpt/skills/hackernews/agents/openai.yaml')), /allow_implicit_invocation: false/);
   assert.doesNotMatch(String(generated.get('plugins/chatgpt/skills/dig/agents/openai.yaml')), /policy:/);
   assert.match(String(generated.get('plugins/chatgpt/skills/hackernews/agents/openai.yaml')), /display_name: "Dig · Hacker News"/);
+  assert.match(String(generated.get('plugins/antigravity/skills/hackernews/SKILL.md')), /^---\n[\s\S]*\ndisable-model-invocation: true\n---\n/);
+  for (const implicit of ['dig', 'library', 'setup', 'video-analyze', 'evidence-rank']) {
+    assert.doesNotMatch(String(generated.get(`plugins/antigravity/skills/${implicit}/SKILL.md`)), /disable-model-invocation/, implicit);
+  }
   assert.deepEqual([...generated.keys()].filter(path => path.startsWith('plugins/claude/')), ['plugins/claude/.claude-plugin/plugin.json']);
 });
 
@@ -45,6 +50,16 @@ test('each pointer launches dig mcp from this checkout\'s dist/dig.mjs, with no 
   assert.deepEqual(codex.env_vars, ['DIG_STATE_DIR', 'DIG_PORT']);
   const claude = JSON.parse(generated.get('plugins/claude/.claude-plugin/plugin.json'));
   assert.deepEqual(claude.mcpServers, { dig: { command: 'node', args: [DIG, 'mcp'] } });
+  const agyManifest = JSON.parse(generated.get('plugins/antigravity/plugin.json'));
+  assert.equal(agyManifest.$schema, 'https://antigravity.google/schemas/v1/plugin.json');
+  assert.equal(agyManifest.name, 'dig');
+  assert.equal(agyManifest.displayName, 'Dig');
+  assert.equal(agyManifest.logo, 'assets/logo.png');
+  assert.ok(generated.has(`plugins/antigravity/${agyManifest.logo}`));
+  assert.ok(Array.isArray(agyManifest.suggestedPrompts) && agyManifest.suggestedPrompts.length > 0);
+  const agyMcp = JSON.parse(generated.get('plugins/antigravity/mcp_config.json')).mcpServers.dig;
+  assert.deepEqual([agyMcp.command, ...agyMcp.args], ['node', DIG, 'mcp']);
+  assert.equal(agyMcp.timeoutSeconds, 600);
   const manifest = JSON.parse(generated.get('plugins/chatgpt/.codex-plugin/plugin.json'));
   assert.equal(manifest.skills, './skills/'); assert.equal(manifest.mcpServers, './.mcp.json');
   assert.equal(manifest.extensions['com.openai'].onboardingSkill, './skills/setup/SKILL.md');

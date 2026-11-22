@@ -53,7 +53,7 @@ export function declaresUi(capabilities: ClientCapabilities | null | undefined) 
   return !!ui && (!Array.isArray(ui.mimeTypes) || ui.mimeTypes.includes(RESOURCE_MIME_TYPE));
 }
 /** The host a client names itself as, for the views' wording; `any` when Dig does not know it, as in a browser. */
-export const clientHost = (name: unknown) => typeof name !== 'string' ? 'any' : /claude/i.test(name) ? 'claude-code' : /codex|openai|chatgpt/i.test(name) ? 'codex' : 'any';
+export const clientHost = (name: unknown) => typeof name !== 'string' ? 'any' : /claude/i.test(name) ? 'claude-code' : /antigravity|\bagy\b/i.test(name) ? 'antigravity' : /codex|openai|chatgpt/i.test(name) ? 'codex' : 'any';
 
 /** What a view tool needs from where it runs: the wording host, the service's address (the key page) and the settings hook. */
 export interface ViewContext { host: string; origin: string; settingsChanged(c: Config): void }

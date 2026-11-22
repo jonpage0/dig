@@ -75,7 +75,7 @@ source_card:
 Include these sections even when empty:
 
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`, citing the DeepWiki section or question and repository;
-- `## Needs Follow-Up` with a specific file, module, or API for direct inspection, or `None.`;
+- `## Needs Follow-Up` with a specific file, module, or API for direct inspection—plus any cross-source lead a load-bearing finding points to, with its typed identifier (GitHub `owner/repo`, arXiv/DOI, YouTube URL/video ID, X post URL, Reddit/HN thread)—or `None.`;
 - `## Negative Evidence (when relevant)` with absent sections or details, or `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of these audit sections.

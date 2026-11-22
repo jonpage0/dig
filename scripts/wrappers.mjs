@@ -1,8 +1,10 @@
 // The host wrappers: thin plugins that launch `dig mcp` from this checkout, generated from the sources and never
 // edited by hand. plugins/chatgpt is a ChatGPT/Codex plugin (manifest, pointer, a copy of skills/ with each method's
 // agents/openai.yaml, and the icons those name), since ChatGPT does not yet read methods from a local server;
-// plugins/claude is a Claude Code plugin with the pointer only, since Claude Code shows the service's prompts. Each
-// host's marketplace file sits at plugins/. The pointer holds this checkout's absolute path, so plugins/ is not tracked.
+// plugins/claude is a Claude Code plugin with the pointer only, since Claude Code shows the service's prompts;
+// plugins/antigravity is an Antigravity plugin (plugin.json, mcp_config.json, logo, and a copy of skills/ with
+// disable-model-invocation on source methods). Claude and Codex marketplace files sit at plugins/. The pointer holds
+// this checkout's absolute path, so plugins/ is not tracked.
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +34,20 @@ const CODEX = {
   extensions: { 'com.openai': { onboardingSkill: './skills/setup/SKILL.md' } },
 };
 const CLAUDE = { ...MANIFEST, keywords: ['research', 'evidence', 'mcp'] };
+const ANTIGRAVITY = {
+  $schema: 'https://antigravity.google/schemas/v1/plugin.json',
+  name: 'dig',
+  displayName: 'Dig',
+  description: DESCRIPTION,
+  version: VERSION,
+  logo: 'assets/logo.png',
+  suggestedPrompts: PROMPTS,
+  author: AUTHOR,
+  homepage: REPOSITORY,
+  repository: REPOSITORY,
+  license: 'MIT',
+  keywords: ['research', 'evidence', 'mcp'],
+};
 // The three methods every installation has take their glyph here; a source's methods take theirs from the glyph table.
 const OWN_GLYPHS = { dig: 'shovel', library: 'library-big', setup: 'sliders-horizontal' };
 
@@ -51,6 +67,13 @@ const owner = new Map(MODULES.flatMap(m => [...(m.skills ?? (m.kind === 'tool' ?
 const label = name => { const m = owner.get(name); if (!m) return name === 'dig' ? null : name[0].toUpperCase() + name.slice(1); return name === m.id || name === m.helperSkill ? m.label : `${m.label} ${name.startsWith(`${m.id}-`) ? name.slice(m.id.length + 1).replaceAll('-', ' ') : name.replaceAll('-', ' ')}`; };
 const glyph = name => OWN_GLYPHS[name] ?? glyphFor(owner.get(name)?.id, name);
 
+const isImplicit = name => { const m = owner.get(name); return !m || m.kind === 'tool'; };
+function antigravitySkill(name, text) {
+  if (isImplicit(name)) return text;
+  if (!/^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.test(text)) throw new Error(`skills/${name}/SKILL.md has no YAML frontmatter`);
+  return text.replace(/^(---\r?\n[\s\S]*?)(\r?\n)(---[ \t]*(?:\r?\n|$))/, '$1$2disable-model-invocation: true$2$3');
+}
+
 /**
  * agents/openai.yaml for one method: its display name, short description and icon, generated from the method and the
  * glyph table. A source's methods are reached through the dig method's routing or by name, never implicitly; the
@@ -60,7 +83,7 @@ function openaiYaml(name, description, prompts) {
   const m = owner.get(name); const icon = `../../assets/skills/${glyph(name)}.svg`;
   const short = m && name === m.id ? m.description : shorten(description);
   const prompt = { dig: prompts[0], library: prompts[1], setup: prompts[2] }[name] ?? `Use $dig:${name} for this question.`;
-  const implicit = !m || m.kind === 'tool';
+  const implicit = isImplicit(name);
   return ['interface:', `  display_name: ${JSON.stringify(label(name) ? `Dig · ${label(name)}` : 'Dig')}`, `  short_description: ${JSON.stringify(short)}`, `  icon_small: ${JSON.stringify(icon)}`, `  icon_large: ${JSON.stringify(icon)}`, `  brand_color: ${JSON.stringify(BRAND)}`, `  default_prompt: ${JSON.stringify(prompt)}`,
     ...(implicit ? [] : ['policy:', `  # Reached through the dig method's source_info routing or an explicit $dig:${name} mention.`, '  allow_implicit_invocation: false']), ''].join('\n');
 }
@@ -77,6 +100,11 @@ export async function wrapperFiles() {
   // Claude Code: the manifest with its pointer; the methods come from the service as prompts.
   out.set('plugins/claude/.claude-plugin/plugin.json', json({ name: 'dig', version: VERSION, ...CLAUDE, mcpServers: { dig: launch } }));
 
+  // Antigravity: the manifest, mcp_config.json, logo and methods with disable-model-invocation on source methods.
+  out.set('plugins/antigravity/plugin.json', json(ANTIGRAVITY));
+  out.set('plugins/antigravity/mcp_config.json', json({ mcpServers: { dig: { ...launch, timeoutSeconds: 600 } } }));
+  out.set('plugins/antigravity/assets/logo.png', await readFile(at('assets/logo.png')));
+
   // ChatGPT and Codex: the manifest, the pointer, the methods with their host files, and the images they name.
   out.set('plugins/chatgpt/.codex-plugin/plugin.json', json({ name: 'dig', version: VERSION, ...CODEX }));
   // The service reads keys.env itself, so no credential is passed through; only where the service lives.
@@ -84,7 +112,12 @@ export async function wrapperFiles() {
   for (const image of ['logo.png', 'logo-dark.png', 'icon.png']) out.set(`plugins/chatgpt/assets/${image}`, await readFile(at(`assets/${image}`)));
   const glyphs = new Set();
   for (const dir of (await readdir(at('skills'), { withFileTypes: true })).filter(d => d.isDirectory()).map(d => d.name).sort()) {
-    for (const file of await files(at(`skills/${dir}`))) out.set(`plugins/chatgpt/skills/${relative(at('skills'), file)}`, await readFile(file));
+    for (const file of await files(at(`skills/${dir}`))) {
+      const rel = relative(at('skills'), file);
+      const bytes = await readFile(file);
+      out.set(`plugins/chatgpt/skills/${rel}`, bytes);
+      out.set(`plugins/antigravity/skills/${rel}`, rel === `${dir}/SKILL.md` ? antigravitySkill(dir, bytes.toString('utf8')) : bytes);
+    }
     const { name, description } = frontMatter(await readFile(at(`skills/${dir}/SKILL.md`), 'utf8'));
     if (name !== dir || !description) throw new Error(`skills/${dir}/SKILL.md needs name ${dir} and a description`);
     out.set(`plugins/chatgpt/skills/${dir}/agents/openai.yaml`, openaiYaml(dir, description, PROMPTS));

@@ -89,7 +89,7 @@ source_card:
 Include all three audit sections even when empty:
 
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`, including ad id, advertiser or brand, industry, country, period, and the returned metric or date;
-- `## Needs Follow-Up` with an advertiser, industry, ad id, or market, or `None.`;
+- `## Needs Follow-Up` with an advertiser, industry, ad id, or market—plus any cross-source lead a load-bearing finding points to, with its typed identifier (destination URL, advertiser/brand, YouTube URL/video ID, X post URL, Reddit/HN thread)—or `None.`;
 - `## Negative Evidence (when relevant)` with the searches and filters that returned nothing and any advertiser that did not resolve to an entity, or `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of these audit sections.

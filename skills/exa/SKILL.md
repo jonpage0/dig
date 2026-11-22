@@ -117,7 +117,7 @@ source_card:
 Include all three audit sections, even when empty:
 
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`; evidence names the URL, passage or highlight, date, and extraction quality;
-- `## Needs Follow-Up` with a concrete URL, domain, query, or `None.`;
+- `## Needs Follow-Up` with a concrete URL, domain, or query—plus any cross-source lead a load-bearing finding points to, with its typed identifier (YouTube URL/video ID, arXiv/DOI, GitHub `owner/repo`, X post URL, CJK handle/platform, Reddit/HN thread, advertiser/brand)—or `None.`;
 - `## Negative Evidence (when relevant)` with concrete searches or `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of these audit sections.

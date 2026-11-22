@@ -131,7 +131,7 @@ The following sections are mandatory even when empty:
 - `## Metrics Table` with `Metric | Value | Market / Language / Device | Endpoint | Estimate or Observation`;
 - `## Method and Cost` with endpoint paths, modes, shaping parameters, call ids, per-call and total returned cost, and UTC retrieval time;
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`;
-- `## Needs Follow-Up` with an exact target or `None.`;
+- `## Needs Follow-Up` with an exact target—including any cross-source lead a load-bearing finding points to, with its typed identifier (page URL, advertiser/brand, YouTube URL/video ID, GitHub `owner/repo`, X post URL, Reddit/HN thread)—or `None.`;
 - `## Negative Evidence (when relevant)` with empty results, task errors, and code meanings, or `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of the three audit sections.

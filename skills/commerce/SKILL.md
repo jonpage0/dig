@@ -87,7 +87,7 @@ source_card:
 Include all three audit sections even when empty:
 
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`, tied to an ASIN, seller id, or URL and identified as current observation, dated history observation, review sample, or estimate;
-- `## Needs Follow-Up` with an ASIN, product, search, or retailer gap, or `None.`;
+- `## Needs Follow-Up` with an ASIN, product, search, or retailer gap—plus any cross-source lead a load-bearing finding points to, with its typed identifier (YouTube URL/video ID, X post URL, Reddit/HN thread, CJK handle/platform, advertiser/brand)—or `None.`;
 - `## Negative Evidence (when relevant)` with noisy candidates or missing series, or `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of these audit sections.

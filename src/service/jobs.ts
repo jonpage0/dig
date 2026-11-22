@@ -11,7 +11,7 @@ import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promise
 import { join } from 'node:path';
 import { MissingRequiredClientCapabilityError, ProtocolError, type CallToolResult } from '@modelcontextprotocol/server';
 import { loadConfig, stateDirectory } from '../config.mjs';
-import { projectFolder, readLibraryFile, recordCall, withoutSecrets } from '../library.mjs';
+import { projectFolder, readLibraryFile, recordCall, safeSegment, SESSION_UNAVAILABLE, withoutSecrets } from '../library.mjs';
 import { MODULES } from '../providers/modules.ts';
 
 type Config = Awaited<ReturnType<typeof loadConfig>>;
@@ -155,7 +155,7 @@ export class JobStore {
    */
   async #written(c: Config, job: Job, digId: string): Promise<{ id: string } | undefined> {
     let text: string;
-    try { text = (await readLibraryFile(c, `${projectFolder(job.project)}/sessions/${digId}/calls.jsonl`, 0, Number.MAX_SAFE_INTEGER)).text; } catch { return undefined; }
+    try { text = (await readLibraryFile(c, `${projectFolder(job.project)}/sessions/${safeSegment(digId, SESSION_UNAVAILABLE)}/calls.jsonl`, 0, Number.MAX_SAFE_INTEGER)).text; } catch { return undefined; }
     const args = JSON.stringify(canonical(withoutSecrets(job.args, job.declared)));
     const from = Date.parse(job.createdAt);
     const until = Math.min(...[...this.#jobs.values()].filter(other => other !== job && other.dig === job.dig && other.tool === job.tool && other.argsHash === job.argsHash && Date.parse(other.createdAt) > from).map(other => Date.parse(other.createdAt)));

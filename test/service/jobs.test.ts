@@ -10,8 +10,10 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { argsHash, JobStore, STOPPED, type Job } from '../../src/service/jobs.ts';
+import { readDigCalls, result as formatResult } from '../../src/service/calls.ts';
+import { SOURCE_TOOLS } from '../../src/service/surface.ts';
 import { loadConfig } from '../../src/config.mjs';
-import { projectFolder, recordCall, startDig } from '../../src/library.mjs';
+import { projectFolder, readLibraryFile, recordCall, safeSegment, SESSION_UNAVAILABLE, startDig } from '../../src/library.mjs';
 import { cleanup, connectLegacy, connectModern, DIG, eventually, MODERN, node, run, text, workspace } from './helpers.mjs';
 
 const PRELOAD = resolve('test/service/jobs-preload.mjs');
@@ -381,4 +383,48 @@ test('jobs that finished more than 24 hours ago are removed, at start and later;
       assert.equal(store.get(running.id), undefined);
     } finally { store.close(); }
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('pre-existing trailing-hyphen digs use safeSegment for receipt adoption, readDigCalls and resource links', async () => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-jobs-trailing-')); const project = join(state, 'project'); await mkdir(project);
+  const saved = process.env.DIG_STATE_DIR; process.env.DIG_STATE_DIR = state;
+  try {
+    const c = await loadConfig();
+    const folder = projectFolder(project);
+    const digId = `2026-11-12-1200-${'a'.repeat(48)}-`;
+    const digDir = join(c.library, folder, 'digs', digId);
+    await mkdir(digDir, { recursive: true });
+    await writeFile(join(digDir, 'dig.md'), `---\ndig: ${JSON.stringify(digId)}\nquestion: "Pre-existing trailing hyphen"\nproject: ${JSON.stringify(project)}\nmode: composed\nstarted_at: "2026-11-12T12:00:00.000Z"\nsession: ${JSON.stringify(digId)}\n---\n# Pre-existing trailing hyphen\n`);
+    const handle = `${folder}/${digId}`;
+    const safeSession = safeSegment(digId, SESSION_UNAVAILABLE);
+    assert.notEqual(safeSession, digId);
+    const t0 = Date.parse('2026-11-12T12:00:00Z');
+    const own = await recordCall(c, project, digId, { tool: 'xsearch', source: 'x', args: { query: 'legacy-hyphen' }, declared: ['query'], at: new Date(t0 + 1000).toISOString(), ms: 500, status: 'success', cost: [{ amount: 0.01, unit: 'USD' }], responses: [{ label: 'search', status: 200, body: { ok: true } }], session: digId });
+    // JobStore.open() adopts the existing receipt stored under safeSegment(digId) without writing a duplicate.
+    const jobId = 'job-TTTTTTTTTTTTTTTTTTTTTT';
+    const working: Job = { id: jobId, dig: handle, project, source: 'x', tool: 'xsearch', argsHash: argsHash({ query: 'legacy-hyphen' }), args: { query: 'legacy-hyphen' }, declared: ['query'], status: 'working', createdAt: new Date(t0).toISOString(), lastUpdatedAt: new Date(t0).toISOString() };
+    await mkdir(join(state, 'jobs'), { recursive: true });
+    await writeFile(join(state, 'jobs', `${jobId}.json`), JSON.stringify(working));
+    const store = await new JobStore(join(state, 'jobs')).open(t0 + 60_000);
+    try {
+      assert.equal(store.get(jobId)?.receipt, own.id);
+      const calls = await readDigCalls(c, { handle, project, dig: digId, folder, path: digDir });
+      assert.equal(calls?.length, 1);
+      assert.equal(calls?.[0].id, own.id);
+    } finally { store.close(); }
+    // resource_link URIs use safeSegment so they resolve cleanly through readLibraryFile.
+    const xTool = SOURCE_TOOLS.find(t => t.name === 'x')!;
+    const formatted = formatResult({ c, tool: xTool, action: 'xsearch', spec: {} as never, args: { query: 'legacy-hyphen' }, dig: { handle, project, dig: digId, folder, path: digDir } }, { outcome: { status: 'success', text: 'ok' }, images: [], call: { id: own.id, raw: own.raw }, retentionError: null, digCost: null });
+    const links = formatted.content.filter((b): b is { type: 'resource_link'; uri: string; name: string } => b.type === 'resource_link');
+    assert.equal(links.length, 2);
+    for (const link of links) {
+      const rel = decodeURIComponent(link.uri.replace(/^dig:\/\/library\//, ''));
+      assert.ok(rel.startsWith(`${folder}/sessions/${safeSession}/`), rel);
+      const read = await readLibraryFile(c, rel);
+      assert.ok(read.text.length > 0);
+    }
+  } finally {
+    if (saved === undefined) delete process.env.DIG_STATE_DIR; else process.env.DIG_STATE_DIR = saved;
+    await rm(state, { recursive: true, force: true });
+  }
 });

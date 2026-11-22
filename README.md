@@ -1,6 +1,6 @@
 # Dig
 
-Dig is a research service that runs on your computer. Your assistant (ChatGPT desktop, Codex, Claude Code or another MCP host) connects to it and searches the sources you turn on: the web, code, papers, videos, social platforms, ads and markets. Every call leaves a receipt, and with it the provider's original response, in a library on your disk; reports and answers are saved there too. Dig's methods tell the assistant how to research each source.
+Dig is a research service that runs on your computer. Your assistant (ChatGPT desktop, Codex, Claude Code, Antigravity or another MCP host) connects to it and searches the sources you turn on: the web, code, papers, videos, social platforms, ads and markets. Every call leaves a receipt, and with it the provider's original response, in a library on your disk; reports and answers are saved there too. Dig's methods tell the assistant how to research each source.
 
 <p align="center">
 <img src="docs/logos/exa.svg" width="32" height="32" alt="Exa" title="Exa">
@@ -22,7 +22,7 @@ Dig is a research service that runs on your computer. Your assistant (ChatGPT de
 ## Requirements
 
 - **[Node.js](https://nodejs.org) 22 or newer** (`node --version` to check).
-- An MCP host: ChatGPT desktop, Codex, Claude Code or another client.
+- An MCP host: ChatGPT desktop, Codex, Claude Code, Antigravity or another client.
 - Optional local programs for some sources: [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) for YouTube search and transcripts, `ffmpeg` and `ffprobe` for video clips, `git` and `uv` for the Papers bridge.
 
 ## Install
@@ -59,6 +59,14 @@ args = ["/absolute/path/to/dig/dist/dig.mjs", "mcp"]
 tool_timeout_sec = 600
 ```
 
+**Antigravity (`agy`)**, command form:
+
+```sh
+agy mcp add dig -- node /absolute/path/to/dig/dist/dig.mjs mcp
+```
+
+Then set `"timeoutSeconds": 600` on the `dig` entry in `~/.gemini/config/mcp_config.json` so slow provider calls do not time out.
+
 **Address form.** Start the service with `dig serve` (or let a `dig mcp` start it). The token is `token` in `~/.local/share/dig/service.json`, which only you can read.
 
 ```sh
@@ -67,12 +75,13 @@ claude mcp add --transport http dig http://127.0.0.1:47811/mcp --header "Authori
 
 For Codex, set `url = "http://127.0.0.1:47811/mcp"` under `[mcp_servers.dig]` and `bearer_token_env_var` to the name of an environment variable that holds the token. The token stays the same across restarts. The service exits after 30 minutes with nothing to do, and in the address form nothing starts it again: run `dig serve` before you use it.
 
-**Host wrappers.** The build also generates thin wrappers in `plugins/` that launch `dig mcp` from your checkout: a marketplace named `dig-local` with a `dig` entry for Claude Code and one for Codex and ChatGPT, whose copy carries Dig's methods as ChatGPT skills.
+**Host wrappers.** The build also generates thin wrappers in `plugins/` that launch `dig mcp` from your checkout: a marketplace named `dig-local` with a `dig` entry for Claude Code and one for Codex and ChatGPT (whose copy carries Dig's methods as ChatGPT skills), and a direct plugin directory `plugins/antigravity` for Antigravity (carrying `mcp_config.json` with `timeoutSeconds: 600` and Dig's methods as skills).
 
 ```sh
 claude plugin marketplace add /absolute/path/to/dig/plugins
 claude plugin install dig@dig-local
 codex plugin marketplace add /absolute/path/to/dig/plugins
+agy plugin install /absolute/path/to/dig/plugins/antigravity
 ```
 
 then install `dig` from `dig-local` in Codex's plugin browser.
@@ -123,7 +132,7 @@ The two shared tools work alongside any source: **Video analysis** inspects a vi
 
 1. **A dig.** The assistant starts a dig with `dig_start`, giving your project folder and the question. A dig groups everything one question produces, and its handle goes on every call that follows.
 2. **Source calls.** The assistant calls each source's tool with the dig, an action and that action's arguments. Each call's result starts with one line: the source, the action, its status, its receipt and what the call and the dig so far have cost. The action's text follows; when the action also returned data (a structured answer, ids, a cursor), the text ends with a `Details:` block of that data as JSON, cut at 20,000 characters. Links to the receipt and the original response follow.
-3. **Reports.** For each source it researched, the assistant (or a helper it starts) saves a report with `research_save`: a summary, the evidence, what needs follow-up and what was looked for and not found.
+3. **Reports and follow-up.** For each source it researched, the assistant (or a helper it starts) saves a report with `research_save`: a summary, the evidence, what needs follow-up (including cross-source leads) and what was looked for and not found. When a load-bearing lead points to another enabled source, the assistant can chase it in a second wave under the same dig handle.
 4. **An answer.** The assistant reads the reports and the originals its conclusions rest on, answers you, and can save the answer with `dig_finish`.
 
 Ask for a method by name (“use Dig's x-judge method”) or let the assistant choose. Earlier research is reused: ask the assistant to find what you already researched about a topic.
@@ -148,7 +157,7 @@ Dig's views show the library, the current dig's trail and a card for each saved 
 
 ## Where things are
 
-Settings, keys, the library, jobs and the service's own files live in `~/.local/share/dig` (`DIG_STATE_DIR` chooses another folder). `dig status` says whether the service is running and lists running jobs; `dig stop` stops it. See [getting started](docs/getting-started.md), [permissions](docs/permissions.md) and [the architecture](docs/architecture.md).
+Settings, keys, the library, jobs and the service's own files live in `~/.local/share/dig` (`DIG_STATE_DIR` chooses another folder). `dig status` says whether the service is running and lists running jobs; `dig stop` stops it. Local library commands inspect saved research without starting the service or calling providers: `dig list`, `dig read`, `dig search` and `dig stats` (`list`, `read` and `stats` write nothing; `search` is read-only on the library and refreshes the local search index cache as needed). See [getting started](docs/getting-started.md), [permissions](docs/permissions.md) and [the architecture](docs/architecture.md).
 
 ## Development
 

@@ -78,7 +78,7 @@ source_card:
 Include `## Summary` (findings, scope, assumptions and limits), findings organized around the question, and all three audit sections, even if empty:
 
 - `## Evidence Highlights`: Finding | Evidence | Confidence | Useful For, carrying exact URLs, quoted text and relevant dates or metrics.
-- `## Needs Follow-Up`: specific public URLs or unresolved questions, or `None.`
+- `## Needs Follow-Up`: specific public URLs, unresolved questions, or cross-source leads a load-bearing finding points to with typed identifiers (YouTube URL/video ID, X post URL, Reddit/HN thread, advertiser/brand, GitHub `owner/repo`, arXiv/DOI), or `None.`
 - `## Negative Evidence (when relevant)`: searches and pages returning nothing, unavailable fields and access limits, or `None.`
 
 Call `research_save` with `source: "facebook"`, `agent: "facebook"`, the `dig` handle and the full Markdown `content`. Optional `topic` is lowercase hyphenated and at most 50 characters; optional `topic_volatility` is `live`, `fast`, `medium`, `slow` or `reference`. Do not add front matter; the save writes it. Use `supersedes` only for a deliberate correction in the same dig. Fix a save argument without repeating the provider call.

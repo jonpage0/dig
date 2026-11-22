@@ -69,6 +69,20 @@ Composing sources is your decision and your work; Dig does not do it for you.
 3. Choose each worker's model and effort when you start it, guided by the method's `workerDefault`. It is Dig's suggestion, or the user's own when its `basis` says they set it in Dig's settings; follow a user-set suggestion unless the task or the user says otherwise. Neither is a pin: choose differently when the task warrants it, and say what you chose. Dig's own suggestions name OpenAI models; on a host that does not offer the suggested model, start an ordinary general-purpose worker on a model the host offers, using the suggested effort as a guide to how demanding the method is. Workers are ordinary, fresh workers: no generated agent definitions or persistent workers are needed, and none should be assumed. The method confines a worker to its source; the host may still show it other Dig tools, so do not claim per-worker tool isolation.
 4. Wait for all of them. Do not impose your own timeout on a slow worker or one waiting for approval; wait for completion, an explicit failure or an explicit cancellation.
 
+### Wave 2: Follow load-bearing leads across sources
+
+Keep "Choose the fewest sources" for narrow questions: do not add a second wave by reflex. When a Wave 1 report's `## Needs Follow-Up` names a concrete off-platform lead that a load-bearing claim rests on, check whether that target source is enabled in `source_info` and hop to it under the same `dig` handle before `dig_finish`:
+
+- a linked YouTube video → `youtube` (transcript) or `youtube-video` (deeper video analysis);
+- a cited paper, DOI or arXiv ID → `papers`;
+- a referenced repository (`owner/repo`) → `github` or `deepwiki`;
+- a Chinese lab, creator or platform handle → `china-social`;
+- a product, seller or ad claim → `commerce`, `facebook-ads`, `google-ads`, `linkedin-ads` or `tiktok-ads`;
+- a dead or changed URL → `wayback`;
+- an X post, thread or account → `x-post` or `x-trace`.
+
+Pass the Wave 2 worker (or inline run) the exact identifier or URL, the retained Wave 1 report path, and the specific remaining question it must settle. If the target source is disabled or not ready, record that gap in your answer rather than working around it.
+
 ## Give every worker a full assignment
 
 A worker knows only what its assignment tells it. It has not seen this conversation, the files and reports you read, the earlier digs you checked or what the user has already settled, and it should not have to ask you anything to begin. In Codex, choosing a worker's model or effort rules out a full-history fork, because a full fork keeps your own model and effort (use the current host’s supported fork options; on hosts that accept only `all` or `none`, choose `none` for a model or effort override). A worker started as `workerDefault` suggests therefore starts with none of this conversation, or only the last few turns you chose to fork, and even forked history reaches it as background rather than as its task. Write every assignment as though the worker has seen nothing.

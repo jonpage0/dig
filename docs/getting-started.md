@@ -27,6 +27,7 @@ Then add it to your host so that the host launches `node /absolute/path/to/dig/d
   tool_timeout_sec = 600
   ```
 
+- **Antigravity (`agy`):** install the generated plugin wrapper (`agy plugin install /absolute/path/to/dig/plugins/antigravity`), or add the server directly with `agy mcp add dig -- node /absolute/path/to/dig/dist/dig.mjs mcp` and set `"timeoutSeconds": 600` on the `dig` entry in `~/.gemini/config/mcp_config.json`.
 - **Another MCP host:** launch the same command over stdio, or connect to `http://127.0.0.1:47811/mcp` with the token from `~/.local/share/dig/service.json` as a bearer token. The [README](../README.md#connect-a-host) has the address form in full.
 
 Below, `dig` stands for `node /absolute/path/to/dig/dist/dig.mjs`: nothing installs a `dig` command, and on macOS and Linux that name is the DNS lookup tool, so type the full form in a terminal.
@@ -113,7 +114,7 @@ Everything lives in `~/.local/share/dig`, or the folder `DIG_STATE_DIR` names:
 | `search/` | The local search index, which can be rebuilt. |
 | `tools/` | The optional Papers bridge. |
 
-Changing the library setting selects another folder; it does not move existing research. `dig status` shows whether the service is running and its running jobs; `dig stop` stops it.
+Changing the library setting selects another folder; it does not move existing research. `dig status` shows whether the service is running and its running jobs; `dig stop` stops it. Local library commands inspect saved research without starting the service or calling providers: `dig list`, `dig read`, `dig search` and `dig stats` (each supports `--json`; `list`, `read` and `stats` write nothing, while `search` refreshes the local search index cache as needed).
 
 ## Notes for each host
 
@@ -122,5 +123,7 @@ Changing the library setting selects another folder; it does not move existing r
 **ChatGPT desktop** shows Dig's views: the library, the current dig's trail and the saved-research cards. With the generated ChatGPT wrapper installed, Dig's methods also appear among ChatGPT's skills; otherwise ask for a method by name and the assistant reads it with the `method` tool.
 
 **Codex** in a terminal shows no views; use `dig open`. Ask for a method by name. Keep `tool_timeout_sec` at 600 or more in its configuration, since its default of 60 seconds is shorter than some calls.
+
+**Antigravity (`agy`)** shows no MCP Apps views; ask it to open Dig's library (`open_library`) or run `dig open` in a terminal. Installing the generated wrapper at `plugins/antigravity` configures the server with a 600-second timeout and installs Dig's methods as skills (keeping source methods out of automatic invocation).
 
 **Other hosts** reach every method through the `method` tool, and the views in a browser through `open_library` (or `dig open` in a terminal). A host that implements MCP's Skills, Tasks or Apps extensions gets Dig's methods, slow calls and views through them without any change to Dig.

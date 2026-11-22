@@ -7,7 +7,7 @@ Please report a vulnerability privately through this repository's **Security** t
 Dig runs one service on your computer, listening on `127.0.0.1` only. It has no server of its own elsewhere and collects nothing.
 
 - **Who can reach it.** Every MCP request needs a random bearer token, kept in `service.json` in Dig's folder (`~/.local/share/dig`), readable only by you. `dig mcp` adds the token itself, so a host that launches it holds none. A request must name the service's own address as its `Host`, and one that carries an `Origin` must come from the service itself, so a web page cannot call it.
-- **Without the token**, only three things answer: `/health` (the service's name, version and process id), the key page at a one-time address, and the views in a browser, which need a session that only a one-time address from `dig open` gives. The views can call only the tools they use, never a source.
+- **Without the token**, only three things answer: `/health` (the service's name, version, build fingerprint and process id), the key page at a one-time address, and the views in a browser, which need a session that only a one-time address from `dig open` gives. The views can call only the tools they use, never a source.
 
 ## Credentials
 

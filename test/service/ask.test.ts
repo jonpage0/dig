@@ -161,6 +161,64 @@ for (const kind of KINDS) {
       } finally { await mute.client.close(); }
     });
   });
+
+  test(`[${kind}] parallel ceiling raises against the same ceiling only raise once, and a stale raise past the active limit is refused`, async () => {
+    await withService(`ceiling-parallel-${kind}`, { config: config(''), keys: XAI }, {}, async (space, token) => {
+      const asking = await connect(kind, space, token, { reply: choose('raise') });
+      try {
+        const dig = await asking.start('Parallel ceiling raise?');
+        // Record $0.0247 across two calls before setting the ceiling to $0.02, so both parallel raises see spent >= limit
+        // and one raise to $0.04 covers both calls while only applying the $0.02 increment once.
+        await asking.call('x', xsearch(dig, 'seed-one'));
+        await asking.call('x', xsearch(dig, 'seed-two'));
+        await asking.call('settings', { set: { spend_dig_ceiling_usd: 0.02 } });
+        let arrived = 0;
+        let release!: () => void;
+        const bothArrived = new Promise<void>(done => { release = done; });
+        asking.answerWith(async () => {
+          arrived += 1;
+          if (arrived === 2) release();
+          await bothArrived;
+          return { action: 'accept', content: { choice: 'raise' } };
+        });
+        const [first, second] = await Promise.all([
+          asking.call('x', xsearch(dig, 'parallel-a')),
+          asking.call('x', xsearch(dig, 'parallel-b')),
+        ]);
+        assert.notEqual(first.isError, true, text(first));
+        assert.notEqual(second.isError, true, text(second));
+        assert.equal(asking.asked.length, 2);
+        assert.equal(await requests(space), 4);
+        const answers = JSON.parse(await readFile(join(space.state, 'jobs', 'digs', ...dig.split('/')) + '.json', 'utf8'));
+        assert.equal(answers.raisedUsd, 0.02, 'two parallel raises against the same ceiling must only raise once');
+
+        // Stale raise: spend is now $0.0493 (>= $0.04). Hold a ceiling prompt while another call raises once to $0.06
+        // and spends $0.01235 ($0.0617 >= $0.06); releasing the older stale approval must NOT slip past the limit.
+        let releaseStale!: () => void;
+        const staleReady = new Promise<void>(done => { releaseStale = done; });
+        let staleAsked!: () => void;
+        const waitStaleAsked = new Promise<void>(done => { staleAsked = done; });
+        let calls = 0;
+        asking.answerWith(async () => {
+          calls += 1;
+          if (calls === 1) {
+            staleAsked();
+            await staleReady;
+          }
+          return { action: 'accept', content: { choice: 'raise' } };
+        });
+        const staleCall = asking.call('x', xsearch(dig, 'stale-approval'));
+        await waitStaleAsked;
+        const freshCall = await asking.call('x', xsearch(dig, 'fresh-approval'));
+        assert.notEqual(freshCall.isError, true, text(freshCall));
+        releaseStale();
+        const staleResult = await staleCall;
+        assert.equal(staleResult.isError, true, 'stale approval past the current limit must be refused');
+        assert.match(text(staleResult), /ceiling raise was already applied and spend has reached the current limit/);
+        assert.equal(await requests(space), 5, 'stale call did not send a provider request');
+      } finally { await asking.client.close(); }
+    });
+  });
 }
 
 test('through dig mcp, both kinds of client are asked and answer', async () => {

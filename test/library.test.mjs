@@ -443,3 +443,16 @@ test('answer references refuse other digs, reserved files and symlinks before wr
   for (const path of [saved.path, relative(await realpath(config.library), saved.path), 'hackernews.md', 'dig.md', '../answer.md']) await assert.rejects(finish([path]));
   assert.equal(existsSync(join(group.path, 'answer.md')), false);
 });
+
+test('startDig trims trailing hyphens from long question slugs without changing projectFolder', async t => {
+  const state = await mkdtemp(join(tmpdir(), 'dig-trailing-hyphen-')); t.after(() => rm(state, { recursive: true, force: true }));
+  const config = await loadConfig(state);
+  const question = `${'a'.repeat(64)} trailing word`;
+  const started = await startDig(config, state, question, undefined, { ownSession: true });
+  assert.equal(started.dig.endsWith('-'), false, `dig id must not end with a hyphen: ${started.dig}`);
+  assert.ok(started.dig.endsWith(`-${'a'.repeat(64)}`), started.dig);
+  assert.equal(started.session, started.dig);
+  // projectFolder keeps slug() unchanged so existing long-named project folders are never orphaned.
+  const folder = projectFolder(join('/tmp', `${'p'.repeat(64)} tail`));
+  assert.match(folder, new RegExp(`^${'p'.repeat(64)}--[0-9a-f]{6}$`));
+});

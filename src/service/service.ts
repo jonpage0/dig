@@ -7,26 +7,85 @@
 // <state>/service.json (mode 600); the token is made once and kept, so a host configured with the URL form keeps
 // working across restarts. It exits by itself after an idle period with no request in progress.
 import { createServer } from 'node:http';
-import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { openSync, closeSync, watchFile, unwatchFile } from 'node:fs';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { openSync, closeSync, readFileSync, watchFile, unwatchFile } from 'node:fs';
 import { mkdir, readFile, rename, writeFile, chmod } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { join, resolve } from 'node:path';
-import { createMcpHandler, isLegacyRequest, WebStandardStreamableHTTPServerTransport, type McpServer } from '@modelcontextprotocol/server';
+import { homedir } from 'node:os';
+import { delimiter, join, resolve } from 'node:path';
+import { CLIENT_CAPABILITIES_META_KEY, CLIENT_INFO_META_KEY, createMcpHandler, isLegacyRequest, WebStandardStreamableHTTPServerTransport, type ClientCapabilities, type McpServer } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { initializeConfig, keysPath, loadConfig, loadKeys, stateDirectory } from '../config.mjs';
+import { MODULES } from '../providers/modules.ts';
 import { cleanupSearchTemps } from '../search/engine.mjs';
 import { VERSION } from '../version.mjs';
 import { activity } from './calls.ts';
 import { openJobs } from './jobs.ts';
 import { createDigServer, LIBRARY_READ, SOURCE_INFO, type ServiceHooks } from './mcp.ts';
 import { VIEW_TOOLS, viewPage, type ViewContext } from './views.ts';
-import { keyPage, keySubmit, OPEN_CODE_MS, type PageReply } from './ask.ts';
+import { hasPendingPrompts, keyPage, keySubmit, OPEN_CODE_MS, type PageReply } from './ask.ts';
 
 export const DEFAULT_PORT = 47811;
 const IDLE_MS = 30 * 60_000;
 // 2025-era sessions that have seen no request for this long are closed; a client that comes back re-initializes.
 const SESSION_MS = 24 * 60 * 60_000;
+const MAX_LOGGED_CLIENTS = 64;
+
+function buildFingerprint() {
+  const hash = createHash('sha256');
+  hash.update(JSON.stringify([VERSION, MODULES.map(m => m.id)]));
+  if (process.argv[1]) {
+    try { hash.update(readFileSync(process.argv[1])); } catch {}
+  }
+  return hash.digest('hex').slice(0, 12);
+}
+export const BUILD = buildFingerprint();
+
+const standardPathDirs = (platform = process.platform) => platform === 'win32'
+  ? []
+  : [join(homedir(), '.local', 'bin'), join(homedir(), '.cargo', 'bin'), join(homedir(), '.bun', 'bin'), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin'];
+/** Appends missing standard executable directories after `current`, preserving order and avoiding duplicates. */
+export function servicePath(current = process.env.PATH, platform = process.platform) {
+  const parts = (current ?? '').split(delimiter).filter(Boolean);
+  const seen = new Set(parts.map(dir => dir.replace(/\/+$/, '') || dir));
+  for (const dir of standardPathDirs(platform)) {
+    if (!seen.has(dir)) { seen.add(dir); parts.push(dir); }
+  }
+  return parts.join(delimiter);
+}
+
+const MAX_LOGGED_CAPS = 32;
+const cleanCap = (value: string) => value.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 64);
+
+/** Compact, sorted summary of declared client capabilities (keys only; never values or arguments). */
+export function summarizeCapabilities(capabilities: ClientCapabilities | undefined): string {
+  if (!capabilities || typeof capabilities !== 'object') return 'none';
+  const items = new Set<string>();
+  const push = (label: string) => { const cleaned = cleanCap(label); if (cleaned) items.add(cleaned); };
+  for (const [rawKey, value] of Object.entries(capabilities)) {
+    if (!value) continue;
+    const key = cleanCap(rawKey);
+    if (!key) continue;
+    if (key === 'elicitation' && typeof value === 'object') {
+      const elicit = value as { form?: unknown; url?: unknown };
+      if (elicit.form !== undefined || elicit.url === undefined) push('elicitation.form');
+      if (elicit.url !== undefined) push('elicitation.url');
+    } else if (key === 'extensions' && typeof value === 'object') {
+      const exts = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined && v !== null && v !== false).map(([k]) => cleanCap(k)).filter(Boolean);
+      if (exts.length) for (const ext of exts) push(`ext:${ext}`);
+      else push('extensions');
+    } else if (typeof value === 'object') {
+      const sub = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined && v !== null && v !== false).map(([k]) => cleanCap(k)).filter(Boolean);
+      if (sub.length) for (const k of sub) push(`${key}.${k}`);
+      else push(key);
+    } else {
+      push(key);
+    }
+  }
+  const sorted = [...items].sort();
+  if (!sorted.length) return 'none';
+  return sorted.length > MAX_LOGGED_CAPS ? `${sorted.slice(0, MAX_LOGGED_CAPS).join(', ')}, ... (+${sorted.length - MAX_LOGGED_CAPS})` : sorted.join(', ');
+}
 export interface ServiceFile { port: number; token: string; pid: number | null; version: string; startedAt: string | null }
 export const serviceFilePath = (state = stateDirectory()) => join(state, 'service.json');
 export async function readServiceFile(state = stateDirectory()): Promise<ServiceFile | null> {
@@ -67,6 +126,18 @@ export async function serve({ state = stateDirectory(), env = process.env } = {}
   const hooks: ServiceHooks = { settingsChanged, origin: self, openAddress: () => browser.issue(self) };
   const onerror = (error: Error) => console.error(`dig: ${error.message}`);
   const modern = createMcpHandler(async context => (await createDigServer(context, hooks)).server, { legacy: 'reject', onerror });
+  const seenClients = new Set<string>();
+  const logClient = (era: 'modern' | 'legacy', info: { name?: unknown; version?: unknown } | undefined, capabilities: ClientCapabilities | undefined) => {
+    const clean = (v: unknown) => typeof v === 'string' ? v.trim().replace(/[\r\n\t]+/g, ' ').slice(0, 120) : '';
+    const name = clean(info?.name);
+    const version = clean(info?.version);
+    const who = name ? (version ? `${name}/${version}` : name) : 'unknown';
+    const line = `dig: client ${era} ${who} capabilities=[${summarizeCapabilities(capabilities)}]`;
+    if (seenClients.has(line)) return;
+    if (seenClients.size >= MAX_LOGGED_CLIENTS) seenClients.delete(seenClients.values().next().value!);
+    seenClients.add(line);
+    console.error(line);
+  };
 
   // A 2025-era client: its handshake opens a session with its own server instance, pinned to the legacy era.
   async function legacy(request: Request): Promise<Response> {
@@ -84,6 +155,7 @@ export async function serve({ state = stateDirectory(), env = process.env } = {}
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID(), onsessioninitialized: sid => { sessions.set(sid, { server, sync, transport, lastSeen: Date.now() }); }, onsessionclosed: sid => closeSession(sid) });
     await server.connect(transport);
     const response = await transport.handleRequest(request);
+    logClient('legacy', server.server.getClientVersion(), server.server.getClientCapabilities());
     if (!transport.sessionId) await server.close().catch(() => {});
     return response;
   }
@@ -94,21 +166,37 @@ export async function serve({ state = stateDirectory(), env = process.env } = {}
     const host = request.headers.get('host') ?? ''; const origin = request.headers.get('origin');
     if (!hosts.includes(host)) return json(403, { error: 'Forbidden host' });
     if (origin !== null && !origins.includes(origin)) return json(403, { error: 'Forbidden origin' });
-    const { pathname } = new URL(request.url);
-    if (pathname === '/health' && request.method === 'GET') return json(200, { name: 'dig', version: VERSION, pid: process.pid });
+    const { pathname, searchParams } = new URL(request.url);
+    if (pathname === '/health' && request.method === 'GET') return json(200, { name: 'dig', version: VERSION, build: BUILD, pid: process.pid });
     const keyCode = /^\/keys\/([A-Za-z0-9_-]{1,128})$/.exec(pathname)?.[1];
     if (keyCode) return keyRoute(request, keyCode, `http://${host}`);
     if (pathname === '/' || pathname === '/trail' || pathname === '/card' || pathname.startsWith('/api/') || pathname.startsWith('/open/')) return browser.route(request, pathname, `http://${host}`);
     const auth = request.headers.get('authorization') ?? '';
     if (!auth.startsWith('Bearer ') || !same(auth.slice(7), token)) return json(401, { error: 'A valid bearer token is required' }, { 'www-authenticate': 'Bearer' });
-    if (pathname === '/mcp') return (await isLegacyRequest(request)) ? legacy(request) : modern.fetch(request);
+    if (pathname === '/mcp') {
+      if (await isLegacyRequest(request)) return legacy(request);
+      if (request.method === 'POST' && !(Number(request.headers.get('content-length')) > 16_384)) {
+        const body = await request.clone().json().catch(() => null) as { method?: unknown; params?: { _meta?: Record<string, unknown> } } | null;
+        if (body && typeof body === 'object' && typeof body.method === 'string') {
+          const meta = body.params?._meta;
+          logClient('modern', meta?.[CLIENT_INFO_META_KEY] as { name?: unknown; version?: unknown } | undefined, meta?.[CLIENT_CAPABILITIES_META_KEY] as ClientCapabilities | undefined);
+        }
+      }
+      return modern.fetch(request);
+    }
     if (pathname === '/status' && request.method === 'GET') {
-      let running: unknown[] = []; try { running = activity.snapshot((await loadConfig()).library); } catch {}
+      const running = activity.all();
       const jobs = store.running().map(job => ({ id: job.id, tool: job.tool, source: job.source, dig: job.dig, since: job.createdAt }));
-      return json(200, { name: 'dig', version: VERSION, pid: process.pid, port, startedAt, running, jobs, sessions: sessions.size });
+      return json(200, { name: 'dig', version: VERSION, pid: process.pid, port, startedAt, running, jobs, pendingPrompts: hasPendingPrompts(), sessions: sessions.size });
     }
     if (pathname === '/open' && request.method === 'POST') return json(200, browser.issue(self));
-    if (pathname === '/stop' && request.method === 'POST') { setImmediate(() => { void shutdown('stopped'); }); return json(200, { stopping: true }); }
+    if (pathname === '/stop' && request.method === 'POST') {
+      if (searchParams.get('ifIdle') === '1' && (activity.size > 0 || store.running().length > 0 || hasPendingPrompts())) {
+        return json(409, { stopping: false, busy: true });
+      }
+      setImmediate(() => { void shutdown('stopped'); });
+      return json(200, { stopping: true });
+    }
     return json(404, { error: 'Not found' });
   }
 
@@ -184,9 +272,11 @@ const line = (status: number, text: string, headers: Record<string, string> = {}
 const quoted = (word: string) => (/^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replaceAll('\'', '\'\\\'\'')}'`);
 export const digCommand = () => `node ${quoted(resolve(process.argv[1] ?? 'dist/dig.mjs'))}`;
 const needsOpen = () => `To open Dig in a browser, ask the assistant to open Dig's library, or run this in a terminal: ${digCommand()} open`;
-// What /api runs: exactly the tools the views call, and never a source tool.
-const API_TOOLS: Record<string, { inputSchema: { safeParse(value: unknown): { success: true; data: unknown } | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } } }; run(args: never, view: ViewContext): Promise<unknown> }> = { ...VIEW_TOOLS, source_info: SOURCE_INFO, library_read: LIBRARY_READ };
-export const API_TOOL_NAMES = Object.keys(API_TOOLS);
+// What /api runs: exactly the tools the views call, and never a source tool. Built lazily so views.ts can import helpers from service.ts safely.
+type ApiTool = { inputSchema: { safeParse(value: unknown): { success: true; data: unknown } | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } } }; run(args: never, view: ViewContext): Promise<unknown> };
+let apiToolsCache: Record<string, ApiTool> | undefined;
+const apiTools = (): Record<string, ApiTool> => (apiToolsCache ??= { ...VIEW_TOOLS, source_info: SOURCE_INFO, library_read: LIBRARY_READ });
+export const apiToolNames = () => Object.keys(apiTools());
 /**
  * The pages and their tools for a browser. `issue` (for open_library, and for the `open` command with the bearer token) makes a one-time code; its
  * address sets an HttpOnly, SameSite=Strict session cookie and redirects to the library. Without that cookie every page
@@ -203,7 +293,8 @@ function browserViews(view: ViewContext) {
     if (request.method !== 'POST') return new Response(null, { status: 405, headers: { allow: 'POST' } });
     const site = request.headers.get('sec-fetch-site');
     if (request.headers.get('origin') !== self || (site !== null && site !== 'same-origin')) return json(403, { error: 'Dig\'s views may be called only from their own page' });
-    const tool = Object.hasOwn(API_TOOLS, name) ? API_TOOLS[name] : undefined;
+    const tools = apiTools();
+    const tool = Object.hasOwn(tools, name) ? tools[name] : undefined;
     if (!tool) return json(404, { error: `No view tool is named ${name}` });
     if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) return json(415, { error: 'A JSON body is required' });
     const body = await request.text();
@@ -242,31 +333,52 @@ export async function openAddress(state = stateDirectory()): Promise<{ address: 
 }
 
 // ---- Reaching the service from another process (dig mcp, status, stop) ------------------------------------------
-export async function health(port: number): Promise<{ name: string; version: string; pid: number } | null> {
+export async function health(port: number): Promise<{ name: string; version: string; build?: string; pid: number } | null> {
   try { const response = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(2000) }); if (!response.ok) return null; const body = await response.json(); return body?.name === 'dig' ? body : null; } catch { return null; }
 }
 const older = (a: string, b: string) => { const [x, y] = [a, b].map(v => v.split(/[.-]/).map(n => Number.parseInt(n, 10) || 0)); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false; };
+const needsReplace = (running: { version: string; build?: string }) =>
+  older(running.version, VERSION) || (running.version === VERSION && typeof running.build === 'string' && running.build.length > 0 && running.build !== BUILD);
+async function hasActiveWork(port: number, token: string | undefined): Promise<boolean> {
+  // Fail closed: if status cannot be verified, treat the service as busy rather than stopping active work.
+  if (!token) return true;
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/status`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(2000) });
+    if (!response.ok) return true;
+    const info = await response.json() as { running?: unknown[]; jobs?: unknown[]; pendingPrompts?: unknown };
+    return (Array.isArray(info.running) && info.running.length > 0) || (Array.isArray(info.jobs) && info.jobs.length > 0) || info.pendingPrompts === true;
+  } catch { return true; }
+}
 const pause = (ms: number) => new Promise(done => setTimeout(done, ms));
 async function until<T>(read: () => Promise<T | null | false>, ms: number): Promise<T | null> { const end = Date.now() + ms; for (;;) { const value = await read(); if (value) return value; if (Date.now() > end) return null; await pause(100); } }
-/** Asks the running service to exit and waits until it has. */
-export async function stopService(state = stateDirectory()) {
+/** Asks the running service to exit and waits until it has. With `ifIdle`, refuses (returns false) if the service is busy. */
+export async function stopService(state = stateDirectory(), { ifIdle = false } = {}) {
   const file = await readServiceFile(state); if (!file) return false;
   const port = portOf(file); if (!(await health(port))) return false;
-  await fetch(`http://127.0.0.1:${port}/stop`, { method: 'POST', headers: { authorization: `Bearer ${file.token}` } }).catch(() => {});
+  const response = await fetch(`http://127.0.0.1:${port}/stop${ifIdle ? '?ifIdle=1' : ''}`, { method: 'POST', headers: { authorization: `Bearer ${file.token}` } }).catch(() => null);
+  if (ifIdle && (!response || response.status === 409)) return false;
   return (await until(async () => !(await health(port)), 15_000)) !== null;
 }
 /**
  * The running service's address and token, starting it first when none is running (detached, logging to
- * <state>/service.log) and replacing it when it runs an older version. `command` starts `dig serve`.
+ * <state>/service.log) and replacing it when it runs an older version or a different build while idle. `command` starts `dig serve`.
  */
 export async function ensureService(command: { execPath: string; args: string[] }, state = stateDirectory()): Promise<{ port: number; token: string }> {
   await mkdir(state, { recursive: true });
   let file = await readServiceFile(state); const port = portOf(file);
   let running = await health(port);
-  if (running && older(running.version, VERSION)) { await stopService(state); running = null; }
+  if (running && needsReplace(running)) {
+    if (await hasActiveWork(port, file?.token)) {
+      console.error(`dig: keeping running service ${running.version}${running.build ? ` (${running.build})` : ''} on port ${port} because it has active work or status could not be confirmed`);
+    } else if (await stopService(state, { ifIdle: true })) {
+      running = null;
+    } else {
+      console.error(`dig: keeping running service ${running.version}${running.build ? ` (${running.build})` : ''} on port ${port} because it became busy before stopping`);
+    }
+  }
   if (!running) {
     const log = openSync(join(state, 'service.log'), 'a');
-    const child = spawn(command.execPath, [...command.args, 'serve'], { detached: true, stdio: ['ignore', log, log], env: { ...process.env, DIG_PORT: String(port) } });
+    const child = spawn(command.execPath, [...command.args, 'serve'], { detached: true, stdio: ['ignore', log, log], env: { ...process.env, PATH: servicePath(process.env.PATH), DIG_PORT: String(port), DIG_STATE_DIR: state } });
     child.unref(); closeSync(log);
     // Two starters may race: the one that binds the port writes service.json; the other exits.
     running = await until(async () => { const seen = await health(port); file = await readServiceFile(state); return seen && file?.pid === seen.pid ? seen : null; }, 30_000);

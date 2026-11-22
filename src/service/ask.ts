@@ -5,20 +5,18 @@
 // credentials the person types, so a value never passes through the client or the model.
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { CLIENT_CAPABILITIES_META_KEY, SdkError, SdkErrorCode, createRequestStateCodec, inputRequired, inputResponse, type CallToolResult, type ClientCapabilities, type InputRequiredResult, type McpServer, type ServerContext } from '@modelcontextprotocol/server';
 import { loadConfig, stateDirectory } from '../config.mjs';
 import { credentialNames, saveKeys } from '../catalog.mjs';
-import { listLibrary } from '../library.mjs';
 import { MODULES, type DigModule } from '../providers/modules.ts';
 import { costSummary } from '../providers/library/cost.ts';
 import { toolHistory } from '../ui/usage.mjs';
 import { costAmounts, plural } from '../ui/format.mjs';
-import type { Dig, LibraryItem, Prepared, Receipt } from './calls.ts';
+import { listing, readDigCalls, type Dig, type Prepared } from './calls.ts';
 
 type Config = Awaited<ReturnType<typeof loadConfig>>;
 const refused = (text: string): CallToolResult => ({ content: [{ type: 'text', text }], isError: true });
-const listing = async (c: Config) => (await listLibrary(c)) as unknown as { items: LibraryItem[]; live: Receipt[] };
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('base64url');
 /** How long the service waits for an answer it asked for on a 2025-era session, or for the key page to be sent. */
 export const askTimeoutMs = () => { const ms = Number(process.env.DIG_ASK_TIMEOUT_MS); return Number.isFinite(ms) && ms > 0 ? ms : 5 * 60_000; };
@@ -34,12 +32,12 @@ export const askerOf = (era: 'modern' | 'legacy', server: McpServer, ctx: Server
   era, ctx, capabilities: (era === 'modern' ? (ctx.mcpReq.envelope as Record<string, unknown> | undefined)?.[CLIENT_CAPABILITIES_META_KEY] as ClientCapabilities | undefined : undefined) ?? server.server.getClientCapabilities(),
 });
 /** The person's answer, or why there is none. `unavailable`: the client declared no elicitation, or not this mode. */
-export type Answer = { kind: 'answered'; choice: string } | { kind: 'declined' } | { kind: 'cancelled' } | { kind: 'unanswered' } | { kind: 'unavailable' };
+export type Answer = { kind: 'answered'; choice: string; targetRaised?: number } | { kind: 'declined' } | { kind: 'cancelled' } | { kind: 'unanswered' } | { kind: 'unavailable' };
 /** On 2026-07-28 the first round has no answer yet: the handler returns `result` and the client calls again. */
 export type Asked = Answer | { kind: 'pending'; result: InputRequiredResult };
 export interface Choice { value: string; title: string }
 /** `key` names the question in the request; `bind` ties an answer to the call it was asked about. */
-export interface FormQuestion { key: string; bind: string; title: string; message: string; choices: Choice[] }
+export interface FormQuestion { key: string; bind: string; title: string; message: string; choices: Choice[]; targetRaised?: number }
 export interface UrlQuestion { key: string; bind: string; message: string; url: string }
 
 // An empty elicitation declaration means form mode only (the spec's rule for older clients).
@@ -50,16 +48,22 @@ const modes = (capabilities: ClientCapabilities | undefined) => {
 };
 // requestState round-trips through the client, so it is sealed (HMAC) with a key that lives as long as this process;
 // a retry after a restart is simply asked again. Each state is used once.
-interface State { key: string; bind: string; nonce: string }
+interface State { key: string; bind: string; nonce: string; targetRaised?: number }
 const codec = createRequestStateCodec<State>({ key: randomBytes(32), ttlSeconds: 3600 });
 const usedStates = new Map<string, number>();
-const consume = (nonce: string) => { const now = Date.now(); for (const [id, at] of usedStates) if (now - at > 3_600_000) usedStates.delete(id); if (usedStates.has(nonce)) return false; usedStates.set(nonce, now); return true; };
+const pendingStates = new Map<string, number>();
+let activeWaits = 0;
+const consume = (nonce: string) => { const now = Date.now(); for (const [id, at] of usedStates) if (now - at > 3_600_000) usedStates.delete(id); pendingStates.delete(nonce); if (usedStates.has(nonce)) return false; usedStates.set(nonce, now); return true; };
 /** The verified requestState a retried 2026-07-28 call carries for this question, or null. */
 async function priorState(asker: Asker, key: string): Promise<State | null> {
   if (asker.era !== 'modern') return null;
   const state = asker.ctx.mcpReq.requestState();
   if (typeof state !== 'string') return null;
-  try { const payload = await codec.verify(state, asker.ctx); return payload?.key === key && typeof payload.bind === 'string' && typeof payload.nonce === 'string' ? payload : null; } catch { return null; }
+  try {
+    const payload = await codec.verify(state, asker.ctx);
+    const validTarget = payload?.targetRaised === undefined || (typeof payload.targetRaised === 'number' && Number.isFinite(payload.targetRaised) && payload.targetRaised >= 0);
+    return payload?.key === key && typeof payload.bind === 'string' && typeof payload.nonce === 'string' && validTarget ? payload : null;
+  } catch { return null; }
 }
 const formSchema = (q: FormQuestion) => ({ type: 'object' as const, properties: { choice: { type: 'string' as const, title: q.title, oneOf: q.choices.map(c => ({ const: c.value, title: c.title })) } }, required: ['choice'] });
 
@@ -74,22 +78,25 @@ async function ask(asker: Asker, q: ({ mode: 'form' } & FormQuestion) | ({ mode:
   if (asker.era === 'legacy') {
     // A server request on the session; a client that never answers is given up on at the timeout.
     const params = q.mode === 'form' ? { mode: 'form' as const, message: q.message, requestedSchema: formSchema(q) } : { mode: 'url' as const, message: q.message, url: q.url, elicitationId: randomUUID() };
+    activeWaits++;
     try {
       const answer = await asker.ctx.mcpReq.elicitInput(params, { timeout: askTimeoutMs(), signal: asker.ctx.mcpReq.signal, relatedRequestId: asker.ctx.mcpReq.id } as Parameters<ServerContext['mcpReq']['elicitInput']>[1]);
       return read(answer.action, answer.content) ?? { kind: 'cancelled' };
     } catch (error) {
       if (asker.ctx.mcpReq.signal.aborted) throw error;
       return error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout ? { kind: 'unanswered' } : { kind: 'unavailable' };
-    }
+    } finally { activeWaits--; }
   }
   const prior = await priorState(asker, q.key);
   if (prior && prior.bind === q.bind) {
     const view = inputResponse(asker.ctx.mcpReq.inputResponses, q.key);
     const answer = view.kind === 'elicit' ? read(view.action, view.content) : null;
-    if (answer && consume(prior.nonce)) return answer;
+    if (answer && consume(prior.nonce)) return answer.kind === 'answered' && prior.targetRaised !== undefined ? { ...answer, targetRaised: prior.targetRaised } : answer;
   }
   const request = q.mode === 'form' ? inputRequired.elicit({ mode: 'form', message: q.message, requestedSchema: formSchema(q) }) : inputRequired.elicitUrl({ message: q.message, url: q.url });
-  return { kind: 'pending', result: inputRequired({ inputRequests: { [q.key]: request }, requestState: await codec.mint({ key: q.key, bind: q.bind, nonce: randomUUID() }) }) };
+  const minted: State = { key: q.key, bind: q.bind, nonce: randomUUID(), ...(q.mode === 'form' && q.targetRaised !== undefined ? { targetRaised: q.targetRaised } : {}) };
+  pendingStates.set(minted.nonce, Date.now() + askTimeoutMs());
+  return { kind: 'pending', result: inputRequired({ inputRequests: { [q.key]: request }, requestState: await codec.mint(minted) }) };
 }
 /** Asks a question with a small form: a title, a message, and one choice among `choices`. */
 export const askForm = (asker: Asker, q: FormQuestion) => ask(asker, { mode: 'form', ...q });
@@ -106,11 +113,25 @@ export async function digAnswers(dig: Dig): Promise<DigAnswers> {
     return { dig: dig.handle, raisedUsd: typeof value.raisedUsd === 'number' && Number.isFinite(value.raisedUsd) && value.raisedUsd > 0 ? value.raisedUsd : 0, dontAsk: value.dontAsk === true, updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : null };
   } catch { return { dig: dig.handle, raisedUsd: 0, dontAsk: false, updatedAt: null }; }
 }
-async function remember(dig: Dig, change: (current: DigAnswers) => Partial<DigAnswers>) {
-  const current = await digAnswers(dig); const next = { ...current, ...change(current), updatedAt: new Date().toISOString() };
-  const path = answersPath(dig); await mkdir(dirname(path), { recursive: true });
-  const temporary = `${path}.${randomUUID()}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 }); await rename(temporary, path);
+// Per-dig read-modify-write serialization for remembered answers; never held across askForm/askUrl.
+const rememberQueues = new Map<string, Promise<unknown>>();
+function queueRemember<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const prior = rememberQueues.get(key) ?? Promise.resolve();
+  const next = prior.then(work);
+  const settled = next.catch(() => {});
+  rememberQueues.set(key, settled);
+  settled.finally(() => { if (rememberQueues.get(key) === settled) rememberQueues.delete(key); });
+  return next;
+}
+function remember(dig: Dig, change: (current: DigAnswers) => Partial<DigAnswers>): Promise<{ previous: DigAnswers; next: DigAnswers }> {
+  const path = answersPath(dig);
+  return queueRemember(resolve(path), async () => {
+    const previous = await digAnswers(dig); const next = { ...previous, ...change(previous), updatedAt: new Date().toISOString() };
+    await mkdir(dirname(path), { recursive: true });
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    await writeFile(temporary, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 }); await rename(temporary, path);
+    return { previous, next };
+  });
 }
 
 // ---- Spending ---------------------------------------------------------------------------------------------------
@@ -129,26 +150,42 @@ const ceilingRefusal = (spent: number, limit: number, raised: number, others: st
 export async function spendGate({ c, tool, action, args, dig }: Prepared, asker: Asker | undefined): Promise<CallToolResult | InputRequiredResult | null> {
   const ceiling = c.spend.dig_ceiling_usd as number | null; const askAbove = (c.spend as { ask_above_usd?: number | null }).ask_above_usd ?? null;
   if (ceiling === null && askAbove === null) return null;
-  const library = await listing(c); const answers = await digAnswers(dig);
+  const answers = await digAnswers(dig);
   const subject = `${tool.module.label}’s ${action} action`;
   const bind = hash([dig.handle, tool.name, action, args]);
   const unavailable: Answer = { kind: 'unavailable' };
   if (ceiling !== null) {
     // Only US-dollar amounts count, including the known part of an incompletely priced call; credits, read counts and
     // unknown costs are named, never added. So the call that crosses the ceiling completes and the next paid call stops.
-    const { byUnit, unknownCalls } = costSummary(library.items.find(item => item.id === dig.dig && item.project === dig.project)?.calls ?? []);
+    const { byUnit, unknownCalls } = costSummary((await readDigCalls(c, dig)) ?? []);
     const spent = byUnit.USD ?? 0; const limit = ceiling + answers.raisedUsd;
     const { USD: _usd, ...otherUnits } = byUnit; const others = costAmounts({ byUnit: otherUnits });
     if (spent >= limit) {
+      const targetRaised = answers.raisedUsd + ceiling;
       const message = `This dig has reached its spending ceiling: its calls have recorded ${usd(spent)} in provider-reported US-dollar costs, and the ceiling is $${limit}${answers.raisedUsd ? ` (raised by $${answers.raisedUsd} for this dig)` : ''}.${others.length ? ` Its calls also recorded ${others.join(', ')}, which ${others.length === 1 ? 'is' : 'are'} not part of that total.` : ''}${unknownCalls ? ` ${plural(unknownCalls, 'call')} in this dig ${unknownCalls === 1 ? 'has' : 'have'} an unknown cost, not included.` : ''} The next call is ${subject}, a paid request. Raise the ceiling for this dig, or stop its paid calls here?`;
-      const answer = asker ? await askForm(asker, { key: 'ceiling', bind, title: 'Dig: spending ceiling reached', message, choices: [{ value: 'raise', title: `Raise the ceiling for this dig by $${ceiling}` }, { value: 'stop', title: 'Stop here' }] }) : unavailable;
+      const answer = asker ? await askForm(asker, { key: 'ceiling', bind, title: 'Dig: spending ceiling reached', message, choices: [{ value: 'raise', title: `Raise the ceiling for this dig by $${ceiling}` }, { value: 'stop', title: 'Stop here' }], targetRaised }) : unavailable;
       if (answer.kind === 'pending') return answer.result;
-      if (answer.kind === 'answered' && answer.choice === 'raise') { await remember(dig, current => ({ raisedUsd: current.raisedUsd + ceiling })); return null; }
+      if (answer.kind === 'answered' && answer.choice === 'raise') {
+        const raised = answer.targetRaised ?? targetRaised;
+        const { previous, next } = await remember(dig, current => ({ raisedUsd: Math.max(current.raisedUsd, raised) }));
+        if (previous.raisedUsd >= raised) {
+          // A stale raise whose target was already applied: re-check current spend against the active limit.
+          const latest = costSummary((await readDigCalls(c, dig)) ?? []);
+          const freshSpent = latest.byUnit.USD ?? 0;
+          const activeLimit = ceiling + next.raisedUsd;
+          if (freshSpent >= activeLimit) {
+            const { USD: _latestUsd, ...latestOthers } = latest.byUnit;
+            return ceilingRefusal(freshSpent, activeLimit, next.raisedUsd, costAmounts({ byUnit: latestOthers }), latest.unknownCalls, 'This ceiling raise was already applied and spend has reached the current limit.');
+          }
+        }
+        return null;
+      }
       const reason = answer.kind === 'answered' ? 'The person chose to stop here when asked whether to raise this dig’s spending ceiling.' : why(answer, 'whether to raise this dig’s spending ceiling');
       return ceilingRefusal(spent, limit, answers.raisedUsd, others, unknownCalls, reason);
     }
   }
   if (askAbove !== null && !answers.dontAsk) {
+    const library = await listing(c);
     const row = toolHistory([...library.items.flatMap(item => item.calls), ...library.live], { days: HISTORY_DAYS }).find((entry: { tool: string }) => entry.tool === action) as { typicalCost: { amount: number; unit: string }[] | null; pricedCalls: number } | undefined;
     // The median US-dollar cost of the action's priced calls; null when this library has none.
     const typical = !row || row.typicalCost === null ? null : row.typicalCost.find(entry => entry.unit === 'USD')?.amount ?? 0;
@@ -216,13 +253,25 @@ export async function keysTool(asker: Asker | undefined, source: string | undefi
   if (answer.kind !== 'answered') { codes.delete(code); return report(answer.kind === 'declined' ? 'The person declined to open the key page; nothing was changed.' : answer.kind === 'cancelled' ? 'The person dismissed the key page request; nothing was changed.' : 'The request to open the key page went unanswered; nothing was changed.'); }
   // The person agreed to open the page: wait, within bounds, for them to send it.
   const signal = asker!.ctx.mcpReq.signal;
-  await new Promise<void>(done => {
-    const timer = setTimeout(done, Math.max(0, Math.min(askTimeoutMs(), entry.expires - Date.now())));
-    const finish = () => { clearTimeout(timer); signal.removeEventListener('abort', finish); done(); };
-    void entry.settled.then(finish); signal.addEventListener('abort', finish);
-  });
+  activeWaits++;
+  try {
+    await new Promise<void>(done => {
+      const timer = setTimeout(done, Math.max(0, Math.min(askTimeoutMs(), entry.expires - Date.now())));
+      const finish = () => { clearTimeout(timer); signal.removeEventListener('abort', finish); done(); };
+      void entry.settled.then(finish); signal.addEventListener('abort', finish);
+    });
+  } finally { activeWaits--; }
   if (entry.used) return report(entry.saved.length ? `The person saved ${entry.saved.join(', ')} on the key page; Dig is using ${entry.saved.length === 1 ? 'it' : 'them'} now.` : 'The person sent the key page without filling anything in; nothing was changed.', { saved: entry.saved });
   return report(`The person has not sent the key page yet; it stays open until ${until(entry.expires)}. Call source_info afterwards to see which are set.`);
+}
+
+/** Whether a spending question or key-entry page is still waiting on the person in this service process. */
+export function hasPendingPrompts(): boolean {
+  const now = Date.now();
+  for (const [nonce, until] of pendingStates) if (now > until) pendingStates.delete(nonce);
+  if (activeWaits > 0 || pendingStates.size > 0) return true;
+  for (const entry of codes.values()) if (!entry.used && now <= entry.expires) return true;
+  return false;
 }
 
 /**

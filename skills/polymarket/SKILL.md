@@ -79,7 +79,7 @@ source_card:
 Include all three audit sections even when empty:
 
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`, carrying the exact question, outcome, odds, volume, liquidity, timestamp, and URL when returned;
-- `## Needs Follow-Up` with a market, outcome, category, or trigger, or `None.`;
+- `## Needs Follow-Up` with a market, outcome, category, or trigger—plus any cross-source lead a load-bearing finding points to, with its typed identifier (X post URL, YouTube URL/video ID, Reddit/HN thread, arXiv/DOI, official source URL)—or `None.`;
 - `## Negative Evidence (when relevant)` with expected markets or query variants that produced no useful signal, or `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of these audit sections.

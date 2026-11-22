@@ -85,7 +85,7 @@ source_card:
 Include all three audit sections even when empty:
 
 - `## Evidence Highlights` with `Finding | Evidence | Confidence | Useful For`, carrying the quoted text, the capture's time, the address that opens it, the original address and, when a date was asked for, the distance from it;
-- `## Needs Follow-Up` with an address, date range or capture to read next, or `None.`;
+- `## Needs Follow-Up` with an address, date range, or capture to read next—plus any cross-source lead a load-bearing finding points to, with its typed identifier (YouTube URL/video ID, arXiv/DOI, GitHub `owner/repo`, X post URL, Reddit/HN thread, advertiser/brand)—or `None.`;
 - `## Negative Evidence (when relevant)` with the addresses, match scopes and date ranges that returned no capture or no readable text, or `None.`.
 
 The save refuses a report that does not begin with the `source_card` block or lacks `## Summary` or any of these audit sections.

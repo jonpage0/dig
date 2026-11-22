@@ -1338,7 +1338,7 @@ export function createSchemas(
         T.String({ description: "Previous response id for chaining." }),
       ),
       recoverResponseId: T.Optional(
-        T.String({ minLength: 1, description: "Read the stored answer of an earlier pass by the response id an interrupted call reported, instead of running a search. Free: nothing is searched or charged. Pass the original query for the record; the other arguments are not applied." }),
+        T.String({ minLength: 1, description: "Read a stored pass by response id without searching (free). Pass the original query for the record; other arguments are ignored." }),
       ),
       handles: T.Optional(T.Array(T.String(), { maxItems: 20, description: "Limit to at most 20 handles, without @. Mutually exclusive with excludeHandles." })),
       excludeHandles: T.Optional(T.Array(T.String(), { maxItems: 20, description: "Exclude at most 20 handles, without @. Mutually exclusive with handles." })),
@@ -1352,6 +1352,7 @@ export function createSchemas(
       enableWebSearch: T.Optional(
         T.Boolean({ description: "Add web search alongside X search for this pass. Omit it to use the user's Dig setting ([x] web_search, off unless they turned it on)." }),
       ),
+      media: T.Optional(T.Boolean({ description: "Grok reads post images/video (default false)." })),
     }),
     x_post: T.Object(
       {

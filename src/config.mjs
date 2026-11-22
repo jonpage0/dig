@@ -94,43 +94,56 @@ export async function initializeConfig(state = stateDirectory()) {
   try { await writeFile(c.path, serialized(c), { flag: 'wx', mode: 0o600 }); } catch (e) { if (e.code !== 'EEXIST') throw e; }
   return loadConfig(state);
 }
+// config.toml updates for the same state directory run one at a time.
+const configQueues = new Map();
+function queueConfigWrite(state, write) {
+  const key = resolve(state);
+  const prior = configQueues.get(key) ?? Promise.resolve();
+  const work = prior.then(write);
+  const settled = work.catch(() => {});
+  configQueues.set(key, settled);
+  settled.finally(() => { if (configQueues.get(key) === settled) configQueues.delete(key); });
+  return work;
+}
 /**
  * Applies flat settings fields (`set`, as the settings tool and Dig's settings view send them) to config.toml. A
  * worker field is stored only when it differs from what its table would inherit, so echoing the value a control
  * shows stores nothing and a method keeps following the Dig-wide suggestion until it is given its own. Only the
  * fields in `set` are compared; values written by hand stay as they are.
  */
-export async function updateConfig(set, state = stateDirectory()) {
-  const current = await loadConfig(state);
-  const workerKeys = WORKER_TABLES.flatMap(name => WORKER_FIELDS.map(field => [workerSetting(name, field), name, field]));
-  const allowed = ['library', 'keep_raw', 'search_semantic', 'spend_dig_ceiling_usd', 'spend_ask_above_usd', ...MODULES.map(m => sourceSetting(m.id)), ...Object.keys(X_DEFAULTS).map(k => `x_${k}`), ...workerKeys.map(([key]) => key)];
-  for (const key of Object.keys(set)) if (!allowed.includes(key)) throw new Error(`Unknown setting: ${key}`);
-  for (const m of MODULES) if (set[sourceSetting(m.id)] !== undefined && typeof set[sourceSetting(m.id)] !== 'boolean') throw new Error(`${sourceSetting(m.id)} must be boolean`);
-  const ceiling = set.spend_dig_ceiling_usd;
-  if (ceiling !== undefined && (typeof ceiling !== 'number' || !Number.isFinite(ceiling) || ceiling < 0)) throw new Error('spend_dig_ceiling_usd must be a number of US dollars, 0 for no ceiling');
-  const askAbove = set.spend_ask_above_usd;
-  if (askAbove !== undefined && (typeof askAbove !== 'number' || !Number.isFinite(askAbove) || askAbove < 0)) throw new Error('spend_ask_above_usd must be a number of US dollars, 0 to stop asking');
-  const workers = Object.fromEntries(Object.entries(current.workers).map(([name, entry]) => [name, { ...entry }]));
-  const touched = workerKeys.filter(([key]) => set[key] !== undefined);
-  for (const [key, name, field] of touched) (workers[name] ??= {})[field] = workerValue(key, field, set[key]);
-  // `default` comes first in WORKER_TABLES, so a method compares against the Dig-wide value this update leaves.
-  for (const [, name, field] of touched) {
-    if (workers[name][field] === inherited(workers, name, field)) delete workers[name][field];
-    if (!Object.keys(workers[name]).length) delete workers[name];
-  }
-  const next = config({
-    library: set.library ?? current.library, keep_raw: set.keep_raw ?? current.keep_raw,
-    sources: { enabled: MODULES.filter(m => set[sourceSetting(m.id)] ?? current.sources.enabled.includes(m.id)).map(m => m.id) },
-    x: Object.fromEntries(Object.keys(X_DEFAULTS).map(k => [k, set[`x_${k}`] ?? current.x[k]])),
-    workers, search: { semantic: set.search_semantic ?? current.search.semantic },
-    // 0 removes the ceiling, or the amount to ask at.
-    spend: { dig_ceiling_usd: ceiling === undefined ? current.spend.dig_ceiling_usd : ceiling || null, ask_above_usd: askAbove === undefined ? current.spend.ask_above_usd : askAbove || null },
-  }, state);
-  await mkdir(state, { recursive: true });
-  const temporary = `${current.path}.${crypto.randomUUID()}.tmp`;
-  await writeFile(temporary, serialized(next), { mode: 0o600 });
-  await rename(temporary, current.path);
-  return next;
+export function updateConfig(set, state = stateDirectory()) {
+  return queueConfigWrite(state, async () => {
+    const current = await loadConfig(state);
+    const workerKeys = WORKER_TABLES.flatMap(name => WORKER_FIELDS.map(field => [workerSetting(name, field), name, field]));
+    const allowed = ['library', 'keep_raw', 'search_semantic', 'spend_dig_ceiling_usd', 'spend_ask_above_usd', ...MODULES.map(m => sourceSetting(m.id)), ...Object.keys(X_DEFAULTS).map(k => `x_${k}`), ...workerKeys.map(([key]) => key)];
+    for (const key of Object.keys(set)) if (!allowed.includes(key)) throw new Error(`Unknown setting: ${key}`);
+    for (const m of MODULES) if (set[sourceSetting(m.id)] !== undefined && typeof set[sourceSetting(m.id)] !== 'boolean') throw new Error(`${sourceSetting(m.id)} must be boolean`);
+    const ceiling = set.spend_dig_ceiling_usd;
+    if (ceiling !== undefined && (typeof ceiling !== 'number' || !Number.isFinite(ceiling) || ceiling < 0)) throw new Error('spend_dig_ceiling_usd must be a number of US dollars, 0 for no ceiling');
+    const askAbove = set.spend_ask_above_usd;
+    if (askAbove !== undefined && (typeof askAbove !== 'number' || !Number.isFinite(askAbove) || askAbove < 0)) throw new Error('spend_ask_above_usd must be a number of US dollars, 0 to stop asking');
+    const workers = Object.fromEntries(Object.entries(current.workers).map(([name, entry]) => [name, { ...entry }]));
+    const touched = workerKeys.filter(([key]) => set[key] !== undefined);
+    for (const [key, name, field] of touched) (workers[name] ??= {})[field] = workerValue(key, field, set[key]);
+    // `default` comes first in WORKER_TABLES, so a method compares against the Dig-wide value this update leaves.
+    for (const [, name, field] of touched) {
+      if (workers[name][field] === inherited(workers, name, field)) delete workers[name][field];
+      if (!Object.keys(workers[name]).length) delete workers[name];
+    }
+    const next = config({
+      library: set.library ?? current.library, keep_raw: set.keep_raw ?? current.keep_raw,
+      sources: { enabled: MODULES.filter(m => set[sourceSetting(m.id)] ?? current.sources.enabled.includes(m.id)).map(m => m.id) },
+      x: Object.fromEntries(Object.keys(X_DEFAULTS).map(k => [k, set[`x_${k}`] ?? current.x[k]])),
+      workers, search: { semantic: set.search_semantic ?? current.search.semantic },
+      // 0 removes the ceiling, or the amount to ask at.
+      spend: { dig_ceiling_usd: ceiling === undefined ? current.spend.dig_ceiling_usd : ceiling || null, ask_above_usd: askAbove === undefined ? current.spend.ask_above_usd : askAbove || null },
+    }, state);
+    await mkdir(state, { recursive: true });
+    const temporary = `${current.path}.${crypto.randomUUID()}.tmp`;
+    await writeFile(temporary, serialized(next), { mode: 0o600 });
+    await rename(temporary, current.path);
+    return next;
+  });
 }
 export const keysPath = (state = stateDirectory()) => join(state, 'keys.env');
 const CATALOG_NAMES = new Set(MODULES.flatMap(m => m.env ?? []));
