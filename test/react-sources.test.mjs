@@ -66,7 +66,7 @@ test('React Sources uses ReUI frames and icon tiles, with capabilities/cost prom
   const exa = $('source-exa');
   assert.ok(exa.querySelector('[data-slot="frame"]'));
   assert.ok(exa.querySelector('[data-slot="icon-tile"]'));
-  assert.match(exa.querySelector('.source-page-capabilities').textContent, /Fast or cache-only/);
+  assert.match(exa.querySelector('.source-page-capabilities').textContent, /Auto or low-cost cache-only/);
   assert.match(exa.querySelector('.source-page-billing').textContent, /Cost/);
   const footer = exa.querySelector('.source-page-card-footer');
   assert.deepEqual([...footer.querySelectorAll(':scope > details > summary')].map(node => node.textContent), ['About this source', 'Example for the conversation']);

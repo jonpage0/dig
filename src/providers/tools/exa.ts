@@ -2,21 +2,23 @@
  * Exa search, content extraction, similarity, and deep research tools.
  *
  * Exa is the retrieval layer of the Dig search group: it finds documents,
- * extracts page content, and (opt-in) runs a grounded deep-reasoning search.
+ * extracts page content, and (opt-in) runs a grounded deep search.
  * Perplexity remains the synthesis layer for question answering.
  *
  * Requires: EXA_API_KEY env var (https://dashboard.exa.ai)
+ * Optional: EXA_BASE_URL env var (default https://api.exa.ai; https://api.eu.exa.ai for EU keys)
  *
- * API reference: https://exa.ai/docs/reference/search (OpenAPI 2.0.0, read 2026-09-15)
- * Pricing (2026-03-03 update): /search $7/1k requests including text + highlights for
- * the first 10 results, +$1/1k results above 10, AI summaries +$1/1k pages;
- * deep-lite and deep $12/1k, deep-reasoning $15/1k; /contents $1/1k pages per content type.
+ * API reference: https://exa.ai/docs/reference/search (Exa 3.0 / OpenAPI 2.0.0)
+ * Pricing: /search lite $4/1k, auto $7/1k (includes text + highlights for the first
+ * 10 results; +$1/1k results above 10; AI summaries +$1/1k pages); deep-lite and deep
+ * $12/1k, legacy deep-reasoning $15/1k; /contents $1/1k pages per content type
+ * (text, highlights, summary). Legacy search modes: fast, instant, deep-reasoning.
  *
  * Exports four tools:
- *   exa_search     — /search with the current search modes (instant … deep-reasoning)
- *   exa_contents   — /contents with per-URL fetch status reporting
+ *   exa_search     — /search with Exa 3.0 modes (auto, lite, deep-lite, deep) and legacy modes (fast, instant, deep-reasoning)
+ *   exa_contents   — /contents with per-URL fetch status reporting and optional highlights
  *   exa_similar    — /findSimilar (deprecated upstream, still served)
- *   exa_research   — /search type "deep-reasoning" with a synthesized, field-grounded answer
+ *   exa_research   — /search deep mode (default "deep", optional "deep-lite" or legacy "deep-reasoning") with a synthesized, field-grounded answer
  *
  * The retired /research endpoint (HTTP 410 RESEARCH_RETIRED since 2026-04-01) and its
  * exa-research-* model tiers are gone; the deprecated `livecrawl` freshness knob is replaced
@@ -27,10 +29,10 @@ import { metered, setOutsideChat } from "../outcome.js"
 import { knownSecrets, redactText } from "../secrets.js"
 import type { KeepRaw, ToolContext, ToolSpec } from "../types.js"
 
-const EXA_BASE = "https://api.exa.ai"
+const DEFAULT_EXA_BASE = "https://api.exa.ai"
 const MISSING_KEY = `ERROR: EXA_API_KEY is not set in Dig's keys.env. Get a key at https://dashboard.exa.ai. ${setOutsideChat()}`
 
-/** Research-preview flag for Dynamic Highlights; sent only when the caller opts in. */
+/** Documented Exa-Beta header value for Dynamic Highlights; sent only when the caller opts in. */
 const DYNAMIC_HIGHLIGHTS_BETA = "dynamic-highlights-2026-08-28"
 
 /** Public numResults ceiling on /search and /findSimilar. */
@@ -53,15 +55,15 @@ const TEXT_PREVIEW_CHARACTERS = 500
 
 const SEARCH_TIMEOUT_MS = 60_000
 /**
- * deep-reasoning is documented at 12–40s; this is a provider-latency envelope with headroom
- * for queueing, not a "slow call" cutoff. The research call is never retried (see exaPost).
+ * deep is documented at ~4–15s and legacy deep-reasoning at 12–40s; this is a provider-latency
+ * envelope with headroom for queueing, not a "slow call" cutoff. The research call is never retried (see exaPost).
  */
 const RESEARCH_TIMEOUT_MS = 180_000
 
 /**
  * Exa documents 429 and 503 as "the request was not processed; retry with backoff".
  * Other statuses are not retried, and requestJson never repeats a request that got no
- * response (including its own timeout). The paid deep-reasoning call, and exa_search in any
+ * response (including its own timeout). The paid exa_research call, and exa_search in any
  * deep mode, also sets retries to 0: it must never be issued twice.
  */
 const EXA_RETRY_STATUSES = [429, 503] as const
@@ -69,27 +71,9 @@ const RESEARCH_RETRIES = 0
 
 const SEARCH_TYPES = ["instant", "fast", "lite", "auto", "deep-lite", "deep", "deep-reasoning"] as const
 type SearchType = (typeof SEARCH_TYPES)[number]
-const RESEARCH_TYPE: SearchType = "deep-reasoning"
-
-const CATEGORY_HELP =
-  "Known categories: 'company', 'publication' (scholarly; replaced 'research paper'), 'news', " +
-  "'personal site', 'financial report', 'people' (replaced 'linkedin profile'). Other strings are " +
-  "accepted as hints. 'pdf', 'github', and 'tweet' are deprecated upstream. 'company' and 'people' " +
-  "reject startPublishedDate, endPublishedDate, and excludeDomains (HTTP 400)."
-
-const MAX_AGE_HELP =
-  "Content freshness for extracted page content (not a publication-date filter): " +
-  "omit to use cached content with a live fetch fallback, 0 to always fetch fresh, " +
-  "-1 for cache only, N (1-720) to refetch pages whose cached copy is older than N hours."
-
-const HIGHLIGHT_CHARACTERS_HELP =
-  "Per-page character budget for highlights (1-10000). Omit for Exa's default budget. " +
-  "Not compatible with dynamicHighlights."
-
-const DYNAMIC_HIGHLIGHTS_HELP =
-  "Opt in to Exa Dynamic Highlights (research preview): one shared excerpt budget across the whole " +
-  "result set instead of a per-page budget, sent with the required Exa-Beta header. " +
-  "Use when several pages feed one context window; omit for a predictable per-page excerpt."
+const RESEARCH_MODES = ["deep", "deep-lite", "deep-reasoning"] as const
+type ResearchMode = (typeof RESEARCH_MODES)[number]
+const RESEARCH_TYPE: ResearchMode = "deep"
 
 // ---------------------------------------------------------------------------
 // Response types (validated from the 2.0.0 OpenAPI schemas before rendering)
@@ -272,12 +256,40 @@ function apiKey(): string | null {
   return process.env.EXA_API_KEY?.trim() || null
 }
 
+const ALLOWED_EXA_HOSTS = new Set(["api.exa.ai", "api.eu.exa.ai"])
+
+/** Read per request so an EXA_BASE_URL reloaded from keys.env after startup applies. */
+function exaBaseUrl(): string | Invalid {
+  const raw = process.env.EXA_BASE_URL?.trim()
+  if (!raw) return DEFAULT_EXA_BASE
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return { error: "ERROR: EXA_BASE_URL must be https://api.exa.ai or https://api.eu.exa.ai." }
+  }
+  const cleanPath = parsed.pathname.replace(/\/+$/, "")
+  if (
+    parsed.protocol !== "https:" ||
+    !ALLOWED_EXA_HOSTS.has(parsed.hostname.toLowerCase()) ||
+    parsed.port ||
+    cleanPath !== "" ||
+    parsed.username ||
+    parsed.password ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    return { error: "ERROR: EXA_BASE_URL must be https://api.exa.ai or https://api.eu.exa.ai (plain https:// origin with no port, path, credentials, query, or fragment)." }
+  }
+  return `https://${parsed.hostname.toLowerCase()}`
+}
+
 type ExaPath = "/search" | "/contents" | "/findSimilar"
 
 async function exaPost(
   path: ExaPath,
   body: Record<string, unknown>,
-  options: { key: string; signal: AbortSignal; keep: KeepRaw; timeoutMs: number; retries?: number; beta?: string },
+  options: { baseUrl: string; key: string; signal: AbortSignal; keep: KeepRaw; timeoutMs: number; retries?: number; beta?: string },
 ): Promise<ExaResponse> {
   const headers: Record<string, string> = {
     "x-api-key": options.key,
@@ -287,10 +299,11 @@ async function exaPost(
   if (options.beta) headers["Exa-Beta"] = options.beta
 
   const response = await requestJson({
-    url: `${EXA_BASE}${path}`,
+    url: `${options.baseUrl}${path}`,
     method: "POST",
     headers,
     body,
+    redirect: "error",
     signal: options.signal,
     timeoutMs: options.timeoutMs,
     retries: options.retries,
@@ -389,6 +402,15 @@ function characterBudget(value: unknown, name: string): number | undefined | Inv
     return { error: `ERROR: ${name} must be an integer from 1 to ${MAX_CHARACTERS}.` }
   }
   return value
+}
+
+function userLocation(value: unknown): string | undefined | Invalid {
+  if (value === undefined || value === null) return undefined
+  const code = typeof value === "string" ? value.trim() : ""
+  if (!/^[A-Za-z]{2}$/.test(code)) {
+    return { error: "ERROR: userLocation must be a 2-letter ISO-3166-1 alpha-2 country code (e.g. US)." }
+  }
+  return code.toUpperCase()
 }
 
 interface HighlightArgs {
@@ -505,7 +527,7 @@ function contentsPlan(args: ContentsArgs, textCharacters: number, summaryQuery?:
   if (invalid(age)) return age
 
   const contents: Record<string, unknown> = {
-    text: { maxCharacters: textCharacters },
+    ...(args.dynamicHighlights === true ? {} : { text: { maxCharacters: textCharacters } }),
     highlights: highlights.highlights,
   }
   if (args.summary === true) contents.summary = summaryQuery ? { query: summaryQuery } : {}
@@ -535,15 +557,15 @@ function snapshotTime(value: unknown): string | undefined | Invalid {
 export const search = exaMetered({
   description:
     "Search the web with Exa and get ranked documents with page text and query-relevant highlights. " +
-    "Search modes: 'auto' (default), 'lite' for low-cost cached retrieval, legacy 'fast'/'instant', and the Deep modes 'deep-lite', 'deep', " +
-    "'deep-reasoning' ($12–15/1k) for iterative research over the selected pages. " +
-    "Filters: domains/paths (wildcards like '*.substack.com'), publication dates, category. " +
-    "Exa returns source documents for your analysis; lite is low-cost cached retrieval. Use exa_research " +
-    "when a synthesized, source-grounded answer is explicitly requested.",
+    "Search modes: 'auto' (default, $7/1k), 'lite' ($4/1k low-cost cached retrieval), legacy 'fast'/'instant', and Deep modes 'deep-lite'/'deep' ($12/1k) " +
+    "or legacy 'deep-reasoning' ($15/1k) for iterative research over selected pages. " +
+    "Filters: domains/paths (wildcards like '*.substack.com'), publication dates, category, userLocation (ISO country code). " +
+    "With dynamicHighlights: true, page text is omitted for token savings. Use exa_research when a synthesized, source-grounded answer is explicitly requested.",
   async execute(args, ctx: ToolContext) {
     const key = apiKey()
     if (!key) return MISSING_KEY
-
+    const baseUrl = exaBaseUrl()
+    if (invalid(baseUrl)) return baseUrl.error
     const query = requireText(args.query, "query")
     if (invalid(query)) return query.error
 
@@ -554,6 +576,8 @@ export const search = exaMetered({
 
     if (type === "lite" && (args.maxAgeHours !== undefined || args.summary !== undefined)) return "ERROR: lite is cache-only and does not accept maxAgeHours or summary; use auto."
     if (args.snapshotAsOf !== undefined && (args.category !== undefined || type === "deep" || type === "deep-reasoning")) return "ERROR: Snapshot does not support category, deep or deep-reasoning."
+    const location = userLocation(args.userLocation)
+    if (invalid(location)) return location.error
     const includeDomains = optionalStringArray(args.includeDomains, "includeDomains")
     if (invalid(includeDomains)) return includeDomains.error
     const excludeDomains = optionalStringArray(args.excludeDomains, "excludeDomains")
@@ -565,6 +589,7 @@ export const search = exaMetered({
 
     const body: Record<string, unknown> = { query, numResults, type }
     if (args.category) body.category = args.category
+    if (location) body.userLocation = location
     if (includeDomains) body.includeDomains = includeDomains
     if (excludeDomains) body.excludeDomains = excludeDomains
     if (args.startPublishedDate) body.startPublishedDate = args.startPublishedDate
@@ -573,7 +598,7 @@ export const search = exaMetered({
 
     let response: ExaResponse
     try {
-      response = await exaPost("/search", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: plan.beta, ...(type.startsWith("deep") ? { retries: RESEARCH_RETRIES } : {}) })
+      response = await exaPost("/search", body, { baseUrl, key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: plan.beta, ...(type.startsWith("deep") ? { retries: RESEARCH_RETRIES } : {}) })
     } catch (error) {
       return failure("search", error, ctx.abort)
     }
@@ -603,13 +628,14 @@ export const search = exaMetered({
 
 export const contents = exaMetered({
   description:
-    "Extract clean markdown text and query-relevant highlights from specific URLs via Exa's cache " +
+    "Extract clean markdown text and optional highlights from specific URLs via Exa's cache " +
     "with live-fetch fallback. Reports per-URL fetch status so a failed page is never silently dropped. " +
-    "Bills $1/1k pages per content type (text, highlights, and optional summary each count).",
+    "Bills $1/1k pages per content type (text, highlights, summary); set highlights: false for text-only at half cost.",
   async execute(args, ctx: ToolContext) {
     const key = apiKey()
     if (!key) return MISSING_KEY
-
+    const baseUrl = exaBaseUrl()
+    if (invalid(baseUrl)) return baseUrl.error
     const urls = optionalStringArray(args.urls, "urls")
     if (invalid(urls)) return urls.error
     if (!urls || urls.length === 0) return "ERROR: urls must be a non-empty array of URLs."
@@ -622,7 +648,14 @@ export const contents = exaMetered({
 
     const textCharacters = characterBudget(args.maxCharacters, "maxCharacters")
     if (invalid(textCharacters)) return textCharacters.error
-    const highlights = highlightPlan(args)
+    if (args.highlights !== undefined && typeof args.highlights !== "boolean") {
+      return "ERROR: highlights must be a boolean."
+    }
+    const wantHighlights = args.highlights !== false
+    if (!wantHighlights && (args.dynamicHighlights === true || (args.highlightMaxCharacters !== undefined && args.highlightMaxCharacters !== null))) {
+      return "ERROR: highlights: false cannot be combined with dynamicHighlights or highlightMaxCharacters."
+    }
+    const highlights = wantHighlights ? highlightPlan(args) : undefined
     if (invalid(highlights)) return highlights.error
     const age = maxAgeHours(args.maxAgeHours)
     if (invalid(age)) return age.error
@@ -635,15 +668,15 @@ export const contents = exaMetered({
     const body: Record<string, unknown> = {
       urls: requested,
       text: { maxCharacters: textCharacters ?? CONTENTS_TEXT_CHARACTERS },
-      highlights: highlights.highlights,
     }
+    if (highlights) body.highlights = highlights.highlights
     if (args.summary === true) body.summary = focus ? { query: focus } : {}
     if (age !== undefined) body.maxAgeHours = age
     if (snapshot !== undefined) body.snapshotAsOf = snapshot
 
     let response: ExaResponse
     try {
-      response = await exaPost("/contents", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: highlights.beta })
+      response = await exaPost("/contents", body, { baseUrl, key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: highlights?.beta })
     } catch (error) {
       return failure("contents extraction", error, ctx.abort)
     }
@@ -713,7 +746,7 @@ export const contents = exaMetered({
         requested: requested.length,
         failed: failures.map((f) => redactText(f.id, knownSecrets())),
         unaccounted,
-        dynamicHighlights: highlights.beta !== undefined,
+        dynamicHighlights: highlights?.beta !== undefined,
       }),
     }
   },
@@ -731,6 +764,8 @@ export const similar = exaMetered({
   async execute(args, ctx: ToolContext) {
     const key = apiKey()
     if (!key) return MISSING_KEY
+    const baseUrl = exaBaseUrl()
+    if (invalid(baseUrl)) return baseUrl.error
 
     const url = requireText(args.url, "url")
     if (invalid(url)) return url.error
@@ -755,7 +790,7 @@ export const similar = exaMetered({
 
     let response: ExaResponse
     try {
-      response = await exaPost("/findSimilar", body, { key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: plan.beta })
+      response = await exaPost("/findSimilar", body, { baseUrl, key, signal: ctx.abort, keep: ctx.keep, timeoutMs: SEARCH_TIMEOUT_MS, beta: plan.beta })
     } catch (error) {
       return failure("findSimilar", error, ctx.abort)
     }
@@ -778,7 +813,7 @@ export const similar = exaMetered({
 } satisfies ToolSpec)
 
 // ---------------------------------------------------------------------------
-// exa_research — /search type "deep-reasoning" with grounded synthesis
+// exa_research — /search deep mode (default "deep") with grounded synthesis
 // ---------------------------------------------------------------------------
 
 function formatSynthesis(content: ExaSynthesisOutput["content"]): string[] {
@@ -788,16 +823,24 @@ function formatSynthesis(content: ExaSynthesisOutput["content"]): string[] {
 
 export const research = exaMetered({
   description:
-    "Opt-in deep research: one Exa /search call with type 'deep-reasoning' ($15/1k requests, 12–40s). " +
+    "Opt-in deep research: one Exa /search call (default 'deep' $12/1k, 4–15s; optional 'deep-lite' or legacy 'deep-reasoning'). " +
     "Exa plans multiple searches, inspects and refines the evidence, then returns a synthesized text answer " +
     "with field-level grounding (citations + Exa-reported confidence) and the selected source pages with " +
     "highlights. Call only when the user or parent explicitly asks for Exa deep research.",
   async execute(args, ctx: ToolContext) {
     const key = apiKey()
     if (!key) return MISSING_KEY
+    const baseUrl = exaBaseUrl()
+    if (invalid(baseUrl)) return baseUrl.error
 
     const query = requireText(args.query, "query")
     if (invalid(query)) return query.error
+
+    const rawMode = args.mode ?? RESEARCH_TYPE
+    if (typeof rawMode !== "string" || !(RESEARCH_MODES as readonly string[]).includes(rawMode)) {
+      return `ERROR: mode must be one of ${RESEARCH_MODES.join(", ")}.`
+    }
+    const mode = rawMode as ResearchMode
 
     const additionalQueries = optionalStringArray(args.additionalQueries, "additionalQueries")
     if (invalid(additionalQueries)) return additionalQueries.error
@@ -810,7 +853,7 @@ export const research = exaMetered({
 
     const body: Record<string, unknown> = {
       query,
-      type: RESEARCH_TYPE,
+      type: mode,
       numResults,
       // outputSchema triggers synthesis; without it /search returns pages only.
       outputSchema: { type: "text" },
@@ -822,6 +865,7 @@ export const research = exaMetered({
     let response: ExaResponse
     try {
       response = await exaPost("/search", body, {
+        baseUrl,
         key,
         signal: ctx.abort,
         keep: ctx.keep,
@@ -835,7 +879,7 @@ export const research = exaMetered({
     const results = response.results
     const output = response.output
     const lines: string[] = []
-    lines.push(`## Exa Deep Research (${RESEARCH_TYPE})`)
+    lines.push(`## Exa Deep Research (${mode})`)
     const cost = costLine(response)
     if (cost) lines.push(`(${cost})`)
     if (note) lines.push(`Note: ${note}`)
@@ -875,7 +919,7 @@ export const research = exaMetered({
       ...(!output && results.length === 0 ? { status: "empty" as const } : {}),
       text: lines.join("\n"),
       details: resultDetails(response, {
-        type: RESEARCH_TYPE,
+        type: mode,
         synthesized: output !== undefined,
         grounding: output?.grounding.length ?? 0,
         citations: [...new Set((output?.grounding ?? []).flatMap((g) => g.citations.map((c) => c.url)))],

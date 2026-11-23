@@ -24,10 +24,10 @@ Use only this `dig` MCP server's tools. Another Dig edition's server, methods, C
 Every provider call is a call to the `x` tool with the `dig` handle, an `action` naming one of its actions, and that action's arguments in `args`: to read a post, call `x` with `action: "x_post"` and `args: { posts: […], thread: true }`. The rest of this method names an action alone (`x_post` with `thread: true`) for such a call. The `x` tool's actions are `xsearch`, `x_post`, `x_search_posts`, `x_web_search`, `x_count_posts`, `x_users`, `x_follows`, `x_news`, `x_explore`, `x_bookmarks`, `x_likes`, `x_community` and `x_images`; this method uses these:
 
 - `source_info` with `source: "x"` for enablement and readiness;
-- X's own API, which needs `X_BEARER_TOKEN`: `x_post` (a post with its thread, replies, quote posts and reposters), `x_users` (profiles, an account's recent posts, posts mentioning it), `x_follows` (who an account follows, and who follows it), `x_search_posts` (every X search operator) and `x_count_posts` (how much, and when); `x_community` and `x_explore` when the trail leads into a Community or a List;
-- ScrapeCreators web search, which uses optional `SCRAPECREATORS_API_KEY`: `x_web_search` (1 credit per page; cheap historical seed discovery >24 hours old with zero X API post-read fees);
-- `x_images`, which needs no key: the pictures in posts, for you to look at;
-- Grok's X search, which needs `XAI_API_KEY`: `xsearch`, for the one-off uses named below;
+- X's own API (`X_BEARER_TOKEN`): `x_post`, `x_users`, `x_follows`, `x_search_posts`, `x_count_posts`, plus `x_community` and `x_explore` when the trail leads into a Community or List;
+- ScrapeCreators (`SCRAPECREATORS_API_KEY`, optional): `x_web_search` (cheap >24 h seed discovery, 1 credit/page, zero X API post reads);
+- `x_images` (no key): inspect post images directly;
+- Grok X search (`XAI_API_KEY`): `xsearch` (max 1 pass, for the one-off uses below);
 - `research_save` with `source: "x"` and `agent: "x-trace"`.
 
 Pass the `dig` handle on every provider call and on `research_save`; Dig uses it to file the evidence, and it never reaches the provider. Use only this source's tool, `x`, and `source_info`, `method`, `job`, `library_list`, `library_search`, `library_read` and `research_save`.
@@ -46,70 +46,36 @@ When the budget runs out, stop, and list what you did not follow in `## Leads No
 
 Work in rounds. Each round reads something, chooses whom or what to look at next, and says why. Keep a running list of voices (accounts) and strands (distinct claims or lines of argument).
 
-**Start from the seed.** For a post: `x_post` with `thread: true` and a first helping of `replies` and `quotes`. Follow the post it quotes or replies to back to where the conversation started, and read that. For an account: `x_users` with its recent `posts`, then the posts that bear on the question. For a claim with no post yet: `x_search_posts` on its distinctive words, links and names (and `x_web_search` for cheap historical seeds >24 hours old when `SCRAPECREATORS_API_KEY` is set); when the wording cannot be guessed, one `xsearch` pass with `mode: "semantic"` (below) to find seeds, which then become leads to read with `x_post`.
+- **Start from the seed.** Post: `x_post` (`thread: true`, sized `replies`/`quotes`), following any quoted/replied-to post back to where it started. Account: `x_users` (`posts`). Unlinked claim: `x_search_posts` (and `x_web_search` for >24 h), using your one allowed `xsearch` (`mode: "semantic"`) only if wording cannot be guessed.
+- **Choose whom to look at by what they said.** Pick voices that add checkable detail, corrections, counter-evidence, named sources, or replies the author engaged with (strongest dissent included). Note volume of reactions/slogans where relevant. Do not rank candidates by likes.
+- **Read who they are & follow what they point to.** Batch candidate handles in `x_users`; add `posts`/`mentions` and `from:<handle>` (`archive: true`, `end_time` before peak) for decisive voices. Follow quoted posts, named people, shared links (`url:"<link>"`), Communities/Lists, and (sparingly) small `x_follows` pages.
+- **Trace each strand to its origin & stop cleanly.** Use `x_count_posts` by day + first-day `x_search_posts` so echoes are not counted as independent sources. Stop when answered, when a round adds no new voice/strand, or at the budget (typically 3–4 rounds).
 
-**Choose whom to look at by what they said.** In replies and quote posts, look for the voices that add something: a first-hand detail, a number or version that can be checked, a correction, counter-evidence, a named source, a question the author answered. Take the strongest dissent as seriously as the strongest support. Notice whom the original author answered: the replies an author engages with are often the ones that mattered. Pass over reactions, slogans and promotion, but note their volume where it is part of the picture. Do not rank candidates by likes.
+## Tool cheat sheet
 
-**Read who they are.** `x_users` takes many handles in one call; read the profiles of the voices you chose together. For the few whose standing matters most, add their recent `posts` (what do they usually talk about; is this their field or a one-off), and `mentions` when how others treat them matters. Look for earlier posts on the subject: `x_search_posts` with `from:<handle>` and the topic's words, `archive: true`, and an `end_time` before the topic became widely discussed, shows whether they were here early or arrived with the crowd.
+| Need | Action | Key usage |
+| --- | --- | --- |
+| Seed post, thread, replies, quotes | `x_post` | `thread: true` plus sized `replies` / `quotes`; cheaper per item than reading many profiles. |
+| Batch-check voices & track record | `x_users`, `x_search_posts` | Batch `handles` in `x_users` (add `posts`/`mentions` for decisive voices); `from:<handle>` + `archive: true` for early history. |
+| Shared links & strand origin | `x_search_posts`, `x_count_posts` | `url:"<link>"` across threads; `x_count_posts` (`granularity: "day"`) + first-day search to find origin. |
+| Network standing & Communities | `x_follows`, `x_community`, `x_explore` | `x_follows` (`direction: "following"`/`"followers"`) is expensive — small `limit` on decisive accounts only. |
+| Photos, unguessable seeds, video | `x_images`, `xsearch` | Free `x_images` (`size: "large"`) for screenshots; max 1 `xsearch` pass (`mode: "semantic"` for seeds OR `media: true`, `depth: "quick"` on 1–5 video links). |
 
-**Follow what they point to.** The post a voice quotes; the people it names; the link it shares (search `url:"<link>"` for other conversations about the same link, which is how to find related discussion that shares no keywords); a Community or List it belongs to. For an account whose place in a field decides the answer, `x_follows` with `direction: "following"` shows which community it sits in, and `direction: "followers"` who pays attention to it; ask for a small page.
-
-**Trace each strand to its origin.** When several accounts say the same thing, find where it first appeared before counting them as several: `x_count_posts` by day shows when a phrase began, and `x_search_posts` over that first day finds the earliest posts. Ten accounts repeating one post are one source and its echo.
-
-**Stop** when the question is answered, when a round adds no new voice or strand, or at the budget. Most traces take three or four rounds.
-
-### Worked 3-round trace (within the default 300 post / 60 account budget)
-
-Every example below is a call to the `x` tool.
-
-- **Round 1 — Read the seed and surface substantive replies/quotes:**
-```json
-{ "dig": "<dig>", "action": "x_post", "args": { "posts": ["https://x.com/seed_author/status/123"], "thread": true, "replies": 30, "quotes": 20 } }
-```
-  (If starting from an unlinked claim instead of a post URL, find seeds with `x_web_search` for historical claims >24 h old or `x_search_posts` for recent/exact terms; spend your single allowed `xsearch` pass with `mode: "semantic"` only when the wording cannot be guessed.)
-- **Round 2 — Batch-check who the substantive voices are, plus early track record on the key 1–2 accounts** (chosen for specific detail, dissent, or author engagement — never likes):
-```json
-{ "dig": "<dig>", "action": "x_users", "args": { "handles": ["voice_a", "voice_b", "voice_c"], "posts": 10 } }
-{ "dig": "<dig>", "action": "x_search_posts", "args": { "query": "from:voice_a (<topic term>)", "archive": true, "end_time": "2026-10-01T00:00:00Z", "limit": 20 } }
-```
-- **Round 3 — Follow shared links across threads, verify origin timing, and check network standing only on accounts that decide the answer:**
-```json
-{ "dig": "<dig>", "action": "x_search_posts", "args": { "query": "url:\"example.com/report\"", "sort": "relevancy", "limit": 25 } }
-{ "dig": "<dig>", "action": "x_count_posts", "args": { "query": "\"<distinctive phrase>\"", "archive": true, "start_time": "2026-10-01T00:00:00Z", "granularity": "day" } }
-{ "dig": "<dig>", "action": "x_follows", "args": { "handle": "voice_a", "direction": "following", "limit": 25 } }
-```
-  Inspect any load-bearing screenshot immediately with `x_images` (`size: "large"`, free), or a load-bearing video with your single allowed `xsearch` pass (`media: true`, `depth: "quick"`, `passLabel: "pass-1"`) naming only those 1–5 video post links.
+For the worked 3-round JSON trace (within the default 300 post / 60 account budget), operator/budget sizing table, and `xsearch` `recoverResponseId` stream-recovery rules, read [the worked playbooks and operator reference](references/playbooks.md) via `method({ name: "x-trace", file: "references/playbooks.md" })`.
 
 ## Weigh who is speaking
 
-For each voice that matters to the answer, establish these from what you read, and say what you could not establish. A profile's own words are a claim about itself, not proof.
+Establish each decisive voice's weight from what you read (a profile's bio is a claim, not proof) across seven checks: **Proximity** (first-hand > second-hand regardless of reach), **Standing in the subject**, **Track record** (early vs crowd), **Stake** (disclosed beside the claim), **Independence** (original vs echo), **Specificity and checkability**, and **Conduct** (answering challenges/self-correcting). See `references/playbooks.md` for the full rubric.
 
-- **Proximity.** Did they do, build, measure or witness the thing, or are they passing on what someone else said? First-hand and specific outranks second-hand and general, whoever has more followers.
-- **Standing in the subject.** What their profile and recent posts show they work on. A person can be authoritative in one field and a bystander in this one.
-- **Track record.** Whether they were posting about this before it was popular, and whether what they said earlier held up where you can check it.
-- **Stake.** What they gain if the claim is believed: they sell it, compete with it, are paid or employed by someone involved, hold a position, or grow an audience from it. A stake does not make a claim false; state it beside the claim.
-- **Independence.** Whether their claim is their own or traces back to another account's post. Name the origin.
-- **Specificity and checkability.** Names, numbers, versions, steps, links to a primary source. Vague certainty weighs little.
-- **Conduct in the conversation.** Whether they answer challenges, show their working, and correct themselves.
+Reach is context, not weight: quote public metrics from X's response with read time, and note when reach comes mainly from one large amplifier. Describe observed patterns without labeling accounts fake, paid, or automated without evidence; stay with public roles (never unmask anonymous accounts or infer private life), and put off-X affiliation checks under `## Needs Follow-Up`.
 
-Reach is context, not weight. Quote public metrics from X's response on load-bearing posts, with the time you read them, and say when a claim's reach comes mostly from one large account passing it on. A high count does not raise a voice's credibility and a low count does not lower it.
-
-Describe patterns; do not label people. An account created last week, a run of replies with near-identical wording, a profile that exists to sell one thing: say what you observed and what it suggests, and never call an account fake, paid or automated without evidence that shows it. Stay with public accounts and public roles: do not try to work out who is behind an anonymous account, and do not infer anything about a person's private life. When a claimed affiliation is load-bearing and X alone cannot confirm it, say so and name the check (the organisation's own site, a repository's contributors, a company page) under `## Needs Follow-Up` for the parent, which can run another source.
-
-Classify each claim the answer rests on as **OFFICIAL** (vendor, staff member or documentation), **FIRST-HAND** (a named account describing its own experience), **REPEATED CLAIM** (echoed without a primary source) or **SPECULATION** (theory or sentiment), as `x-judge` does, so reports can be compared.
-
-Never fabricate a post, handle, quote, metric, date or URL. What you did not read, you do not know: absence is "not found in the replies, quotes and searches read", never "nobody said".
+Classify each load-bearing claim as **OFFICIAL**, **FIRST-HAND**, **REPEATED CLAIM**, or **SPECULATION** (as `x-judge` does). Never fabricate a post, handle, quote, metric, date, or URL; phrase absence as "not found in the replies, quotes and searches read," never "nobody said."
 
 ## Grok and media, only when needed
 
-Grok is not part of the walk. Run at most one `xsearch` pass in a trace, and only for something X's API cannot do:
+Grok is not part of the walk. Run at most one `xsearch` pass in a trace (`passLabel: "pass-1"`), and only for what X's API cannot do: (a) finding seeds by meaning when wording cannot be guessed (`mode: "semantic"`, `media` off), or (b) inspecting 1–5 specific video post links (`media: true`, `depth: "quick"`). `xsearch` is slow (follow a job handle with `job({ id })`; repeating a paid call returns the earlier result unless `fresh: true` pays again). Any Grok-cited post is a lead until `x_post` reads it, and Grok's media account is labeled as Grok's (see `references/playbooks.md` for `recoverResponseId` stream recovery).
 
-- finding seeds by meaning, when the claim has no post yet and its wording cannot be guessed (`mode: "semantic"`, leaving `media` off);
-- saying what a video in a load-bearing post shows (targeted `media: true`, `depth: "quick"`, naming only those 1–5 specific video post links).
-
-Grok media understanding is off by default on broad discovery passes to control cost, **but have zero hesitation pulling media whenever a post's images or video look useful:** inspect images immediately with `x_images` (free, no key) and inspect videos with targeted `xsearch` (`media: true`, `depth: "quick"`) naming only those 1–5 specific video post links (completed passes report `Posts fetched` / `Users fetched` when xAI returns them). Label the pass `passLabel: "pass-1"`. `xsearch` is slow: the call may answer with a job handle instead of the result; follow it with `job({ id })` and do not call the action again. A repeat of the same paid call returns the earlier result unless `fresh: true` is passed, which pays again. A post Grok cites is a lead until `x_post` has read it, and what Grok says media show is Grok's description: label it so. When a pass fails saying its stream was cut, read it once with `recoverResponseId` set to the response id it names; if xAI holds nothing under the id, the pass was dropped, and sending it again is a new pass.
-
-For an image, X's API returns its link and, when the poster wrote one, its description. Whenever what an image shows is useful, pull it immediately with `x_images`, passing the `pbs.twimg.com` image link printed after `Media:`. What you say it shows is your own reading: label it so in the report, and quote any text in the image exactly. If the pictures did not reach you (the result has no image you can see), say so and do not describe the image. The Grok pass is for seeds by meaning and for what a video shows, not for images.
+Pull useful post images immediately with free `x_images` (`pbs.twimg.com` links from `Media:`, `size: "large"` for screenshots); label as your own reading, quote text verbatim, or say if no image reached you. Never spend the Grok pass on still images.
 
 ## Optional video inspection
 
@@ -123,14 +89,7 @@ Keep outcomes distinct: a provider error is a provider failure; an interruption 
 
 ## Save the trace report
 
-Structure the report with `## Trace Method`, `## Summary`, `## Who Is Speaking`, `## What the Conversation Establishes`, `## Strands and Origins`, `## Leads Not Followed` and `## Sources`, followed by the audit sections.
-
-- `## Trace Method`: the seeds, each round in a line (what was read and why the next step was chosen), the budget and what was used (post reads and account reads, from the receipts or the dig's running totals in each result's first line), and any Grok pass.
-- `## Summary` is the report's discovery summary: what was found, its scope and limits, and what this research is useful for later. Keep it inside the report; never write a separate summary file.
-- `## Who Is Speaking`: a table, `Account | Who they are, and how that is known | Stake | What they said (link) | Weight and why`, for every voice the answer rests on, strongest dissent included.
-- `## What the Conversation Establishes`: what holds, what is contested, and what is only repeated, each tied to the voices behind it and its claim class.
-- `## Strands and Origins`: each distinct claim traced to its earliest post found, with how many accounts repeated it.
-- `## Leads Not Followed`: accounts, threads and links left unread, and why (budget, access, out of scope), or `None.`.
+Structure the report with `## Trace Method` (seeds, one line per round, budget vs actual reads, any Grok pass), `## Summary` (discovery summary kept inside the report — never a separate file), `## Who Is Speaking` (table `Account | Who they are, and how that is known | Stake | What they said (link) | Weight and why`, strongest dissent included), `## What the Conversation Establishes`, `## Strands and Origins`, `## Leads Not Followed` (or `None.`), and `## Sources`, followed by the audit sections. See `references/playbooks.md` for section authoring notes.
 
 Give the report a concise, descriptive H1 title (roughly 4–10 words) after the `source_card` block. Name the actual topic; do not repeat the full question or use a generic title such as “Research report.” The original question stays with the dig.
 

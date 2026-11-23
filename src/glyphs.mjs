@@ -40,6 +40,9 @@ SOURCE_GLYPHS["google-ads"] = "megaphone";
 SOURCE_GLYPHS["linkedin-ads"] = "megaphone";
 SOURCE_GLYPHS.evidence = "list-tree";
 SOURCE_GLYPHS.wayback = "history";
+SOURCE_GLYPHS.firecrawl = "globe";
+SOURCE_GLYPHS.sec = "briefcase-business";
+SOURCE_GLYPHS.bluesky = "messages-square";
 const METHOD_GLYPHS = {"x-judge":"scale","x-breadth":"radar","x-post":"message-square-quote","x-trace":"waypoints","youtube-summarizer":"captions","youtube-video":"clapperboard","video-analyze":"clapperboard"};
 METHOD_GLYPHS["evidence-rank"] = "list-tree";
 /** @returns {keyof typeof GLYPHS} */

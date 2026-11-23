@@ -221,7 +221,7 @@ test('in a browser: no cookie is 401; the open command\'s one-time address sets 
   } finally { await cleanup(space); }
 });
 
-test('with every source enabled, the tools/list a UI client receives, the app-only tools included, stays under 140,000 characters, and so does one without views, open_library included', async () => {
+test('with every source enabled, the tools/list a UI client receives, the app-only tools included, stays under 100,000 characters, and so does one without views, open_library included', async () => {
   const space = await workspace('views-size', { config: `[sources]\nenabled = ${JSON.stringify(MODULES.map(m => m.id))}\n` });
   try {
     const service = await startService(space);
@@ -230,14 +230,14 @@ test('with every source enabled, the tools/list a UI client receives, the app-on
     assert.ok(list.tools.some(tool => tool.name === 'library_snapshot'));
     const size = JSON.stringify(list).length;
     console.log(`tools/list for a UI client with every source enabled: ${size} characters, ${list.tools.length} tools, ${modelTools(list.tools).length} for the model`);
-    assert.ok(size < 140_000, `tools/list grew to ${size} characters`);
+    assert.ok(size < 100_000, `tools/list grew to ${size} characters`);
     await client.close();
     const plain = await connectModern(space, service.token, {});
     const without = await plain.listTools();
     assert.ok(without.tools.some(tool => tool.name === 'open_library')); assert.ok(!without.tools.some(tool => tool.name === 'library_snapshot'));
     const plainSize = JSON.stringify(without).length;
     console.log(`tools/list for a client without views with every source enabled: ${plainSize} characters, ${without.tools.length} tools`);
-    assert.ok(plainSize < 140_000, `tools/list grew to ${plainSize} characters`);
+    assert.ok(plainSize < 100_000, `tools/list grew to ${plainSize} characters`);
     await plain.close();
   } finally { await cleanup(space); }
 });

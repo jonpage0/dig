@@ -5,13 +5,13 @@ description: Exa web document search, page extraction and similar-page discovery
 
 # Exa document research
 
-Use Exa to find documents, extract pages, and discover pages similar to a known URL. Keep search results, extracted content, similarity results, and the opt-in deep-reasoning synthesis distinct.
+Use Exa to find documents, extract pages, and discover pages similar to a known URL. Keep search results, extracted content, similarity results, and the opt-in deep research synthesis distinct.
 
 Run this method inline in the thread that needs it, or as an ordinary source worker that the parent thread started with this method for this one question. Either way, run it yourself: do not start another agent or run a second source. This is research-only: do not edit application code or recommend an implementation as if the documents decided it.
 
 ## Exa 3.0
 
-Exa 3.0 is a retrieval/index release served through the existing API, not a `/v3` endpoint or an SDK major-version requirement. `auto` receives the upgraded retrieval without a migration. Use `lite` for low-cost cached discovery. Search also covers local places, products, events, sports, weather and podcast transcripts; name the geography, date and source type in the query. Preserve returned structured entities and source URLs, and check time-sensitive facts in the source before relying on them.
+Exa 3.0 is a retrieval/index release served through the existing API, not a `/v3` endpoint or an SDK major-version requirement. `auto` ($7/1k) receives the upgraded retrieval without a migration. Use `lite` ($4/1k) for low-cost cached discovery. Search also covers local places, products, events, sports, weather and podcast transcripts; pass `userLocation` (2-letter ISO country code) and name the geography, date and source type in the query. Preserve returned structured entities and source URLs, and check time-sensitive facts in the source before relying on them.
 
 The October 19 announcement says Dynamic Highlights is generally available; the current API reference still requires its beta header for the explicit `dynamic` option, so Dig continues sending the documented header. No result or benchmark claim is a guarantee for your particular question.
 
@@ -31,12 +31,12 @@ Every provider call is a call to the `exa` tool with the `dig` handle, an `actio
 - `exa_search`: web search with the mode (`type`), domain, category, publication-date, content, highlight, and freshness controls;
 - `exa_contents`: batch-extract needed URLs with per-URL fetch status;
 - `exa_similar`: expand from a seed URL;
-- `exa_research`: one opt-in `deep-reasoning` search that returns a synthesized answer with field-level grounding. It is slow: the call may answer with a job handle instead of the result; follow it with `job({ id })` and do not call the action again. A repeat of the same paid call returns the earlier result unless `fresh: true` is passed, which pays again;
+- `exa_research`: one opt-in deep search (defaults to `mode: "deep"`, $12/1k, ~4–15s; optional `deep-lite` or legacy `deep-reasoning` $15/1k) that returns a synthesized answer with field-level grounding. It is slow: the call may answer with a job handle instead of the result; follow it with `job({ id })` and do not call the action again. A repeat of the same paid call returns the earlier result unless `fresh: true` is passed, which pays again;
 - `research_save` with `source: "exa"` and `agent: "exa"`: save the source report.
 
 Pass the `dig` handle on every provider call and on `research_save`; Dig uses it to file the evidence, and it never reaches the provider. Use only this source's tool, `exa`, and `source_info`, `method`, `job`, `library_list`, `library_search`, `library_read` and `research_save`.
 
-Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. Exa needs `EXA_API_KEY`. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the person sets keys outside the chat, on the page the `keys` tool opens or in Dig's `keys.env`. Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
+Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. Exa needs `EXA_API_KEY` (and optionally `EXA_BASE_URL`, e.g. `https://api.eu.exa.ai` for EU data-residency keys). Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the person sets keys outside the chat, on the page the `keys` tool opens or in Dig's `keys.env`. Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness.
 
 ## Use the smallest useful sequence
 
@@ -46,22 +46,23 @@ Use one corrective search only when the first pass is empty, low quality, contra
 
 ### Choose the search mode
 
-`type` selects the Exa search mode. `auto` is the default and covers most research. `lite` is the current low-cost cached-retrieval mode. `fast` and `instant` are legacy modes that remain accepted. Choose `lite` for quick discovery and `auto` when fresh page extraction or broader options matter. `deep-lite`, `deep`, and `deep-reasoning` run iterative multi-search research at $12–15 per thousand requests; never self-initiate them. Use `deep` or `deep-lite` only when the user or the parent thread explicitly asks for Exa deep search over the selected pages, and use `exa_research` when they explicitly ask for a synthesized deep-research answer. `neural` and `keyword` are no longer modes; put exact phrases in the query instead.
+`type` selects the Exa search mode. `auto` ($7/1k) is the default and covers most research. `lite` ($4/1k) is the current low-cost cached-retrieval mode. `fast` and `instant` are legacy modes that remain accepted. Choose `lite` for quick discovery and `auto` when fresh page extraction or broader options matter. `deep-lite` and `deep` ($12/1k), plus legacy `deep-reasoning` ($15/1k), run iterative multi-search research; never self-initiate them. Use `deep` or `deep-lite` only when the user or the parent thread explicitly asks for Exa deep search over the selected pages, and use `exa_research` when they explicitly ask for a synthesized deep-research answer. `neural` and `keyword` are no longer modes; put exact phrases in the query instead.
 
 ### Use Exa's filters when they matter
 
 - `includeDomains` and `excludeDomains` accept hostnames, paths (`exa.ai/blog`), and subdomain wildcards (`*.substack.com`). Use them instead of `site:` in the query.
 - `category` focuses retrieval: `company`, `publication` (scholarly work; the old `research paper` value), `news`, `personal site`, `financial report`, `people` (the old `linkedin profile` value). `pdf`, `github`, and `tweet` are deprecated upstream. `company` and `people` reject `startPublishedDate`, `endPublishedDate`, and `excludeDomains`; the tool returns Exa's 400 rather than guessing.
+- `userLocation` takes a 2-letter ISO-3166-1 alpha-2 country code (such as `US` or `GB`) to localize Exa 3.0 Places, local business, and events queries.
 - `startPublishedDate` / `endPublishedDate` filter by publication date. `maxAgeHours` does not: it controls how fresh the extracted page content must be (`0` always refetches, `-1` cache only, `N` refetches when the cached copy is older than N hours). Set it only when a stale page body would be wrong, such as prices, availability, or live status pages. The old `livecrawl` values are gone.
 - `numResults` defaults to 10 and accepts at most 100; a larger value is refused, not capped. Results above 10 bill extra.
 
 ### Historical content
 
-`exa_search` and `exa_contents` accept `snapshotAsOf`, an ISO date or date-time. Search puts it inside contents; extraction sends it at the top level. It returns stored content at or before the cutoff, with current ranking signals. It does not recreate historical rankings. Plan access, a rolling lookback window and trial caps apply. Do not combine it with `maxAgeHours`, category, `deep` or `deep-reasoning`; `lite` is cache-only and also rejects summaries. A missing snapshot is a coverage gap, not proof a page did not exist.
+`exa_search` and `exa_contents` accept `snapshotAsOf`, an ISO date or date-time. Search puts it inside contents; extraction sends it at the top level. It returns stored content at or before the cutoff, with current ranking signals. It does not recreate historical rankings. Snapshot covers a 5-month rolling lookback window and is unavailable on Exa's Free tier (paid plan access and trial caps apply). Do not combine it with `maxAgeHours`, category, `deep` or `deep-reasoning`; `lite` is cache-only and also rejects summaries. A missing snapshot is a coverage gap, not proof a page did not exist.
 
 ### Control highlights and summaries
 
-Search and similarity results include page text and query-relevant highlights by default. `highlightMaxCharacters` sets a per-page excerpt budget. `dynamicHighlights: true` opts into Exa Dynamic Highlights (research preview): one shared budget allocated across the result set, sent with the required beta header. Use it only when the caller asks for it or when many pages must fit one context window; it cannot be combined with `highlightMaxCharacters`. `summary: true` requests an Exa-generated summary per page and bills an extra content type; leave it off unless the caller wants Exa's summary rather than your own reading.
+Search and similarity results include page text and query-relevant highlights by default. `highlightMaxCharacters` sets a per-page excerpt budget. `dynamicHighlights: true` opts into Exa Dynamic Highlights: one shared excerpt budget allocated across the result set, sent with the documented `Exa-Beta` header. On `exa_search` (and `exa_similar`), `dynamicHighlights: true` omits `contents.text` so only dynamic highlights (plus optional `summary` or `snapshotAsOf`) are returned, delivering real token savings across multi-page result sets. Use it when the caller asks for it or when many pages must fit one context window; it cannot be combined with `highlightMaxCharacters`. On `exa_contents`, `text` and `highlights` each bill $1/1k pages ($2/1k combined): pass `highlights: false` when only page text is needed to cut `/contents` cost in half ($1/1k); `highlights: false` cannot be combined with `dynamicHighlights` or `highlightMaxCharacters`. `summary: true` requests an Exa-generated summary per page and bills an extra content type ($1/1k); leave it off unless the caller wants Exa's summary rather than your own reading.
 
 ### Read `exa_contents` status lines
 
@@ -69,7 +70,7 @@ Search and similarity results include page text and query-relevant highlights by
 
 ### Deep research is opt-in
 
-Never self-initiate `exa_research`. Call it only when the user or the parent thread explicitly asks for Exa deep research. It makes one `/search` call with `type: "deep-reasoning"` and a text output schema; `query` states what to research, `systemPrompt` states how to conduct and present it (source preferences, deduplication, organization), and `additionalQueries` adds up to ten meaningfully different search directions. One call is enough. The result has three parts: the synthesized text, a grounding list that maps output fields to citations with Exa-reported confidence, and the selected source pages with highlights. Report the synthesis as Exa's claim, cite from the grounding list, and treat a synthesis whose grounding is empty as unsupported. If deep research might help but was not requested, put it in `## Needs Follow-Up` instead of spending on it.
+Never self-initiate `exa_research`. Call it only when the user or the parent thread explicitly asks for Exa deep research. It makes one `/search` call defaulting to `mode: "deep"` ($12/1k, ~4–15s) with a text output schema; pass `mode: "deep-lite"` ($12/1k) or legacy `mode: "deep-reasoning"` ($15/1k) only when explicitly requested. `query` states what to research, `systemPrompt` states how to conduct and present it (source preferences, deduplication, organization), and `additionalQueries` adds up to ten meaningfully different search directions. One call is enough. The result has three parts: the synthesized text, a grounding list that maps output fields to citations with Exa-reported confidence, and the selected source pages with highlights. Report the synthesis as Exa's claim, cite from the grounding list, and treat a synthesis whose grounding is empty as unsupported. If deep research might help but was not requested, put it in `## Needs Follow-Up` instead of spending on it.
 
 ## Preserve evidence limits
 

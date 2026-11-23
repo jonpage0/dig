@@ -8,6 +8,7 @@ import { MODULES } from '../src/providers/modules.ts';
 import { VERSION } from '../src/version.mjs';
 import { logoSprite } from './logo-sprite.mjs';
 import { wrapperFiles } from './wrappers.mjs';
+import { buildSearchRuntime, SUPPORTED_PLATFORMS } from './search-runtime.mjs';
 
 // The files that carry Dig's version besides src/version.mjs; the host wrappers take theirs from it.
 const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
@@ -15,8 +16,8 @@ for (const [file, version] of [['package.json', JSON.parse(await readFile('packa
   if (version !== VERSION) throw new Error(`${file} is version ${version}; src/version.mjs is ${VERSION}`);
 }
 
-await import('./search-runtime.mjs');
-if (process.platform !== 'darwin' || process.arch !== 'arm64') console.log(`Skipped the packaged search-runtime load check: it runs only on darwin/arm64, not ${process.platform}/${process.arch}.`);
+const searchRuntime = await buildSearchRuntime();
+if (!searchRuntime.supported) console.log(`Skipped packaging native ONNX search runtime binaries and load check: supported platforms are ${SUPPORTED_PLATFORMS.join(', ')}, not ${searchRuntime.platform}.`);
 // Every package the bundles include, by its node_modules root, so its license travels with the package.
 const bundled = new Set();
 const collectInput = input => { const clean = input.replace(/^\0/, '').split('?')[0]; const at = clean.lastIndexOf('node_modules/'); if (at < 0) return; const name = /^((?:@[^/]+\/)?[^/]+)/.exec(clean.slice(at + 13))[1]; const root = `${clean.slice(0, at)}node_modules/${name}`; bundled.add(root.startsWith('/') ? relative(process.cwd(), root) : root); };
@@ -94,7 +95,7 @@ for (const root of [...bundled].sort()) {
   else throw new Error(`${pkg.name} is bundled but ships no license file; its notice must travel with the package`);
   notices.push(`## ${pkg.name} ${pkg.version}\n\nLicense: ${pkg.license ?? 'see below'}\n\n\`\`\`\`text\n${text.replace(/[ \t]+$/gm, '')}\n\`\`\`\`\n`);
 }
-await writeFile('THIRD_PARTY_NOTICES.md', `# Third-party notices\n\nDig's bundled service (dist/dig.mjs) and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).\n\nLocal semantic search additionally uses ONNX Runtime Node/Common 1.30.0 (Microsoft, MIT); Search-Runtime-LICENSE and Search-Runtime-ThirdPartyNotices.txt carry its runtime notices. Only the accepted macOS arm64 binding is included.\n\nThe selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.\n\nDig's icon glyphs are Lucide icons (ISC License, Copyright (c) 2026 Lucide Icons and Contributors); their notice ships as Lucide-LICENSE.\n\n${notices.join('\n')}`);
+await writeFile('THIRD_PARTY_NOTICES.md', `# Third-party notices\n\nDig's bundled service (dist/dig.mjs) and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).\n\nLocal semantic search additionally uses ONNX Runtime Node/Common 1.30.0 (Microsoft, MIT); Search-Runtime-LICENSE and Search-Runtime-ThirdPartyNotices.txt carry its runtime notices. Supported packaged native bindings are macOS arm64 and Linux x64 (the active build platform's binding is included).\n\nThe selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.\n\nDig's icon glyphs are Lucide icons (ISC License, Copyright (c) 2026 Lucide Icons and Contributors); their notice ships as Lucide-LICENSE.\n\n${notices.join('\n')}`);
 // The host wrappers are build output: plugins/ is replaced as a whole, so nothing in it is kept by hand.
 await rm('plugins', { recursive: true, force: true });
 for (const [path, contents] of await wrapperFiles()) { await mkdir(dirname(path), { recursive: true }); await writeFile(path, contents); }

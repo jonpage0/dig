@@ -84,6 +84,17 @@ test("first requests enforce one to ten videos, bounded output and exact provide
   assert.equal(body.store, true);
   assert.equal(body.background, true, "The default caller waits on Google's stored background interaction");
   assert.equal(buildYouTubeRequest({ ...ARGS, model: "gemini-4-argon", thinking: "high", maxTokens: 16384 }).model, "gemini-4-argon");
+  const hydrogen = buildYouTubeRequest({ ...ARGS, model: "gemini-4-hydrogen", thinking: "xhigh" });
+  assert.equal(hydrogen.model, "gemini-4-hydrogen");
+  assert.equal(hydrogen.generation_config.thinking_level, "xhigh");
+  const neon = buildYouTubeRequest({ ...ARGS, model: "gemini-4-neon", thinking: "xhigh" });
+  assert.equal(neon.model, "gemini-4-neon");
+  assert.equal(neon.generation_config.thinking_level, "xhigh");
+  const analyzeSchema = createYouTubeAnalysisSchemas(Type).youtube_analyze;
+  assert.equal(Value.Check(analyzeSchema, { ...ARGS, model: "gemini-4-hydrogen", thinking: "xhigh" }), true);
+  assert.equal(Value.Check(analyzeSchema, { ...ARGS, model: "gemini-4-neon", thinking: "xhigh" }), true);
+  assert.equal(Value.Check(analyzeSchema, { ...ARGS, model: "gemini-pro" }), false);
+  assert.equal(Value.Check(analyzeSchema, { ...ARGS, thinking: "max" }), false);
   assert.equal(buildYouTubeRequest({ ...ARGS, videos: Array.from({ length: 10 }, () => ({ url: ID })) }).input.length, 11);
   for (const extra of [{ videos: [] }, { videos: Array.from({ length: 11 }, () => ({ url: ID })) }, { videos: "not an array" }, { question: " " }, { question: "x".repeat(20001) }, { model: "gemini-pro" }, { thinking: "max" }, { maxTokens: 127 }, { maxTokens: 16385 }, { maxTokens: 128.5 }]) {
     assert.throws(() => buildYouTubeRequest({ ...ARGS, ...extra }));

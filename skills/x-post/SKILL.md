@@ -41,36 +41,24 @@ X's API bills each post and account it returns from the user's X developer credi
 3. **The thread and the reactions.** `x_post` with `thread: true` for the author's own thread, `replies` for the conversation and `quotes` for the quote posts, which usually carry the commentary. Size these to the post's reach: a post with a handful of replies needs all of them; a viral one needs the most-engaged replies and quotes, which `x_search_posts` with `conversation_id:<id>` or `quotes_of_tweet_id:<id>` and `sort: "relevancy"` returns. Group the reactions into agreement, pushback, questions and other, each with representative posts quoted exactly.
 4. **Amplifiers.** `x_post` with `reposters` names the accounts that reposted it; name the notable ones and their reach.
 5. **Spread and origin.** `x_count_posts` for the post's distinctive phrase, its link (`url:`) or its claim's key terms, by hour or day (`granularity`), shows when discussion rose and fell; with `archive: true` it needs a `start_time`. `x_search_posts` with an `end_time` before the post looks for earlier posts making the same claim or sharing the same link; pass `archive: true` when the post is more than a few days old. When `SCRAPECREATORS_API_KEY` is set, `x_web_search` can complement `x_search_posts` for cheap broad historical topic mentions (>24 hours old).
-6. **Context.** `x_news` with the topic finds an X News story that clusters the post (`max_age_hours` and `limit` narrow the search; `id` reads one story). When the post was made in an X Community, `x_community` with that Community reads its details and recent posts around the topic. Links in the post are named, not read: reading them needs another source, which the parent can choose.
-7. **Images, video, and Grok when asked.** X's API returns media links and metadata such as alt text, duration and views. Keep `media` off on broad text passes, **and have zero hesitation pulling media whenever a post's images or video look useful:**
-   - **Images:** look at a post's images yourself with `x_images` (free, no key), passing the `pbs.twimg.com` image links printed after `Media:` in `x_post`: what you say an image shows is your own reading, reported under the post as such, with any text in it quoted exactly. If the pictures did not reach you (the result has no image you can see), say so and do not describe the image.
-   - **Videos:** when a post's substance is in its video (a demo, a finished reel), run a targeted `xsearch` with `media: true` and `depth: "quick"` naming **only those 1–5 specific video post links** (one pass can cover several) and ask what the video shows, with on-screen text quoted and what Grok could not see stated; report it under the post as Grok's description, not as something Dig observed. (The shared Glimpse `video_analyze` tool can separately inspect a returned direct MP4 URL when close visual detail matters.)
-   - **Wider conversation:** when the assignment asks for Grok's reading of the wider conversation, run `xsearch` with `media` off (`mode: "semantic"` for fast semantic leads, or `depth: "quick"` / user's `[x]` depth for synthesis; completed passes report `Posts fetched` / `Users fetched` when xAI returns them) and label what it returns as Grok's account. Read any post Grok cites with `x_post` before quoting it.
+6. **Context.** Use `x_news` for an X News story clustering the post and `x_community` if the post sits inside an X Community. Name links in the post without reading them; external pages need another source chosen by the parent.
+7. **Images, video, and Grok when asked.** Keep `media` off on broad text passes, **and have zero hesitation pulling media whenever a post's images or video look useful:**
+   - **Images:** inspect returned `Media:` `pbs.twimg.com` links yourself with `x_images` (free, no key; `size: "large"` for screenshots/charts), labeling descriptions as your own reading and quoting text verbatim (or saying if no image reached you).
+   - **Videos:** run a targeted `xsearch` (`media: true`, `depth: "quick"`) naming **only those 1–5 specific video post links**, quoting on-screen text and reporting it as Grok's description (or use shared `video_analyze` on a returned direct MP4 URL when close visual detail matters).
+   - **Wider conversation:** only when the assignment asks, run `xsearch` with `media` off (`mode: "semantic"` or `depth: "quick"` / `[x]` depth), label it as Grok's account, and verify any Grok-cited post with `x_post`.
 
-X's search operators include `from:`, `to:`, `conversation_id:`, `in_reply_to_tweet_id:`, `quotes_of_tweet_id:`, `is:reply`, `is:quote`, `is:verified`, `has:media`, `has:links`, `url:`, `lang:`, `min_likes:N`, `min_replies:N` and `min_reposts:N`, with parentheses and `OR`. Since May 4, 2026, X's search leaves reposts out of keyword matches (a `from:` search still returns an account's reposts), so `reposters` is how to see who reposted; recent search covers seven days and `archive: true` reaches back to 2006.
+Since May 4, 2026, X search omits reposts from keyword matches (`from:` still returns an account's reposts), so `reposters` is how to see who amplified a post; recent search covers 7 days and `archive: true` reaches back to 2006.
 
-### Worked post-inspection sequence
+## Tool cheat sheet
 
-Every example below is a call to the `x` tool.
+| Need | Action | Key usage |
+| --- | --- | --- |
+| Post, thread, reactions, amplifiers | `x_post` | `posts`, `thread: true`, sized `replies` / `quotes` / `reposters`; batch multiple post URLs. |
+| Viral replies, quotes, earlier origin | `x_search_posts`, `x_web_search` | `conversation_id:`, `quotes_of_tweet_id:`, `archive: true`, `end_time` before post; `x_web_search` for cheap >24 h mentions. |
+| Author standing & volume over time | `x_users`, `x_follows`, `x_count_posts` | Author `posts`/`mentions`; small `x_follows` page only when needed; `x_count_posts` by hour/day. |
+| Photos & videos | `x_images`, `xsearch` | Free `x_images` (`size: "large"`) for photos; targeted `xsearch` (`media: true`, `depth: "quick"`) on 1–5 video links. |
 
-1. **Read the supplied post(s), author thread, and initial reactions** (add `reposters: 25` when who amplified it matters; for viral posts, follow with `x_search_posts` using `conversation_id:<id>` or `quotes_of_tweet_id:<id>` and `sort: "relevancy"`):
-```json
-{ "dig": "<dig>", "action": "x_post", "args": { "posts": ["https://x.com/author/status/123"], "thread": true, "replies": 20, "quotes": 20 } }
-```
-2. **Check the author's standing and recent pattern:**
-```json
-{ "dig": "<dig>", "action": "x_users", "args": { "handles": ["author"], "posts": 15, "mentions": 10 } }
-```
-3. **Inspect useful media immediately** — free `x_images` (`size: "large"` for screenshots/charts) on returned `Media:` photo URLs, and a targeted `xsearch` (`media: true`, `depth: "quick"`) naming only the 1–5 video post links when the post's substance is in a video:
-```json
-{ "dig": "<dig>", "action": "x_images", "args": { "images": ["https://pbs.twimg.com/media/EXAMPLE.jpg"], "size": "large" } }
-{ "dig": "<dig>", "action": "xsearch", "args": { "query": "Describe what the video in https://x.com/author/status/123 shows, quote on-screen text verbatim, and note anything unclear.", "media": true, "depth": "quick", "passLabel": "pass-1" } }
-```
-4. **Measure spread and hunt earlier origin** (omit `end_time` on `x_count_posts` to count through now; pass `end_time` before the post's timestamp on `x_search_posts` to find earlier instances; add `x_web_search` for cheap historical mentions >24 h old when `SCRAPECREATORS_API_KEY` is set):
-```json
-{ "dig": "<dig>", "action": "x_count_posts", "args": { "query": "\"<distinctive phrase or url>\"", "granularity": "hour" } }
-{ "dig": "<dig>", "action": "x_search_posts", "args": { "query": "\"<distinctive phrase or url>\"", "archive": true, "end_time": "2026-11-10T14:00:00Z", "sort": "recency", "limit": 25 } }
-```
+For the worked 4-step JSON inspection sequence and extended X API operator reference, read [the worked playbooks and operator reference](references/playbooks.md) via `method({ name: "x-post", file: "references/playbooks.md" })`.
 
 Classify the post's own claim as the judge does: **OFFICIAL** (vendor, staff member or documentation), **FIRST-HAND** (a named user describing their own experience), **REPEATED CLAIM** (echoed without a primary source) or **SPECULATION** (theory, mechanism or sentiment). Say what would confirm or refute it, but do not rule on a wider dispute the posts do not settle.
 

@@ -38,7 +38,7 @@ Below, `dig` stands for `node /absolute/path/to/dig/dist/dig.mjs`: nothing insta
 
 Ask: **“Set up Dig.”** The assistant reads Dig's `setup` method, shows you the sources, and turns on the ones you choose. It changes a setting only when you ask it to.
 
-Hacker News is on from the start and needs no key. DeepWiki, Polymarket and the Wayback Machine need no key either. GitHub and the direct Papers searches work without one, at lower limits. [Sources and their keys](sources.md) lists what each source needs.
+Hacker News is on from the start and needs no key. DeepWiki, Polymarket, the Wayback Machine, SEC EDGAR and Bluesky need no key either. GitHub and the direct Papers searches work without one, at lower limits. [Sources and their keys](sources.md) lists what each source needs.
 
 ## 3. Enter keys
 
@@ -86,7 +86,7 @@ To find earlier research, ask: “Use Dig to find what we already researched abo
 
 ## 6. Understand costs
 
-- Each provider reports usage in its own units: US dollars, ScrapeCreators or Scrape.do credits, OpenAlex credits, or X post and account reads. Dig keeps each unit separate and never converts between them.
+- Each provider reports usage in its own units: US dollars, Firecrawl, ScrapeCreators or Scrape.do credits, OpenAlex credits, or X post and account reads. Dig keeps each unit separate and never converts between them.
 - **Unknown** means the provider reported no cost for the call. It does not mean free.
 - A **reported subtotal** means part of a call was priced and part was not, so its total is unknown.
 - Figures are what providers reported, not an invoice, and leave out your assistant's own model use, which your ChatGPT or Claude plan covers.

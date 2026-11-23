@@ -33,12 +33,15 @@ Before choosing among paid tools, look at each source's `history` in `source_inf
 
 - `perplexity`: current web facts, official documentation, news, web-grounded comparisons.
 - `exa`: targeted document discovery, page extraction, similar pages; deep research only on request.
+- `firecrawl`: reading JS-rendered, anti-bot, or SPA web pages as clean Markdown (`firecrawl_scrape`) and mapping URLs on a single domain (`firecrawl_map`) when plain fetch or Exa extraction comes back thin or blocked.
 - `wayback`: what a web page said on a given date and how it changed, from the Internet Archive's captures; the page behind a dead link.
 - `deepwiki`: structure and Q&A for one named public GitHub repository.
 - `github`: discover, compare and rank public repositories for a need.
 - `papers`: scholarly literature, citations, related work, full text.
+- `sec`: free, keyless SEC EDGAR filings (10-K, 10-Q, 8-K, S-1, DEF 14A, 13F, Form 4), company submission histories, and structured XBRL financial facts.
 - `dataforseo`: paid search-market data (SERPs, keywords, rankings, backlinks, local business, AI visibility) from DataForSEO's v3 API. `dataforseo-ai-visibility`: a brand's mentions and citations in AI answers, compared with competitors and over time, from DataForSEO LLM Mentions.
 - `x-judge`: X discourse weighed by reach and claim type. `x-breadth`: X discourse found as widely as possible, not weighed. `x-post`: particular X posts (a link the user supplied, or a post a report cited) read exactly, with their thread, reactions, author, spread and origin. `x-trace`: a conversation followed outward from a post, an account or a claim, through the people replying, who they are and what they point to, each voice weighed by who it is and what it knows, not by engagement; give it the seeds and, when cost matters, a budget in post reads and account reads. Independent methods; run one or several. When the question is only "what does this post say", reading it with `x_post` inline is enough; when it turns on what a post's images or video show, use `x-post`, whose worker looks at the images itself with `x_images` and asks Grok to describe the video. The user's own X bookmarks and likes need no method: call the `x` tool's `x_bookmarks` or `x_likes` action directly, under a dig (they need the optional X sign-in keys), with `match` for a topic, and answer from what they return. An X Community's details and posts come from `x_community`; `x_explore` with `kind: "communities"` finds Communities by topic.
+- `bluesky`: free, keyless public Bluesky/ATProto post search, thread reading, and account profiles.
 - `reddit`: public Reddit threads and comments. `tikhub-reddit`: advanced Reddit scouting, subreddit context, a thread's first page of comments with up to 8 collapsed-reply continuations per call, batch enrichment.
 - `hackernews`: Hacker News stories, comments, Ask HN, Show HN.
 - `polymarket`: market-implied probabilities, volume, liquidity, movement.
@@ -79,6 +82,9 @@ Keep "Choose the fewest sources" for narrow questions: do not add a second wave 
 - a Chinese lab, creator or platform handle → `china-social`;
 - a product, seller or ad claim → `commerce`, `facebook-ads`, `google-ads`, `linkedin-ads` or `tiktok-ads`;
 - a dead or changed URL → `wayback`;
+- a JS-rendered, SPA, or anti-bot URL whose content came back thin → `firecrawl`;
+- a US public company ticker, CIK, or SEC filing claim → `sec`;
+- a Bluesky post, thread, or handle → `bluesky`;
 - an X post, thread or account → `x-post` or `x-trace`.
 
 Pass the Wave 2 worker (or inline run) the exact identifier or URL, the retained Wave 1 report path, and the specific remaining question it must settle. If the target source is disabled or not ready, record that gap in your answer rather than working around it.

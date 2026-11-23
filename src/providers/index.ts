@@ -43,6 +43,9 @@ import { search as github_search, inspect as github_inspect, read as github_read
 import { search as tiktok_ads_search, top as tiktok_ads_top, detail as tiktok_ads_detail, library as tiktok_ad_library } from "./tools/tiktok_ads.js";
 import { read_wiki_structure as deepwiki_read_wiki_structure, read_wiki_contents as deepwiki_read_wiki_contents, ask_question as deepwiki_ask_question } from "./tools/deepwiki.js";
 import { docs_sections as dataforseo_docs_sections, docs_index as dataforseo_docs_index, docs_read as dataforseo_docs_read, request as dataforseo_request } from "./tools/dataforseo.js";
+import { scrape as firecrawl_scrape, map as firecrawl_map } from "./tools/firecrawl.js";
+import { search as sec_search, company as sec_company, facts as sec_facts } from "./tools/sec.js";
+import { search as bluesky_search, thread as bluesky_thread, profile as bluesky_profile } from "./tools/bluesky.js";
 import type { ToolSpec } from "./types.js";
 
 /**
@@ -132,4 +135,12 @@ export const providerTools: Record<string, ToolSpec> = {
 	dataforseo_docs_index,
 	dataforseo_docs_read,
 	dataforseo_request,
+	firecrawl_scrape,
+	firecrawl_map,
+	sec_search,
+	sec_company,
+	sec_facts,
+	bluesky_search,
+	bluesky_thread,
+	bluesky_profile,
 };

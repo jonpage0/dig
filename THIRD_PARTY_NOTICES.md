@@ -2,7 +2,7 @@
 
 Dig's bundled service (dist/dig.mjs) and views include code from the packages below, under their own licenses. Dig itself is MIT-licensed (LICENSE).
 
-Local semantic search additionally uses ONNX Runtime Node/Common 1.30.0 (Microsoft, MIT); Search-Runtime-LICENSE and Search-Runtime-ThirdPartyNotices.txt carry its runtime notices. Only the accepted macOS arm64 binding is included.
+Local semantic search additionally uses ONNX Runtime Node/Common 1.30.0 (Microsoft, MIT); Search-Runtime-LICENSE and Search-Runtime-ThirdPartyNotices.txt carry its runtime notices. Supported packaged native bindings are macOS arm64 and Linux x64 (the active build platform's binding is included).
 
 The selected ReUI Base UI Frame, Icon Tile and Timeline components are MIT-licensed by Keenthemes Inc; their notice ships as ReUI-LICENSE. Their source provenance is documented in src/frontend/shared/THIRD_PARTY.md in the repository.
 

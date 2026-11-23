@@ -11,6 +11,9 @@ import { existsSync } from 'node:fs';
 // The packaged ONNX Runtime (scripts/search-runtime.mjs) is the package's runtime/: beside dist/ for the bundled service
 // (dist/dig.mjs), two folders up from here.
 export const RUNTIME=(['../runtime/dist/onnx.cjs','../../runtime/dist/onnx.cjs'].map(path=>new URL(path,import.meta.url)).find(url=>existsSync(url))??new URL('../runtime/dist/onnx.cjs',import.meta.url)).href;
+export const SUPPORTED_PLATFORMS=Object.freeze(['darwin/arm64','linux/x64']);
+export function isSupportedPlatform(platform=process.platform,arch=process.arch){return SUPPORTED_PLATFORMS.includes(`${platform}/${arch}`);}
+export function assertSupportedPlatform(platform=process.platform,arch=process.arch){if(!isSupportedPlatform(platform,arch))throw Error(`Local semantic search is currently packaged for macOS arm64 and Linux x64 (not ${platform}/${arch}). Keyword search remains available.`);}
 export const MODEL={id:manifest.model,revision:manifest.revision,dtype:'q8',pooling:'cls',dimensions:384,normalized:true};
 export const tokenizer=new Tokenizer(tokenizerData,tokenizerConfig);
 export const hash=value=>createHash('sha256').update(value).digest('hex');
@@ -54,7 +57,7 @@ export async function installAssets(state,signal){
 }
 export function embed(state,text,signal){return serialized(async()=>{
  signal?.throwIfAborted();clearTimeout(timer);
- if(process.platform!=='darwin'||process.arch!=='arm64')throw Error('Local semantic search is currently packaged for macOS arm64. Keyword search remains available.');
+ assertSupportedPlatform();
  const path=join(state,'search/models',manifest.revision,'onnx/model_quantized.onnx');
  if(!session||sessionPath!==path)await installAssets(state,signal);
  if(!session||sessionPath!==path){await session?.release();session=null;const runtime=await import(RUNTIME);session=await (runtime.default??runtime).InferenceSession.create(path,{executionProviders:['cpu'],intraOpNumThreads:4,interOpNumThreads:1});sessionPath=path;}

@@ -54,8 +54,8 @@ async function files(dir: string, prefix = ''): Promise<string[]> {
   return (await Promise.all((await readdir(dir, { withFileTypes: true })).map(d => d.isDirectory() ? files(join(dir, d.name), `${prefix}${d.name}/`) : [`${prefix}${d.name}`]))).flat();
 }
 
-test('[methods] there are 36, one folder each, and every catalog method and helper has one', () => {
-  assert.equal(NAMES.length, 36);
+test('[methods] there are 39, one folder each, and every catalog method and helper has one', () => {
+  assert.equal(NAMES.length, 39);
   assert.deepEqual(new Set(moduleSkills(MODULES.map(m => m.id))), new Set(NAMES));
 });
 
@@ -96,7 +96,7 @@ test('[methods] every relative link resolves to a file inside its method', async
   }
 });
 
-test('[catalog] lists all 36 with manifests whose digests and sizes match the files', async () => {
+test('[catalog] lists all 39 with manifests whose digests and sizes match the files', async () => {
   assert.deepEqual(all.list.map(m => m.name), NAMES);
   for (const m of all.list) {
     assert.equal(m.entry.uri, `skill://${m.name}/SKILL.md`);
@@ -133,6 +133,13 @@ test('[method tool] instructions, a supporting file, an unknown name and a file 
   assert.ok(!instructions.isError); assert.equal(text(instructions), methodText(all.byName.get('x-post')!));
   const file = readMethod(all, 'dataforseo', 'references/website-recipes.md');
   assert.ok(!file.isError); assert.match(text(file), /^# /);
+  for (const xMethod of ['x-judge', 'x-breadth', 'x-post', 'x-trace']) {
+    const pb = readMethod(all, xMethod, 'references/playbooks.md');
+    assert.ok(!pb.isError, `${xMethod} exposes references/playbooks.md`);
+    assert.match(text(pb), /^# /);
+    const skillBytes = all.byName.get(xMethod)!.files.get('SKILL.md')!.length;
+    assert.ok(skillBytes < 20_000, `${xMethod}/SKILL.md grew to ${skillBytes} bytes`);
+  }
   const unknown = readMethod(all, 'x-search');
   assert.equal(unknown.isError, true); assert.match(text(unknown), /No method is named x-search\. The methods are: .*x-judge/);
   for (const outside of ['../dataforseo/references/website-recipes.md', '/etc/passwd', 'references/../../dig/SKILL.md', 'file:///etc/passwd']) {

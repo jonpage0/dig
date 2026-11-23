@@ -80,6 +80,13 @@ export const CHECKS = [
   { tool: 'dataforseo_docs_index', args: { section: 'SERP API', query: 'languages', limit: 3 } },
   { tool: 'dataforseo_docs_read', args: { path: 'serp/google/languages', limit: 4000 } },
   { tool: 'dataforseo_request', args: { path: 'serp/google/languages', method: 'GET' } },
+  { tool: 'firecrawl_scrape', args: { url: 'https://example.com', onlyMainContent: true } },
+  { tool: 'firecrawl_map', args: { url: 'https://example.com', limit: 5 } },
+  { tool: 'sec_search', args: { q: 'risk factors', forms: ['10-K'], entity: '0000320193', limit: 2 } },
+  { tool: 'sec_company', args: { entity: '0000320193', forms: ['10-K'], limit: 2 } },
+  { tool: 'sec_facts', args: { entity: '0000320193', concepts: ['Assets'], forms: ['10-K'], limit: 2 } },
+  { tool: 'bluesky_search', args: { q: 'atproto', limit: 2 } },
+  { tool: 'bluesky_profile', args: { actor: 'bsky.app', includePosts: true, limit: 2 } },
 ];
 
 export const SKIPPED = [
@@ -95,6 +102,7 @@ export const SKIPPED = [
   { tool: 'x_bookmarks', reason: 'Reads the signed-in account’s bookmarks: needs an X sign-in.' },
   { tool: 'x_likes', reason: 'Reads the signed-in account’s likes: needs an X sign-in.' },
   { tool: 'x_images', reason: 'Needs an image link that another call returns (x_post or x_search_posts).' },
+  { tool: 'bluesky_thread', reason: 'Needs a post URL or AT URI that bluesky_search or bluesky_profile returns.' },
 ];
 
 /** Deep-research and model-analysis calls: run only when named with --tool. */

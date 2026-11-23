@@ -233,3 +233,20 @@ test("the docs reader follows at most three same-host redirects", async () => {
 	expect(refused.status).toBe("failed");
 	expect(endless).toHaveLength(4);
 });
+
+test("live requests allow a 300-second timeout so slow SERP options such as resolve_goto_urls do not abort early", async () => {
+	const timeouts: number[] = [];
+	const originalTimeout = AbortSignal.timeout;
+	AbortSignal.timeout = ((ms: number) => {
+		timeouts.push(ms);
+		return originalTimeout(ms);
+	}) as typeof AbortSignal.timeout;
+	try {
+		installFetch(() => Response.json(envelope([{ id: "t-slow", status_code: 20000, status_message: "Ok.", cost: 0.002, result_count: 1, result: [{ items: [] }] }], 0.002)));
+		const result = await executeSource(request, { path: "serp/google/organic/live/advanced", tasks: [{ keyword: "x", resolve_goto_urls: true }] }, context);
+		expect(result.status).toBe("success");
+		expect(timeouts).toEqual([300_000]);
+	} finally {
+		AbortSignal.timeout = originalTimeout;
+	}
+});

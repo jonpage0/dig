@@ -215,7 +215,13 @@ test("the default model receives the requested depth as reasoning effort", async
 	await executeSource(search, { query: "depth" }, context);
 	await executeSource(search, { query: "depth", depth: "standard" }, context);
 	await executeSource(search, { query: "depth", depth: "max" }, context);
-	expect(bodies.map((body) => [body.model, body.reasoning?.effort])).toEqual([["grok-4.7", "low"], ["grok-4.7", "medium"], ["grok-4.7", "high"]]);
+	await executeSource(search, { query: "depth", depth: "ultra" }, context);
+	expect(bodies.map((body) => [body.model, body.reasoning?.effort])).toEqual([
+		["grok-4.7", "low"],
+		["grok-4.7", "medium"],
+		["grok-4.7", "high"],
+		["grok-4.7", "xhigh"],
+	]);
 });
 
 test("a write-up that cites posts by number is flagged; links, references, code and years are not", async () => {
@@ -665,4 +671,82 @@ test("SSE search-round items emit deduplicated, redacted live progress updates w
 	expect(events[1]).toEqual({ progress: 2, message: "Search round 2 (x_thread_fetch): post 2072482460122964067" });
 	expect(events[2]).toEqual({ progress: 3, message: "Search round 3 (open_page): https://pbs.twimg.com/media/EXAMPLE.jpg" });
 	expect(events[3]).toEqual({ progress: 4, message: 'Search round 4 (x_search): "direct x_search_call"' });
+});
+
+test("depth 'ultra' sends reasoning.effort 'xhigh' and falls back gracefully when a model rejects xhigh", async () => {
+	const bodies: any[] = [];
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		bodies.push(JSON.parse(String(init?.body)));
+		return bodies.length === 1
+			? Response.json({ error: { message: "Invalid value 'xhigh' for reasoning effort" }, usage: { total_tokens: 0, cost_in_usd_ticks: 0 } }, { status: 400 })
+			: Response.json(complete());
+	}) as typeof fetch;
+	const result = await executeSource(search, { query: "deep trace", depth: "ultra" }, context);
+	expect(bodies.map(body => body.reasoning)).toEqual([{ effort: "xhigh" }, undefined]);
+	expect(result.status).toBe("success");
+	expect(result.text).toContain("- Depth: ultra (effort not sent; provider default applies)");
+});
+
+test("webAllowedDomains and webExcludedDomains forward as web_search filters and validate cleanly before sending", async () => {
+	const schema = createSchemas(Type).xsearch;
+	const bodies: any[] = [];
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		bodies.push(JSON.parse(String(init?.body)));
+		return Response.json(complete());
+	}) as typeof fetch;
+
+	// Allowed domains forwarded (normalized to lowercase)
+	const allowedArgs = { query: "docs check", enableWebSearch: true, webAllowedDomains: ["Docs.Example.com", "blog.example.org", "a.co", "b.io", "c.dev"] };
+	expect(Value.Check(schema, allowedArgs)).toBe(true);
+	const allowedRes = await executeSource(search, allowedArgs, context);
+	expect(allowedRes.status).toBe("success");
+	expect(bodies.at(-1).tools).toContainEqual({
+		type: "web_search",
+		filters: { allowed_domains: ["docs.example.com", "blog.example.org", "a.co", "b.io", "c.dev"] },
+	});
+	expect(allowedRes.text).toContain("- Web Allowed Domains: docs.example.com, blog.example.org, a.co, b.io, c.dev");
+
+	// Excluded domains forwarded
+	const excludedArgs = { query: "no spam", enableWebSearch: true, webExcludedDomains: ["spam.example.com"] };
+	expect(Value.Check(schema, excludedArgs)).toBe(true);
+	const excludedRes = await executeSource(search, excludedArgs, context);
+	expect(excludedRes.status).toBe("success");
+	expect(bodies.at(-1).tools).toContainEqual({
+		type: "web_search",
+		filters: { excluded_domains: ["spam.example.com"] },
+	});
+	expect(excludedRes.text).toContain("- Web Excluded Domains: spam.example.com");
+
+	// Validation rejections before any request
+	const sentSoFar = bodies.length;
+	// 1. webSearch disabled
+	const noWeb = await executeSource(search, { query: "q", webAllowedDomains: ["example.com"] }, context);
+	expect(noWeb.status).toBe("failed");
+	expect(noWeb.text).toContain("require web search");
+	const explicitFalse = await executeSource(search, { query: "q", enableWebSearch: false, webExcludedDomains: ["example.com"] }, context);
+	expect(explicitFalse.status).toBe("failed");
+	expect(explicitFalse.text).toContain("require web search");
+
+	// 2. Both provided (mutually exclusive)
+	const both = await executeSource(search, { query: "q", enableWebSearch: true, webAllowedDomains: ["a.com"], webExcludedDomains: ["b.com"] }, context);
+	expect(both.status).toBe("failed");
+	expect(both.text).toContain("Cannot use both");
+
+	// 3. > 5 entries (rejected by schema and runtime)
+	const six = ["a.com", "b.com", "c.com", "d.com", "e.com", "f.com"];
+	expect(Value.Check(schema, { query: "q", enableWebSearch: true, webAllowedDomains: six })).toBe(false);
+	expect(Value.Check(schema, { query: "q", enableWebSearch: true, webExcludedDomains: six })).toBe(false);
+	const tooManyAllowed = await executeSource(search, { query: "q", enableWebSearch: true, webAllowedDomains: six }, context);
+	expect(tooManyAllowed.status).toBe("failed");
+	expect(tooManyAllowed.text).toContain("at most 5 hostnames");
+	const tooManyExcluded = await executeSource(search, { query: "q", enableWebSearch: true, webExcludedDomains: six }, context);
+	expect(tooManyExcluded.status).toBe("failed");
+	expect(tooManyExcluded.text).toContain("at most 5 hostnames");
+
+	// 4. Invalid hostname (URL with scheme or path)
+	const badHost = await executeSource(search, { query: "q", enableWebSearch: true, webAllowedDomains: ["https://example.com/path"] }, context);
+	expect(badHost.status).toBe("failed");
+	expect(badHost.text).toContain("Invalid hostname");
+
+	expect(bodies).toHaveLength(sentSoFar);
 });

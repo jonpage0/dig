@@ -831,19 +831,24 @@ export function createSchemas(
           T.Integer({
             minimum: 1,
             maximum: 100,
-            description:
-              "Number of results (default: 10, max: 100; results above 10 bill $1/1k each).",
+            description: "Results (default 10, max 100; >10 bill $1/1k each).",
           }),
         ),
         type: enumSchema(
           T,
           ["instant", "fast", "lite", "auto", "deep-lite", "deep", "deep-reasoning"],
-          "Search mode: auto (default), fast/instant for latency, lite for cached page content only (no maxAgeHours or summary), deep-lite/deep/deep-reasoning for opt-in iterative research ($12-15/1k).",
+          "Mode: auto (default, $7/1k), lite ($4/1k cache-only; no maxAgeHours/summary), deep-lite/deep ($12/1k), or legacy fast/instant/deep-reasoning ($15/1k).",
         ),
         category: T.Optional(
           T.String({
             description:
-              "Data category focus: company, publication, news, personal site, financial report, people; other strings are hints. company/people reject date filters and excludeDomains.",
+              "Category focus: company, publication, news, personal site, financial report, people (other strings are hints). company/people reject dates and excludeDomains.",
+          }),
+        ),
+        userLocation: T.Optional(
+          T.String({
+            pattern: "^[A-Za-z]{2}$",
+            description: "2-letter ISO country code (e.g. US) for local/places/events.",
           }),
         ),
         includeDomains: stringArray(
@@ -872,31 +877,27 @@ export function createSchemas(
         ),
         summary: T.Optional(
           T.Boolean({
-            description:
-              "Also return an Exa AI summary per result (default: false; bills $1/1k pages).",
+            description: "Also return an AI summary per result (default false; +$1/1k pages).",
           }),
         ),
         highlightMaxCharacters: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 10000,
-            description:
-              "Per-page highlight character budget; not compatible with dynamicHighlights.",
+            description: "Per-page highlight char budget (not with dynamicHighlights).",
           }),
         ),
         dynamicHighlights: T.Optional(
           T.Boolean({
-            description:
-              "Opt in to Exa Dynamic Highlights (research preview, shared budget across the result set; sends the Exa-Beta header).",
+            description: "Dynamic Highlights: shared excerpt budget across results, omits text (sends Exa-Beta header).",
           }),
         ),
-        snapshotAsOf: T.Optional(T.String({ description: "ISO cutoff date for stored historical content. Plan and rolling lookback limits apply; incompatible with maxAgeHours, category and the deep and deep-reasoning types. Does not reproduce historical ranking." })),
+        snapshotAsOf: T.Optional(T.String({ description: "ISO cutoff for stored content (5-month window, paid plans; no historical ranking; not with maxAgeHours, category, deep, deep-reasoning)." })),
         maxAgeHours: T.Optional(
           T.Integer({
             minimum: -1,
             maximum: 720,
-            description:
-              "Content freshness: omit for cache with live fallback, 0 always fresh, -1 cache only, N refetch if older than N hours.",
+            description: "Freshness: omit for cache+live fallback, 0 fresh, -1 cache only, N refetch if >N hours old.",
           }),
         ),
       },
@@ -921,33 +922,34 @@ export function createSchemas(
             description: "Max characters of page text per URL (default: 5000).",
           }),
         ),
+        highlights: T.Optional(
+          T.Boolean({
+            description: "Include highlights (default: true; false for text-only, $1/1k vs $2/1k).",
+          }),
+        ),
         summary: T.Optional(
           T.Boolean({
-            description:
-              "Also return an Exa AI summary per page (default: false; bills an extra content type).",
+            description: "Also return an AI summary per page (default false; +$1/1k pages).",
           }),
         ),
         highlightMaxCharacters: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 10000,
-            description:
-              "Per-page highlight character budget; not compatible with dynamicHighlights.",
+            description: "Per-page highlight char budget (not with dynamicHighlights).",
           }),
         ),
         dynamicHighlights: T.Optional(
           T.Boolean({
-            description:
-              "Opt in to Exa Dynamic Highlights (research preview; sends the Exa-Beta header).",
+            description: "Dynamic Highlights: shared excerpt budget (sends Exa-Beta header).",
           }),
         ),
-        snapshotAsOf: T.Optional(T.String({ description: "ISO cutoff date for stored historical content. Plan and rolling lookback limits apply; incompatible with maxAgeHours. Does not reproduce historical ranking." })),
+        snapshotAsOf: T.Optional(T.String({ description: "ISO cutoff for stored content (5-month window, paid plans; not with maxAgeHours)." })),
         maxAgeHours: T.Optional(
           T.Integer({
             minimum: -1,
             maximum: 720,
-            description:
-              "Content freshness: omit for cache with live fallback, 0 always fresh, -1 cache only, N refetch if older than N hours.",
+            description: "Freshness: omit for cache+live fallback, 0 fresh, -1 cache only, N refetch if >N hours old.",
           }),
         ),
       },
@@ -994,30 +996,26 @@ export function createSchemas(
         ),
         summary: T.Optional(
           T.Boolean({
-            description:
-              "Also return an Exa AI summary per result (default: false; bills $1/1k pages).",
+            description: "Also return an AI summary per result (default false; +$1/1k pages).",
           }),
         ),
         highlightMaxCharacters: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 10000,
-            description:
-              "Per-page highlight character budget; not compatible with dynamicHighlights.",
+            description: "Per-page highlight char budget (not with dynamicHighlights).",
           }),
         ),
         dynamicHighlights: T.Optional(
           T.Boolean({
-            description:
-              "Opt in to Exa Dynamic Highlights (research preview; sends the Exa-Beta header).",
+            description: "Dynamic Highlights: shared excerpt budget, omits text (sends Exa-Beta header).",
           }),
         ),
         maxAgeHours: T.Optional(
           T.Integer({
             minimum: -1,
             maximum: 720,
-            description:
-              "Content freshness: omit for cache with live fallback, 0 always fresh, -1 cache only, N refetch if older than N hours.",
+            description: "Freshness: omit for cache+live fallback, 0 fresh, -1 cache only, N refetch if >N hours old.",
           }),
         ),
       },
@@ -1026,13 +1024,16 @@ export function createSchemas(
     exa_research: T.Object(
       {
         query: T.String({
-          description:
-            "What to research (natural-language question or task). One deep-reasoning /search call, $15/1k, 12-40s.",
+          description: "What to research. One deep /search call (default deep, $12/1k, 4-15s).",
         }),
+        mode: enumSchema(
+          T,
+          ["deep", "deep-lite", "deep-reasoning"],
+          "Mode: deep (default, $12/1k, 4-15s), deep-lite ($12/1k), or legacy deep-reasoning ($15/1k).",
+        ),
         systemPrompt: T.Optional(
           T.String({
-            description:
-              "How to conduct and present the research: source preferences, novelty/deduplication constraints, organization.",
+            description: "Research guidance: source preferences, deduplication, and organization.",
           }),
         ),
         additionalQueries: stringArray(
@@ -1125,15 +1126,15 @@ export function createSchemas(
         ),
         search_type: enumSchema(
           T,
-          ["web", "people"],
-          "Web search (default) or people search.",
+          ["web", "fast", "people"],
+          "web (default, $5/1k), fast (Photon, $1/1k), or people.",
         ),
         max_results: T.Optional(
           T.Integer({
             minimum: 1,
             maximum: 50,
             description:
-              "1-20 for web, 1-50 for people; default 10. Runtime enforces the search-type limit.",
+              "1-20 for web/fast, 1-50 for people; default 10. Runtime enforces the limit.",
           }),
         ),
         country: T.Optional(
@@ -1356,6 +1357,12 @@ export function createSchemas(
       ),
       enableWebSearch: T.Optional(
         T.Boolean({ description: "Add web search alongside X (omit for [x] web_search setting, default off)." }),
+      ),
+      webAllowedDomains: T.Optional(
+        T.Array(T.String({ minLength: 1 }), { maxItems: 5, description: "Up to 5 web_search hostnames (needs web search; exclusive with webExcludedDomains)." }),
+      ),
+      webExcludedDomains: T.Optional(
+        T.Array(T.String({ minLength: 1 }), { maxItems: 5, description: "Exclude up to 5 web_search hostnames (needs web search; exclusive with webAllowedDomains)." }),
       ),
       media: T.Optional(T.Boolean({ description: "Grok reads post images/video (default false)." })),
     }),
@@ -2406,6 +2413,122 @@ export function createSchemas(
             description: "Maximum lines to return (default: 400).",
           }),
         ),
+      },
+      { additionalProperties: false },
+    ),
+    firecrawl_scrape: T.Object(
+      {
+        url: T.String({ description: "Public http(s) URL to scrape." }),
+        formats: T.Optional(
+          T.Array(requiredEnumSchema(T, ["markdown", "html", "links"], "Output format"), {
+            minItems: 1,
+            description: "Output formats (default: ['markdown']).",
+          }),
+        ),
+        onlyMainContent: T.Optional(
+          T.Boolean({ description: "Strip nav, headers and footers (default: true)." }),
+        ),
+        maxAge: T.Optional(
+          T.Integer({ minimum: 0, description: "Cache max age in ms; 0 forces fresh fetch." }),
+        ),
+        waitFor: T.Optional(
+          T.Integer({ minimum: 0, maximum: 10000, description: "Extra JS render wait in ms (0-10000)." }),
+        ),
+        maxCharacters: T.Optional(
+          T.Integer({ minimum: 500, maximum: 100000, description: "Max output characters (default: 40000)." }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    firecrawl_map: T.Object(
+      {
+        url: T.String({ description: "Public http(s) site or section URL to map." }),
+        search: T.Optional(T.String({ description: "Filter and rank URLs by relevance." })),
+        limit: T.Optional(
+          T.Integer({ minimum: 1, maximum: 200, description: "Max URLs (default: 50, max: 200)." }),
+        ),
+        includeSubdomains: T.Optional(
+          T.Boolean({ description: "Include subdomains (default: false)." }),
+        ),
+        sitemap: enumSchema(T, ["include", "skip", "only"], "Sitemap mode (default: include)."),
+      },
+      { additionalProperties: false },
+    ),
+    sec_search: T.Object(
+      {
+        q: T.String({ description: "Full-text query (keywords or exact phrase)." }),
+        forms: stringArray(T, "Form types, e.g. ['10-K','10-Q','8-K']."),
+        entity: T.Optional(T.String({ description: "Filter by company name or CIK." })),
+        startDate: T.Optional(T.String({ description: "Start filing date (YYYY-MM-DD)." })),
+        endDate: T.Optional(T.String({ description: "End filing date (YYYY-MM-DD)." })),
+        limit: T.Optional(
+          T.Integer({ minimum: 1, maximum: 25, description: "Max filings (default: 10, max: 25)." }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    sec_company: T.Object(
+      {
+        entity: T.String({ description: "Ticker symbol (e.g. AAPL) or CIK." }),
+        forms: stringArray(T, "Filter recent filings by form type."),
+        limit: T.Optional(
+          T.Integer({ minimum: 1, maximum: 50, description: "Max filings (default: 20, max: 50)." }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    sec_facts: T.Object(
+      {
+        entity: T.String({ description: "Ticker symbol (e.g. AAPL) or CIK." }),
+        concepts: stringArray(T, "XBRL concepts (e.g. Revenues, NetIncomeLoss, Assets); omit to list concepts."),
+        taxonomy: T.Optional(T.String({ description: "Taxonomy namespace (default: us-gaap)." })),
+        forms: stringArray(T, "Filter facts by form type (e.g. ['10-K','10-Q'])."),
+        limit: T.Optional(
+          T.Integer({ minimum: 1, maximum: 25, description: "Recent periods per concept (default: 8, max: 25)." }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    bluesky_search: T.Object(
+      {
+        q: T.String({ description: "Search query." }),
+        sort: enumSchema(T, ["top", "latest"], "Sort order (default: latest)."),
+        author: T.Optional(T.String({ description: "Filter by author handle or DID." })),
+        since: T.Optional(T.String({ description: "Posts at or after ISO date/datetime." })),
+        until: T.Optional(T.String({ description: "Posts before ISO date/datetime." })),
+        lang: T.Optional(T.String({ description: "Language code filter (e.g. en)." })),
+        limit: T.Optional(
+          T.Integer({ minimum: 1, maximum: 50, description: "Max posts (default: 20, max: 50)." }),
+        ),
+        cursor: T.Optional(T.String({ description: "Pagination cursor from prior call." })),
+      },
+      { additionalProperties: false },
+    ),
+    bluesky_thread: T.Object(
+      {
+        post: T.String({ description: "bsky.app post URL or at:// post URI." }),
+        depth: T.Optional(
+          T.Integer({ minimum: 0, maximum: 20, description: "Reply depth (default: 6, max: 20)." }),
+        ),
+        parentHeight: T.Optional(
+          T.Integer({ minimum: 0, maximum: 20, description: "Parent height (default: 6, max: 20)." }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    bluesky_profile: T.Object(
+      {
+        actor: T.String({ description: "Bluesky handle (e.g. bsky.app) or DID." }),
+        includePosts: T.Optional(T.Boolean({ description: "Also fetch recent posts (default: true)." })),
+        limit: T.Optional(
+          T.Integer({ minimum: 1, maximum: 50, description: "Max posts (default: 15, max: 50)." }),
+        ),
+        filter: enumSchema(
+          T,
+          ["posts_with_replies", "posts_no_replies", "posts_with_media", "posts_and_author_threads"],
+          "Author feed filter.",
+        ),
+        cursor: T.Optional(T.String({ description: "Feed pagination cursor." })),
       },
       { additionalProperties: false },
     ),

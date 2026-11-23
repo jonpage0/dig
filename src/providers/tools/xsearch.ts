@@ -38,6 +38,10 @@ interface XSearchToolConfig {
 
 interface WebSearchToolConfig {
   type: "web_search"
+  filters?: {
+    allowed_domains?: string[]
+    excluded_domains?: string[]
+  }
 }
 
 interface CodeInterpreterToolConfig {
@@ -260,12 +264,38 @@ function numberedCitations(text: string): string[] {
 }
 
 export type XSearchDepth = "quick" | "standard" | "max" | "ultra"
-type ReasoningEffort = "low" | "medium" | "high"
+type ReasoningEffort = "low" | "medium" | "high" | "xhigh"
 
 function reasoningEffortForDepth(depth: XSearchDepth): ReasoningEffort {
   if (depth === "quick") return "low"
-  if (depth === "max" || depth === "ultra") return "high"
+  if (depth === "max") return "high"
+  if (depth === "ultra") return "xhigh"
   return "medium"
+}
+
+const HOSTNAME_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
+
+function normalizeWebDomains(value: unknown, field: "webAllowedDomains" | "webExcludedDomains"): { domains: string[] } | { error: string } {
+  if (value === undefined) return { domains: [] }
+  if (!Array.isArray(value)) return { error: `${field} must be an array of up to 5 hostnames.` }
+  if (value.length > 5) {
+    return { error: `Each web domain filter accepts at most 5 hostnames. Split a larger scope into explicit searches; no domains were silently omitted.` }
+  }
+  const domains: string[] = []
+  const seen = new Set<string>()
+  for (const entry of value) {
+    if (typeof entry !== "string") return { error: `${field} entries must be hostname strings (e.g. "example.com").` }
+    const host = entry.trim().toLowerCase()
+    const tld = host.split(".").at(-1) ?? ""
+    if (!host || host.length > 253 || !HOSTNAME_RE.test(host) || /^\d+$/.test(tld)) {
+      return { error: `Invalid hostname "${entry}" in ${field}: pass bare hostnames without scheme, path or port (e.g. "example.com").` }
+    }
+    if (!seen.has(host)) {
+      seen.add(host)
+      domains.push(host)
+    }
+  }
+  return { domains }
 }
 
 // Explicitly supported model families. Unlisted models use their provider default;
@@ -278,6 +308,7 @@ async function callResponsesApi(apiKey: string, requestBody: ResponsesRequest, s
   try {
     return await fetch(`${API_BASE}/responses`, {
       method: "POST",
+      redirect: "error",
       signal,
       headers: {
         "Content-Type": "application/json",
@@ -498,7 +529,7 @@ async function storedResponse(apiKey: string, id: string, signal: AbortSignal, w
     await abortableDelay(wait, signal)
     let response: Response
     try {
-      response = await fetch(`${API_BASE}/responses/${encodeURIComponent(id)}`, { headers: { "Authorization": `Bearer ${apiKey}` }, signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) })
+      response = await fetch(`${API_BASE}/responses/${encodeURIComponent(id)}`, { redirect: "error", headers: { "Authorization": `Bearer ${apiKey}` }, signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) })
     } catch (error) {
       signal.throwIfAborted()
       found = { state: "error", status: error instanceof Error ? error.message : String(error) }
@@ -545,7 +576,7 @@ function shouldRetryWithoutStorage(status: number, errorText: string): boolean {
 // parameter. Retrying without it beats hard-coding every model xAI ships, and keeps
 // a model swap in config.toml ([x] model) from silently turning `depth` into a no-op.
 function shouldRetryWithoutReasoning(status: number, errorText: string, sentReasoning: boolean): boolean {
-  return sentReasoning && status === 400 && /reasoning|effort/i.test(errorText)
+  return sentReasoning && status === 400 && /reasoning|effort|xhigh/i.test(errorText)
 }
 
 /** xAI's own charge on one response body, in ticks; null when the body reports none. */
@@ -607,8 +638,9 @@ export const search = metered({
       return failed(`ERROR: XAI_API_KEY is not set in Dig's keys.env. ${setOutsideChat()}`)
     }
 
-    if (args.recoverResponseId) {
-      const id = String(args.recoverResponseId).trim()
+    const recoverId = typeof args.recoverResponseId === "string" ? args.recoverResponseId.trim() : ""
+    if (recoverId) {
+      const id = recoverId
       let found: Stored
       try {
         found = await storedResponse(apiKey, id, context.abort, [0])
@@ -677,9 +709,28 @@ export const search = metered({
 
     const tools: ToolConfig[] = [xSearchTool]
 
+    const parsedAllowedDomains = normalizeWebDomains(args.webAllowedDomains, "webAllowedDomains")
+    if ("error" in parsedAllowedDomains) return failed(`ERROR: ${parsedAllowedDomains.error}`)
+    const parsedExcludedDomains = normalizeWebDomains(args.webExcludedDomains, "webExcludedDomains")
+    if ("error" in parsedExcludedDomains) return failed(`ERROR: ${parsedExcludedDomains.error}`)
+    const webAllowedDomains = parsedAllowedDomains.domains
+    const webExcludedDomains = parsedExcludedDomains.domains
+    if (webAllowedDomains.length && webExcludedDomains.length) {
+      return failed("ERROR: Cannot use both 'webAllowedDomains' and 'webExcludedDomains' - choose one")
+    }
+
     const webSearchEnabled = args.enableWebSearch ?? xConfig.webSearch
+    if ((webAllowedDomains.length || webExcludedDomains.length) && !webSearchEnabled) {
+      return failed("ERROR: webAllowedDomains and webExcludedDomains require web search to be enabled (pass enableWebSearch: true or enable [x] web_search).")
+    }
     if (webSearchEnabled) {
-      tools.push({ type: "web_search" })
+      const webSearchTool: WebSearchToolConfig = { type: "web_search" }
+      if (webAllowedDomains.length) {
+        webSearchTool.filters = { allowed_domains: webAllowedDomains }
+      } else if (webExcludedDomains.length) {
+        webSearchTool.filters = { excluded_domains: webExcludedDomains }
+      }
+      tools.push(webSearchTool)
     }
     if (xConfig.codeExecution) {
       tools.push({ type: "code_interpreter" })
@@ -772,6 +823,12 @@ export const search = metered({
       result += `- Store: ${requestBody.store === false ? "false" : "true"}\n`
       result += `- Handles: ${handleList}\n`
       result += `- Excluded Handles: ${excludeList}\n`
+      if (webAllowedDomains.length) {
+        result += `- Web Allowed Domains: ${webAllowedDomains.join(", ")}\n`
+      }
+      if (webExcludedDomains.length) {
+        result += `- Web Excluded Domains: ${webExcludedDomains.join(", ")}\n`
+      }
       result += `- Date Range: ${dateRange(args.fromDate, args.toDate)}\n`
       if (requestBody.previous_response_id) {
         result += `- Chained from: ${requestBody.previous_response_id}\n`

@@ -49,10 +49,12 @@ const page = {
 
 describe("exa tools", () => {
 	const savedKey = process.env.EXA_API_KEY;
+	const savedBaseUrl = process.env.EXA_BASE_URL;
 	let restore: (() => void) | undefined;
 
 	beforeEach(() => {
 		process.env.EXA_API_KEY = "exa-test-key";
+		delete process.env.EXA_BASE_URL;
 	});
 
 	afterEach(() => {
@@ -60,16 +62,18 @@ describe("exa tools", () => {
 		restore = undefined;
 		if (savedKey === undefined) delete process.env.EXA_API_KEY;
 		else process.env.EXA_API_KEY = savedKey;
+		if (savedBaseUrl === undefined) delete process.env.EXA_BASE_URL;
+		else process.env.EXA_BASE_URL = savedBaseUrl;
 	});
 
-	test("research posts one deep-reasoning /search with a text outputSchema and renders grounding", async () => {
+	test("research defaults to deep /search with a text outputSchema and renders grounding", async () => {
 		const mock = installFetchMock({
 			"/search": {
 				payload: {
 					requestId: "req-1",
 					results: [page],
-					costDollars: { total: 0.015 },
-					searchTime: 18400,
+					costDollars: { total: 0.012 },
+					searchTime: 8400,
 					output: {
 						content: "Deep Search runs iterative retrieval before synthesis.",
 						grounding: [{ field: "content", citations: [{ title: page.title, url: page.url }], confidence: "high" }],
@@ -80,28 +84,60 @@ describe("exa tools", () => {
 		restore = mock.restore;
 
 		const result = await research.execute(
-			{ query: "How does Exa Deep Search work?", systemPrompt: "Prefer official docs.", additionalQueries: ["exa deep-reasoning mode"] },
+			{ query: "How does Exa Deep Search work?", systemPrompt: "Prefer official docs.", additionalQueries: ["exa deep mode"] },
 			context,
 		);
 
 		expect(mock.calls).toHaveLength(1);
+		expect(mock.calls[0]!.url.origin).toBe("https://api.exa.ai");
 		expect(mock.calls[0]!.body).toEqual({
 			query: "How does Exa Deep Search work?",
-			type: "deep-reasoning",
+			type: "deep",
 			numResults: 10,
 			outputSchema: { type: "text" },
 			contents: { highlights: { query: "How does Exa Deep Search work?" } },
 			systemPrompt: "Prefer official docs.",
-			additionalQueries: ["exa deep-reasoning mode"],
+			additionalQueries: ["exa deep mode"],
 		});
 		expect(mock.calls[0]!.headers.get("x-api-key")).toBe("exa-test-key");
 		expect(mock.calls[0]!.headers.get("exa-beta")).toBeNull();
 		const out = text(result);
+		expect(out).toContain("## Exa Deep Research (deep)");
 		expect(out).toContain("Deep Search runs iterative retrieval before synthesis.");
 		expect(out).toContain("- `content` — confidence high: Exa Deep Search <https://exa.ai/docs/search/deep-search>");
 		expect(out).toContain("### Selected sources (1)");
 		expect(out).toContain("> Deep Search is the research mode of the Search API.");
-		expect(details(result)).toMatchObject({ provider: "exa", requestId: "req-1", synthesized: true, grounding: 1, citations: [page.url] });
+		expect(details(result)).toMatchObject({ provider: "exa", type: "deep", requestId: "req-1", synthesized: true, grounding: 1, citations: [page.url] });
+	});
+
+	test("research supports mode overrides, rejects unknown modes before spending, and warns on empty grounding", async () => {
+		const mock = installFetchMock({
+			"/search": {
+				payload: {
+					requestId: "req-mode",
+					results: [page],
+					costDollars: { total: 0.015 },
+					output: { content: "Synthesis without citations.", grounding: [] },
+				},
+			},
+		});
+		restore = mock.restore;
+
+		expect(text(await research.execute({ query: "q", mode: "auto" }, context))).toBe(
+			"ERROR: mode must be one of deep, deep-lite, deep-reasoning.",
+		);
+		expect(mock.calls).toHaveLength(0);
+
+		const lite = await research.execute({ query: "q", mode: "deep-lite" }, context);
+		expect(mock.calls[0]!.body.type).toBe("deep-lite");
+		expect(text(lite)).toContain("## Exa Deep Research (deep-lite)");
+		expect(text(lite)).toContain("Exa returned no grounding entries for this output; treat the synthesis as unsupported.");
+		expect(details(lite)).toMatchObject({ type: "deep-lite", synthesized: true, grounding: 0 });
+
+		const reasoning = await research.execute({ query: "q", mode: "deep-reasoning" }, context);
+		expect(mock.calls[1]!.body.type).toBe("deep-reasoning");
+		expect(text(reasoning)).toContain("## Exa Deep Research (deep-reasoning)");
+		expect(details(reasoning)).toMatchObject({ type: "deep-reasoning", synthesized: true, grounding: 0 });
 	});
 
 	test("research says plainly when Exa returns pages without a synthesis", async () => {
@@ -114,12 +150,13 @@ describe("exa tools", () => {
 		expect(details(result)).toMatchObject({ synthesized: false, grounding: 0 });
 	});
 
-	test("search sends the beta header only when dynamic highlights are selected", async () => {
+	test("search sends the beta header and omits text when dynamic highlights are selected", async () => {
 		const mock = installFetchMock({ "/search": { payload: { requestId: "r", results: [page] } } });
 		restore = mock.restore;
 
 		await search.execute({ query: "solar costs", type: "fast", maxAgeHours: 24 }, context);
 		await search.execute({ query: "solar costs", dynamicHighlights: true }, context);
+		await search.execute({ query: "solar costs", dynamicHighlights: true, summary: true, snapshotAsOf: "2026-09-01" }, context);
 
 		expect(mock.calls[0]!.headers.get("exa-beta")).toBeNull();
 		expect(mock.calls[0]!.body).toEqual({
@@ -129,7 +166,31 @@ describe("exa tools", () => {
 			contents: { text: { maxCharacters: 3000 }, highlights: { query: "solar costs" }, maxAgeHours: 24 },
 		});
 		expect(mock.calls[1]!.headers.get("exa-beta")).toBe("dynamic-highlights-2026-08-28");
-		expect(mock.calls[1]!.body.contents).toEqual({ text: { maxCharacters: 3000 }, highlights: { query: "solar costs", dynamic: true } });
+		expect(mock.calls[1]!.body.contents).toEqual({ highlights: { query: "solar costs", dynamic: true } });
+		expect(mock.calls[1]!.body.contents).not.toHaveProperty("text");
+		expect(mock.calls[2]!.headers.get("exa-beta")).toBe("dynamic-highlights-2026-08-28");
+		expect(mock.calls[2]!.body.contents).toEqual({
+			highlights: { query: "solar costs", dynamic: true },
+			summary: { query: "solar costs" },
+			snapshotAsOf: "2026-09-01",
+		});
+	});
+
+	test("search validates and forwards userLocation as uppercase ISO-3166-1 alpha-2", async () => {
+		const mock = installFetchMock({ "/search": { payload: { requestId: "loc", results: [page] } } });
+		restore = mock.restore;
+
+		for (const bad of ["USA", "U", "12", "", "  ", 42]) {
+			expect(text(await search.execute({ query: "coffee shops", userLocation: bad }, context))).toBe(
+				"ERROR: userLocation must be a 2-letter ISO-3166-1 alpha-2 country code (e.g. US).",
+			);
+		}
+		expect(mock.calls).toHaveLength(0);
+
+		await search.execute({ query: "coffee shops", userLocation: "us" }, context);
+		await search.execute({ query: "coffee shops", userLocation: "GB" }, context);
+		expect(mock.calls[0]!.body.userLocation).toBe("US");
+		expect(mock.calls[1]!.body.userLocation).toBe("GB");
 	});
 
 	test("lite and Snapshot use documented request shapes and reject live-fetch combinations", async () => {
@@ -219,6 +280,42 @@ describe("exa tools", () => {
 		expect(out).toContain("**Page text (15 characters returned against a 5000-character request; completeness not established):**");
 		expect(out).toContain("Full page text.");
 		expect(details(result)).toMatchObject({ requested: 3, failed: ["https://example.com/missing"], unaccounted: ["https://example.com/silent"] });
+	});
+
+	test("contents omits highlights when highlights is false and rejects conflicting highlight options before spending", async () => {
+		const mock = installFetchMock({
+			"/contents": {
+				payload: {
+					requestId: "c-no-hl",
+					results: [{ ...page, text: "Text only." }],
+					statuses: [{ id: page.url, status: "success", source: "cached" }],
+					costDollars: { total: 0.001 },
+				},
+			},
+		});
+		restore = mock.restore;
+
+		expect(text(await contents.execute({ urls: [page.url], highlights: false, dynamicHighlights: true }, context))).toBe(
+			"ERROR: highlights: false cannot be combined with dynamicHighlights or highlightMaxCharacters.",
+		);
+		expect(text(await contents.execute({ urls: [page.url], highlights: false, highlightMaxCharacters: 500 }, context))).toBe(
+			"ERROR: highlights: false cannot be combined with dynamicHighlights or highlightMaxCharacters.",
+		);
+		expect(text(await contents.execute({ urls: [page.url], highlights: "no" }, context))).toBe(
+			"ERROR: highlights must be a boolean.",
+		);
+		expect(mock.calls).toHaveLength(0);
+
+		const result = await contents.execute({ urls: [page.url], highlights: false, query: "focus", summary: true }, context);
+		expect(mock.calls).toHaveLength(1);
+		expect(mock.calls[0]!.headers.get("exa-beta")).toBeNull();
+		expect(mock.calls[0]!.body).toEqual({
+			urls: [page.url],
+			text: { maxCharacters: 5000 },
+			summary: { query: "focus" },
+		});
+		expect(mock.calls[0]!.body).not.toHaveProperty("highlights");
+		expect(details(result)).toMatchObject({ dynamicHighlights: false });
 	});
 
 	test("contents per-URL failure diagnostics never carry the API key", async () => {
@@ -335,5 +432,35 @@ describe("exa tools", () => {
 		expect((await executeSource(contents, { urls: [page.url, "https://example.com/silent"] }, context)).status).toBe("partial");
 		expect((await executeSource(contents, { urls: [page.url] }, context)).status).toBe("success");
 		expect((await executeSource(research, { query: "x" }, context)).status).toBe("empty");
+	});
+
+	test("EXA_BASE_URL allows only official Exa HTTPS endpoints, trims trailing slashes, and rejects untrusted/invalid URLs before spending", async () => {
+		const mock = installFetchMock({
+			"/search": { payload: { requestId: "eu-s", results: [page] } },
+			"/contents": { payload: { requestId: "eu-c", results: [page], statuses: [{ id: page.url, status: "success" }] } },
+			"/findSimilar": { payload: { requestId: "eu-f", results: [page] } },
+		});
+		restore = mock.restore;
+
+		process.env.EXA_BASE_URL = "https://api.eu.exa.ai///";
+		await search.execute({ query: "eu test" }, context);
+		await contents.execute({ urls: [page.url] }, context);
+		await similar.execute({ url: page.url }, context);
+		await research.execute({ query: "eu research" }, context);
+		expect(mock.calls.map((c) => c.url.toString())).toEqual([
+			"https://api.eu.exa.ai/search",
+			"https://api.eu.exa.ai/contents",
+			"https://api.eu.exa.ai/findSimilar",
+			"https://api.eu.exa.ai/search",
+		]);
+
+		for (const bad of ["http://api.eu.exa.ai", "https://evil.example", "https://api.eu.exa.ai:8443", "https://api.eu.exa.ai/v1", "not-a-url", "https://user:pass@api.eu.exa.ai", "https://api.eu.exa.ai?x=1", "https://api.eu.exa.ai#frag"]) {
+			process.env.EXA_BASE_URL = bad;
+			expect(text(await search.execute({ query: "q" }, context))).toMatch(/^ERROR: EXA_BASE_URL must be/);
+			expect(text(await contents.execute({ urls: [page.url] }, context))).toMatch(/^ERROR: EXA_BASE_URL must be/);
+			expect(text(await similar.execute({ url: page.url }, context))).toMatch(/^ERROR: EXA_BASE_URL must be/);
+			expect(text(await research.execute({ query: "q" }, context))).toMatch(/^ERROR: EXA_BASE_URL must be/);
+		}
+		expect(mock.calls).toHaveLength(4);
 	});
 });

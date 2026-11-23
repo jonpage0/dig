@@ -26,43 +26,33 @@ Use only this `dig` MCP server's tools. Another Dig edition's server, methods, C
 Every provider call is a call to the `x` tool with the `dig` handle, an `action` naming one of its actions, and that action's arguments in `args`: to search posts, call `x` with `action: "x_search_posts"` and `args: { query: … }`. The rest of this method names an action alone (`x_search_posts` with `query`) for such a call. The `x` tool's actions are `xsearch`, `x_post`, `x_search_posts`, `x_web_search`, `x_count_posts`, `x_users`, `x_follows`, `x_news`, `x_explore`, `x_bookmarks`, `x_likes`, `x_community` and `x_images`; this method uses these:
 
 - `source_info` with `source: "x"` for enablement and readiness;
-- X's own API, which needs `X_BEARER_TOKEN`: `x_search_posts`, `x_post`, `x_count_posts`, `x_users`, `x_follows`, `x_news`, `x_explore`, and `x_community` (a Community's details come from X's API, or from TikHub without the token; its posts always come through TikHub with `TIKHUB_API_KEY`). People search (`x_users` with `query`) needs the optional X sign-in keys; Community search (`x_explore` with `kind: "communities"`) uses them or, without them, TikHub;
-- ScrapeCreators web search (`SCRAPECREATORS_API_KEY`, optional): `x_web_search` (1 credit/page, pages 1–11; ~8–10 live-hydrated public posts with full text, metrics, views, bookmarks and `Media:` links; zero X API post-read fees; best for broad/historical discovery >24 h old);
-- `x_images`, which needs no key: the pictures in posts, for you to look at;
-- Grok's X search, which needs `XAI_API_KEY`: `xsearch`. It is slow: the call may answer with a job handle instead of the result; follow it with `job({ id })` and do not call the action again. A repeat of the same paid call returns the earlier result unless `fresh: true` is passed, which pays again;
+- X's own API (`X_BEARER_TOKEN`): `x_search_posts`, `x_post`, `x_count_posts`, `x_users`, `x_follows`, `x_news`, `x_explore`, and `x_community`;
+- ScrapeCreators (`SCRAPECREATORS_API_KEY`, optional): `x_web_search` (cheap >24 h discovery, 1 credit/page, zero X API post reads);
+- `x_images` (no key): inspect post images directly;
+- Grok X search (`XAI_API_KEY`): `xsearch` (slow — follow a returned job handle with `job({ id })`; repeating a paid call returns the earlier result unless `fresh: true` pays again);
 - `research_save` with `source: "x"` and `agent: "x-judge"`.
 
 Pass the `dig` handle on every provider call and on `research_save`; Dig uses it to file the evidence, and it never reaches the provider. Use only this source's tool, `x`, and `source_info`, `method`, `job`, `library_list`, `library_search`, `library_read` and `research_save`.
 
 Call `source_info` before the first provider call. If this source is disabled, stop and return `failed` with that reason: enabling a source is the user's choice in Dig's settings, and another source is never a silent substitute. Credentials and prerequisites are reported by name, never by value. Never ask for, print, paste or copy a key; the person sets keys outside the chat, on the page the `keys` tool opens or in Dig's `keys.env`. Read the readiness fields as the server reports them; when a field is absent, let the provider call's own outcome decide instead of assuming readiness. With only one of the two keys set, judge with the tools that are ready, name the missing half in `## Summary` and `## Needs Follow-Up`, and mark the run `partial` when the missing half would have mattered: without X's API, posts cannot be verified directly (though `x_post` can still read a single post through TikHub, labeled "via TikHub"); without Grok, interpretive passes are missing.
 
-Grok's xAI model, starting depth and web search come from the user's `[x]` settings; each completed `xsearch` pass prints the model, mode, depth, media state, active X tools, and `Posts fetched` / `Users fetched` when reported. Leave `enableWebSearch` out unless the assignment explicitly asks for non-X corroboration (`true`) or to keep web results out (`false`). Do not invent `maxResults` or other unlisted flags.
+Grok's xAI model, starting depth and web search come from the user's `[x]` settings. Leave `enableWebSearch` out unless the assignment explicitly asks for non-X corroboration (`true`) or to keep web results out (`false`), and do not invent unlisted flags.
 
 ## Keep breadth and cost visible
 
-X's API bills each post and account it returns from the user's X developer credits and reports no charge per call, so Dig records post reads and account reads (counts, never dollar figures). Size each `limit` to what the judgment needs rather than the maximum. `x_web_search` bills optional ScrapeCreators credits separately (1 credit/page) with zero X API post-read fees.
-
-Every `xsearch` pass is paid (`max`/`ultra` > `standard` > `quick` > `mode: "semantic"`). Dig records returned xAI costs; raw responses are retained only when `keep_raw` is enabled and storage succeeds. Name missing originals or `retentionError` as evidence gaps. State the run's total returned cost, any ScrapeCreators credits, and its X post reads and account reads, and name any pass or call whose cost was unavailable. Never infer cost from citations. The three-pass Grok limit below is a cost rule, not a coverage cut: carry further angles through `x_search_posts` and `x_web_search`, and preserve requested breadth.
+X's API bills each returned post and account from X developer credits without a dollar charge, so Dig records post reads and account reads (counts, never dollar figures); size each `limit` to what the judgment needs. `x_web_search` bills optional ScrapeCreators credits separately (1 credit/page). Every `xsearch` pass is paid (`max`/`ultra` > `standard` > `quick` > `mode: "semantic"`). Dig records returned xAI costs; raw responses are retained only when `keep_raw` is on and storage succeeds (name missing originals or `retentionError` as gaps). Report total returned xAI cost, ScrapeCreators credits, and X post/account reads, naming any unavailable cost and never inferring cost from citations. The three-pass Grok limit is a cost rule, not a coverage cut: carry further angles through `x_search_posts` and `x_web_search`.
 
 ## Judge with real posts
 
-**Keep date boundaries exact.** Grok's `xsearch` accepts only `YYYY-MM-DD` dates: `fromDate` includes 00:00 UTC on that date, while `toDate` excludes 00:00 UTC on that date (to include October 28, use `toDate: "2026-10-29"`). X's API uses ISO timestamps (`start_time`, `end_time`); omit `end_time` for "through now" rather than guessing a future timestamp. Report the actual UTC window, converting to the reader's timezone when it matters.
+**Keep date boundaries exact.** `xsearch` takes `YYYY-MM-DD` dates (`fromDate` inclusive 00:00 UTC; `toDate` exclusive 00:00 UTC — to include October 28, pass `toDate: "2026-10-29"`). X's API takes ISO timestamps (`start_time`, `end_time`; omit `end_time` for "through now"). Report the actual UTC window, converting when timezone matters.
 
-**Lead with `x_web_search` and `x_search_posts` before `xsearch`.** Use `x_web_search` (when `SCRAPECREATORS_API_KEY` is set) for cheap broad/historical discovery (>24 h old), and `x_search_posts` for the last 24 hours, exact operators, archive windows (`archive: true`, back to 2006), and high-precision follow-up (`x_search_posts` returns 100% of the posts it bills, whereas a broad Grok pass fetches many posts internally while linking only a fraction). `sort: "relevancy"` surfaces posts that carried a claim; `recency` the latest. X operators include `from:`, `to:`, `conversation_id:`, `in_reply_to_tweet_id:`, `quotes_of_tweet_id:`, `is:reply`, `is:quote`, `is:verified`, `-is:nullcast`, `has:media`, `has:links`, `url:`, `lang:`, `min_likes:N`, `min_replies:N` and `min_reposts:N`, with parentheses and `OR`. Since May 4, 2026, X search omits reposts from keyword matches (though `from:` still returns an account's reposts). Operators constrain candidates but do not prove relevance; record empty threshold results instead of silently loosening them.
+**Lead with `x_web_search` and `x_search_posts` before `xsearch`.** Use `x_web_search` for cheap >24 h discovery and `x_search_posts` for <24 h, exact X operators, and `archive: true` back to 2006 (`sort: "relevancy"` for what carried; `"recency"` for latest; 100% returned yield). Since May 4, 2026, X search omits reposts from keyword matches (`from:` still returns an account's reposts). Record empty threshold results instead of silently loosening them.
 
-**Use Grok surgically — and pull useful media without hesitation.** Keep `media` off on broad discovery passes so vision/video tokens are not burned across irrelevant posts, **and have zero hesitation inspecting useful media**:
-- **Images:** call `x_images` (free, no key) with 1–4 `pbs.twimg.com` links from returned `Media:` lines (`size: "large"` for screenshots/charts). Label descriptions as your own reading and quote text verbatim; if no image reached you, say so and do not describe it.
-- **Videos:** run a targeted `xsearch` (`media: true`, `depth: "quick"`) naming **only those 1–5 specific video post links**, asking what happens with on-screen text quoted and unclear parts stated. (Use shared `video_analyze` on a returned direct MP4 URL when close visual detail matters.)
+**Use Grok surgically — and pull useful media without hesitation.** Run at most three `xsearch` passes per run (`depth: "max"` at most once, reserved for disputed synthesis; prefer `mode: "semantic"` for leads and `depth: "quick"` for routine/video passes; label `passLabel: "pass-1"` onward). Keep `media` off on broad discovery passes, **but pull useful media immediately:** call free `x_images` (`size: "large"` for screenshots/charts) on `pbs.twimg.com` `Media:` links (label as your own reading, quote text verbatim, or say if no image reached you), and use targeted `xsearch` (`media: true`, `depth: "quick"`) on **only 1–5 video post links** (or shared `video_analyze` on a direct MP4 URL). A Grok-cited post is a lead until `x_post` reads it; label Grok's media descriptions as Grok's and verify key claims against the original clip when possible.
 
-Run at most three `xsearch` passes per run and pass `depth: "max"` on at most one. Prefer `mode: "semantic"` (2–4 semantic search calls, auto-`quick`, staying well under xAI's 200k-token cliff) for fast semantic lead discovery — then feed surfaced handles, terms and post IDs into `x_post` / `x_search_posts`. Use `depth: "quick"` for routine interpretive or video passes, and reserve `depth: "max"` for genuinely disputed synthesis. When the user's `[x]` depth is `max` or `ultra`, ordinary passes without `depth` run at that depth (`mode: "semantic"` still defaults to `quick`) and only the three-pass limit applies. Label passes `passLabel: "pass-1"` onward. Chain with `previousResponseId` only while refining one angle on standard passes (`mode: "semantic"` starts fresh); start fresh when pivoting and never chain from `max`/`ultra`. If a stream cuts with a response id, first call `xsearch` with the same `query` and `recoverResponseId` (free, same pass); if xAI holds nothing under that id, the pass was dropped and rerunning counts as a new pass. Grok controls: `handles`, `excludeHandles`, `fromDate`, `toDate`, and index operators `min_faves:N`, `min_retweets:N`, `min_replies:N`, `filter:media`, `lang:xx` (`min_faves`/`min_retweets` fail in X's API). Report ignored operators. A Grok-cited post is a lead until `x_post` reads it; label Grok's media descriptions as Grok's and verify key claims against the original clip when possible.
+**Verify load-bearing posts and measure volume.** Read every post a claim rests on with `x_post` before quoting it (follow quotes/replies to the original; `thread: true` for threads), check the author with `x_users` (small `x_follows` page only when network standing decides a claim), and measure volume with `x_count_posts` instead of inferring it. Use `x_news`, `x_explore`, and `x_community` when relevant; verify load-bearing Community posts with `x_post`. Normal work takes a few searches plus verification reads; an `AUTHORITY` brief requires at least eight purposeful passes (at most three Grok) plus a primary-source hunt reading the primary post itself.
 
-**Verify every load-bearing post.** Read each post a claim rests on with `x_post` before quoting it: its exact text, time, author and metrics come from X's response. Follow quoted and replied-to posts back to the original, and use `thread: true` when the claim sits in a thread. Check the account behind a load-bearing claim with `x_users` (`mentions` adds recent posts naming it): who it is, whether it is verified or official, and its reach. When an account's place in a field decides a claim, `x_follows` shows whom it follows and who follows it; every account it lists is an account read, so ask for a small page.
-
-**Measure, don't infer, volume.** `x_count_posts` says how much a claim or term is discussed and when it peaked, per minute, hour or day by `granularity`; use it instead of inferring volume from the posts you happened to read. `x_news` finds an X News story on the topic (`query` with `max_age_hours` and `limit`, or one story by `id`), and `x_explore` reaches trends (by `woeid`), Spaces (by `state`), Communities and Lists (by `list`) when the question involves them. When a claim circulates inside an X Community, `x_community` reads that Community's posts; a post read there is quoted like any other, and a load-bearing one is still read with `x_post`.
-
-Normal discourse research takes a few searches plus reads of the posts it relies on; nuanced work takes more searches and up to the three Grok passes. An `AUTHORITY` brief requires at least eight purposeful passes across both kinds, no more than three of them Grok's, and a primary-source hunt that reads the primary post itself; do not stop at community consensus.
-
-## Tool cheat sheet & worked playbooks
+## Tool cheat sheet
 
 | Need | Action | Key usage |
 | --- | --- | --- |
@@ -72,32 +62,9 @@ Normal discourse research takes a few searches plus reads of the posts it relies
 | Screenshots, charts, photos | `x_images` | Free, no key; 1–4 `pbs.twimg.com` links from `Media:` lines (`size: "large"` for dense text). |
 | Semantic leads, video, synthesis | `xsearch` | Under 200k-token tier: `mode: "semantic"` (leads, auto-`quick`, `media` off); `media: true` + `depth: "quick"` on 1–5 video links; at most one `depth: "max"`. |
 
-All examples below call the `x` tool.
+**Avoid:** broad `xsearch` with `media: true` or `depth: "max"`; mixing X API (`min_likes:N`/`has:media`) and Grok (`min_faves:N`/`filter:media`) dialects; ISO timestamps in `fromDate`/`toDate` or future `end_time`; `xsearch` on still images instead of `x_images`.
 
-**1. Historical discourse + screenshots (>24 h):** `x_web_search` + `x_search_posts` → `xsearch` (`mode: "semantic"`) → verify with `x_post` + `x_images`:
-```json
-{ "dig": "<dig>", "action": "x_web_search", "args": { "query": "<topic terms>" } }
-{ "dig": "<dig>", "action": "x_search_posts", "args": { "query": "\"<exact term>\" -is:nullcast lang:en", "sort": "relevancy", "limit": 50 } }
-{ "dig": "<dig>", "action": "xsearch", "args": { "query": "Find practitioner posts and dissent on <topic>; list key handles, phrasing, and post links.", "mode": "semantic", "passLabel": "pass-1", "fromDate": "2026-10-01", "toDate": "2026-11-23" } }
-{ "dig": "<dig>", "action": "x_post", "args": { "posts": ["https://x.com/handle/status/123"], "thread": true, "quotes": 15 } }
-{ "dig": "<dig>", "action": "x_images", "args": { "images": ["https://pbs.twimg.com/media/EXAMPLE.jpg"], "size": "large" } }
-```
-
-**2. Breaking (<24 h) claim & volume:** skip `x_web_search` (indexing lags); count volume, search relevancy, verify primary thread and author:
-```json
-{ "dig": "<dig>", "action": "x_count_posts", "args": { "query": "\"<claim or product>\"", "granularity": "hour" } }
-{ "dig": "<dig>", "action": "x_search_posts", "args": { "query": "\"<claim or product>\" -is:nullcast", "sort": "relevancy", "limit": 50 } }
-{ "dig": "<dig>", "action": "x_post", "args": { "posts": ["https://x.com/primary/status/456"], "thread": true, "replies": 20, "quotes": 20 } }
-{ "dig": "<dig>", "action": "x_users", "args": { "handles": ["primary"], "posts": 10 } }
-```
-
-**3. Video post / demo check:** read with `x_post`, then target **only the 1–5 video links** in `xsearch` (`media: true`, `depth: "quick"`; follow a job handle with `job({ id })`):
-```json
-{ "dig": "<dig>", "action": "x_post", "args": { "posts": ["https://x.com/handle/status/789"], "thread": true, "quotes": 15 } }
-{ "dig": "<dig>", "action": "xsearch", "args": { "query": "Inspect the video in https://x.com/handle/status/789. Describe what happens, quote on-screen text verbatim, and note anything unclear.", "media": true, "depth": "quick", "passLabel": "pass-1" } }
-```
-
-**Avoid:** opening with broad `xsearch` (`media: true`) or `depth: "max"`; mixing operator dialects (`min_likes:N`/`has:media` for `x_search_posts` vs `min_faves:N`/`filter:media` for `xsearch`); passing ISO timestamps to `fromDate`/`toDate` or future `end_time` values; spending `xsearch` (`media: true`) on still photos instead of free `x_images`.
+Read [the worked playbooks and operator reference](references/playbooks.md) via `method({ name: "x-judge", file: "references/playbooks.md" })` for exact JSON call shapes, X API vs Grok operator tables, TikHub/sign-in fallbacks, and `previousResponseId` / `recoverResponseId` mechanics.
 
 ## Weigh every claim
 

@@ -136,6 +136,42 @@ describe("direct social reads", () => {
     assert.equal((await run(instagram_read, { kind: "posts", handle: "fixture" })).status, "partial");
   });
 
+  test("Instagram Oct 2026 uncharged HTTP 403/404 restriction responses with success:false return partial, while generic 403/404 still fail", async () => {
+    for (const kind of ["profile", "posts"] as const) {
+      mock({ success: false, error: "forbidden", errorStatus: 403, age_restricted: true, credits_charged: 0, message: "Profile is age restricted" }, 403);
+      const age = await run(instagram_read, { kind, handle: "fixture" });
+      assert.equal(age.status, "partial");
+      assert.match(age.text, /Provider-reported resource state: Profile is age restricted/);
+      assert.deepEqual(age.details?.cost, []);
+
+      for (const message of ["Profile is restricted", "Profile is unavailable on Instagram"]) {
+        mock({ success: false, error: "not_found", errorStatus: 404, credits_charged: 0, message }, 404);
+        const restricted = await run(instagram_read, { kind, handle: "fixture" });
+        assert.equal(restricted.status, "partial");
+        assert.match(restricted.text, new RegExp(`Provider-reported resource state: ${message}`));
+        assert.deepEqual(restricted.details?.cost, []);
+      }
+    }
+
+    // Age-restricted 403 also qualifies when age_restricted:true or error:"forbidden" is present with the explicit message
+    mock({ success: false, age_restricted: true, credits_charged: 0, message: "Profile is age restricted" }, 403);
+    assert.equal((await run(instagram_read, { kind: "profile", handle: "fixture" })).status, "partial");
+
+    // Generic 403/404 errors (auth failures, missing endpoints, unknown messages, missing structured error markers) must still fail
+    const failures: Array<[Record<string, unknown>, number]> = [
+      [{ success: false, error: "forbidden", errorStatus: 403, message: "Invalid API key" }, 403],
+      [{ success: false, message: "Profile is age restricted" }, 403],
+      [{ success: false, error: "not_found", errorStatus: 404, message: "Endpoint not found" }, 404],
+      [{ success: false, error: "not_found", errorStatus: 404, message: "Not found" }, 404],
+      [{ success: false, message: "Profile is restricted" }, 404],
+      [{ success: false, error: "forbidden", errorStatus: 401, age_restricted: true, message: "Profile is age restricted" }, 401],
+    ];
+    for (const [body, status] of failures) {
+      mock(body, status);
+      assert.equal((await run(instagram_read, { kind: "profile", handle: "fixture" })).status, "failed");
+    }
+  });
+
   test("a handle with surrounding whitespace matches its own returned profile and post links", async () => {
     for (const handle of [" @nasa", "nasa "]) {
       mock({ success: true, credits_charged: 1, data: { user: { id: "1", username: "nasa" } } });

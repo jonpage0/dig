@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp,mkdir,writeFile,readFile,symlink,rm } from 'node:fs/promises';
+import { lstat, mkdtemp, mkdir, readdir, readFile, readlink, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initializeConfig,loadConfig,updateConfig } from '../src/config.mjs';
 import { searchLibrary } from '../src/search/search.mjs';
-import { passages,embeddingText,tokenCount,cleanupSearchTemps } from '../src/search/engine.mjs';
+import { SUPPORTED_PLATFORMS, assertSupportedPlatform, cleanupSearchTemps, embeddingText, isSupportedPlatform, passages, tokenCount } from '../src/search/engine.mjs';
+import { buildSearchRuntime, selectPlatformFiles } from '../scripts/search-runtime.mjs';
 async function fixture(t){const root=await mkdtemp(join(tmpdir(),'dig-search-'));t.after(()=>rm(root,{recursive:true,force:true}));const c=await initializeConfig(root);const folder=join(c.library,'p/digs/one');await mkdir(folder,{recursive:true});await writeFile(join(folder,'dig.md'),'---\nquestion: "Gateway investigation"\nproject: '+JSON.stringify(root)+'\n---\n');const put=async(name,body,extra='')=>writeFile(join(folder,name),'---\ntitle: "Gateway report"\nsource: "x"\nagent: "x-judge"\ngenerated_at: "2026-10-29T10:00:00Z"\n'+extra+'---\n'+body);await put('x-judge.md','# Gateway report\n\n## Summary\nBrief summary.\n\n## Audit\nThe buried error E_CONN_581 appears at https://example.test/oauth/callback in a code block.\n```\nE_CONN_581\n```\n');return{root,c,folder,put};}
 const search=(c,args,opts={})=>searchLibrary(c,{mode:'keyword',query:'E_CONN_581',...args},{checkConfig:false,...opts});
 test('full-body code/URL matches return exact UTF-16 reader bounds and disabled-source research',async t=>{const{c}=await fixture(t);for(const query of ['E_CONN_581','https://example.test/oauth/callback']){const r=await search(c,{query});assert.equal(r.status,'complete');assert(r.hits.length);const h=r.hits[0];const full=await readFile(h.path,'utf8');assert.equal(full.slice(h.start,h.end),h.excerpt);assert.equal(h.read.offset,h.start);assert.equal(h.source,'x');assert.equal(r.coverage.searched_files,1);} });
@@ -28,5 +29,70 @@ test('the packaged search runtime is the one at the package root, found from the
  assert.equal(RUNTIME,packaged);
  assert.equal(new URL('../runtime/dist/onnx.cjs',pathToFileURL(join(process.cwd(),'dist/dig.mjs'))).href,packaged,'dist/dig.mjs looks one folder up');
  assert(existsSync(new URL(packaged)));
- if(process.platform==='darwin'&&process.arch==='arm64'){const runtime=await import(RUNTIME);assert.equal(typeof (runtime.default??runtime).InferenceSession?.create,'function');}
+ const bundle = await readFile(new URL(packaged), 'utf8');
+ assert.match(bundle, /process\.platform,\s*process\.arch,\s*['"]onnxruntime_binding\.node['"]/);
+ assert.equal(bundle.includes('darwin/arm64/onnxruntime_binding.node'), false, 'runtime/dist/onnx.cjs must resolve binding path dynamically');
+ if(isSupportedPlatform()){const runtime=await import(RUNTIME);assert.equal(typeof (runtime.default??runtime).InferenceSession?.create,'function');}
+});
+
+test('local semantic search supports darwin/arm64 and linux/x64 and rejects other platforms clearly', () => {
+ assert.deepEqual([...SUPPORTED_PLATFORMS], ['darwin/arm64', 'linux/x64']);
+ for (const [platform, arch] of [['darwin', 'arm64'], ['linux', 'x64']]) {
+  assert.equal(isSupportedPlatform(platform, arch), true, `${platform}/${arch}`);
+  assert.doesNotThrow(() => assertSupportedPlatform(platform, arch));
+ }
+ for (const [platform, arch] of [['darwin', 'x64'], ['linux', 'arm64'], ['win32', 'x64']]) {
+  assert.equal(isSupportedPlatform(platform, arch), false, `${platform}/${arch}`);
+  assert.throws(() => assertSupportedPlatform(platform, arch), new RegExp(`macOS arm64 and Linux x64.*${platform}/${arch}.*Keyword search remains available`));
+ }
+});
+
+test('search-runtime packages darwin/arm64 and linux/x64 bindings dynamically, preserves linux .so symlinks, and skips unsupported platforms', async t => {
+ assert.deepEqual(selectPlatformFiles('darwin/arm64', ['onnxruntime_binding.node', 'libonnxruntime.1.dylib', 'libonnxruntime.1.30.0.dylib', 'other.dylib']), {
+  binding: ['onnxruntime_binding.node'],
+  libs: ['libonnxruntime.1.dylib'],
+ });
+ assert.deepEqual(selectPlatformFiles('linux/x64', ['onnxruntime_binding.node', 'libonnxruntime.so.1', 'libonnxruntime.so.1.30.0', 'libonnxruntime.so', 'README.txt']), {
+  binding: ['onnxruntime_binding.node'],
+  libs: ['libonnxruntime.so', 'libonnxruntime.so.1', 'libonnxruntime.so.1.30.0'],
+ });
+ assert.deepEqual(selectPlatformFiles('win32/x64', ['onnxruntime_binding.node', 'onnxruntime.dll']), { binding: [], libs: [] });
+
+ const root = await mkdtemp(join(tmpdir(), 'dig-search-runtime-'));
+ t.after(() => rm(root, { recursive: true, force: true }));
+
+ // 1. Real linux/x64 files from node_modules/onnxruntime-node
+ const linuxOut = join(root, 'linux-real');
+ const linuxResult = await buildSearchRuntime({ root: linuxOut, packageRoot: process.cwd(), platform: 'linux', arch: 'x64', checkLoad: false, writeNotices: false });
+ assert.deepEqual(linuxResult, { supported: true, platform: 'linux/x64', copied: ['onnxruntime_binding.node', 'libonnxruntime.so.1'], loadChecked: false });
+ assert.deepEqual((await readdir(join(linuxOut, 'runtime/bin/napi-v6/linux/x64'))).sort(), ['libonnxruntime.so.1', 'onnxruntime_binding.node']);
+ const onnxBundle = await readFile(join(linuxOut, 'runtime/dist/onnx.cjs'), 'utf8');
+ assert.match(onnxBundle, /process\.platform,\s*process\.arch,\s*['"]onnxruntime_binding\.node['"]/);
+ assert.equal(onnxBundle.includes('darwin/arm64/onnxruntime_binding.node'), false);
+
+ // 2. Synthetic linux/x64 folder with versioned shared lib + symlink preserved verbatim
+ const fakeBins = join(root, 'fake-bins');
+ const fakeLinux = join(fakeBins, 'linux/x64');
+ await mkdir(fakeLinux, { recursive: true });
+ await writeFile(join(fakeLinux, 'onnxruntime_binding.node'), 'fake-binding');
+ await writeFile(join(fakeLinux, 'libonnxruntime.so.1.30.0'), 'fake-so-binary');
+ await symlink('libonnxruntime.so.1.30.0', join(fakeLinux, 'libonnxruntime.so.1'));
+ const symOut = join(root, 'linux-symlink');
+ const symResult = await buildSearchRuntime({ root: symOut, packageRoot: process.cwd(), binRoot: fakeBins, platform: 'linux', arch: 'x64', checkLoad: false, writeNotices: false });
+ assert.deepEqual(symResult.copied, ['onnxruntime_binding.node', 'libonnxruntime.so.1', 'libonnxruntime.so.1.30.0']);
+ const copiedLink = join(symOut, 'runtime/bin/napi-v6/linux/x64/libonnxruntime.so.1');
+ assert.equal((await lstat(copiedLink)).isSymbolicLink(), true);
+ assert.equal(await readlink(copiedLink), 'libonnxruntime.so.1.30.0');
+
+ // 3. Real darwin/arm64 files from node_modules/onnxruntime-node
+ const macOut = join(root, 'darwin-real');
+ const macResult = await buildSearchRuntime({ root: macOut, packageRoot: process.cwd(), platform: 'darwin', arch: 'arm64', checkLoad: false, writeNotices: false });
+ assert.deepEqual(macResult, { supported: true, platform: 'darwin/arm64', copied: ['onnxruntime_binding.node', 'libonnxruntime.1.dylib'], loadChecked: false });
+ assert.deepEqual((await readdir(join(macOut, 'runtime/bin/napi-v6/darwin/arm64'))).sort(), ['libonnxruntime.1.dylib', 'onnxruntime_binding.node']);
+
+ // 4. Unsupported platform skips native copy and load check gracefully
+ const winOut = join(root, 'win-skip');
+ const winResult = await buildSearchRuntime({ root: winOut, packageRoot: process.cwd(), platform: 'win32', arch: 'x64', writeNotices: false });
+ assert.deepEqual(winResult, { supported: false, platform: 'win32/x64', copied: [], loadChecked: false });
+ assert.deepEqual((await readdir(join(winOut, 'runtime'))).sort(), ['dist']);
 });

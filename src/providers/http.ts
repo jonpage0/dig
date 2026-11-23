@@ -22,6 +22,8 @@ export interface JsonRequestPolicy {
 	keep: KeepRaw;
 	/** Raw-file label for this request; defaults to `provider`. */
 	label?: string;
+	/** Fetch redirect handling; pass `"error"` or `"manual"` on credentialed paid calls to prevent header leaks. */
+	redirect?: RequestRedirect;
 	/** Preserve provider-specific JSON values (such as identifiers beyond 2^53). */
 	parseJson?: (text: string) => unknown;
 }
@@ -147,6 +149,7 @@ export async function requestJson(policy: JsonRequestPolicy): Promise<JsonReques
 				method: policy.method ?? "GET",
 				headers: policy.headers,
 				body: policy.body === undefined ? undefined : JSON.stringify(policy.body),
+				...(policy.redirect ? { redirect: policy.redirect } : {}),
 				signal: AbortSignal.any([
 					policy.signal,
 					AbortSignal.timeout(policy.timeoutMs ?? 60_000),

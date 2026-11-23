@@ -1,6 +1,6 @@
 # Sources and their keys
 
-Dig has 25 research sources and 2 shared tools, with 82 actions between them and 30 research methods. Each source and each shared tool is one tool, named by its id with `-` written as `_` (`hackernews`, `tikhub_reddit`, `google_ads`). A call to it names the dig, one of its actions and that action's arguments:
+Dig has 28 research sources and 2 shared tools, with 90 actions between them and 33 research methods. Each source and each shared tool is one tool, named by its id with `-` written as `_` (`hackernews`, `tikhub_reddit`, `google_ads`). A call to it names the dig, one of its actions and that action's arguments:
 
 ```json
 { "dig": "<the handle dig_start returned>", "action": "x_post", "args": { "posts": ["https://x.com/…/status/…"] } }
@@ -8,7 +8,7 @@ Dig has 25 research sources and 2 shared tools, with 82 actions between them and
 
 A source you have not turned on is not listed to the assistant. Turning one on lists its tool; it does not authorise spending. Ask your assistant to set Dig up, or change `<source>_enabled` with the `settings` tool. `source_info` reports each source's readiness, its actions, its methods and what each action has cost in your library over the last 90 days.
 
-No source needs any other. Hacker News, DeepWiki, Polymarket and the Wayback Machine need no account. GitHub and the direct Papers searches run without keys at lower limits. YouTube's keyless search needs a local `yt-dlp`. Other sources use your own provider accounts, which bill you separately from your ChatGPT or Claude plan.
+No source needs any other. Hacker News, DeepWiki, Polymarket, the Wayback Machine, SEC EDGAR and Bluesky need no account. GitHub and the direct Papers searches run without keys at lower limits. YouTube's keyless search needs a local `yt-dlp`. Other sources use your own provider accounts, which bill you separately from your ChatGPT or Claude plan.
 
 ## Keys
 
@@ -32,9 +32,11 @@ Actions marked † are slow and run as jobs (see [the architecture](architecture
 | GitHub (`github`) | Repositories, their activity and source | Optional `GH_TOKEN` or `GITHUB_TOKEN`, or a `gh` login | `github_search`, `github_inspect`, `github_read` | `github` | Free |
 | Exa (`exa`) | Web search, page text, similar pages, deep research | `EXA_API_KEY` | `exa_search` $, `exa_contents` $, `exa_similar` $, `exa_research` $ † | `exa` | US dollars, as Exa reports |
 | Perplexity (`perplexity`) | Cited answers and web search | `PERPLEXITY_API_KEY` | `perplexity_ask` $, `perplexity_search` $, `perplexity_research` $ †, `perplexity_reason` $ † | `perplexity` | US dollars for ask, reason and research; search reports none, so unknown |
+| Firecrawl (`firecrawl`) | JS-rendered page scraping to Markdown and single-domain URL mapping | `FIRECRAWL_API_KEY` | `firecrawl_scrape` $, `firecrawl_map` $ | `firecrawl` | Firecrawl credits |
 | Papers (`papers`) | Scholarly papers, citations, snippets, full text, PDFs and sections | Optional; see [Papers](#papers) | `papers_semantic_scholar_search`, `papers_semantic_scholar_recommendations`, `papers_semantic_scholar_snippets`, `papers_semantic_scholar_relations`, `papers_openalex_search` $, `papers_openalex_content` $, `papers_multi_search` $ †, `papers_sections` †, `papers_fulltext_read` $ †, `papers_pdf_download` $ † | `papers` | Mostly free; OpenAlex reports a US-dollar usage cost its free daily allowance can cover |
 | YouTube (`youtube`) | Video discovery, transcripts, comments and Gemini video understanding | Optional by route; see [YouTube](#youtube) | `youtube` †, `youtube_transcript` $, `youtube_comments` $, `youtube_analyze` $ †, `youtube_analysis_status` $ † | `youtube`, `youtube-video` (with the helper `youtube-summarizer`) | yt-dlp and Data API free; ScrapeCreators credits; Gemini unknown |
 | X (`x`) | Posts, threads, accounts, followers, search, web-indexed search, counts, X News, Communities and the pictures in posts; Grok's search by meaning | `XAI_API_KEY`, `X_BEARER_TOKEN`; optional `SCRAPECREATORS_API_KEY`, sign-in keys and `TIKHUB_API_KEY` | `xsearch` $ †, `x_post` $, `x_search_posts` $, `x_web_search` $, `x_count_posts` $, `x_users` $, `x_follows` $, `x_news` $, `x_explore` $, `x_bookmarks` $, `x_likes` $, `x_community` $, `x_images` | `x-judge`, `x-breadth`, `x-post`, `x-trace` | xAI in US dollars; X reads as post and account reads; ScrapeCreators credits; see [X](#x) |
+| Bluesky (`bluesky`) | Public ATProto post search, threads and profiles | None | `bluesky_search`, `bluesky_thread`, `bluesky_profile` | `bluesky` | Free |
 | Reddit (`reddit`) | Threads, comments and collapsed replies | `SCRAPECREATORS_API_KEY` | `reddit` $ | `reddit` | ScrapeCreators credits |
 | TikHub Reddit (`tikhub_reddit`) | A thread's comments with collapsed-reply continuations, and subreddit context | `TIKHUB_API_KEY` | `tikhub_reddit` $ | `tikhub-reddit` | Unknown (TikHub reports no amount) |
 | TikTok (`tiktok`) | Public videos, photo posts, creator feeds, comments and transcripts | `SCRAPECREATORS_API_KEY` | `scrapecreators_tiktok` $, `tiktok_top` $, `tiktok_comments` $, `tiktok_read` $ | `tiktok` | ScrapeCreators credits |
@@ -44,6 +46,7 @@ Actions marked † are slow and run as jobs (see [the architecture](architecture
 | LinkedIn (`linkedin`) | Public profiles, companies and posts | `SCRAPECREATORS_API_KEY` | `scrapecreators_linkedin` $ | `linkedin` | ScrapeCreators credits |
 | Telegram (`telegram`) | Public channel previews and posts | `SCRAPECREATORS_API_KEY` | `scrapecreators_telegram` $ | `telegram` | ScrapeCreators credits |
 | China social (`china_social`) | Xiaohongshu, Bilibili, Douyin, Weibo, Zhihu, Kuaishou, WeChat | `TIKHUB_API_KEY`; optional `JUSTONE_API_KEY` | `china_social_search` $ | `china-social` | Unknown |
+| SEC EDGAR (`sec`) | SEC filings (10-K, 10-Q, 8-K, S-1, 13F, Form 4), submission histories and XBRL financials | None (optional `SEC_USER_AGENT`) | `sec_search`, `sec_company`, `sec_facts` | `sec` | Free |
 | Commerce (`commerce`) | Amazon products, deals, Best Sellers, price and rank history, reviews | `SCRAPE_DO_API_KEY` (or `SCRAPEDO_API_TOKEN`); optional `NEXSCOPE_API_KEY` | `commerce_search` $, `commerce_product` $, `commerce_history` $, `commerce_reviews` $, `commerce_discover` $ | `commerce` | Scrape.do credits; Nexscope unknown |
 | TikTok ads (`tiktok_ads`) | Creative Center top ads and the public Ad Library | `TIKHUB_API_KEY`, `SCRAPECREATORS_API_KEY` | `tiktok_ads_search` $, `tiktok_ads_top` $, `tiktok_ads_detail` $, `tiktok_ad_library` $ | `tiktok-ads` | Creative Center unknown; Ad Library ScrapeCreators credits |
 | Facebook ads (`facebook_ads`) | Meta Ad Library advertisers, ads and transcripts | `SCRAPECREATORS_API_KEY` | `facebook_ad_library` $ | `facebook-ads` | ScrapeCreators credits |
@@ -53,7 +56,7 @@ Actions marked † are slow and run as jobs (see [the architecture](architecture
 | Video analysis (`video`, shared tool) | A supplied video or clip, through Elorian Glimpse | `ELORIAN_API_KEY` | `video_analyze` $ † | helper `video-analyze` | Unknown (tokens shown) |
 | Evidence ranking (`evidence`, shared tool) | A reading order for supplied excerpts, through TypeSafe Jev | `TYPESAFE_API_KEY` | `evidence_rank` $ | helper `evidence-rank` | Unknown (tokens shown) |
 
-Counted from the catalog in `src/providers/modules.ts`: 27 entries (25 sources, 2 shared tools), 82 actions of which 23 are free and 14 slow, and 31 methods for the sources (30 research methods and the `youtube-summarizer` helper). With `dig`, `library`, `setup` and the two shared-tool helpers, Dig serves 36 methods.
+Counted from the catalog in `src/providers/modules.ts`: 30 entries (28 sources, 2 shared tools), 90 actions of which 29 are free and 14 slow, and 34 methods for the sources (33 research methods and the `youtube-summarizer` helper). With `dig`, `library`, `setup` and the two shared-tool helpers, Dig serves 39 methods.
 
 A method is a set of instructions for researching one source: what to search, how to weigh it and how to write the report. Your assistant reads one with the `method` tool, or receives it from the host as a prompt or skill. One key can cover several sources: ScrapeCreators serves several social sources, the ad libraries and hosted YouTube transcripts; TikHub serves advanced Reddit, China social, TikTok ads and some X reads.
 

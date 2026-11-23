@@ -88,20 +88,21 @@ then install `dig` from `dig-local` in Codex's plugin browser.
 
 ## First run
 
-1. **Turn sources on.** Ask your assistant to set Dig up: it reads the `setup` method, shows the sources and turns on the ones you choose through the `settings` tool. Hacker News is on from the start. Hacker News, DeepWiki, Polymarket and the Wayback Machine need no key.
+1. **Turn sources on.** Ask your assistant to set Dig up: it reads the `setup` method, shows the sources and turns on the ones you choose through the `settings` tool. Hacker News is on from the start. Hacker News, DeepWiki, Polymarket, the Wayback Machine, SEC EDGAR and Bluesky need no key.
 2. **Enter keys.** For a source that needs one, your assistant calls the `keys` tool. Your host asks you to open a page that Dig serves on your computer, with one field per key; what you type there goes straight into `keys.env` and never into the conversation. If the host cannot open pages, the assistant gives you the address to open in a browser. Never paste a key into the chat.
 3. **Ask a question.** For example: **“Use Dig and Hacker News to research how developers approach local-first software. Show the strongest findings, disagreements and remaining gaps, and save the supporting research.”**
 
 ## Sources
 
-**25 sources and 2 shared tools · 30 research methods · 82 actions · 39 tools the model sees, with every source on**
+**28 sources and 2 shared tools · 33 research methods · 90 actions · 42 tools the model sees, with every source on**
 
-Each source and each shared tool is one tool, named after it (`hackernews`, `x`, `papers`, `google_ads`). A call names one of its actions, such as `x_post` or `papers_openalex_search`. With every source on, the model sees those 27 tools, 11 of Dig's own and `open_library`: a tool list of about 135,000 characters. A host that shows Dig's views also gets the views' own tools.
+Each source and each shared tool is one tool, named after it (`hackernews`, `x`, `papers`, `google_ads`). A call names one of its actions, such as `x_post` or `papers_openalex_search`. With every source on, the model sees those 30 tools, 11 of Dig's own and `open_library`: a tool list of about 94,000 characters. A host that shows Dig's views also gets the views' own tools.
 
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
 | :---: | --- | --- |
 | <img src="docs/logos/exa.svg" width="22" height="22" alt=""> | **Exa** | Web search and page text |
 | <img src="docs/logos/perplexity.svg" width="22" height="22" alt=""> | **Perplexity** | Cited web answers |
+|  | **Firecrawl** | JS-rendered page scraping to Markdown and single-domain URL mapping |
 |  | **Wayback&nbsp;Machine** | What a web page said on a given date, from the Internet Archive |
 | <img src="docs/logos/github.svg" width="22" height="22" alt=""> | **GitHub** | Repositories, their activity and source code |
 |  | **DeepWiki** | Questions about a public codebase |
@@ -109,6 +110,7 @@ Each source and each shared tool is one tool, named after it (`hackernews`, `x`,
 |  | **Papers** | Semantic Scholar, OpenAlex and 18 more indexes; full text, PDFs and section extraction |
 | <img src="docs/logos/youtube.svg" width="22" height="22" alt=""> | **YouTube** | Video discovery, saved transcripts, comments and optional Gemini video understanding |
 | <img src="docs/logos/x.svg" width="22" height="22" alt=""> | **X** | Exact posts, threads, accounts, who follows whom, web-indexed search and the pictures in posts; Grok for search by meaning, images and video |
+|  | **Bluesky** | Public ATProto post search, threads and profiles |
 | <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **Reddit** | Threads, comments and collapsed replies |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok** | Videos, captions and transcripts |
 | <img src="docs/logos/instagram.svg" width="22" height="22" alt=""> | **Instagram** | Reels, accounts and transcripts |
@@ -122,6 +124,7 @@ Each source and each shared tool is one tool, named after it (`hackernews`, `x`,
 | <img src="docs/logos/linkedin.svg" width="22" height="22" alt=""> | **LinkedIn&nbsp;ads** | Ad Library ads with their payer and published targeting |
 | <img src="docs/logos/tiktok.svg" width="22" height="22" alt=""> | **TikTok&nbsp;ads** | Creative Center analytics and the Ad Library |
 | <img src="docs/logos/polymarket.svg" width="22" height="22" alt=""> | **Polymarket** | Prediction-market odds |
+|  | **SEC&nbsp;EDGAR** | SEC filings (10-K, 10-Q, 8-K, S-1, 13F, Form 4) and structured XBRL company financials |
 |  | **Commerce** | Amazon products, reviews and price history |
 |  | **DataForSEO** | Search results, keywords, rankings and backlinks; Google Trends, Google ads, and app-store and Trustpilot reviews |
 | <img src="docs/logos/reddit.svg" width="22" height="22" alt=""> | **TikHub&nbsp;Reddit** | Advanced Reddit discovery and enrichment |
@@ -139,7 +142,7 @@ Ask for a method by name (“use Dig's x-judge method”) or let the assistant c
 
 ## Cost
 
-- **Receipts.** Every call records what the provider reported it cost, in the provider's own units: US dollars, ScrapeCreators or Scrape.do credits, OpenAlex credits, X post and account reads. Units are never converted or added together. A cost the provider did not report is unknown, never zero.
+- **Receipts.** Every call records what the provider reported it cost, in the provider's own units: US dollars, Firecrawl, ScrapeCreators or Scrape.do credits, OpenAlex credits, X post and account reads. Units are never converted or added together. A cost the provider did not report is unknown, never zero.
 - **Running cost.** Every result says what the call cost and what its dig has cost so far.
 - **Spending ceiling.** `[spend] dig_ceiling_usd` in Dig's settings caps what one dig may record in US dollars. When a dig reaches it, Dig asks you whether to raise it for that dig or stop.
 - **Ask first.** `[spend] ask_above_usd` makes Dig ask you before a paid call whose action has typically cost at least that much in your library, or has never been priced there.

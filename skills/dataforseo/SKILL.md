@@ -25,7 +25,7 @@ Every provider call is a call to the `dataforseo` tool with the `dig` handle, an
 - `dataforseo_docs_sections` to list documentation sections and their subsections;
 - `dataforseo_docs_index` to find endpoint pages by `section` and `query` words, with `offset`/`limit` paging;
 - `dataforseo_docs_read` to read one page by its `path` (or docs URL), following `nextOffset`;
-- `dataforseo_request` to call an endpoint: its `path` after `/v3/`, the documented `method`, and for POST the documented `tasks` array. It can be slow: the call may answer with a job handle instead of the result; follow it with `job({ id })` and do not call the action again. A repeat of the same paid call returns the earlier result unless `fresh: true` is passed, which pays again.;
+- `dataforseo_request` to call an endpoint: its `path` after `/v3/`, the documented `method`, and for POST the documented `tasks` array. It can be slow: the call may answer with a job handle instead of the result; follow it with `job({ id })` and do not call the action again. A repeat of the same paid call returns the earlier result unless `fresh: true` is passed, which pays again;
 - `research_save` with `source: "dataforseo"` and `agent: "dataforseo"` for the report.
 
 Pass the `dig` handle on every provider call and on `research_save`; Dig uses it to file the evidence, and it never reaches the provider. Use only this source's tool, `dataforseo`, and `source_info`, `method`, `job`, `library_list`, `library_search`, `library_read` and `research_save`. There are no per-endpoint tools or actions such as `serp_organic_live_advanced`; do not search for or invent one.
@@ -46,7 +46,7 @@ Use `dataforseo_docs_sections` only when the section is genuinely unclear. Docum
 
 ## Route across the whole v3 API
 
-- **SERP API**: Google, Bing, Yahoo, Baidu, and Naver results; organic, local pack, Google Maps, news, images, events, and jobs.
+- **SERP API**: Google, Bing, Yahoo, Baidu, and Naver results; organic, local pack, Google Maps, news, images, and jobs.
 - **Business Data API**: business listings, Google Business Profile data and updates, reviews, questions, Trustpilot, Tripadvisor, and Yelp.
 - **DataForSEO Labs API**: keyword ideas, suggestions, related terms, ranked keywords, competitors, intersections, traffic estimates, and historical SERPs.
 - **Keywords Data API**: Google Ads volume, CPC, competition, suggestions, and Google Trends.
@@ -62,7 +62,7 @@ Do not narrow this method to remembered endpoints.
 
 ## Website opportunities and GEO recipes
 
-For website, competitor, AI citation, page-access or ad/landing questions, read [the website and GEO recipe router](references/website-recipes.md). It gives purpose-specific endpoint routes and their interpretation boundaries. Follow its answer → cited/competing page → owned-page chain; return a precise page-reading queue to the parent when page evidence is outside this source's scope. A metrics-only sample does not establish a complete website diagnosis. Use adaptive batches for the actual decision rather than a fixed tiny pilot or an automatic broad crawl.
+For website, competitor, AI citation, page-access, ad/landing, or local & review questions (Google Maps & Business Profile reviews, Yelp, Tripadvisor, Trustpilot, App Store & Google Play reviews, and Google Trends), read [the website and GEO recipe router](references/website-recipes.md). It gives purpose-specific endpoint routes, minimal request bodies, and interpretation boundaries. Follow its answer → cited/competing page → owned-page chain; return a precise page-reading queue to the parent when page evidence is outside this source's scope. A metrics-only sample does not establish a complete website diagnosis. Use adaptive batches for the actual decision rather than a fixed tiny pilot or an automatic broad crawl.
 
 ## Search interest, Google ads and review recipes
 
@@ -89,6 +89,10 @@ Every number remains tied to endpoint, location, language, device, retrieval tim
 For Labs Google estimated traffic volume (`etv`), state the calculation regime. The [September 4, 2026 change](https://dataforseo.com/update/new-etv-calculation-in-dataforseo-labs-api) adds SERP-feature/search-intent CTR and clickstream-normalized volume. Since November 1, 2026 the new method is the default for all users; historical-metric endpoints are excluded. Before that date, accounts registered before September 1 kept the old default unless `use_new_etv: true`, so earlier values from those accounts may use the old method. `estimated_paid_traffic_cost` changes with it. Do not treat a method change as a real traffic trend, and do not silently opt an existing comparison into a different regime.
 
 Google Business Profile inspection can include [service details](https://dataforseo.com/update/service-details-in-google-my-business-info-api) in `google_business_info.services`: category, title, snippet and price where the business supplied them. Missing services or prices mean unavailable, not that the business offers none.
+
+Google Organic SERP supports two November 2026 resolution flags when needed: `resolve_poisoned_results: true` recovers clean listings when Google serves poisoned results (adds +1 page charge per call, is incompatible with `udm=web` or `udm=14`, and flags recovered items with `from_web: true` in `checks`), and `resolve_goto_urls: true` follows Google `goto` redirect URLs to final destinations with slower turnaround (up to ~260s worst case; Dig allows 300s).
+
+AI Optimization LLM Responses endpoints (October 2026) can return `search_results[]` alongside model output when web search is enabled. Keep retrieved `search_results[]` distinct from cited URLs in the answer prose: a retrieved page is not automatically cited.
 
 Never fabricate a keyword metric, rank, backlink, business, review, rating, cost, or traffic estimate.
 

@@ -4,6 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MODULES } from '../../src/providers/modules.ts';
+import { actionSchemas, listed, parseAction, sourceToolOf } from '../../src/service/surface.ts';
 import { report } from '../report-fixture.mjs';
 import { cleanup, connectLegacy, connectModern, eventually, startService, text, workspace } from './helpers.mjs';
 
@@ -36,18 +37,100 @@ test('tools/list: a fixed order, one tool per enabled source plus the core tools
       for (const tool of first.tools.filter(tool => !CORE.includes(tool.name) && tool.name !== 'method' && tool.name !== 'open_library')) assert.equal(tool.outputSchema, undefined, tool.name);
       const size = JSON.stringify(first).length;
       console.log(`tools/list with every source enabled: ${size} characters, ${first.tools.length} tools`);
-      assert.ok(size < 140_000, `tools/list grew to ${size} characters`);
+      assert.ok(size < 100_000, `tools/list grew to ${size} characters`);
     } finally { await client.close(); }
   } finally { await cleanup(space); }
 });
 
-// About a third of the plugin's 408,388. The actions' argument descriptions are most of it, and a model needs them.
-test('tools/list with every source enabled stays under 140,000 characters', async () => {
+// Action property descriptions are stripped from listed args branches to preserve headroom; validation and error
+// responses still use full actionSchemas, and wrapper/tool/action summaries stay intact.
+test('tools/list with every source enabled stays well under 100,000 characters while keeping structure and wrapper descriptions', async () => {
   const space = await workspace('size', { config: ALL });
   try {
     const service = await startService(space);
     const client = await connectModern(space, service.token);
-    try { assert.ok(JSON.stringify(await client.listTools()).length < 140_000); } finally { await client.close(); }
+    try {
+      const result = await client.listTools();
+      const size = JSON.stringify(result).length;
+      assert.ok(size < 100_000, `tools/list grew to ${size} characters`);
+      const hasStringDescription = node => {
+        if (Array.isArray(node)) return node.some(hasStringDescription);
+        if (!node || typeof node !== 'object') return false;
+        for (const [key, value] of Object.entries(node)) {
+          if (key === 'description' && typeof value === 'string') return true;
+          if ((key === 'properties' || key === 'patternProperties' || key === '$defs' || key === 'definitions') && value && typeof value === 'object') {
+            if (Object.values(value).some(hasStringDescription)) return true;
+          } else if (key !== 'default' && key !== 'const' && key !== 'enum' && key !== 'examples' && hasStringDescription(value)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      for (const tool of result.tools.filter(t => !CORE.includes(t.name) && t.name !== 'method' && t.name !== 'open_library')) {
+        assert.ok(tool.description.includes('Actions:'), `${tool.name} keeps top-level description and action summaries`);
+        assert.equal(tool.inputSchema.properties.dig.description, 'Handle from dig_start.');
+        assert.equal(tool.inputSchema.properties.args.description, 'The branch titled with the action.');
+        assert.equal(tool.inputSchema.properties.fresh.description, 'Pay again for a call identical to one just completed.');
+        for (const branch of tool.inputSchema.properties.args.anyOf) {
+          assert.equal(hasStringDescription(branch), false, `${tool.name}.${branch.title} strips property descriptions from listed args`);
+        }
+      }
+      // Spot-check that property names, types, enums, required arrays and numeric/string bounds survive compaction.
+      const video = result.tools.find(t => t.name === 'video').inputSchema.properties.args.anyOf.find(b => b.title === 'video_analyze');
+      assert.deepEqual(video.required, ['video', 'question']);
+      assert.equal(video.properties.video.minLength, 1);
+      assert.equal(video.properties.question.maxLength, 12000);
+      assert.deepEqual(video.properties.effort, { type: 'string', enum: ['high', 'xhigh', 'max'] });
+      assert.equal(video.properties.fps.minimum, 0.25);
+      assert.equal(video.properties.fps.maximum, 8);
+    } finally { await client.close(); }
+  } finally { await cleanup(space); }
+});
+
+test('listed() strips schema descriptions and additionalProperties:false without removing a property literally named description, while actionSchemas, parseAction() and source_info retain full descriptions', async () => {
+  const sample = {
+    type: 'object',
+    description: 'Action summary',
+    additionalProperties: false,
+    properties: {
+      description: { type: 'string', minLength: 1, description: 'Literal property named description' },
+      mode: { description: 'Mode selector', anyOf: [{ const: 'a', type: 'string' }, { const: 'b', type: 'string' }] },
+      limit: { type: 'integer', minimum: 1, maximum: 50, default: 10, description: 'Max rows' },
+      nested: { type: 'object', description: 'Nested object', default: { description: 'keep default payload' }, properties: { flag: { type: 'boolean', description: 'Nested flag' } } },
+    },
+    required: ['description'],
+  };
+  assert.deepEqual(listed(sample), {
+    type: 'object',
+    properties: {
+      description: { type: 'string', minLength: 1 },
+      mode: { type: 'string', enum: ['a', 'b'] },
+      limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 },
+      nested: { type: 'object', default: { description: 'keep default payload' }, properties: { flag: { type: 'boolean' } } },
+    },
+    required: ['description'],
+  });
+  // actionSchemas and parseAction() retain full property-level descriptions unmodified.
+  const xsearchDesc = actionSchemas.xsearch.properties.query.description;
+  const videoDesc = actionSchemas.video_analyze.properties.video.description;
+  assert.equal(typeof xsearchDesc, 'string'); assert.ok(xsearchDesc.length > 20);
+  assert.equal(typeof videoDesc, 'string'); assert.ok(videoDesc.length > 20);
+  const parsed = parseAction(sourceToolOf('video'), 'video_analyze', { video: '' });
+  assert.equal(parsed.ok, false);
+  assert.ok(parsed.error.includes(JSON.stringify(videoDesc)), 'parseAction error returns full unmodified schema descriptions');
+  // source_info still returns full source descriptions, credential guidance, and readiness messages.
+  const space = await workspace('source-info-descriptions', { config: ALL });
+  try {
+    const service = await startService(space);
+    const client = await connectModern(space, service.token);
+    try {
+      const info = await client.callTool({ name: 'source_info', arguments: { source: 'video' } });
+      const videoInfo = info.structuredContent.sources[0];
+      assert.equal(videoInfo.description, MODULES.find(m => m.id === 'video').description);
+      assert.ok(videoInfo.description.length > 20);
+      assert.ok(videoInfo.credentialGuidance.length > 10);
+      assert.ok(videoInfo.prerequisites.every(p => typeof p.detail === 'string' && p.detail.length > 10));
+    } finally { await client.close(); }
   } finally { await cleanup(space); }
 });
 
@@ -92,6 +175,7 @@ test('args are validated against the action\'s schema: a wrong argument names th
       const wrong = await client.callTool({ name: 'x', arguments: { dig, action: 'xsearch', args: { query: 42 } } });
       assert.equal(wrong.isError, true);
       assert.match(text(wrong), /^The arguments for x action xsearch do not fit its schema:\n- query: .*expected string.*\nNo request was sent\. The xsearch schema for args:\n\{"type":"object"/s);
+      assert.ok(text(wrong).includes(JSON.stringify(actionSchemas.xsearch.properties.query.description)), 'validation error still includes full property descriptions');
       const missing = await client.callTool({ name: 'hackernews', arguments: { dig, action: 'hackernews', args: {} } });
       assert.equal(missing.isError, true); assert.match(text(missing), /- query: /);
       const unknown = await client.callTool({ name: 'x', arguments: { dig, action: 'x_teleport', args: {} } });

@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, test } from "node:test"
+import { Type } from "@sinclair/typebox"
+import { Value } from "@sinclair/typebox/value"
 import { expect } from "expect"
+import { createSchemas } from "../schemas.js"
 import { executeSource } from "../outcome.js"
 import type { SourceToolResult, ToolContext } from "../types.js"
 import { ask, reason, research, search } from "./perplexity.js"
@@ -51,7 +54,7 @@ describe("Perplexity Agent and Search contracts", () => {
     else process.env.PERPLEXITY_TIMEOUT_MS = originalTimeout
   })
 
-  test("uses each Agent preset and resolves noncontiguous provider citation IDs without renumbering", async () => {
+  test("sends each Agent effort level and resolves noncontiguous provider citation IDs without renumbering", async () => {
     const calls = installFetch(agentFixture())
     for (const tool of [ask, reason, research]) {
       const output = await executeSource(tool, { messages, search_domain_filter: ["example.com"], search_recency_filter: "week" }, context)
@@ -64,7 +67,8 @@ describe("Perplexity Agent and Search contracts", () => {
       expect(result).toContain("Last updated: 2026-09-14")
       expect(result).not.toContain("[web:1]")
     }
-    expect(calls.map((call) => call.body.preset)).toEqual(["low", "medium", "high"])
+    expect(calls.map((call) => call.body.effort)).toEqual(["low", "medium", "high"])
+    expect(calls.every((call) => call.body.preset === undefined)).toBe(true)
     expect(calls.every((call) => call.url.endsWith("/v1/agent"))).toBe(true)
     expect(calls[0].body.input).toEqual([{ type: "message", ...messages[0] }])
     expect(calls[0].body.tools).toEqual([{ type: "web_search", filters: { search_domain_filter: ["example.com"], search_recency_filter: "week" } }])
@@ -143,6 +147,20 @@ describe("Perplexity Agent and Search contracts", () => {
     expect(result).toContain(sourceUrl)
     expect(result).toContain("Snippet: The documented change.")
     expect(result).toContain("Last updated: 2026-09-14")
+  })
+
+  test("accepts Photon fast search_type in schema and runtime, enforcing its 20-result cap", async () => {
+    const schema = createSchemas(Type).perplexity_search
+    expect(Value.Check(schema, { query: "fast lookup", search_type: "fast" })).toBe(true)
+    expect(Value.Check(schema, { query: "fast lookup", search_type: "invalid" })).toBe(false)
+    const calls = installFetch({ results: [source] })
+    const result = await search.execute({ query: "fast lookup", search_type: "fast", max_results: 20 }, context)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe("https://api.perplexity.ai/search")
+    expect(calls[0].body).toEqual({ query: "fast lookup", search_type: "fast", max_results: 20 })
+    expect(result).toContain(sourceUrl)
+    expect(text(await search.execute({ query: "fast lookup", search_type: "fast", max_results: 21 }, context)).startsWith("ERROR:")).toBe(true)
+    expect(calls).toHaveLength(1)
   })
 
   test("rejects retired arguments and conflicting or invalid search constraints before requesting", async () => {

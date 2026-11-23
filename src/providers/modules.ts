@@ -48,12 +48,12 @@ export interface DigModule {
  * their own group. Every catalog entry appears in exactly one group.
  */
 export const SOURCE_GROUPS = [
-  { id: "web", label: "Web search", sources: ["exa", "perplexity", "wayback"] },
+  { id: "web", label: "Web search", sources: ["exa", "perplexity", "wayback", "firecrawl"] },
   { id: "code", label: "Code and developers", sources: ["github", "deepwiki", "hackernews"] },
   { id: "papers", label: "Papers", sources: ["papers"] },
   { id: "video", label: "Video", sources: ["youtube"] },
-  { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "facebook", "threads", "linkedin", "telegram", "china-social"] },
-  { id: "markets", label: "Markets and commerce", sources: ["polymarket", "commerce", "tiktok-ads", "facebook-ads", "google-ads", "linkedin-ads", "dataforseo"] },
+  { id: "social", label: "Social", sources: ["x", "reddit", "tikhub-reddit", "tiktok", "instagram", "facebook", "threads", "linkedin", "telegram", "china-social", "bluesky"] },
+  { id: "markets", label: "Markets and commerce", sources: ["polymarket", "sec", "commerce", "tiktok-ads", "facebook-ads", "google-ads", "linkedin-ads", "dataforseo"] },
   { id: "tools", label: "Shared tools", sources: ["video", "evidence"] },
 ] as const;
 const SCRAPECREATORS = { name: "ScrapeCreators", url: "https://scrapecreators.com" };
@@ -123,9 +123,16 @@ export const MODULES = [
     description: "Web documents, extraction and similarity",
     tools: ["exa_search", "exa_contents", "exa_similar", "exa_research"],
     slow: ["exa_research"],
-    env: ["EXA_API_KEY"],
+    env: ["EXA_API_KEY", "EXA_BASE_URL"],
     keys: ["EXA_API_KEY"],
     credential: "EXA_API_KEY",
+    envSettings: [
+      {
+        name: "EXA_BASE_URL",
+        label: "Exa API endpoint",
+        purpose: "Optional HTTPS API base URL (defaults to https://api.exa.ai). Set https://api.eu.exa.ai in keys.env for EU data-residency API keys.",
+      },
+    ],
     about: "Web search that returns ranked pages with their text, plus clean extraction of pages you name and discovery of similar pages. Exa's deep research runs only when explicitly asked for.",
     providers: [{ name: "Exa", url: "https://exa.ai" }],
     billing: "Paid per request in US dollars from your Exa account. Dig records the cost Exa reports.",
@@ -462,6 +469,45 @@ export const MODULES = [
     providers: [{ name: "DataForSEO v3 API", url: "https://dataforseo.com" }],
     billing: "Paid per request in US dollars from a prepaid DataForSEO account. Dig records the cost each live response reports, and unknown when no complete response arrived; the free sandbox checks request shapes with dummy data and records no charge.",
   },
+  {
+    id: "firecrawl",
+    label: "Firecrawl",
+    description: "Single-page Markdown scraping and site URL mapping",
+    tools: ["firecrawl_scrape", "firecrawl_map"],
+    env: ["FIRECRAWL_API_KEY"],
+    keys: ["FIRECRAWL_API_KEY"],
+    credential: "FIRECRAWL_API_KEY",
+    about: "Turns a single public web page into clean Markdown (including JavaScript-rendered pages) and maps discovered URLs on a site with optional relevance filtering. Bounded to single-page scrapes and URL maps without multi-page crawls.",
+    providers: [{ name: "Firecrawl", url: "https://firecrawl.dev" }],
+    billing: "Firecrawl credits per request, from your Firecrawl account. Dig records the credits each response reports, and shows cost as unknown when a response omits them.",
+  },
+  {
+    id: "sec",
+    label: "SEC EDGAR",
+    description: "Public company filings and XBRL financial statements",
+    tools: ["sec_search", "sec_company", "sec_facts"],
+    env: ["SEC_USER_AGENT"],
+    credential: "No API key required; optional SEC_USER_AGENT contact string per SEC fair-access policy",
+    envSettings: [
+      {
+        name: "SEC_USER_AGENT",
+        label: "SEC EDGAR User-Agent",
+        purpose: "Descriptive User-Agent header (for example AppName contact@domain.com) per SEC EDGAR fair-access policy. Dig sends a polite default when unset.",
+      },
+    ],
+    about: "Official U.S. SEC EDGAR filings and structured XBRL financial data: full-text filing search since 2001, company submission histories with direct sec.gov/Archives URLs, and structured companyfacts financial series.",
+    providers: [{ name: "SEC EDGAR", url: "https://www.sec.gov/edgar" }],
+    billing: "Free. No account or key.",
+  },
+  {
+    id: "bluesky",
+    label: "Bluesky",
+    description: "Public ATProto posts, threads and profiles",
+    tools: ["bluesky_search", "bluesky_thread", "bluesky_profile"],
+    about: "Public Bluesky posts, conversation threads and account profiles read through the official keyless ATProto AppView API.",
+    providers: [{ name: "Bluesky public AppView API", url: "https://docs.bsky.app" }],
+    billing: "Free. No account or key.",
+  },
 ] as const satisfies readonly DigModule[];
 export type ModuleId = (typeof MODULES)[number]["id"];
 export const ALL_MODULES: ModuleId[] = MODULES.map((m) => m.id);
@@ -487,6 +533,7 @@ const UNKNOWN_COST = "Dig shows these calls’ cost as unknown, because the prov
 export const ACCOUNTS = [
   { id: "exa", name: "Exa", signup: "https://dashboard.exa.ai/api-keys", keys: ["EXA_API_KEY"], billing: "Paid per request in US dollars, which Dig records." },
   { id: "perplexity", name: "Perplexity API", signup: "https://console.perplexity.ai", keys: ["PERPLEXITY_API_KEY"], billing: "Paid per request in US dollars; Dig records Agent calls' reported cost and shows Search calls' cost as unknown." },
+  { id: "firecrawl", name: "Firecrawl", signup: "https://www.firecrawl.dev/app/api-keys", keys: ["FIRECRAWL_API_KEY"], billing: "Firecrawl credits per request. Dig records the credits each response reports and shows unknown when omitted." },
   { id: "github", name: "GitHub", signup: "https://github.com/settings/tokens", keys: [["GH_TOKEN", "GITHUB_TOKEN"]], billing: "Free. A token, or an existing gh login, raises GitHub’s anonymous limits." },
   { id: "semantic-scholar", name: "Semantic Scholar", signup: "https://www.semanticscholar.org/product/api#api-key-form", keys: [["SEMANTIC_SCHOLAR_API_KEY", "PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY"]], billing: "Free. A key replaces the shared anonymous pool with a rate limit of your own." },
   { id: "openalex", name: "OpenAlex", signup: "https://openalex.org/settings/api", keys: [["OPENALEX_API_KEY", "PAPER_SEARCH_MCP_OPENALEX_API_KEY"]], billing: "Reports a US-dollar usage cost, which Dig records and its free daily allowance can cover; a key raises the allowance." },

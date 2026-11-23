@@ -1,4 +1,4 @@
-/** Perplexity Agent API (low/medium/high presets) and separate Search API.
+/** Perplexity Agent API (low/medium/high effort) and separate Search API.
  * Direct HTTP keeps tools available to source-research subagents.
  * Requires PERPLEXITY_API_KEY; PERPLEXITY_TIMEOUT_MS bounds the entire response.
  */
@@ -124,6 +124,7 @@ async function makeApiRequest(endpoint: string, body: Record<string, unknown>, c
     try {
       response = await fetch(`${PERPLEXITY_BASE}/${endpoint}`, {
         method: "POST",
+        redirect: "error",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${key}`,
@@ -171,7 +172,7 @@ function sourceLines(source: Record<string, unknown>, label: string): string[] {
   return lines
 }
 
-function formatAgent(data: Record<string, unknown>, preset: string): string {
+function formatAgent(data: Record<string, unknown>, effort: string): string {
   if (data.error || !["completed", "incomplete"].includes(String(data.status))) {
     const message = isRecord(data.error) ? text(data.error.message) : undefined
     throw new Error(`Perplexity Agent status: ${text(data.status) ?? "missing"}${message ? ` — ${message}` : ""}`)
@@ -225,7 +226,7 @@ function formatAgent(data: Record<string, unknown>, preset: string): string {
   const reason = isRecord(data.incomplete_details) ? text(data.incomplete_details.reason) : undefined
   const lines = [
     ...(data.status === "incomplete" ? [`This answer is incomplete: Perplexity stopped before finishing it (${reason ?? "no reason given"}).`] : []),
-    `Perplexity Agent preset: ${preset} | Status: ${data.status}${text(data.model) ? ` | Model: ${data.model}` : ""}`,
+    `Perplexity Agent effort: ${effort} | Status: ${data.status}${text(data.model) ? ` | Model: ${data.model}` : ""}`,
     "", answer,
   ]
   if (sources.length) lines.push("", "Sources (provider IDs preserved):", ...sources)
@@ -242,12 +243,12 @@ const agentMetered = (spec: ToolSpec): ToolSpec => ({
     charge({ body }) {
       const cost = isRecord(body) && isRecord(body.usage) && isRecord(body.usage.cost) ? body.usage.cost : undefined
       if (!cost || typeof cost.total_cost !== "number") return { cost: null }
-      return { cost: [{ amount: cost.total_cost, unit: cost.currency === undefined ? "USD" : cost.currency as string }] }
+      return { cost: [{ amount: cost.total_cost, unit: cost.currency == null ? "USD" : cost.currency as string }] }
     },
   },
 })
 
-async function performAgent(value: unknown, preset: "low" | "medium" | "high", ctx: ToolContext): Promise<SourceToolResult> {
+async function performAgent(value: unknown, effort: "low" | "medium" | "high", ctx: ToolContext): Promise<SourceToolResult> {
   try {
     const args = argumentsObject(value, AGENT_FIELDS)
     if (!Array.isArray(args.messages) || !args.messages.length) throw new Error("messages must be a nonempty array")
@@ -258,13 +259,13 @@ async function performAgent(value: unknown, preset: "low" | "medium" | "high", c
     const filters = searchFilters(args)
     const budgets = searchBudgets(args)
     const data = await makeApiRequest("v1/agent", {
-      preset,
+      effort,
       input,
       tools: [{ type: "web_search", ...(Object.keys(filters).length ? { filters } : {}), ...budgets }],
     }, ctx)
-    const output = formatAgent(data, preset)
+    const output = formatAgent(data, effort)
     const result = args.search_context_size !== undefined && BUDGET_FIELDS.every((field) => args[field] === undefined)
-      ? `${output}\n\nSearch context note: named size was sent, but the preset's explicit token budgets take precedence. Use max_tokens and max_tokens_per_page to override preset search depth.`
+      ? `${output}\n\nSearch context note: named size was sent, but the effort level's explicit token budgets take precedence. Use max_tokens and max_tokens_per_page to override search depth.`
       : output
     // An answer cut short still carries its text and sources: partial evidence, not a failure.
     return data.status === "incomplete" ? outcome("partial", result) : result
@@ -274,17 +275,17 @@ async function performAgent(value: unknown, preset: "low" | "medium" | "high", c
 }
 
 export const ask = agentMetered({
-  description: "Answer narrow factual questions with Perplexity Agent API preset low. Returns provider answer and source IDs/URLs. Supports domain/date/recency filters and search context budgets. For deeper investigation use perplexity_research; for complex analysis use perplexity_reason.",
+  description: "Answer narrow factual questions with Perplexity Agent API effort low. Returns provider answer and source IDs/URLs. Supports domain/date/recency filters and search context budgets. For deeper investigation use perplexity_research; for complex analysis use perplexity_reason.",
   execute: (args: unknown, ctx: ToolContext) => performAgent(args, "low", ctx),
 } satisfies ToolSpec)
 
 export const reason = agentMetered({
-  description: "Analyze complex comparisons and multi-hop questions with Perplexity Agent API preset medium. Returns the answer and provider source IDs/URLs. Supports domain/date/recency filters and search context budgets.",
+  description: "Analyze complex comparisons and multi-hop questions with Perplexity Agent API effort medium. Returns the answer and provider source IDs/URLs. Supports domain/date/recency filters and search context budgets.",
   execute: (args: unknown, ctx: ToolContext) => performAgent(args, "medium", ctx),
 } satisfies ToolSpec)
 
 export const research = agentMetered({
-  description: "Conduct deep multi-source investigation with Perplexity Agent API preset high. Slower than ask/reason; returns the answer and provider source IDs/URLs. Supports domain/date/recency filters and search context budgets.",
+  description: "Conduct deep multi-source investigation with Perplexity Agent API effort high. Slower than ask/reason; returns the answer and provider source IDs/URLs. Supports domain/date/recency filters and search context budgets.",
   execute: (args: unknown, ctx: ToolContext) => performAgent(args, "high", ctx),
 } satisfies ToolSpec)
 
@@ -295,7 +296,7 @@ export const search = {
       const args = argumentsObject(value, SEARCH_FIELDS)
       const query = typeof args.query === "string" ? args.query : strings(args.query, "query", 5)
       if (typeof query === "string" ? !nonempty(query) : !query.length) throw new Error("query must contain 1-5 nonempty queries")
-      const searchType = oneOf(args.search_type ?? "web", "search_type", ["web", "people"])
+      const searchType = oneOf(args.search_type ?? "web", "search_type", ["web", "fast", "people"])
       const budgets = searchBudgets(args)
       if (args.search_context_size !== undefined && BUDGET_FIELDS.some((field) => args[field] !== undefined)) {
         throw new Error("Search API search_context_size cannot be combined with max_tokens or max_tokens_per_page")

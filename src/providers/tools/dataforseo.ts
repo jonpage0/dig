@@ -318,7 +318,7 @@ async function sendOnce(url: string, init: RequestInit, label: string, context: 
 	context.abort.throwIfAborted();
 	let response: Response;
 	try {
-		response = await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.any([context.abort, AbortSignal.timeout(180_000)]) });
+		response = await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.any([context.abort, AbortSignal.timeout(300_000)]) });
 	} catch (error) {
 		context.keep(label, "error", message(error));
 		throw error;

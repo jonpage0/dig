@@ -90,12 +90,43 @@ function prepare(platform: Platform, args: Args, route: Route) {
   return params;
 }
 
-/** Only explicit provider resource-state answers qualify; 401/402/429 and generic 403 failures never do. */
+const PROFILE_STATE_MESSAGES = [
+  "Profile is age restricted",
+  "Profile is restricted",
+  "Profile is unavailable on Instagram",
+  "Profile is private",
+  "Account doesn't exist",
+];
+const INSTAGRAM_404_RESTRICTED_MESSAGES = [
+  "Profile is restricted",
+  "Profile is unavailable on Instagram",
+];
+
+/** Only explicit provider resource-state answers qualify; 401/402/429 and generic 403/404 failures never do. */
 function profileState(body: Record<string, any>, status: number): string | null {
   if (![200, 403, 404].includes(status)) return null;
-  const message = asString(body.message);
-  if (body.success !== true && !(status === 200 && body.errorStatus === 404)) return null;
-  return message && ["Profile is age restricted", "Profile is restricted", "Profile is unavailable on Instagram", "Profile is private", "Account doesn't exist"].includes(message) ? message : null;
+  const message = asString(body.message)?.trim();
+  if (!message) return null;
+  if (body.success === true || (status === 200 && body.errorStatus === 404)) {
+    return PROFILE_STATE_MESSAGES.includes(message) ? message : null;
+  }
+  if (
+    status === 403 &&
+    message === "Profile is age restricted" &&
+    (body.age_restricted === true || body.error === "forbidden") &&
+    (body.errorStatus === undefined || body.errorStatus === 403)
+  ) {
+    return message;
+  }
+  if (
+    status === 404 &&
+    body.error === "not_found" &&
+    (body.errorStatus === undefined || body.errorStatus === 404) &&
+    INSTAGRAM_404_RESTRICTED_MESSAGES.includes(message)
+  ) {
+    return message;
+  }
+  return null;
 }
 function readableId(record: Record<string, any>): string | null {
   const id = record.aweme_id ?? record.id ?? record.pk ?? record.cid;
