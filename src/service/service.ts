@@ -186,7 +186,10 @@ export async function serve({ state = stateDirectory(), env = process.env } = {}
     }
     if (pathname === '/status' && request.method === 'GET') {
       const running = activity.all();
-      const jobs = store.running().map(job => ({ id: job.id, tool: job.tool, source: job.source, dig: job.dig, since: job.createdAt }));
+      const jobs = store.running().map(job => {
+        const progress = store.progressOf(job.id);
+        return { id: job.id, tool: job.tool, source: job.source, dig: job.dig, since: job.createdAt, ...(progress ? { progress: progress.message } : {}) };
+      });
       return json(200, { name: 'dig', version: VERSION, pid: process.pid, port, startedAt, running, jobs, pendingPrompts: hasPendingPrompts(), sessions: sessions.size });
     }
     if (pathname === '/open' && request.method === 'POST') return json(200, browser.issue(self));

@@ -24,12 +24,23 @@ export type KeepRaw = (
 	interrupted?: boolean,
 ) => void;
 
+export interface ToolProgress {
+	/** Monotonically increasing step count (1, 2, 3...). */
+	progress: number;
+	/** Optional known total; omitted for open-ended loops. */
+	total?: number;
+	/** Concise, single-line human-readable progress status. */
+	message: string;
+}
+
 export interface ToolContext {
 	sessionID: string;
 	directory: string;
 	worktree: string;
 	abort: AbortSignal;
 	keep: KeepRaw;
+	/** Optional live progress callback; never throws or blocks the provider call. */
+	progress?: (update: ToolProgress) => void;
 }
 
 export interface SourceToolOutput {

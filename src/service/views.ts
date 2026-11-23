@@ -65,12 +65,17 @@ export interface ViewContext { host: string; origin: string; settingsChanged(c: 
  */
 export async function snapshot(c: Config, host: string) {
   const base = await librarySnapshot(c, activity, host) as Json & { items: { project: string; id: string }[] };
-  const running = (await jobs()).running().map(job => ({ id: job.id, dig: job.dig, source: job.source, tool: job.tool, createdAt: job.createdAt }));
+  const store = await jobs();
+  const running = store.running().map(job => {
+    const progress = store.progressOf(job.id);
+    return { id: job.id, dig: job.dig, source: job.source, tool: job.tool, createdAt: job.createdAt, ...(progress ? { progress: progress.message } : {}) };
+  });
   return { ...base, items: base.items.map(item => ({ ...item, dig: handleOf(item.project, item.id) })), jobs: running };
 }
-/** The snapshot's change fingerprint: the library's (surfaces.mjs), and which jobs are running. */
+/** The snapshot's change fingerprint: the library's (surfaces.mjs), and which jobs are running (with live progress step). */
 export async function revision(c: Config) {
-  const running = (await jobs()).running().map(job => job.id).sort();
+  const store = await jobs();
+  const running = store.running().map(job => `${job.id}:${store.progressOf(job.id)?.progress ?? 0}`).sort();
   return createHash('sha256').update(JSON.stringify([await libraryFingerprint(c, activity), running])).digest('hex').slice(0, 24);
 }
 

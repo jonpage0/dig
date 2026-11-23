@@ -631,3 +631,38 @@ test("mode 'semantic' sends the semantic-only system prompt, defaults depth to q
 	expect(badMode.text).toContain("mode must be 'standard' or 'semantic'");
 	expect(bodies).toHaveLength(3);
 });
+
+test("SSE search-round items emit deduplicated, redacted live progress updates without failing on listener errors", async () => {
+	const secret = "xai-live-progress-secret-token";
+	process.env.XAI_API_KEY = secret;
+	const sse = [
+		`event: response.output_item.done\ndata: ${JSON.stringify({ type: "response.output_item.done", item: { id: "r1", type: "reasoning", status: "completed" } })}`,
+		`event: response.output_item.done\ndata: ${JSON.stringify({ type: "response.output_item.done", item: { id: "c1", call_id: "call-1", type: "custom_tool_call", name: "x_semantic_search", input: JSON.stringify({ query: `practitioner reviews\nwith ${secret}` }), status: "completed" } })}`,
+		// Duplicate call_id must not emit a second round.
+		`event: response.output_item.done\ndata: ${JSON.stringify({ type: "response.output_item.done", item: { id: "c1", call_id: "call-1", type: "custom_tool_call", name: "x_semantic_search", input: JSON.stringify({ query: "duplicate" }), status: "completed" } })}`,
+		`event: response.output_item.done\ndata: ${JSON.stringify({ type: "response.output_item.done", item: { id: "c2", call_id: "call-2", type: "custom_tool_call", name: "x_thread_fetch", input: JSON.stringify({ post_id: "2072482460122964067" }), status: "completed" } })}`,
+		`event: response.output_item.done\ndata: ${JSON.stringify({ type: "response.output_item.done", item: { id: "w1", type: "web_search_call", status: "completed", action: { type: "open_page", url: "https://pbs.twimg.com/media/EXAMPLE.jpg" } } })}`,
+		`event: response.output_item.done\ndata: ${JSON.stringify({ type: "response.output_item.done", item: { id: "x1", type: "x_search_call", status: "completed", action: { query: "direct x_search_call" } } })}`,
+		`event: response.output_item.done\ndata: ${JSON.stringify({ type: "response.output_item.done", item: { id: "m1", type: "message", status: "completed" } })}`,
+		`event: response.completed\ndata: ${JSON.stringify({ type: "response.completed", response: complete() })}`,
+	].join("\n\n") + "\n\n";
+	globalThis.fetch = (async () => new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })) as typeof fetch;
+
+	const events: Array<{ progress: number; total?: number; message: string }> = [];
+	const result = await executeSource(search, { query: "progress test" }, {
+		...context,
+		progress: (update) => {
+			events.push(update);
+			if (update.progress === 2) throw new Error("listener crash must not break paid stream");
+		},
+	});
+	expect(result.status).toBe("success");
+	expect(events).toHaveLength(4);
+	expect(events[0].progress).toBe(1);
+	expect(events[0].message).toContain("Search round 1 (x_semantic_search):");
+	expect(events[0].message).not.toContain(secret);
+	expect(events[0].message).not.toContain("\n");
+	expect(events[1]).toEqual({ progress: 2, message: "Search round 2 (x_thread_fetch): post 2072482460122964067" });
+	expect(events[2]).toEqual({ progress: 3, message: "Search round 3 (open_page): https://pbs.twimg.com/media/EXAMPLE.jpg" });
+	expect(events[3]).toEqual({ progress: 4, message: 'Search round 4 (x_search): "direct x_search_call"' });
+});

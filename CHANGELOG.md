@@ -2,6 +2,10 @@
 
 Below, `dig` stands for `node <checkout>/dist/dig.mjs`: nothing installs a `dig` command, and on macOS and Linux that name is the DNS lookup tool.
 
+## 1.2.2 — 2026-11-23
+
+- **Live search-round progress for `xsearch`.** While `xsearch` consumes xAI's Responses SSE stream, completed search-round items (`custom_tool_call` such as `x_keyword_search`, `x_semantic_search`, `x_user_search`, and `x_thread_fetch`, as well as `web_search_call` and `x_search_call`) now emit live MCP `notifications/progress` updates (when the client supplied `_meta.progressToken`, across both 2025-era and 2026-07-28 clients, including attached duplicate calls and `job({ id, wait: true })`) and update in-memory running-job status (`job`, `tasks/get`, `dig status`, and the trail view) without persisting new fields to job files or receipts.
+
 ## 1.2.1 — 2026-11-22
 
 - **Worked X playbooks and cheat sheets in every X method.** Added concrete JSON `x` tool call playbooks and operator/pitfall checklists across `x-judge` (action cheat sheet, historical discourse + screenshots, breaking <24 h + volume, and targeted video verification), `x-breadth` (6–8 pass allocation sequence), `x-post` (4-step post-inspection sequence), and `x-trace` (3-round trace within the default read budget), while deduplicating repeated prose so every X `SKILL.md` stays comfortably under Antigravity's 24,000-byte load cap. Added `x_web_search` to `x-judge`'s `QUICK` path and updated the X UI source guide.

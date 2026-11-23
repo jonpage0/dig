@@ -16,6 +16,7 @@ import { VERSION } from '../version.mjs';
 import { ANSWER_STATUSES } from '../status.mjs';
 import { toolHistory } from '../ui/usage.mjs';
 import { monochromeSvg, svgDataUri } from '../glyphs.mjs';
+import type { ToolProgress } from '../providers/types.ts';
 import { callSource, handleOf, libraryUri, listing, NO_DIG, Refusal, refused, resolveHandle } from './calls.ts';
 import { SOURCE_TOOLS, type SourceTool } from './surface.ts';
 import { registerMethods } from './methods.ts';
@@ -231,22 +232,38 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
     inputSchema: z.object({ source: z.enum(ALL_MODULES as [string, ...string[]]).optional() }), outputSchema: OUTPUT.keys, annotations: localWrite,
   }, async ({ source }, ctx) => { try { return await keysTool(askerOf(context.era, server, ctx), source, hooks.origin); } catch (error) { if (ctx.mcpReq.signal.aborted) throw error; return failure(error); } });
 
+  // Forward live provider progress to MCP `notifications/progress` whenever the client supplied a progressToken.
+  const progressOf = (ctx: { mcpReq: { _meta?: { progressToken?: string | number }; notify: (notification: { method: 'notifications/progress'; params: { progressToken: string | number; progress: number; total?: number; message?: string } }) => Promise<void>; signal: AbortSignal } }) => {
+    const progressToken = ctx.mcpReq._meta?.progressToken;
+    if (progressToken === undefined) return undefined;
+    return (update: ToolProgress) => {
+      if (ctx.mcpReq.signal.aborted) return;
+      void ctx.mcpReq.notify({ method: 'notifications/progress', params: { progressToken, progress: update.progress, ...(update.total !== undefined ? { total: update.total } : {}), message: update.message } }).catch(() => {});
+    };
+  };
+
   // A slow or paid call's job, by the id its answer gave. Content only, as a source call's result is, since a finished
   // job returns exactly that result.
   server.registerTool('job', {
     title: 'Follow a call\'s job', description: 'Status of a slow or paid source call that answered with a job id, and once it has finished, the result the call returns. wait: true waits up to 40 seconds for the result. cancel: true asks a running job to stop; a paid call then records an unknown cost. Do not repeat the source call while its job runs.',
     inputSchema: z.object({ id: z.string().min(1).describe('The job id the call\'s answer gave.'), wait: z.boolean().optional(), cancel: z.boolean().optional() }),
     annotations: { destructiveHint: false, openWorldHint: false },
-  }, guarded(async ({ id, wait, cancel }) => {
-    const store = await jobs(); let job = store.get(id);
-    if (!job) return refused(unknownJob(id));
-    if (cancel) {
-      if (!store.cancel(job.id)) return withLine(jobResult(job), `Job ${job.id} had already finished (${job.status}); there was nothing to cancel.`);
-      job = await store.wait(job.id, Math.min(inlineWaitMs(), 10_000)) ?? job;
-      if (job.status === 'working') return withLine(working(job), `Cancellation of job ${job.id} was requested; it is stopping.`);
-    } else if (wait && job.status === 'working') job = await store.wait(job.id, inlineWaitMs()) ?? job;
-    return job.status === 'working' ? working(job) : jobResult(job);
-  }));
+  }, async ({ id, wait, cancel }, ctx) => {
+    try {
+      const store = await jobs(); let job = store.get(id);
+      if (!job) return refused(unknownJob(id));
+      if (cancel) {
+        if (!store.cancel(job.id)) return withLine(jobResult(job), `Job ${job.id} had already finished (${job.status}); there was nothing to cancel.`);
+        job = await store.wait(job.id, Math.min(inlineWaitMs(), 10_000)) ?? job;
+        if (job.status === 'working') return withLine(working(job, store.progressOf(job.id)), `Cancellation of job ${job.id} was requested; it is stopping.`);
+      } else if (wait && job.status === 'working') {
+        const progress = progressOf(ctx);
+        const unsubscribe = progress ? store.subscribe(job.id, progress) : undefined;
+        try { job = await store.wait(job.id, inlineWaitMs()) ?? job; } finally { unsubscribe?.(); }
+      }
+      return job.status === 'working' ? working(job, store.progressOf(job.id)) : jobResult(job);
+    } catch (error) { return failure(error); }
+  });
 
   // The Tasks extension, on 2026-07-28: a slow job answers a request that declares it with a task, and tasks/get,
   // tasks/update and tasks/cancel are served from the job store, so a task id answers across connections and service
@@ -254,7 +271,10 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
   if (context.era === 'modern') {
     server.server.registerCapabilities({ extensions: { [TASKS]: {} } });
     const task = async (taskId: string, envelope: unknown) => { if (!declaresTasks(envelope)) throw needsTasks(); const job = (await jobs()).get(taskId); if (!job) throw noSuchTask(taskId); return job; };
-    server.server.setRequestHandler('tasks/get', { params: z.looseObject({ taskId: z.string() }) }, async ({ taskId }, ctx) => taskState(await task(taskId, ctx.mcpReq.envelope)));
+    server.server.setRequestHandler('tasks/get', { params: z.looseObject({ taskId: z.string() }) }, async ({ taskId }, ctx) => {
+      const job = await task(taskId, ctx.mcpReq.envelope);
+      return taskState(job, (await jobs()).progressOf(job.id));
+    });
     // Dig's jobs never wait on input, so there is never an outstanding request for an answer to go to. (The SDK takes
     // inputResponses off the params into the request context, so the schema names only taskId.)
     server.server.setRequestHandler('tasks/update', { params: z.looseObject({ taskId: z.string() }) }, async ({ taskId }, ctx) => { await task(taskId, ctx.mcpReq.envelope); return {}; });
@@ -267,7 +287,7 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
     const registered = server.registerTool(tool.name, {
       title: tool.module.label, description: tool.description, inputSchema: sourceInputs.get(tool.name)!,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-    }, async (input, ctx) => callSource(tool, input, ctx.mcpReq.signal, { tasks: context.era === 'modern' && declaresTasks(ctx.mcpReq.envelope) }, askerOf(context.era, server, ctx)));
+    }, async (input, ctx) => callSource(tool, input, ctx.mcpReq.signal, { tasks: context.era === 'modern' && declaresTasks(ctx.mcpReq.envelope), progress: progressOf(ctx) }, askerOf(context.era, server, ctx)));
     if (!config?.sources.enabled.includes(tool.module.id)) registered.disable();
     sourceTools.set(tool, registered);
   }

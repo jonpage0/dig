@@ -13,6 +13,7 @@ import { MissingRequiredClientCapabilityError, ProtocolError, type CallToolResul
 import { loadConfig, stateDirectory } from '../config.mjs';
 import { projectFolder, readLibraryFile, recordCall, safeSegment, SESSION_UNAVAILABLE, withoutSecrets } from '../library.mjs';
 import { MODULES } from '../providers/modules.ts';
+import type { ToolProgress } from '../providers/types.ts';
 
 type Config = Awaited<ReturnType<typeof loadConfig>>;
 type Json = Record<string, unknown>;
@@ -41,6 +42,8 @@ export interface Job {
   status: JobStatus; createdAt: string; lastUpdatedAt: string; finishedAt?: string;
   result?: CallToolResult; cost?: unknown; knownCost?: unknown; receipt?: string | null; error?: string;
 }
+/** Process-local live progress of a running job; never persisted into job files or receipts. */
+export interface JobProgress extends ToolProgress { at: string }
 /** What a run produces for its job: the model's result, and the receipt's id and pricing (null when none was kept). */
 export interface Outcome { result: CallToolResult; status: 'completed' | 'cancelled'; receipt: string | null; cost?: unknown; knownCost?: unknown }
 export interface NewJob { dig: string; project: string; source: string; tool: string; args: Json; redacted: Json; declared: string[] }
@@ -56,7 +59,7 @@ const record = recordCall as unknown as (c: Config, project: string, dig: string
 export class JobStore {
   readonly dir: string;
   #jobs = new Map<string, Job>();
-  #live = new Map<string, { done: Promise<Job>; controller: AbortController }>();
+  #live = new Map<string, { done: Promise<Job>; controller: AbortController; progress?: JobProgress; listeners: Set<(p: JobProgress) => void> }>();
   #sweeper: ReturnType<typeof setInterval> | null = null;
   constructor(dir: string) { this.dir = dir; }
 
@@ -100,15 +103,24 @@ export class JobStore {
    * Creates a job, writes its file, and only then starts `execute` (which sends the provider request). Resolves once
    * the file exists, so a task answered with this job is answerable by tasks/get.
    */
-  async start(spec: NewJob, execute: (signal: AbortSignal) => Promise<Outcome>): Promise<Job> {
+  async start(spec: NewJob, execute: (signal: AbortSignal, reportProgress: (update: ToolProgress) => void) => Promise<Outcome>): Promise<Job> {
     const at = new Date().toISOString();
     const job: Job = { id: `job-${randomBytes(16).toString('base64url')}`, dig: spec.dig, project: spec.project, source: spec.source, tool: spec.tool, argsHash: argsHash(spec.args), args: spec.redacted, declared: spec.declared, status: 'working', createdAt: at, lastUpdatedAt: at };
     this.#jobs.set(job.id, job);
     // The job is live (attachable) at once; its request is sent only after its file is written.
-    const controller = new AbortController(); const written = this.#write(job);
+    const controller = new AbortController(); const listeners = new Set<(p: JobProgress) => void>(); const written = this.#write(job);
+    const reportProgress = (update: ToolProgress) => {
+      const live = this.#live.get(job.id);
+      if (!live || job.status !== 'working') return;
+      const now = new Date().toISOString();
+      const entry: JobProgress = { progress: update.progress, ...(update.total !== undefined ? { total: update.total } : {}), message: update.message, at: now };
+      live.progress = entry;
+      job.lastUpdatedAt = now;
+      for (const listener of [...live.listeners]) { try { listener(entry); } catch {} }
+    };
     const done = written.then(async () => {
       try {
-        const out = await execute(controller.signal);
+        const out = await execute(controller.signal, reportProgress);
         const end = new Date().toISOString();
         Object.assign(job, { status: out.status, result: out.result, receipt: out.receipt, cost: out.cost ?? null, ...(out.knownCost ? { knownCost: out.knownCost } : {}), finishedAt: end, lastUpdatedAt: end });
         await this.#write(job).catch(error => console.error(`dig: job ${job.id} finished but its file was not updated: ${error instanceof Error ? error.message : error}`));
@@ -119,9 +131,20 @@ export class JobStore {
       return job;
     }, error => { this.#jobs.delete(job.id); throw error; }).finally(() => { this.#live.delete(job.id); });
     done.catch(() => {});
-    this.#live.set(job.id, { done, controller });
+    this.#live.set(job.id, { done, controller, listeners });
     await written;
     return job;
+  }
+
+  /** Latest in-memory live progress of a running job, if any. */
+  progressOf(id: string): JobProgress | undefined { return this.#live.get(id)?.progress; }
+  /** Subscribes to live progress of a running job, replaying the latest update immediately when present. */
+  subscribe(id: string, listener: (p: JobProgress) => void): () => void {
+    const live = this.#live.get(id);
+    if (!live) return () => {};
+    if (live.progress) { try { listener(live.progress); } catch {} }
+    live.listeners.add(listener);
+    return () => { live.listeners.delete(listener); };
   }
 
   /** The job once it has finished, or as it stands after `ms`. */
@@ -198,19 +221,21 @@ export function withLine(base: CallToolResult, line: string): CallToolResult {
 /** An identical earlier call's result, with one line saying so and how to send the request again. */
 export const repeated = (job: Job) => withLine(jobResult(job), `This is the result of an identical call that finished at ${job.finishedAt} (job ${job.id}); no request was sent now. To send it again, and be charged again, repeat the call with fresh: true.`);
 /** The answer to a client without the Tasks extension when a slow job is still running after the inline wait. */
-export function stillRunning(job: Job): CallToolResult {
-  return { content: [{ type: 'text', text: `${job.tool} is still running as job ${job.id} (started ${ago(job.createdAt)} ago); the work continues in Dig's service and its result is kept. Call job with id "${job.id}" for its status and result (wait: true waits up to ${Math.round(inlineWaitMs() / 1000)} seconds). Do not call the tool again for this request.` }] };
+export function stillRunning(job: Job, progress?: JobProgress): CallToolResult {
+  const latest = progress?.message ? ` Latest: ${progress.message}.` : '';
+  return { content: [{ type: 'text', text: `${job.tool} is still running as job ${job.id} (started ${ago(job.createdAt)} ago); the work continues in Dig's service and its result is kept. Call job with id "${job.id}" for its status and result (wait: true waits up to ${Math.round(inlineWaitMs() / 1000)} seconds). Do not call the tool again for this request.${latest}` }] };
 }
 /** The job tool's answer while a job runs. */
-export function working(job: Job): CallToolResult {
-  return { content: [{ type: 'text', text: `Job ${job.id} (${job.tool}) is working, started ${ago(job.createdAt)} ago. Call job again with this id for the result; wait: true waits up to ${Math.round(inlineWaitMs() / 1000)} seconds.` }] };
+export function working(job: Job, progress?: JobProgress): CallToolResult {
+  const latest = progress?.message ? ` Latest: ${progress.message}.` : '';
+  return { content: [{ type: 'text', text: `Job ${job.id} (${job.tool}) is working, started ${ago(job.createdAt)} ago. Call job again with this id for the result; wait: true waits up to ${Math.round(inlineWaitMs() / 1000)} seconds.${latest}` }] };
 }
 export const unknownJob = (id: unknown) => `No job${typeof id === 'string' && id ? ` ${id}` : ''} is known. Dig keeps a job for 24 hours after it finishes; an older one has been removed.`;
 
 /** The Tasks extension's fields for a job: a task's id is its job's id. ttlMs counts from creation to removal. */
-export function taskFields(job: Job) {
+export function taskFields(job: Job, progress?: JobProgress) {
   const ttlMs = job.finishedAt ? Date.parse(job.finishedAt) + KEEP_MS - Date.parse(job.createdAt) : null;
-  const statusMessage = job.status === 'working' ? `${job.tool} is running` : job.status === 'failed' ? job.error : job.status === 'cancelled' ? `${job.tool} was cancelled` : undefined;
+  const statusMessage = job.status === 'working' ? (progress?.message ? `${job.tool}: ${progress.message}` : `${job.tool} is running`) : job.status === 'failed' ? job.error : job.status === 'cancelled' ? `${job.tool} was cancelled` : undefined;
   return { taskId: job.id, status: job.status, ...(statusMessage ? { statusMessage } : {}), createdAt: job.createdAt, lastUpdatedAt: job.lastUpdatedAt, ttlMs, pollIntervalMs: POLL_MS };
 }
 /**
@@ -218,10 +243,10 @@ export function taskFields(job: Job) {
  * SDK passes a tools/call result's own resultType through on 2026-07-28; its CallToolResult type does not name the
  * task fields, hence the cast.
  */
-export const taskAnswer = (job: Job) => ({ resultType: 'task', ...taskFields(job) }) as unknown as CallToolResult;
+export const taskAnswer = (job: Job, progress?: JobProgress) => ({ resultType: 'task', ...taskFields(job, progress) }) as unknown as CallToolResult;
 /** A tasks/get response: the task's fields, and the result when completed or the error when failed. */
-export function taskState(job: Job) {
-  const base = taskFields(job);
+export function taskState(job: Job, progress?: JobProgress) {
+  const base = taskFields(job, progress);
   if (job.status === 'completed') return { ...base, result: jobResult(job) };
   if (job.status === 'failed') return { ...base, error: { code: -32603, message: job.error ?? 'The job failed.' } };
   return base;

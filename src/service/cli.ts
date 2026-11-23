@@ -153,11 +153,11 @@ async function status() {
   const file = await readServiceFile(); const port = portOf(file); const running = await health(port);
   if (!running || !file) { console.log(`Dig is not running (port ${port}, state ${stateDirectory()}).`); return; }
   const response = await fetch(`http://127.0.0.1:${port}/status`, { headers: { authorization: `Bearer ${file.token}` } });
-  const info = await response.json() as { version: string; pid: number; startedAt: string; running: { tool: string; source: string; dig?: string; at: string }[]; jobs?: { id: string; tool: string; source: string; since: string }[] };
+  const info = await response.json() as { version: string; pid: number; startedAt: string; running: { tool: string; source: string; dig?: string; at: string }[]; jobs?: { id: string; tool: string; source: string; since: string; progress?: string }[] };
   console.log(`Dig ${info.version} is running: pid ${info.pid}, http://127.0.0.1:${port}/mcp, since ${info.startedAt}.`);
   console.log(info.running.length ? `Running calls (${info.running.length}):\n${info.running.map(call => `  ${call.tool} (${call.source})${call.dig ? ` in ${call.dig}` : ''} since ${call.at}`).join('\n')}` : 'No running calls.');
   const jobs = info.jobs ?? []; const age = (since: string) => { const s = Math.max(0, Math.round((Date.now() - Date.parse(since)) / 1000)); return s < 120 ? `${s} s` : `${Math.round(s / 60)} min`; };
-  console.log(jobs.length ? `Running jobs (${jobs.length}):\n${jobs.map(job => `  ${job.id} ${job.tool} (${job.source}) for ${age(job.since)}`).join('\n')}` : 'No running jobs.');
+  console.log(jobs.length ? `Running jobs (${jobs.length}):\n${jobs.map(job => `  ${job.id} ${job.tool} (${job.source}) for ${age(job.since)}${job.progress ? ` — ${job.progress}` : ''}`).join('\n')}` : 'No running jobs.');
 }
 
 /**

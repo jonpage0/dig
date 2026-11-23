@@ -13,7 +13,7 @@
  * and multi-turn chaining via previous_response_id.
  */
 import { Lexer, type Token, type Tokens } from "marked"
-import type { KeepRaw, ToolSpec } from "../types.js"
+import type { KeepRaw, ToolProgress, ToolSpec } from "../types.js"
 import { loadConfig } from "../runtime-config.js"
 import { abortableDelay, keptJson, keptText } from "../http.js"
 import { knownSecrets, redactProviderText } from "../secrets.js"
@@ -298,19 +298,96 @@ async function callResponsesApi(apiKey: string, requestBody: ResponsesRequest, s
 
 /** Events that end a Responses stream; each carries the finished `response`. */
 const TERMINAL_EVENTS = new Set(["response.completed", "response.incomplete", "response.failed"])
+const MAX_PROGRESS_DETAIL = 120
+const MAX_TRACKED_PROGRESS_KEYS = 500
+
+function compactProgressDetail(value: unknown): string {
+  if (typeof value !== "string") return ""
+  const clean = value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim()
+  if (!clean) return ""
+  return clean.length > MAX_PROGRESS_DETAIL ? `${clean.slice(0, MAX_PROGRESS_DETAIL - 1)}…` : clean
+}
+
+function parseToolInput(input: unknown): Record<string, unknown> | null {
+  if (input && typeof input === "object" && !Array.isArray(input)) return input as Record<string, unknown>
+  if (typeof input !== "string" || !input.trim()) return null
+  try {
+    const parsed = JSON.parse(input)
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Extracts a deduplicated search-round progress update from a completed Responses output item
+ * (`response.output_item.done`). Handles official xAI `custom_tool_call` items (`x_keyword_search`,
+ * `x_semantic_search`, `x_user_search`, `x_thread_fetch`, etc.) as well as `web_search_call` and
+ * `x_search_call` items. Never throws; returns null for reasoning/message/duplicate items.
+ */
+function searchRoundFromItem(item: unknown, seen: Set<string>, nextRound: number): ToolProgress | null {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return null
+  const record = item as Record<string, unknown>
+  const itemType = typeof record.type === "string" ? record.type : ""
+  let label = ""
+  let query = ""
+  let url = ""
+  let postId = ""
+
+  if (itemType === "custom_tool_call") {
+    const name = typeof record.name === "string" ? record.name : ""
+    if (!name || (!name.startsWith("x_") && name !== "web_search" && name !== "browse_page")) return null
+    label = name
+    const parsed = parseToolInput(record.input)
+    query = compactProgressDetail(parsed?.query)
+    url = compactProgressDetail(parsed?.url)
+    postId = compactProgressDetail(parsed?.post_id ?? parsed?.tweet_id)
+  } else if (itemType === "web_search_call" || itemType === "x_search_call") {
+    const action = record.action && typeof record.action === "object" && !Array.isArray(record.action)
+      ? (record.action as Record<string, unknown>)
+      : null
+    const actionType = typeof action?.type === "string" ? action.type : ""
+    label = actionType === "open_page" ? "open_page" : itemType === "x_search_call" ? "x_search" : "web_search"
+    query = compactProgressDetail(action?.query ?? record.query)
+    url = compactProgressDetail(action?.url ?? record.url)
+  } else {
+    return null
+  }
+
+  const key = (typeof record.call_id === "string" && record.call_id)
+    || (typeof record.id === "string" && record.id)
+    || `${label}\0${query}\0${url}\0${postId}`
+  if (seen.has(key)) return null
+  if (seen.size < MAX_TRACKED_PROGRESS_KEYS) seen.add(key)
+
+  const message = query
+    ? `Search round ${nextRound} (${label}): "${query}"`
+    : postId
+      ? `Search round ${nextRound} (${label}): post ${postId}`
+      : url
+        ? `Search round ${nextRound} (${label}): ${url}`
+        : `Search round ${nextRound} (${label})`
+  return { progress: nextRound, message }
+}
 
 /**
  * The answer of a `POST /responses` sent with `stream: true`, read by OpenAI's Responses event protocol, which xAI
  * follows: records separated by a blank line, of `event:` and `data:` lines, ended by a terminal event whose `response`
  * is the object an unstreamed call returns as its body. Only that object is kept for the raw file, so a retained
- * original has the same shape either way; the deltas are read past. A stream that reports an error, breaks or ends
+ * original has the same shape either way; the deltas are read past, while completed search-round items emit optional
+ * live progress updates. A stream that reports an error, breaks or ends
  * without a terminal event is never sent again. When it broke or ended and its response id had arrived, `recover`
  * (when given) reads the stored response by that id; a finished one is the answer, kept as the call's original with
  * the charge it reports, and `recovered` is true. Otherwise what arrived (the error event, else the last `response`
  * snapshot) is kept as interrupted, so the charge is unknown, and this throws. A JSON body (a server that ignored
  * `stream`) is read as before.
  */
-async function answerBody(response: Response, keep: KeepRaw, recover?: (id: string) => Promise<Stored>): Promise<{ body: unknown; recovered?: true }> {
+async function answerBody(
+  response: Response,
+  keep: KeepRaw,
+  recover?: (id: string) => Promise<Stored>,
+  onProgress?: (update: ToolProgress) => void,
+): Promise<{ body: unknown; recovered?: true }> {
   if (!response.body || !/^text\/event-stream\b/i.test(response.headers.get("content-type") ?? "")) return { body: await keptJson(response, keep, RAW_LABEL) }
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
   const secrets = knownSecrets()
@@ -320,6 +397,8 @@ async function answerBody(response: Response, keep: KeepRaw, recover?: (id: stri
   let seen: unknown = ""
   let answer: object | undefined
   let error: { message?: unknown } | undefined
+  const seenRounds = new Set<string>()
+  let roundCount = 0
   const dispatch = () => {
     const text = data.join("\n")
     const named = event
@@ -329,10 +408,17 @@ async function answerBody(response: Response, keep: KeepRaw, recover?: (id: stri
     // Each record is redacted by what it means before anything reads it, as keptJson does for a whole body.
     const record = redactProviderText(text, secrets)
     if (!record.json || !record.value || typeof record.value !== "object") return
-    const value = record.value as { type?: unknown; response?: unknown; message?: unknown }
+    const value = record.value as { type?: unknown; response?: unknown; message?: unknown; item?: unknown }
     const type = typeof value.type === "string" ? value.type : named
     const snapshot = value.response && typeof value.response === "object" ? value.response : undefined
     if (snapshot) seen = snapshot
+    if (type === "response.output_item.done" && onProgress) {
+      const update = searchRoundFromItem(value.item, seenRounds, roundCount + 1)
+      if (update) {
+        roundCount = update.progress
+        try { onProgress(update) } catch {}
+      }
+    }
     if (snapshot && TERMINAL_EVENTS.has(type)) answer = snapshot
     else if (type === "error") seen = error = value
   }
@@ -654,7 +740,7 @@ export const search = metered({
       }
 
       // A response sent without storage cannot be read back, so its cut stream is not looked for.
-      const answered = await answerBody(response, keep, requestBody.store === false ? undefined : (id) => storedResponse(apiKey, id, context.abort, RECOVERY.waitsMs))
+      const answered = await answerBody(response, keep, requestBody.store === false ? undefined : (id) => storedResponse(apiKey, id, context.abort, RECOVERY.waitsMs), context.progress)
       const data = answered.body as ResponsesResponse
       if (data.error) return fail(data.error.message)
       if (!Array.isArray(data.output)) return fail("No response content from xAI API")

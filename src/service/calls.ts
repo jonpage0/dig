@@ -9,7 +9,7 @@ import { assertDig, frontMatter, listLibrary, projectFolder, readLibraryFile, re
 import { executeSource, type ToolOutcome } from '../providers/outcome.ts';
 import { knownSecrets, redactRecord, redactText, redactValue } from '../providers/secrets.ts';
 import { costSummary } from '../providers/library/cost.ts';
-import type { ToolSpec } from '../providers/types.ts';
+import type { ToolProgress, ToolSpec } from '../providers/types.ts';
 import { costAmounts, costShort, costTotal, plural } from '../ui/format.mjs';
 import { createCallActivity } from '../call-activity.mjs';
 import { actionSchemas, parseAction, type SourceTool } from './surface.ts';
@@ -116,12 +116,12 @@ async function answeredByJob(call: Prepared, fresh: boolean): Promise<boolean> {
 export interface Ran { outcome: ToolOutcome; images: { data: string; mimeType: string }[]; call: { id: string; raw?: string } | null; retentionError: string | null; digCost: { calls: number; byUnit: Record<string, number>; unknownCalls: number; freeCalls: number } | null }
 const NEVER_ABORT = new AbortController().signal;
 /** Sends the provider request once, keeps the receipt (and the original response as settings say), and reads the dig's cost. */
-export async function run({ c, tool, action, spec, args, dig }: Prepared, signal: AbortSignal = NEVER_ABORT): Promise<Ran> {
+export async function run({ c, tool, action, spec, args, dig }: Prepared, signal: AbortSignal = NEVER_ABORT, onProgress?: (update: ToolProgress) => void): Promise<Ran> {
   return activity.run({ library: c.library, project: dig.project, dig: dig.dig, session: dig.dig, source: tool.module.id, tool: action }, async () => {
     const at = new Date().toISOString(); const begin = Date.now(); const responses: { label: string; status: number | string; body: unknown; headers?: unknown }[] = [];
     // Pictures are taken off the outcome here, so they never pass through redaction, the receipt or the retained
     // original, and go only to the model at the end; a tool without returnsImages never returns any.
-    const { images, ...raw } = await executeSource(spec, args, { directory: dig.project, worktree: dig.project, sessionID: dig.dig, abort: signal, keep: (label, status, body, headers) => { responses.push({ label, status, body, ...(headers ? { headers } : {}) }); } });
+    const { images, ...raw } = await executeSource(spec, args, { directory: dig.project, worktree: dig.project, sessionID: dig.dig, abort: signal, keep: (label, status, body, headers) => { responses.push({ label, status, body, ...(headers ? { headers } : {}) }); }, ...(onProgress ? { progress: onProgress } : {}) });
     const secrets = knownSecrets(); const outcome = redactValue(raw, secrets) as ToolOutcome; const details = outcome.details ?? {};
     const failed = ['failed', 'cancelled'].includes(outcome.status);
     let call: Ran['call'] = null; let retentionError: string | null = null;
@@ -167,8 +167,8 @@ function detailsText(details: Record<string, unknown>): string {
   return `\n\nDetails:\n${json.length > DETAILS_LIMIT ? `${json.slice(0, DETAILS_LIMIT)}\n… cut at ${DETAILS_LIMIT.toLocaleString('en-US')} of ${json.length.toLocaleString('en-US')} characters; the retained original holds the response.` : json}`;
 }
 
-/** How this request may be answered: `tasks` when it declared the Tasks extension, so a slow job may answer with a task. */
-export interface Answering { tasks?: boolean }
+/** How this request may be answered: `tasks` when it declared the Tasks extension, and optional live progress reporting. */
+export interface Answering { tasks?: boolean; progress?: (update: ToolProgress) => void }
 /** One source-tool call: gate, then the run step, whose result is the model's. */
 export async function callSource(tool: SourceTool, input: Record<string, unknown>, signal?: AbortSignal, answering: Answering = {}, asker?: Asker): Promise<CallToolResult | InputRequiredResult> {
   const checked = await gate(tool, input, asker);
@@ -187,21 +187,23 @@ const paid = ({ spec, args }: Prepared) => { const billing = spec.billing; if (b
  * answers a request that declared the Tasks extension with a task at once, and any other after inlineWaitMs with its
  * handle; a paid, fast job is waited for.
  */
-async function runStep(call: Prepared, fresh: boolean, signal: AbortSignal | undefined, { tasks = false }: Answering): Promise<CallToolResult> {
+async function runStep(call: Prepared, fresh: boolean, signal: AbortSignal | undefined, { tasks = false, progress }: Answering): Promise<CallToolResult> {
   const slow = isSlow(call.action);
-  if (!slow && !paid(call)) return result(call, await run(call, signal));
+  if (!slow && !paid(call)) return result(call, await run(call, signal, progress));
   const store = await jobs();
   let job = store.find(call.dig.handle, call.action, argsHash(call.args));
   if (job && job.status !== 'working') {
     if (!fresh && job.status !== 'cancelled' && Date.now() - Date.parse(job.finishedAt ?? job.lastUpdatedAt) <= REUSE_MS) return repeated(job);
     job = undefined;
   }
-  job ??= await store.start({ dig: call.dig.handle, project: call.dig.project, source: call.tool.module.id, tool: call.action, args: call.args, redacted: redactRecord(call.args, knownSecrets()), declared: Object.keys((actionSchemas[call.action].properties as object | undefined) ?? {}) }, async jobSignal => {
-    const ran = await run(call, jobSignal); const details = ran.outcome.details ?? {};
+  job ??= await store.start({ dig: call.dig.handle, project: call.dig.project, source: call.tool.module.id, tool: call.action, args: call.args, redacted: redactRecord(call.args, knownSecrets()), declared: Object.keys((actionSchemas[call.action].properties as object | undefined) ?? {}) }, async (jobSignal, reportProgress) => {
+    const ran = await run(call, jobSignal, reportProgress); const details = ran.outcome.details ?? {};
     return { result: result(call, ran), status: ran.outcome.status === 'cancelled' ? 'cancelled' : 'completed', receipt: ran.call?.id ?? null, cost: details.cost, ...(details.knownCost ? { knownCost: details.knownCost } : {}) };
   });
-  if (slow && tasks) return taskAnswer(job);
-  const settled = await store.wait(job.id, slow ? inlineWaitMs() : Infinity);
+  if (slow && tasks) return taskAnswer(job, store.progressOf(job.id));
+  const unsubscribe = progress ? store.subscribe(job.id, progress) : undefined;
+  let settled;
+  try { settled = await store.wait(job.id, slow ? inlineWaitMs() : Infinity); } finally { unsubscribe?.(); }
   if (!settled) return refused(`Dig could not keep a job for this ${call.action} call. No request was sent.`);
-  return settled.status === 'working' ? stillRunning(settled) : jobResult(settled);
+  return settled.status === 'working' ? stillRunning(settled, store.progressOf(settled.id)) : jobResult(settled);
 }

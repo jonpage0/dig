@@ -428,3 +428,62 @@ test('pre-existing trailing-hyphen digs use safeSegment for receipt adoption, re
     await rm(state, { recursive: true, force: true });
   }
 });
+
+test('streaming xsearch rounds emit live MCP progress notifications and in-memory job/task/status updates without persisting new job fields', async () => {
+  const space = await workspace('jobs-progress', SETUP);
+  try {
+    const { token } = await serve(space, { DIG_INLINE_WAIT_MS: '5000' });
+    await writeFile(join(space.state, 'provider-sse-ms'), '120');
+
+    // Legacy 2025-era client and modern 2026-07-28 client both receive notifications/progress when supplying onprogress.
+    for (const [label, connect] of [['legacy', connectLegacy], ['modern', connectModern]] as const) {
+      const client = await connect(space, token);
+      try {
+        const { dig } = (await client.callTool({ name: 'dig_start', arguments: { project: space.root, question: `Progress test ${label}` } })).structuredContent as { dig: string };
+        const seen: Array<{ progress: number; message?: string }> = [];
+        const onprogress = (p: { progress: number; message?: string }) => { seen.push({ progress: p.progress, message: p.message }); };
+        const req = { name: 'x', arguments: { dig, action: 'xsearch', args: { query: `progress-${label}` } } };
+        const res = label === 'legacy'
+          ? await (client as any).callTool(req, undefined, { onprogress })
+          : await (client as any).callTool(req, { onprogress });
+        assert.match(text(res), HEAD);
+        assert.equal(seen.length, 2, `${label} received both search rounds: ${JSON.stringify(seen)}`);
+        assert.equal(seen[0].progress, 1);
+        assert.equal(seen[0].message, 'Search round 1 (x_semantic_search): "local-first xsearch progress"');
+        assert.equal(seen[1].progress, 2);
+        assert.equal(seen[1].message, 'Search round 2 (x_keyword_search): "from:example dig"');
+      } finally { await client.close(); }
+    }
+
+    // While a streaming task runs, tasks/get, job({ id }), /status and dig status surface live progress in memory only.
+    await writeFile(join(space.state, 'provider-sse-ms'), '700');
+    const client = await connectModern(space, token);
+    try {
+      const { dig } = (await client.callTool({ name: 'dig_start', arguments: { project: space.root, question: 'Progress while running' } })).structuredContent as { dig: string };
+      const started = await call(space, token, dig, { query: 'progress-task' }, { tasks: true });
+      const id = started.result.taskId as string;
+      const got = await eventually(async () => {
+        const res = await rpc(space, token, 'tasks/get', { taskId: id });
+        return typeof res.result?.statusMessage === 'string' && res.result.statusMessage.includes('Search round 1') ? res.result : null;
+      }, 'tasks/get did not report live search round');
+      assert.equal(got.status, 'working');
+      assert.match(got.statusMessage, /xsearch: Search round \d+ \(x_(?:semantic|keyword)_search\):/);
+
+      const pending = await client.callTool({ name: 'job', arguments: { id } });
+      assert.match(text(pending), /Latest: Search round \d+ \(x_(?:semantic|keyword)_search\):/);
+
+      const status = await run(space, ['status']);
+      assert.match(status.stdout, new RegExp(`${id} xsearch \\(x\\) for \\d+ s — Search round \\d+ \\(x_(?:semantic|keyword)_search\\):`));
+
+      // Durable job JSON on disk keeps its exact contract with no persisted progress field.
+      const disk = await jobFile(space, id) as unknown as Record<string, unknown>;
+      assert.equal('progress' in disk, false, 'progress stays in memory and is never persisted to job files');
+
+      const done = await eventually(async () => {
+        const res = await rpc(space, token, 'tasks/get', { taskId: id });
+        return res.result?.status === 'completed' ? res.result : null;
+      }, 'streaming task did not finish');
+      assert.match(text(done.result), HEAD);
+    } finally { await client.close(); }
+  } finally { await cleanup(space); }
+});

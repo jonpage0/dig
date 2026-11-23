@@ -60,7 +60,7 @@ export function ConversationActivity({ app, hidden }: { app: any; hidden: boolea
       {scope.jobs.length > 0 && <div id="panel-jobs" className="activity-sources" role="group" aria-label="Running jobs">
         {scope.jobs.map((job: any) => <div className="activity-source" key={job.id} data-running={liveAvailable}>
           <SourceIcon id={job.source} />
-          <div className="activity-source-name"><strong>{app.catalog.label(job.source)}</strong><span>{job.tool}</span></div>
+          <div className="activity-source-name"><strong>{app.catalog.label(job.source)}</strong><span>{job.progress ? `${job.tool} · ${job.progress}` : job.tool}</span></div>
           <div className="activity-source-counts"><span className="activity-active" title={`Job ${job.id}, started ${job.createdAt}`}>job running {jobAge(job.createdAt, now)}</span></div>
         </div>)}
       </div>}
