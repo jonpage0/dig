@@ -2,6 +2,11 @@
 
 Below, `dig` stands for `node <checkout>/dist/dig.mjs`: nothing installs a `dig` command, and on macOS and Linux that name is the DNS lookup tool.
 
+## 2.0.1 — 2026-11-24
+
+- **Minimal SEP-1865 inline event card (`ui://dig/card/v2.0.1.html`).** Added one static ~11 KB (~3.8 KB gzipped) zero-dependency read-only MCP App card (`src/service/card.ts`, `text/html;profile=mcp-app`, empty CSP `connectDomains: []` / `resourceDomains: []`, strict DOM construction with zero `innerHTML`, `ev.source === window.parent` check, and loopback-only `http://127.0.0.1:<port>/(open|keys)/...` `ui/open-link` allowlist) gated strictly on client `io.modelcontextprotocol/ui` capability. Attaches `_meta.ui.resourceUri` and best-effort `_meta.digCard` metadata on `research_save`, `dig_finish`, `keys`, `open_library`, `job`, and source provider calls—opening the full localhost Dig web SPA via `ui/open-link` while adding zero tools and zero `tools/list` overhead for non-UI clients. Spend-gate refusals render a safe pause card without ever exposing `/approve/:code`. *(Protocol and unit verified; not yet visually rendered in a live host.)*
+- **Idle-swap token scoping & bridge error fidelity.** Scoped `ExecutionService.hasPendingTokens()` to active `keys` and `spend_approval` codes so ephemeral read-only `browser_open` deep links never block `POST /stop?ifIdle=1` or idle daemon exit. Updated `dig mcp` (`src/service/cli.ts`) to forward daemon JSON-RPC error codes/messages unchanged instead of wrapping HTTP 4xx JSON-RPC rejections as `"could not be reached"`. Kept `2025`-era legacy session compatibility alongside `2026-07-28` so Codex CLI (`0.171.0`) continues to work seamlessly.
+
 ## 2.0.0 — 2026-11-23
 
 Dig 2.0 is a ground-up, 100% strict TypeScript (`allowJs: false`) rebuild on **Effect-TS 4.1.5** (`effect`, `@effect/platform-node`, `@effect/sql-sqlite-node`, `@effect/ai-typesafe`, `@effect/atom-react`) and **`@modelcontextprotocol/server` 2.4+**, preserving Dig's plain-file research archive (`dig.md`, reports, `answer.md`, `calls.jsonl`, `raw/*.json`, `config.toml`, `keys.env`) while replacing legacy infrastructure with a unified, crash-safe Effect runtime and localhost web application.

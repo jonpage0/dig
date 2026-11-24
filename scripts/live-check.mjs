@@ -111,7 +111,10 @@ try {
   // HOME points into the state folder, so a local program such as gh finds no login of its own: credentials come
   // only from --keys.
   env = { DIG_STATE_DIR: state, DIG_PORT: String(port), PATH: process.env.PATH, HOME: home };
-  const client = new Client({ name: 'dig-live-check', version: '1' });
+  const client = new Client(
+    { name: 'dig-live-check', version: '1' },
+    { versionNegotiation: { mode: 'auto' } },
+  );
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [DIG, 'mcp'], env, stderr: 'ignore' }));
   try {
     version = client.getServerVersion()?.version ?? null;

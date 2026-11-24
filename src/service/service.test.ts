@@ -6,9 +6,23 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { Effect } from "effect";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY } from "@modelcontextprotocol/server";
 import { keysPath } from "../core/config.ts";
 import { ExecutionService } from "../core/workflow.ts";
 import { VERSION } from "../version.ts";
+import {
+  CARD_URI,
+  SAFE_CARD_URL_RE,
+  UI_EXTENSION_ID,
+  UI_RESOURCE_MIME,
+  cardForKeys,
+  cardForSourceCall,
+  cardForSpendGate,
+  declaresUi,
+  renderCardHtml,
+} from "./card.ts";
 import { runCli } from "./cli.ts";
 import { health, serve } from "./daemon.ts";
 import { loadMethods, methodFile, promptedMethods } from "./methods.ts";
@@ -38,22 +52,6 @@ function rawHttp(
     req.on("error", rejectReq);
     req.end();
   });
-}
-
-async function parseMcpResponse(res: Response): Promise<Record<string, unknown>> {
-  const ct = (res.headers.get("content-type") ?? "").toLowerCase();
-  const text = await res.text();
-  if (ct.includes("application/json")) {
-    return JSON.parse(text) as Record<string, unknown>;
-  }
-  // Streamable HTTP SSE frame: extract the last `data: {...}` line
-  const dataLines = text
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.slice(5).trim())
-    .filter(Boolean);
-  assert.ok(dataLines.length > 0, `Expected SSE data line in MCP response: ${text}`);
-  return JSON.parse(dataLines.at(-1)!) as Record<string, unknown>;
 }
 
 describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
@@ -513,17 +511,17 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
       });
       assert.equal(approveReplay.status, 410);
 
-      // ---- 8. /mcp JSON-RPC round-trip (ZERO ui:// tools or resources!) ----
-      const mcpHeaders = (sid?: string): Record<string, string> => ({
+      // ---- 8. MCP 2026-07-28 + 2025-era legacy session + gated SEP-1865 ui://dig/card ----
+      // 8a. 2025-era legacy session (used by Codex CLI) still connects, lists tools, and closes cleanly
+      const legacyHeaders = (sid?: string): Record<string, string> => ({
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
         accept: "application/json, text/event-stream",
         ...(sid ? { "mcp-session-id": sid } : {}),
       });
-
-      const initRes = await fetch(`${origin}/mcp`, {
+      const legacyInitRes = await fetch(`${origin}/mcp`, {
         method: "POST",
-        headers: mcpHeaders(),
+        headers: legacyHeaders(),
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: 1,
@@ -531,244 +529,450 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
           params: {
             protocolVersion: "2025-11-25",
             capabilities: {},
-            clientInfo: { name: "dig-service-test", version: "1.0.0" },
+            clientInfo: { name: "legacy-codex-test", version: "0.171.0" },
           },
         }),
       });
-      assert.equal(initRes.status, 200);
-      const sid = initRes.headers.get("mcp-session-id") ?? undefined;
-      assert.ok(sid, "2025-era initialize must return mcp-session-id");
-      const initPayload = await parseMcpResponse(initRes);
-      assert.ok("result" in initPayload);
-
-      const initializedNotify = await fetch(`${origin}/mcp`, {
+      assert.equal(legacyInitRes.status, 200, "2025-era legacy initialize must stay supported");
+      const legacySid = legacyInitRes.headers.get("mcp-session-id") ?? undefined;
+      assert.ok(legacySid, "2025-era initialize must return mcp-session-id");
+      const legacyNotify = await fetch(`${origin}/mcp`, {
         method: "POST",
-        headers: mcpHeaders(sid),
+        headers: legacyHeaders(legacySid),
         body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
       });
-      assert.ok(initializedNotify.status === 202 || initializedNotify.status === 200);
+      assert.ok(legacyNotify.status === 200 || legacyNotify.status === 202);
+      const legacyToolsRes = await fetch(`${origin}/mcp`, {
+        method: "POST",
+        headers: legacyHeaders(legacySid),
+        body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
+      });
+      assert.equal(legacyToolsRes.status, 200);
+      const legacyTasksRes = await fetch(`${origin}/mcp`, {
+        method: "POST",
+        headers: legacyHeaders(legacySid),
+        body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tasks/list", params: {} }),
+      });
+      assert.equal(legacyTasksRes.status, 200);
+      assert.match(await legacyTasksRes.text(), /"tasks":\[\]/);
+      await fetch(`${origin}/mcp`, { method: "DELETE", headers: legacyHeaders(legacySid) });
 
-      const rpc = async (id: number, method: string, params: Record<string, unknown> = {}) => {
-        const res = await fetch(`${origin}/mcp`, {
-          method: "POST",
-          headers: mcpHeaders(sid),
-          body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
-        });
-        assert.equal(res.status, 200, `RPC ${method} failed with HTTP ${res.status}`);
-        return parseMcpResponse(res);
-      };
-
-      // tools/list: verify all core tools + method + enabled sources, ZERO ui:// or open_trail!
-      const toolsList = (await rpc(2, "tools/list")) as {
-        result: { tools: { name: string; _meta?: Record<string, unknown> }[] };
-      };
-      const toolNames = toolsList.result.tools.map((t) => t.name);
-      for (const core of CORE_ORDER) {
-        assert.ok(toolNames.includes(core), `Expected core tool ${core} in tools/list`);
-      }
-      assert.ok(toolNames.includes("method"));
-      assert.ok(toolNames.includes("hackernews"));
-      assert.ok(toolNames.includes("exa"));
-      assert.equal(toolNames.includes("open_trail"), false, "open_trail must be dropped in Dig 2.0");
-      for (const tool of toolsList.result.tools) {
-        assert.equal(
-          tool._meta?.ui,
-          undefined,
-          `Tool ${tool.name} must not carry _meta.ui in Dig 2.0`,
+      const connectClient = async (name: string, capabilities: Record<string, unknown>) => {
+        const client = new Client(
+          { name, version: "1.0.0" },
+          { capabilities, versionNegotiation: { mode: { pin: "2026-07-28" } } },
         );
-      }
-
-      // resources/list & resources/templates/list: ZERO ui:// resources!
-      const resList = (await rpc(3, "resources/list")) as {
-        result: { resources: { uri: string }[] };
+        const transport = new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), {
+          authProvider: { token: async () => token },
+        });
+        await client.connect(transport);
+        return { client, transport };
       };
-      assert.equal(
-        resList.result.resources.some((r) => r.uri.startsWith("ui://")),
-        false,
-        "ZERO ui:// resources allowed in Dig 2.0",
-      );
-      const tmplList = (await rpc(4, "resources/templates/list")) as {
-        result: { resourceTemplates: { uriTemplate: string }[] };
-      };
-      assert.ok(
-        tmplList.result.resourceTemplates.some((t) => t.uriTemplate === "dig://library/{file}"),
-      );
 
-      // tools/call: dig_start -> research_save -> library_list -> library_search -> library_read
-      const startedRes = (await rpc(5, "tools/call", {
-        name: "dig_start",
-        arguments: { project: projectDir, question: "How does Dig 2.0 service layer work?" },
-      })) as { result: { isError?: boolean; structuredContent: { dig: string } } };
-      assert.notEqual(startedRes.result.isError, true);
-      const digHandle = startedRes.result.structuredContent.dig;
-      assert.ok(digHandle.includes("/"));
-
-      const reportMarkdown = [
-        "```yaml",
-        "source_card:",
-        "  source: hackernews",
-        "  status: complete",
-        "```",
-        "",
-        "# Dig 2.0 Effect Service Architecture",
-        "",
-        "## Summary",
-        "Dig 2.0 uses Effect 4.1.5 HttpRouter, SQLite FTS5, and a single localhost Web SPA.",
-        "",
-        "## Evidence Highlights",
-        "- Zero zod, zero ui:// MCP Apps.",
-        "",
-        "## Needs Follow-Up",
-        "- None.",
-        "",
-        "## Negative Evidence (when relevant)",
-        "- None.",
-      ].join("\n");
-
-      const saveRes = (await rpc(6, "tools/call", {
-        name: "research_save",
-        arguments: { dig: digHandle, source: "hackernews", content: reportMarkdown },
-      })) as { result: { isError?: boolean; structuredContent: { file: string } } };
-      assert.notEqual(saveRes.result.isError, true);
-
-      const listRes = (await rpc(7, "tools/call", {
-        name: "library_list",
-        arguments: {},
-      })) as { result: { structuredContent: { total: number } } };
-      assert.equal(listRes.result.structuredContent.total, 1);
-
-      const searchRes = (await rpc(8, "tools/call", {
-        name: "library_search",
-        arguments: { query: "HttpRouter localhost", mode: "keyword" },
-      })) as { result: { structuredContent: { hits: { file: string }[] } } };
-      assert.ok(searchRes.result.structuredContent.hits.length >= 1);
-
-      const readRes = (await rpc(9, "tools/call", {
-        name: "library_read",
-        arguments: { file: saveRes.result.structuredContent.file },
-      })) as { result: { structuredContent: { text: string } } };
-      assert.match(readRes.result.structuredContent.text, /Dig 2\.0 Effect Service Architecture/);
-
-      // tools/call: dig_finish
-      const finishRes = (await rpc(10, "tools/call", {
-        name: "dig_finish",
-        arguments: {
-          dig: digHandle,
-          answer: "# Answer\nDig 2.0 service layer uses Effect 4.1.5 cleanly.",
-          status: "answered",
-          reports: ["hackernews.md"],
-        },
-      })) as { result: { isError?: boolean; structuredContent: { file: string } } };
-      assert.notEqual(finishRes.result.isError, true);
-      assert.match(finishRes.result.structuredContent.file, /answer\.md$/);
-
-      // Cookie-authenticated SPA endpoints POST /api/library/read & POST /api/library/search
-      const apiReadRes = await fetch(`${origin}/api/library/read`, {
-        method: "POST",
-        headers: { cookie: cookieHeader, origin, "content-type": "application/json" },
-        body: JSON.stringify({ file: saveRes.result.structuredContent.file }),
+      // 8b. Non-UI 2026-07-28 client (with tasks extension & URL elicitation, WITHOUT io.modelcontextprotocol/ui)
+      const plain = await connectClient("dig-service-test-plain", {
+        extensions: { "io.modelcontextprotocol/tasks": {} },
       });
-      assert.equal(apiReadRes.status, 200);
-      const apiReadJson = (await apiReadRes.json()) as { text: string };
-      assert.match(apiReadJson.text, /Dig 2\.0 Effect Service Architecture/);
+      let uiClient: Awaited<ReturnType<typeof connectClient>> | null = null;
+      let elicitClient: Awaited<ReturnType<typeof connectClient>> | null = null;
+      try {
+        const toolsList = await plain.client.listTools();
+        const toolNames = toolsList.tools.map((t) => t.name);
+        for (const core of CORE_ORDER) {
+          assert.ok(toolNames.includes(core), `Expected core tool ${core} in tools/list`);
+        }
+        assert.ok(toolNames.includes("method"));
+        assert.ok(toolNames.includes("hackernews"));
+        assert.ok(toolNames.includes("exa"));
+        assert.equal(toolNames.includes("open_trail"), false, "open_trail must stay removed in Dig 2.0");
+        for (const tool of toolsList.tools) {
+          assert.equal(
+            (tool as { _meta?: Record<string, unknown> })._meta?.ui,
+            undefined,
+            `Non-UI client must not receive _meta.ui on ${tool.name}`,
+          );
+        }
 
-      const apiSearchRes = await fetch(`${origin}/api/library/search`, {
-        method: "POST",
-        headers: { cookie: cookieHeader, origin, "content-type": "application/json" },
-        body: JSON.stringify({ query: "HttpRouter localhost", mode: "keyword" }),
-      });
-      assert.equal(apiSearchRes.status, 200);
-      const apiSearchJson = (await apiSearchRes.json()) as { hits: unknown[] };
-      assert.ok(apiSearchJson.hits.length >= 1);
+        const resList = await plain.client.listResources();
+        assert.equal(
+          resList.resources.some((r) => r.uri.startsWith("ui://")),
+          false,
+          "Non-UI client must see zero ui:// resources",
+        );
+        const tmplList = await plain.client.listResourceTemplates();
+        assert.ok(tmplList.resourceTemplates.some((t) => t.uriTemplate === "dig://library/{file}"));
 
-      // tools/call: source_info
-      const infoRes = (await rpc(11, "tools/call", {
-        name: "source_info",
-        arguments: { source: "hackernews" },
-      })) as { result: { structuredContent: { sources: { id: string; enabled: boolean }[] } } };
-      assert.equal(infoRes.result.structuredContent.sources.length, 1);
-      assert.equal(infoRes.result.structuredContent.sources[0].id, "hackernews");
-      assert.equal(infoRes.result.structuredContent.sources[0].enabled, true);
+        // 2026-07-28 `tasks/get` extension dispatch (reaches our custom handler and reports unknown task -32602)
+        const taskGetRes = await fetch(`${origin}/mcp`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "tasks/get",
+            "mcp-name": "job-doesNotExist000000001",
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 99,
+            method: "tasks/get",
+            params: {
+              taskId: "job-doesNotExist000000001",
+              _meta: {
+                [PROTOCOL_VERSION_META_KEY]: "2026-07-28",
+                [CLIENT_CAPABILITIES_META_KEY]: {
+                  extensions: { "io.modelcontextprotocol/tasks": {} },
+                },
+              },
+            },
+          }),
+        });
+        const taskGetBody = await taskGetRes.text();
+        assert.match(taskGetBody, /Unknown task job-doesNotExist000000001/);
 
-      // tools/call: settings (reads & updates multi-unit caps)
-      const mcpSettingsRes = (await rpc(12, "tools/call", {
-        name: "settings",
-        arguments: { set: { spend_max_unknown_calls: 12 } },
-      })) as { result: { isError?: boolean; structuredContent: { values: Record<string, unknown> } } };
-      assert.notEqual(mcpSettingsRes.result.isError, true);
-      assert.equal(mcpSettingsRes.result.structuredContent.values.spend_max_unknown_calls, 12);
+        // tools/call: dig_start -> research_save -> library_list -> library_search -> library_read
+        const startedRes = (await plain.client.callTool({
+          name: "dig_start",
+          arguments: { project: projectDir, question: "How does Dig 2.0 service layer work?" },
+        })) as { isError?: boolean; structuredContent: { dig: string }; _meta?: Record<string, unknown> };
+        assert.notEqual(startedRes.isError, true);
+        const digHandle = startedRes.structuredContent.dig;
+        assert.ok(digHandle.includes("/"));
 
-      // tools/call: open_library (returns one-time /open/<code> link for setup & dig reader)
-      const openLibRes = (await rpc(13, "tools/call", {
-        name: "open_library",
-        arguments: { view: "setup" },
-      })) as {
-        result: {
+        const reportMarkdown = [
+          "```yaml",
+          "source_card:",
+          "  source: hackernews",
+          "  status: complete",
+          "  evidence_grade: high",
+          "```",
+          "",
+          "# Dig 2.0 Effect Service Architecture",
+          "",
+          "## Summary",
+          "Dig 2.0 uses Effect 4.1.5 HttpRouter, SQLite FTS5, and a single localhost Web SPA.",
+          "",
+          "## Evidence Highlights",
+          "- Zero zod, Effect 4.1.5 core.",
+          "",
+          "## Needs Follow-Up",
+          "- None.",
+          "",
+          "## Negative Evidence (when relevant)",
+          "- None.",
+        ].join("\n");
+
+        const saveRes = (await plain.client.callTool({
+          name: "research_save",
+          arguments: { dig: digHandle, source: "hackernews", content: reportMarkdown },
+        })) as { isError?: boolean; structuredContent: { file: string }; _meta?: Record<string, unknown> };
+        assert.notEqual(saveRes.isError, true);
+        assert.equal(saveRes._meta?.digCard, undefined, "Non-UI client must not receive _meta.digCard");
+
+        const listRes = (await plain.client.callTool({
+          name: "library_list",
+          arguments: {},
+        })) as { structuredContent: { total: number } };
+        assert.equal(listRes.structuredContent.total, 1);
+
+        const searchRes = (await plain.client.callTool({
+          name: "library_search",
+          arguments: { query: "HttpRouter localhost", mode: "keyword" },
+        })) as { structuredContent: { hits: { file: string }[] } };
+        assert.ok(searchRes.structuredContent.hits.length >= 1);
+
+        const readRes = (await plain.client.callTool({
+          name: "library_read",
+          arguments: { file: saveRes.structuredContent.file },
+        })) as { structuredContent: { text: string } };
+        assert.match(readRes.structuredContent.text, /Dig 2\.0 Effect Service Architecture/);
+
+        // tools/call: dig_finish
+        const finishRes = (await plain.client.callTool({
+          name: "dig_finish",
+          arguments: {
+            dig: digHandle,
+            answer: "# Answer\nDig 2.0 service layer uses Effect 4.1.5 cleanly.",
+            status: "answered",
+            reports: ["hackernews.md"],
+          },
+        })) as { isError?: boolean; structuredContent: { file: string }; _meta?: Record<string, unknown> };
+        assert.notEqual(finishRes.isError, true);
+        assert.match(finishRes.structuredContent.file, /answer\.md$/);
+        assert.equal(finishRes._meta?.digCard, undefined);
+
+        // Cookie-authenticated SPA endpoints POST /api/library/read & POST /api/library/search
+        const apiReadRes = await fetch(`${origin}/api/library/read`, {
+          method: "POST",
+          headers: { cookie: cookieHeader, origin, "content-type": "application/json" },
+          body: JSON.stringify({ file: saveRes.structuredContent.file }),
+        });
+        assert.equal(apiReadRes.status, 200);
+        const apiReadJson = (await apiReadRes.json()) as { text: string };
+        assert.match(apiReadJson.text, /Dig 2\.0 Effect Service Architecture/);
+
+        const apiSearchRes = await fetch(`${origin}/api/library/search`, {
+          method: "POST",
+          headers: { cookie: cookieHeader, origin, "content-type": "application/json" },
+          body: JSON.stringify({ query: "HttpRouter localhost", mode: "keyword" }),
+        });
+        assert.equal(apiSearchRes.status, 200);
+        const apiSearchJson = (await apiSearchRes.json()) as { hits: unknown[] };
+        assert.ok(apiSearchJson.hits.length >= 1);
+
+        // tools/call: source_info
+        const infoRes = (await plain.client.callTool({
+          name: "source_info",
+          arguments: { source: "hackernews" },
+        })) as { structuredContent: { sources: { id: string; enabled: boolean }[] } };
+        assert.equal(infoRes.structuredContent.sources.length, 1);
+        assert.equal(infoRes.structuredContent.sources[0].id, "hackernews");
+        assert.equal(infoRes.structuredContent.sources[0].enabled, true);
+
+        // tools/call: settings (reads & updates multi-unit caps)
+        const mcpSettingsRes = (await plain.client.callTool({
+          name: "settings",
+          arguments: { set: { spend_max_unknown_calls: 12 } },
+        })) as { isError?: boolean; structuredContent: { values: Record<string, unknown> } };
+        assert.notEqual(mcpSettingsRes.isError, true);
+        assert.equal(mcpSettingsRes.structuredContent.values.spend_max_unknown_calls, 12);
+
+        // tools/call: open_library (returns one-time /open/<code> link for setup & dig reader)
+        const openLibRes = (await plain.client.callTool({
+          name: "open_library",
+          arguments: { view: "setup" },
+        })) as {
           isError?: boolean;
           structuredContent: { address: string; path: string; opened: boolean };
+          _meta?: Record<string, unknown>;
         };
-      };
-      assert.notEqual(openLibRes.result.isError, true);
-      assert.equal(openLibRes.result.structuredContent.path, "/setup");
-      assert.ok(openLibRes.result.structuredContent.address.startsWith(`${origin}/open/`));
+        assert.notEqual(openLibRes.isError, true);
+        assert.equal(openLibRes.structuredContent.path, "/setup");
+        assert.ok(openLibRes.structuredContent.address.startsWith(`${origin}/open/`));
+        assert.equal(openLibRes._meta?.digCard, undefined);
 
-      const openDigRes = (await rpc(14, "tools/call", {
-        name: "open_library",
-        arguments: { dig: digHandle },
-      })) as {
-        result: {
-          isError?: boolean;
-          structuredContent: { path: string; dig: string };
+        const openDigRes = (await plain.client.callTool({
+          name: "open_library",
+          arguments: { dig: digHandle },
+        })) as { isError?: boolean; structuredContent: { path: string; dig: string } };
+        assert.notEqual(openDigRes.isError, true);
+        const [digFolder, digId] = digHandle.split("/");
+        assert.equal(openDigRes.structuredContent.path, `/dig/${digFolder}/${digId}`);
+
+        // 8c. 2026-07-28 2-round `input_required` URL elicitation round-trip on `open_library`
+        const rawElicit = new Client(
+          { name: "dig-service-test-elicit", version: "1.0.0" },
+          {
+            capabilities: { elicitation: { url: {} } },
+            versionNegotiation: { mode: { pin: "2026-07-28" } },
+          },
+        );
+        let elicitedUrl = "";
+        rawElicit.setRequestHandler("elicitation/create", async (req) => {
+          elicitedUrl = String((req.params as { url?: unknown }).url ?? "");
+          return { action: "accept" as const };
+        });
+        const elicitTransport = new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), {
+          authProvider: { token: async () => token },
+        });
+        await rawElicit.connect(elicitTransport);
+        elicitClient = { client: rawElicit, transport: elicitTransport };
+        const elicitedOpen = (await rawElicit.callTool({
+          name: "open_library",
+          arguments: { view: "sources" },
+        })) as { isError?: boolean; structuredContent: { opened: boolean; path: string } };
+        assert.notEqual(elicitedOpen.isError, true);
+        assert.equal(elicitedOpen.structuredContent.opened, true);
+        assert.equal(elicitedOpen.structuredContent.path, "/sources");
+        assert.ok(elicitedUrl.startsWith(`${origin}/open/`), "URL elicitation must present a one-time /open/ URL");
+
+        // tools/call: method
+        const methodRes = (await plain.client.callTool({
+          name: "method",
+          arguments: { name: "dig" },
+        })) as { isError?: boolean; content: { type: string; text: string }[] };
+        assert.notEqual(methodRes.isError, true);
+        assert.match(methodRes.content[0].text, /source_info/);
+
+        // tools/call: job (unknown job id refused cleanly)
+        const jobRes = (await plain.client.callTool({
+          name: "job",
+          arguments: { id: "job-doesNotExist000000001" },
+        })) as { isError?: boolean };
+        assert.equal(jobRes.isError, true);
+
+        // 8d. SEP-1865 UI-capable 2026-07-28 client (`io.modelcontextprotocol/ui`)
+        uiClient = await connectClient("dig-service-test-ui", {
+          extensions: {
+            [UI_EXTENSION_ID]: { mimeTypes: [UI_RESOURCE_MIME] },
+          },
+        });
+        const uiTools = await uiClient.client.listTools();
+        const cardToolNames = new Set(["research_save", "dig_finish", "keys", "job", "open_library", "hackernews", "exa"]);
+        for (const t of uiTools.tools) {
+          const uiMeta = (t as { _meta?: { ui?: { resourceUri?: string } } })._meta?.ui;
+          if (cardToolNames.has(t.name)) {
+            assert.equal(uiMeta?.resourceUri, CARD_URI, `UI client must get CARD_URI on ${t.name}`);
+          } else {
+            assert.equal(uiMeta, undefined, `Non-card tool ${t.name} should not carry _meta.ui`);
+          }
+        }
+
+        const uiResList = await uiClient.client.listResources();
+        const cardResEntry = uiResList.resources.find((r) => r.uri === CARD_URI);
+        assert.ok(cardResEntry, "UI client must see ui://dig/card resource");
+        assert.equal(cardResEntry.mimeType, UI_RESOURCE_MIME);
+
+        const cardRead = await uiClient.client.readResource({ uri: CARD_URI });
+        const cardContent = cardRead.contents[0] as {
+          text?: string;
+          mimeType?: string;
+          _meta?: { ui?: { prefersBorder?: boolean; csp?: { connectDomains: string[]; resourceDomains: string[] } } };
         };
-      };
-      assert.notEqual(openDigRes.result.isError, true);
-      const [digFolder, digId] = digHandle.split("/");
-      assert.equal(openDigRes.result.structuredContent.path, `/dig/${digFolder}/${digId}`);
+        const cardHtml = cardContent.text ?? "";
+        assert.equal(cardContent.mimeType, UI_RESOURCE_MIME);
+        assert.equal(cardContent._meta?.ui?.prefersBorder, false);
+        assert.deepEqual(cardContent._meta?.ui?.csp, { connectDomains: [], resourceDomains: [] });
+        assert.match(cardHtml, /ui\/initialize/);
+        assert.match(cardHtml, /ui\/notifications\/tool-result/);
+        assert.match(cardHtml, /ui\/open-link/);
+        assert.match(cardHtml, /ev\.source!==window\.parent/, "Card must ignore non-parent postMessage sources");
+        assert.match(cardHtml, /127\\\.0\\\.0\\\.1/, "Card must restrict ui/open-link strictly to loopback Dig URLs");
+        assert.match(cardHtml, /method==="ping"/, "Card must reply to host ping requests");
+        assert.match(cardHtml, /params:\{height:h\}/, "size-changed must report height only");
+        assert.doesNotMatch(cardHtml, /innerHTML/i, "Card HTML must never use innerHTML");
 
-      // tools/call: keys (never leaks secret; returns one-time /keys/<code> link)
-      const mcpKeysRes = (await rpc(15, "tools/call", {
-        name: "keys",
-        arguments: { source: "exa" },
-      })) as {
-        result: {
-          isError?: boolean;
-          structuredContent: { set: string[]; address?: string };
-        };
-      };
-      assert.notEqual(mcpKeysRes.result.isError, true);
-      assert.ok(mcpKeysRes.result.structuredContent.set.includes("EXA_API_KEY"));
-      assert.ok(mcpKeysRes.result.structuredContent.address?.startsWith(`${origin}/keys/`));
+        // UI client gets `_meta.digCard` on open_library and research_save (with single-use /open/<code> link)
+        const uiOpenRes = (await uiClient.client.callTool({
+          name: "open_library",
+          arguments: { view: "trail", dig: digHandle },
+        })) as { _meta?: { digCard?: { card: string; badge?: string; action?: { url: string } } } };
+        assert.equal(uiOpenRes._meta?.digCard?.card, "open_library");
+        assert.match(uiOpenRes._meta?.digCard?.badge ?? "", /single-use/);
+        assert.ok(uiOpenRes._meta?.digCard?.action?.url.startsWith(`${origin}/open/`));
 
-      // tools/call: method
-      const methodRes = (await rpc(16, "tools/call", {
-        name: "method",
-        arguments: { name: "dig" },
-      })) as { result: { isError?: boolean; content: { type: string; text: string }[] } };
-      assert.notEqual(methodRes.result.isError, true);
-      assert.match(methodRes.result.content[0].text, /source_info/);
+        const uiDigStart = (await uiClient.client.callTool({
+          name: "dig_start",
+          arguments: { project: projectDir, question: "SEP-1865 card test dig" },
+        })) as { structuredContent: { dig: string } };
+        const uiSaveRes = (await uiClient.client.callTool({
+          name: "research_save",
+          arguments: { dig: uiDigStart.structuredContent.dig, source: "hackernews", content: reportMarkdown },
+        })) as { _meta?: { digCard?: { card: string; title: string; chips?: { label: string; value: string }[]; action?: { url: string } } } };
+        assert.equal(uiSaveRes._meta?.digCard?.card, "report_saved");
+        assert.equal(uiSaveRes._meta?.digCard?.title, "Dig 2.0 Effect Service Architecture");
+        assert.ok(uiSaveRes._meta?.digCard?.action?.url.startsWith(`${origin}/open/`));
+        assert.ok(uiSaveRes._meta?.digCard?.chips?.some((c) => c.label === "Link" && c.value.includes("single-use")));
 
-      // tools/call: job (unknown job id refused cleanly)
-      const jobRes = (await rpc(17, "tools/call", {
-        name: "job",
-        arguments: { id: "job-doesNotExist000000001" },
-      })) as { result: { isError?: boolean } };
-      assert.equal(jobRes.result.isError, true);
+        // Verify `hasPendingTokens()` ignores `browser_open` codes (so `open_library` & UI cards do NOT block `?ifIdle=1`)
+        const pendingBeforeKeys = await service.runtime.runPromise(
+          Effect.flatMap(ExecutionService, (exec) => exec.hasPendingTokens()),
+        );
+        assert.equal(pendingBeforeKeys, false, "Ephemeral browser_open codes must not count as pending tokens");
 
-      // tasks/list returns empty running tasks cleanly
-      const tasksListRes = (await rpc(18, "tasks/list", {})) as {
-        result: { tasks: unknown[] };
-      };
-      assert.ok(Array.isArray(tasksListRes.result.tasks));
+        // Now call `keys`, which mints an active `keys` token -> MUST block `POST /stop?ifIdle=1` with 409!
+        const mcpKeysRes = (await plain.client.callTool({
+          name: "keys",
+          arguments: { source: "exa" },
+        })) as { isError?: boolean; structuredContent: { set: string[]; address?: string } };
+        assert.notEqual(mcpKeysRes.isError, true);
+        assert.ok(mcpKeysRes.structuredContent.set.includes("EXA_API_KEY"));
+        assert.ok(mcpKeysRes.structuredContent.address?.startsWith(`${origin}/keys/`));
 
-      // Close legacy MCP session cleanly
-      await fetch(`${origin}/mcp`, { method: "DELETE", headers: mcpHeaders(sid) });
+        const idleBlocked = await fetch(`${origin}/stop?ifIdle=1`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}` },
+        });
+        assert.equal(idleBlocked.status, 409, "Active keys token must block POST /stop?ifIdle=1");
 
-      // ---- 9. POST /stop graceful shutdown ----
-      const stopRes = await fetch(`${origin}/stop`, {
+        // Redeem the keys token so `hasPendingTokens()` returns false again (even with unexpired browser_open codes!)
+        const mintedKeyCode = mcpKeysRes.structuredContent.address!.split("/").at(-1)!;
+        await service.runtime.runPromise(
+          Effect.flatMap(ExecutionService, (exec) => exec.redeemOpaqueCode(mintedKeyCode)),
+        );
+        const pendingAfterKeysRedeem = await service.runtime.runPromise(
+          Effect.flatMap(ExecutionService, (exec) => exec.hasPendingTokens()),
+        );
+        assert.equal(pendingAfterKeysRedeem, false);
+
+        // Card helper security & edge-case checks
+        assert.equal(SAFE_CARD_URL_RE.test(`${origin}/open/abc_123`), true);
+        assert.equal(SAFE_CARD_URL_RE.test(`${origin}/keys/abc-123`), true);
+        assert.equal(SAFE_CARD_URL_RE.test("https://evil.example/keys/abc"), false);
+        assert.equal(SAFE_CARD_URL_RE.test(`${origin}/approve/secretcode`), false);
+
+        const spendCard = cardForSpendGate({
+          sourceLabel: "Exa",
+          actionName: "exa_search",
+          title: "Confirm paid call",
+          reason: "Typical cost exceeds ask_above_usd.",
+        });
+        assert.equal(spendCard.card, "spend_gate");
+        assert.equal(spendCard.action, undefined);
+        assert.equal(JSON.stringify(spendCard).includes("/approve/"), false);
+
+        // Failed job with trailing period renders red (`err`) with clean badge & receipt
+        const failedCard = cardForSourceCall({
+          sourceLabel: "Exa",
+          actionName: "exa_search",
+          status: "failed",
+          jobId: "job-fail",
+          receiptId: null,
+          dig: digHandle,
+          isError: true,
+          resultText: "exa_search · job job-fail · failed · receipt c-999.\n\nProvider error.",
+          error: "Provider error.",
+        });
+        assert.equal(failedCard.tone, "err");
+        assert.equal(failedCard.badge, "failed");
+        assert.equal(failedCard.chips?.find((c) => c.label === "Receipt")?.value, "c-999");
+
+        // Declined `keys` card shows refusal line and omits the "Open key page" action button
+        const declinedKeysCard = cardForKeys({
+          scopeLabel: "Exa",
+          set: [],
+          missing: ["EXA_API_KEY"],
+          declined: true,
+          url: `${origin}/keys/unused`,
+          line: "The person declined to open the key page; nothing was changed.",
+        });
+        assert.equal(declinedKeysCard.badge, "not opened");
+        assert.equal(declinedKeysCard.action, undefined);
+        assert.match(declinedKeysCard.title, /declined/);
+
+        const srcCard = cardForSourceCall({
+          sourceLabel: "X",
+          actionName: "x_web_search",
+          status: "completed",
+          jobId: "job-1",
+          receiptId: "c-1",
+          dig: digHandle,
+          reused: true,
+          resultText: "X · x_web_search · success · receipt c-1 · cost: 1 credit · dig so far: $0.01 + 2 credits",
+          rawFile: "proj/sessions/s1/raw/c-1.json",
+          openUrl: `${origin}/open/testcode`,
+        });
+        assert.equal(srcCard.badge, "reused");
+        assert.equal(srcCard.action?.label, "Inspect in Dig ↗");
+
+        assert.equal(declaresUi({ extensions: { [UI_EXTENSION_ID]: {} } }), true);
+        assert.equal(declaresUi({ extensions: { [UI_EXTENSION_ID]: { mimeTypes: [UI_RESOURCE_MIME] } } }), true);
+        assert.equal(declaresUi({ extensions: { [UI_EXTENSION_ID]: { mimeTypes: ["text/plain"] } } }), false);
+        assert.equal(declaresUi({}), false);
+        assert.ok(renderCardHtml().includes(`"dig-card"`));
+      } finally {
+        await elicitClient?.client.close().catch(() => {});
+        await uiClient?.client.close().catch(() => {});
+        await plain.client.close().catch(() => {});
+      }
+
+      // ---- 9. POST /stop?ifIdle=1 succeeds despite unexpired browser_open tokens! ----
+      const stopRes = await fetch(`${origin}/stop?ifIdle=1`, {
         method: "POST",
         headers: { authorization: `Bearer ${token}` },
       });
-      assert.equal(stopRes.status, 200);
+      assert.equal(stopRes.status, 200, "Unexpired browser_open codes must not block POST /stop?ifIdle=1");
       assert.deepEqual(await stopRes.json(), { stopping: true });
 
       await service.waitForStop;
@@ -1077,6 +1281,55 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
       assert.equal(res.status, 0);
       assert.equal(res.stdout.trim(), VERSION);
     } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("runStdioBridge (`dig mcp`) proxies both 2026-07-28 and 2025-era stdio clients cleanly", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "dig-svc-stdio-"));
+    const distDig = join(process.cwd(), "dist/dig.mjs");
+    const service = await serve({
+      state: tmp,
+      port: 0,
+      handleSignals: false,
+      env: { ...process.env, DIG_STATE_DIR: tmp, DIG_IDLE_EXIT_MS: "600000" },
+    });
+    const env = {
+      ...process.env,
+      DIG_STATE_DIR: tmp,
+      DIG_PORT: String(service.port),
+    };
+    const modernClient = new Client(
+      { name: "dig-stdio-modern", version: "1.0.0" },
+      {
+        capabilities: { extensions: { [UI_EXTENSION_ID]: { mimeTypes: [UI_RESOURCE_MIME] } } },
+        versionNegotiation: { mode: { pin: "2026-07-28" } },
+      },
+    );
+    const legacyClient = new Client(
+      { name: "dig-stdio-legacy", version: "1.0.0" },
+      { capabilities: {} },
+    );
+    try {
+      await modernClient.connect(
+        new StdioClientTransport({ command: process.execPath, args: [distDig, "mcp"], env, stderr: "pipe" }),
+      );
+      const modernTools = await modernClient.listTools();
+      assert.ok(modernTools.tools.some((t) => t.name === "open_library"));
+      const openTool = modernTools.tools.find((t) => t.name === "open_library") as {
+        _meta?: { ui?: { resourceUri?: string } };
+      };
+      assert.equal(openTool._meta?.ui?.resourceUri, CARD_URI);
+
+      await legacyClient.connect(
+        new StdioClientTransport({ command: process.execPath, args: [distDig, "mcp"], env, stderr: "pipe" }),
+      );
+      const legacyTools = await legacyClient.listTools();
+      assert.ok(legacyTools.tools.some((t) => t.name === "open_library"));
+    } finally {
+      await legacyClient.close().catch(() => {});
+      await modernClient.close().catch(() => {});
+      await service.stop("test-cleanup").catch(() => {});
       await rm(tmp, { recursive: true, force: true });
     }
   });

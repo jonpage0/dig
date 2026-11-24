@@ -15,7 +15,10 @@ const state = await mkdtemp(join(root, 'smoke-state-'));
 const port = await new Promise((done, fail) => { const server = createServer(); server.once('error', fail); server.listen(0, '127.0.0.1', () => { const { port } = server.address(); server.close(() => done(port)); }); });
 const env = { DIG_STATE_DIR: state, DIG_PORT: String(port), PATH: process.env.PATH, HOME: process.env.HOME };
 const dig = args => new Promise((done, fail) => { const child = spawn(process.execPath, [DIG, ...args], { env, stdio: ['ignore', 'pipe', 'inherit'] }); let out = ''; child.stdout.on('data', chunk => { out += chunk; }); child.once('error', fail); child.once('exit', code => done({ code, out })); });
-const client = new Client({ name: 'dig-smoke', version: '1.0.0' });
+const client = new Client(
+  { name: 'dig-smoke', version: '1.0.0' },
+  { versionNegotiation: { mode: 'auto' } },
+);
 const call = async (name, args) => {
   const response = await client.callTool({ name, arguments: args });
   if (response.isError) throw new Error(response.content.find(block => block.type === 'text')?.text ?? `${name} failed`);

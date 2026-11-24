@@ -1,7 +1,8 @@
 // Dig 2.0 MCP server adapter: thin `@modelcontextprotocol/server` 2.4+ layer over `DigManagedRuntime`.
 // Uses Effect 4.1.5 `Schema.toStandardJSONSchemaV1` + `Schema.toStandardSchemaV1` for every tool and prompt
-// schema (zero zod). Drops `ui://` MCP Apps completely in favor of ONE universal localhost Web SPA opened
-// via `open_library` (`http://127.0.0.1:<port>/open/<code>`).
+// schema (zero zod), serves MCP 2026-07-28 + 2025-era sessions, opens ONE universal localhost Web SPA
+// (`open_library`), and serves one optional minimal SEP-1865 inline card (`ui://dig/card/v<VERSION>.html`)
+// gated on client `io.modelcontextprotocol/ui` capability.
 import { randomUUID } from "node:crypto";
 import { isAbsolute, resolve } from "node:path";
 import { Effect, Schema } from "effect";
@@ -19,6 +20,7 @@ import {
   type ClientCapabilities,
   type InputRequiredResult,
   type McpRequestContext,
+  type RegisteredResource,
   type RegisteredTool,
   type ServerContext,
 } from "@modelcontextprotocol/server";
@@ -72,6 +74,21 @@ import {
 import { ANSWER_STATUSES, type AnswerStatus } from "../status.ts";
 import { plural } from "../ui/format.ts";
 import { VERSION } from "../version.ts";
+import {
+  CARD_RESOURCE_META,
+  CARD_URI,
+  UI_EXTENSION_ID,
+  UI_RESOURCE_MIME,
+  cardForDigFinished,
+  cardForKeys,
+  cardForOpenLibrary,
+  cardForReportSaved,
+  cardForSourceCall,
+  cardForSpendGate,
+  declaresUi,
+  renderCardHtml,
+  type DigCardPayload,
+} from "./card.ts";
 import { registerMethods } from "./methods.ts";
 import {
   SOURCE_TOOLS,
@@ -1241,8 +1258,8 @@ async function listedResources(runtime: DigManagedRuntime) {
 
 /**
  * Builds one `McpServer` instance backed by `hooks.runtime` (`DigManagedRuntime`).
- * Serves both 2026-07-28 per-request traffic (`era: "modern"`) and 2025-era sessions (`era: "legacy"`).
- * Zero `ui://` MCP Apps: universal browser SPA is opened via `open_library`.
+ * Serves both 2026-07-28 per-request traffic (`era: "modern"`) and 2025-era sessions (`era: "legacy"`),
+ * with an optional minimal SEP-1865 inline card (`ui://dig/card/v<VERSION>.html`) gated on client UI capability.
  */
 export async function createDigServer(context: McpRequestContext, hooks: ServiceHooks) {
   const { runtime } = hooks;
@@ -1263,6 +1280,98 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
       },
     },
   );
+
+  // Dynamic SEP-1865 UI gating: capabilities arrive after server construction (from the request envelope
+  // on 2026-07-28, or from `initialize` on a 2025-era session) and before list/call handlers run.
+  const ui = () => declaresUi(server.server.getClientCapabilities());
+  const onlyWhen = <T extends RegisteredTool | RegisteredResource>(
+    registered: T,
+    when: () => boolean,
+  ): T => {
+    Object.defineProperty(registered, "enabled", { get: when, set: () => {}, configurable: true });
+    return registered;
+  };
+  const showsCard = (registered: RegisteredTool): RegisteredTool => {
+    const base = registered._meta;
+    Object.defineProperty(registered, "_meta", {
+      get: () => (ui() ? { ...base, ui: { resourceUri: CARD_URI } } : base),
+      set: () => {},
+      configurable: true,
+    });
+    return registered;
+  };
+  const withCard = (result: CallToolResult, card: DigCardPayload | null): CallToolResult =>
+    ui() && card ? { ...result, _meta: { ...result._meta, digCard: card } } : result;
+  // Best-effort deep-link minting: a failed mint must NEVER turn a successful paid call into an error.
+  const mintCardOpenUrl = async (targetPath: string): Promise<string | undefined> => {
+    if (!ui()) return undefined;
+    try {
+      const minted = await runtime.runPromise(
+        Effect.flatMap(ExecutionService, (exec) =>
+          exec.createOpaqueCode({
+            kind: "browser_open",
+            payload: { path: targetPath },
+            ttlMs: OPEN_CODE_MS,
+          }),
+        ),
+      );
+      return `${hooks.origin()}/open/${minted.code}`;
+    } catch {
+      return undefined;
+    }
+  };
+  const digRouteOf = (digHandle: string, working = false): string => {
+    if (working) return `/trail?dig=${encodeURIComponent(digHandle)}`;
+    const slash = digHandle.indexOf("/");
+    if (slash > 0 && slash < digHandle.length - 1) {
+      const folder = digHandle.slice(0, slash);
+      const id = digHandle.slice(slash + 1);
+      return `/dig/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`;
+    }
+    return "/";
+  };
+  const attachJobCard = async (
+    result: CallToolResult,
+    job: LedgerJob,
+    opts: { readonly reused?: boolean; readonly working?: boolean; readonly progressMessage?: string } = {},
+  ): Promise<CallToolResult> => {
+    if (!ui()) return result;
+    try {
+      const sourceLabel = SOURCES.find((s) => s.id === job.source)?.label ?? job.source;
+      const textBlock = result.content.find((b) => b.type === "text") as { text?: string } | undefined;
+      const rawLink = result.content.find(
+        (b) =>
+          b.type === "resource_link" &&
+          typeof (b as { uri?: string }).uri === "string" &&
+          (b as { uri: string }).uri.includes("/raw/"),
+      ) as { uri: string } | undefined;
+      const rawFile = rawLink?.uri.startsWith("dig://library/")
+        ? decodeURIComponent(rawLink.uri.slice("dig://library/".length))
+        : undefined;
+      const openUrl = await mintCardOpenUrl(digRouteOf(job.dig, Boolean(opts.working)));
+      return withCard(
+        result,
+        cardForSourceCall({
+          sourceLabel,
+          actionName: job.tool,
+          status: job.status,
+          jobId: job.id,
+          receiptId: job.receiptId,
+          dig: job.dig,
+          isError: result.isError,
+          reused: opts.reused,
+          working: opts.working,
+          progressMessage: opts.progressMessage,
+          resultText: textBlock?.text,
+          error: job.error,
+          rawFile,
+          openUrl,
+        }),
+      );
+    } catch {
+      return result;
+    }
+  };
 
   let initialConfig: DigConfig | null = null;
   try {
@@ -1345,78 +1454,107 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
   );
 
   // 2. dig_finish
-  server.registerTool(
-    "dig_finish",
-    {
-      title: "Answer a dig",
-      description:
-        "Optional initiating-thread answer for a dig. Read every relied-on report and check load-bearing original evidence first. Writes answer.md once; does not invoke a composer.",
-      inputSchema: DigFinishInput,
-      outputSchema: DigFinishOutput,
-      annotations: LOCAL_WRITE,
-    },
-    async (args) => {
-      try {
-        const clean = redactRecord(args, knownSecrets()) as typeof args;
-        const finished = await runtime.runPromise(
-          Effect.gen(function* () {
-            const lib = yield* LibraryService;
-            const dig = yield* lib.resolveHandle(clean.dig);
-            return yield* lib.finishDig({
-              dig,
-              answer: clean.answer,
-              status: clean.status as AnswerStatus,
+  showsCard(
+    server.registerTool(
+      "dig_finish",
+      {
+        title: "Answer a dig",
+        description:
+          "Optional initiating-thread answer for a dig. Read every relied-on report and check load-bearing original evidence first. Writes answer.md once; does not invoke a composer.",
+        inputSchema: DigFinishInput,
+        outputSchema: DigFinishOutput,
+        annotations: LOCAL_WRITE,
+      },
+      async (args) => {
+        try {
+          const clean = redactRecord(args, knownSecrets()) as typeof args;
+          const { dig, finished } = await runtime.runPromise(
+            Effect.gen(function* () {
+              const lib = yield* LibraryService;
+              const resolved = yield* lib.resolveHandle(clean.dig);
+              const out = yield* lib.finishDig({
+                dig: resolved,
+                answer: clean.answer,
+                status: clean.status as AnswerStatus,
+                reports: clean.reports,
+              });
+              return { dig: resolved, finished: out };
+            }),
+          );
+          const openUrl = await mintCardOpenUrl(digRouteOf(dig.handle));
+          return withCard(
+            reply(
+              { path: finished.path, file: finished.file, dig: finished.dig },
+              `Answer saved: ${finished.path}`,
+            ),
+            cardForDigFinished({
+              dig: finished.dig,
+              status: clean.status,
               reports: clean.reports,
-            });
-          }),
-        );
-        return reply(
-          { path: finished.path, file: finished.file, dig: finished.dig },
-          `Answer saved: ${finished.path}`,
-        );
-      } catch (error) {
-        return refused(errorText(error));
-      }
-    },
+              file: finished.file,
+              openUrl,
+            }),
+          );
+        } catch (error) {
+          return refused(errorText(error));
+        }
+      },
+    ),
   );
 
   // 3. research_save
-  server.registerTool(
-    "research_save",
-    {
-      title: "Save a report",
-      description:
-        "Save one source-method report in a dig, write-once, with its discovery Summary and audit sections. Pass the dig handle. After the source_card block, include a short descriptive H1 title (roughly 4–10 words). agent names the source method (required for X). Returns the exact Primary artifact path.",
-      inputSchema: ResearchSaveInput,
-      outputSchema: ResearchSaveOutput,
-      annotations: LOCAL_WRITE,
-    },
-    async (args) => {
-      try {
-        const clean = redactRecord(args, knownSecrets()) as typeof args;
-        const saved = await runtime.runPromise(
-          Effect.gen(function* () {
-            const lib = yield* LibraryService;
-            const dig = yield* lib.resolveHandle(clean.dig);
-            return yield* lib.saveReport({
-              dig,
+  showsCard(
+    server.registerTool(
+      "research_save",
+      {
+        title: "Save a report",
+        description:
+          "Save one source-method report in a dig, write-once, with its discovery Summary and audit sections. Pass the dig handle. After the source_card block, include a short descriptive H1 title (roughly 4–10 words). agent names the source method (required for X). Returns the exact Primary artifact path.",
+        inputSchema: ResearchSaveInput,
+        outputSchema: ResearchSaveOutput,
+        annotations: LOCAL_WRITE,
+      },
+      async (args) => {
+        try {
+          const clean = redactRecord(args, knownSecrets()) as typeof args;
+          const { dig, saved } = await runtime.runPromise(
+            Effect.gen(function* () {
+              const lib = yield* LibraryService;
+              const resolved = yield* lib.resolveHandle(clean.dig);
+              const out = yield* lib.saveReport({
+                dig: resolved,
+                source: clean.source,
+                agent: clean.agent,
+                content: clean.content,
+                topic: clean.topic,
+                topic_volatility: clean.topic_volatility,
+                supersedes: clean.supersedes,
+              });
+              return { dig: resolved, saved: out };
+            }),
+          );
+          const sourceLabel = SOURCES.find((s) => s.id === clean.source)?.label ?? clean.source;
+          const openUrl = await mintCardOpenUrl(digRouteOf(dig.handle));
+          return withCard(
+            reply(
+              { path: saved.path, file: saved.file, dig: saved.dig, report: saved.report },
+              `Primary artifact: ${saved.path}\nRead this full file with library_read; a pointer is not its evidence.`,
+            ),
+            cardForReportSaved({
               source: clean.source,
+              sourceLabel,
               agent: clean.agent,
               content: clean.content,
-              topic: clean.topic,
-              topic_volatility: clean.topic_volatility,
-              supersedes: clean.supersedes,
-            });
-          }),
-        );
-        return reply(
-          { path: saved.path, file: saved.file, dig: saved.dig, report: saved.report },
-          `Primary artifact: ${saved.path}\nRead this full file with library_read; a pointer is not its evidence.`,
-        );
-      } catch (error) {
-        return refused(errorText(error));
-      }
-    },
+              file: saved.file,
+              dig: saved.dig,
+              openUrl,
+            }),
+          );
+        } catch (error) {
+          return refused(errorText(error));
+        }
+      },
+    ),
   );
 
   // 4. library_list
@@ -1606,195 +1744,195 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
   );
 
   // 9. keys (never asks for keys in chat; returns one-time http://127.0.0.1:<port>/keys/<code> link)
-  server.registerTool(
-    "keys",
-    {
-      title: "Enter keys",
-      description:
-        "Open a one-time page Dig serves on this computer so the person can type provider credentials directly into keys.env (0600) outside chat: those of `source`, or the missing ones of every enabled source. NEVER ask for a key in chat. Returns which credentials are set and which are still missing, never a value.",
-      inputSchema: KeysInput,
-      outputSchema: KeysOutput,
-      annotations: LOCAL_WRITE,
-    },
-    async ({ source }, ctx) => {
-      try {
-        const { cfg, keysSvc } = await runtime.runPromise(
-          Effect.gen(function* () {
-            const c = yield* ConfigService;
-            const k = yield* KeysService;
-            return { cfg: yield* c.load(), keysSvc: k };
-          }),
-        );
-        const scope = keyScopeFor(cfg.sources.enabled, source);
-        const label = SOURCES.find((s) => s.id === source)?.label;
-        const makeReport = (line: string, extra: Json = {}): CallToolResult => {
-          const setNames = scope.filter((e) => keysSvc.has(e.name)).map((e) => e.name);
-          const missingNames = scope.filter((e) => !keysSvc.has(e.name)).map((e) => e.name);
-          return {
-            content: [
+  showsCard(
+    server.registerTool(
+      "keys",
+      {
+        title: "Enter keys",
+        description:
+          "Open a one-time page Dig serves on this computer so the person can type provider credentials directly into keys.env (0600) outside chat: those of `source`, or the missing ones of every enabled source. NEVER ask for a key in chat. Returns which credentials are set and which are still missing, never a value.",
+        inputSchema: KeysInput,
+        outputSchema: KeysOutput,
+        annotations: LOCAL_WRITE,
+      },
+      async ({ source }, ctx) => {
+        try {
+          const { cfg, keysSvc } = await runtime.runPromise(
+            Effect.gen(function* () {
+              const c = yield* ConfigService;
+              const k = yield* KeysService;
+              return { cfg: yield* c.load(), keysSvc: k };
+            }),
+          );
+          const scope = keyScopeFor(cfg.sources.enabled, source);
+          const label = SOURCES.find((s) => s.id === source)?.label;
+          const scopeLabel = label ?? source ?? "Enabled sources";
+          const makeReport = (line: string, extra: Json = {}, declined = false): CallToolResult => {
+            const setNames = scope.filter((e) => keysSvc.has(e.name)).map((e) => e.name);
+            const missingNames = scope.filter((e) => !keysSvc.has(e.name)).map((e) => e.name);
+            const addr = typeof extra.address === "string" ? extra.address : undefined;
+            const exp = typeof extra.expiresAt === "string" ? untilClock(extra.expiresAt) : undefined;
+            const savedNames = Array.isArray(extra.saved) ? (extra.saved as string[]) : undefined;
+            return withCard(
               {
-                type: "text",
-                text: `${line}\nSet: ${setNames.join(", ") || "none"}.\nStill missing: ${missingNames.join(", ") || "none"}.`,
+                content: [
+                  {
+                    type: "text",
+                    text: `${line}\nSet: ${setNames.join(", ") || "none"}.\nStill missing: ${missingNames.join(", ") || "none"}.`,
+                  },
+                ],
+                structuredContent: { set: setNames, missing: missingNames, ...extra },
               },
-            ],
-            structuredContent: { set: setNames, missing: missingNames, ...extra },
-          };
-        };
-
-        if (!scope.length) {
-          return makeReport(
-            source ? `${label ?? source} needs no credential.` : "The enabled sources need no credential.",
-          );
-        }
-        const pageEntries = source ? scope : scope.filter((e) => !keysSvc.has(e.name));
-        if (!pageEntries.length) {
-          return makeReport("Every credential the enabled sources use is already set.");
-        }
-
-        const asker = askerOf(context.era, server, ctx);
-        // Check if this is a retried 2026-07-28 call carrying an already-minted code
-        let code: string | undefined;
-        let expiresAt: string | undefined;
-        const echoed = context.era === "modern" ? ctx.mcpReq.requestState() : undefined;
-        if (typeof echoed === "string") {
-          const verified = await runtime.runPromise(
-            Effect.flatMap(ExecutionService, (exec) => exec.verifyState(echoed)),
-          );
-          if (verified && verified.key === "keys" && typeof verified.bind === "string") {
-            const existing = await runtime.runPromise(
-              Effect.flatMap(ExecutionService, (exec) => exec.readOpaqueCode(verified.bind as string)),
+              cardForKeys({
+                scopeLabel,
+                set: setNames,
+                missing: missingNames,
+                saved: savedNames,
+                declined,
+                url: addr,
+                expiresClock: exp,
+                line,
+              }),
             );
-            if (existing && existing.kind === "keys") {
-              code = existing.code;
-              expiresAt = existing.expiresAt;
+          };
+
+          if (!scope.length) {
+            return makeReport(
+              source ? `${label ?? source} needs no credential.` : "The enabled sources need no credential.",
+            );
+          }
+          const pageEntries = source ? scope : scope.filter((e) => !keysSvc.has(e.name));
+          if (!pageEntries.length) {
+            return makeReport("Every credential the enabled sources use is already set.");
+          }
+
+          const asker = askerOf(context.era, server, ctx);
+          // Check if this is a retried 2026-07-28 call carrying an already-minted code
+          let code: string | undefined;
+          let expiresAt: string | undefined;
+          const echoed = context.era === "modern" ? ctx.mcpReq.requestState() : undefined;
+          if (typeof echoed === "string") {
+            const verified = await runtime.runPromise(
+              Effect.flatMap(ExecutionService, (exec) => exec.verifyState(echoed)),
+            );
+            if (verified && verified.key === "keys" && typeof verified.bind === "string") {
+              const existing = await runtime.runPromise(
+                Effect.flatMap(ExecutionService, (exec) => exec.readOpaqueCode(verified.bind as string)),
+              );
+              if (existing && existing.kind === "keys") {
+                code = existing.code;
+                expiresAt = existing.expiresAt;
+              }
             }
           }
-        }
-        if (!code) {
-          const minted = await runtime.runPromise(
-            Effect.flatMap(ExecutionService, (exec) =>
-              exec.createOpaqueCode({
-                kind: "keys",
-                payload: {
-                  names: pageEntries,
-                  source: source ?? null,
-                },
-                ttlMs: keyCodeMs(),
-              }),
-            ),
+          if (!code) {
+            const minted = await runtime.runPromise(
+              Effect.flatMap(ExecutionService, (exec) =>
+                exec.createOpaqueCode({
+                  kind: "keys",
+                  payload: {
+                    names: pageEntries,
+                    source: source ?? null,
+                  },
+                  ttlMs: keyCodeMs(),
+                }),
+              ),
+            );
+            code = minted.code;
+            expiresAt = minted.expiresAt;
+          }
+
+          const url = `${hooks.origin()}/keys/${code}`;
+          const message = `Dig would like you to enter ${source ? `${label ?? source}'s credentials` : "the missing credentials of your enabled sources"} on a local page (${pageEntries.map((e) => e.name).join(", ")}). They are saved in Dig's keys.env (0600) and never pass through chat.`;
+          const answer = await askUrl(runtime, asker, { key: "keys", bind: code, message, url });
+
+          if (answer.kind === "pending") return answer.result;
+          if (answer.kind === "unavailable") {
+            return makeReport(
+              `Open this one-time local page in your browser to enter keys directly into keys.env: ${url} (expires at ${untilClock(expiresAt!)}, single-use). Call source_info afterwards to verify readiness.`,
+              { address: url, expiresAt },
+            );
+          }
+          if (answer.kind !== "answered") {
+            return makeReport(
+              answer.kind === "declined"
+                ? "The person declined to open the key page; nothing was changed."
+                : answer.kind === "cancelled"
+                  ? "The person dismissed the key page request; nothing was changed."
+                  : "The request to open the key page went unanswered; nothing was changed.",
+              { address: url, expiresAt },
+              true,
+            );
+          }
+
+          // Wait bounded time for submission if waiter is hooked up
+          const remainingMs = Math.max(0, Math.min(askTimeoutMs(), Date.parse(expiresAt!) - Date.now()));
+          if (hooks.waitForKeyCode && remainingMs > 0) {
+            await hooks.waitForKeyCode(code, remainingMs, ctx.mcpReq.signal);
+          }
+          const latest = await runtime.runPromise(
+            Effect.flatMap(ExecutionService, (exec) => exec.readOpaqueCode(code!)),
           );
-          code = minted.code;
-          expiresAt = minted.expiresAt;
-        }
-
-        const url = `${hooks.origin()}/keys/${code}`;
-        const message = `Dig would like you to enter ${source ? `${label ?? source}'s credentials` : "the missing credentials of your enabled sources"} on a local page (${pageEntries.map((e) => e.name).join(", ")}). They are saved in Dig's keys.env (0600) and never pass through chat.`;
-        const answer = await askUrl(runtime, asker, { key: "keys", bind: code, message, url });
-
-        if (answer.kind === "pending") return answer.result;
-        if (answer.kind === "unavailable") {
+          if (latest?.used) {
+            const saved = Array.isArray(latest.result?.saved)
+              ? (latest.result.saved as string[])
+              : [];
+            return makeReport(
+              saved.length
+                ? `Saved ${saved.join(", ")} in keys.env; Dig is using ${saved.length === 1 ? "it" : "them"} now.`
+                : "The key page was submitted without changes.",
+              { saved },
+            );
+          }
           return makeReport(
-            `Open this one-time local page in your browser to enter keys directly into keys.env: ${url} (expires at ${untilClock(expiresAt!)}, single-use). Call source_info afterwards to verify readiness.`,
+            `The key page has not been submitted yet; it stays open until ${untilClock(expiresAt!)}. Call source_info afterwards to see which are set.`,
             { address: url, expiresAt },
           );
+        } catch (error) {
+          if (ctx.mcpReq.signal.aborted) throw error;
+          return refused(errorText(error));
         }
-        if (answer.kind !== "answered") {
-          return makeReport(
-            answer.kind === "declined"
-              ? "The person declined to open the key page; nothing was changed."
-              : answer.kind === "cancelled"
-                ? "The person dismissed the key page request; nothing was changed."
-                : "The request to open the key page went unanswered; nothing was changed.",
-            { address: url, expiresAt },
-          );
-        }
-
-        // Wait bounded time for submission if waiter is hooked up
-        const remainingMs = Math.max(0, Math.min(askTimeoutMs(), Date.parse(expiresAt!) - Date.now()));
-        if (hooks.waitForKeyCode && remainingMs > 0) {
-          await hooks.waitForKeyCode(code, remainingMs, ctx.mcpReq.signal);
-        }
-        const latest = await runtime.runPromise(
-          Effect.flatMap(ExecutionService, (exec) => exec.readOpaqueCode(code!)),
-        );
-        if (latest?.used) {
-          const saved = Array.isArray(latest.result?.saved)
-            ? (latest.result.saved as string[])
-            : [];
-          return makeReport(
-            saved.length
-              ? `Saved ${saved.join(", ")} in keys.env; Dig is using ${saved.length === 1 ? "it" : "them"} now.`
-              : "The key page was submitted without changes.",
-            { saved },
-          );
-        }
-        return makeReport(
-          `The key page has not been submitted yet; it stays open until ${untilClock(expiresAt!)}. Call source_info afterwards to see which are set.`,
-          { address: url, expiresAt },
-        );
-      } catch (error) {
-        if (ctx.mcpReq.signal.aborted) throw error;
-        return refused(errorText(error));
-      }
-    },
+      },
+    ),
   );
 
   // 10. job
-  server.registerTool(
-    "job",
-    {
-      title: "Follow a call's job",
-      description:
-        "Status of a slow or paid source call that answered with a job id, and once finished, the result the call returns. wait: true waits up to 40 seconds for the result. cancel: true asks a running job to stop (a paid call then records unknown cost). Do not repeat the source call while its job runs.",
-      inputSchema: JobInput,
-      annotations: { destructiveHint: false, openWorldHint: false },
-    },
-    async ({ id, wait, cancel }, ctx) => {
-      try {
-        let job = await runtime.runPromise(
-          Effect.flatMap(ExecutionService, (exec) => exec.getJob(id)),
-        );
-        if (!job) return refused(unknownJobText(id));
-
-        const getProgress = () =>
-          runtime.runPromise(Effect.flatMap(ProgressHub, (hub) => hub.progressOf(job!.id)));
-
-        const isWorking = (j: LedgerJob) => j.status === "working" || j.status === "pending_approval";
-
-        if (cancel) {
-          const cancelled = await runtime.runPromise(
-            Effect.flatMap(ExecutionService, (exec) => exec.cancelJob(job!.id)),
+  showsCard(
+    server.registerTool(
+      "job",
+      {
+        title: "Follow a call's job",
+        description:
+          "Status of a slow or paid source call that answered with a job id, and once finished, the result the call returns. wait: true waits up to 40 seconds for the result. cancel: true asks a running job to stop (a paid call then records unknown cost). Do not repeat the source call while its job runs.",
+        inputSchema: JobInput,
+        annotations: { destructiveHint: false, openWorldHint: false },
+      },
+      async ({ id, wait, cancel }, ctx) => {
+        try {
+          let job = await runtime.runPromise(
+            Effect.flatMap(ExecutionService, (exec) => exec.getJob(id)),
           );
-          if (!cancelled) {
-            return withLeadingLine(
-              jobResultContent(job),
-              `Job ${job.id} had already finished (${job.status}); there was nothing to cancel.`,
+          if (!job) return refused(unknownJobText(id));
+
+          const getProgress = () =>
+            runtime.runPromise(Effect.flatMap(ProgressHub, (hub) => hub.progressOf(job!.id)));
+
+          const isWorking = (j: LedgerJob) => j.status === "working" || j.status === "pending_approval";
+
+          if (cancel) {
+            const cancelled = await runtime.runPromise(
+              Effect.flatMap(ExecutionService, (exec) => exec.cancelJob(job!.id)),
             );
-          }
-          const deadline = Date.now() + Math.min(inlineWaitMs(), 10_000);
-          while (Date.now() < deadline && !ctx.mcpReq.signal.aborted) {
-            const cur = await runtime.runPromise(
-              Effect.flatMap(ExecutionService, (exec) => exec.getJob(job!.id)),
-            );
-            if (cur) job = cur;
-            if (!isWorking(job)) break;
-            await new Promise((r) => setTimeout(r, 50));
-          }
-          if (isWorking(job)) {
-            return withLeadingLine(
-              workingJobResult(job, await getProgress()),
-              `Cancellation of job ${job.id} was requested; it is stopping.`,
-            );
-          }
-        } else if (wait && isWorking(job)) {
-          const notify = progressNotifierOf(ctx);
-          const unsub = notify
-            ? await runtime.runPromise(
-                Effect.map(ProgressHub, (hub) => hub.subscribeCall(job!.id, notify)),
-              )
-            : undefined;
-          try {
-            const deadline = Date.now() + inlineWaitMs();
+            if (!cancelled) {
+              return await attachJobCard(
+                withLeadingLine(
+                  jobResultContent(job),
+                  `Job ${job.id} had already finished (${job.status}); there was nothing to cancel.`,
+                ),
+                job,
+              );
+            }
+            const deadline = Date.now() + Math.min(inlineWaitMs(), 10_000);
             while (Date.now() < deadline && !ctx.mcpReq.signal.aborted) {
               const cur = await runtime.runPromise(
                 Effect.flatMap(ExecutionService, (exec) => exec.getJob(job!.id)),
@@ -1803,115 +1941,170 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
               if (!isWorking(job)) break;
               await new Promise((r) => setTimeout(r, 50));
             }
-          } finally {
-            unsub?.();
+            if (isWorking(job)) {
+              const prog = await getProgress();
+              return await attachJobCard(
+                withLeadingLine(
+                  workingJobResult(job, prog),
+                  `Cancellation of job ${job.id} was requested; it is stopping.`,
+                ),
+                job,
+                { working: true, progressMessage: prog?.message },
+              );
+            }
+          } else if (wait && isWorking(job)) {
+            const notify = progressNotifierOf(ctx);
+            const unsub = notify
+              ? await runtime.runPromise(
+                  Effect.map(ProgressHub, (hub) => hub.subscribeCall(job!.id, notify)),
+                )
+              : undefined;
+            try {
+              const deadline = Date.now() + inlineWaitMs();
+              while (Date.now() < deadline && !ctx.mcpReq.signal.aborted) {
+                const cur = await runtime.runPromise(
+                  Effect.flatMap(ExecutionService, (exec) => exec.getJob(job!.id)),
+                );
+                if (cur) job = cur;
+                if (!isWorking(job)) break;
+                await new Promise((r) => setTimeout(r, 50));
+              }
+            } finally {
+              unsub?.();
+            }
           }
-        }
 
-        return isWorking(job) ? workingJobResult(job, await getProgress()) : jobResultContent(job);
-      } catch (error) {
-        return refused(errorText(error));
-      }
-    },
+          if (isWorking(job)) {
+            const prog = await getProgress();
+            return await attachJobCard(workingJobResult(job, prog), job, {
+              working: true,
+              progressMessage: prog?.message,
+            });
+          }
+          return await attachJobCard(jobResultContent(job), job);
+        } catch (error) {
+          return refused(errorText(error));
+        }
+      },
+    ),
   );
 
-  // 11. open_library (replaces ALL ui:// MCP Apps with ONE universal localhost Web SPA!)
-  server.registerTool(
-    "open_library",
-    {
-      title: "Open Dig web library",
-      description:
-        "Open Dig's universal localhost Web SPA in the user's browser (library, dig reader, live research trail, setup wizard, sources, or settings) via a single-use http://127.0.0.1:<port>/open/<code> link. Never launches research.",
-      inputSchema: OpenLibraryInput,
-      outputSchema: OpenLibraryOutput,
-      annotations: READ_ONLY,
-    },
-    async ({ dig, view }, ctx) => {
-      try {
-        const cfg = await runtime.runPromise(Effect.flatMap(ConfigService, (c) => c.load()));
-        let resolvedHandle: string | null = null;
-        let resolvedFolder: string | null = null;
-        let resolvedDigId: string | null = null;
-        if (dig) {
-          const resolved = await runtime.runPromise(
-            Effect.flatMap(LibraryService, (lib) => lib.resolveHandle(dig)),
-          );
-          resolvedHandle = resolved.handle;
-          resolvedFolder = resolved.folder;
-          resolvedDigId = resolved.dig;
-        }
-        const viewName = view ?? "library";
-        const targetPath =
-          resolvedHandle && resolvedFolder && resolvedDigId
-            ? viewName === "trail"
-              ? `/trail?dig=${encodeURIComponent(resolvedHandle)}`
-              : `/dig/${encodeURIComponent(resolvedFolder)}/${encodeURIComponent(resolvedDigId)}`
-            : viewName === "library"
-              ? "/"
-              : `/${viewName}`;
-
-        const asker = askerOf(context.era, server, ctx);
-
-        let minted: { readonly code: string; readonly expiresAt: string } | null = null;
-        const mintOpenUrl = async (): Promise<string> => {
-          if (!minted) {
-            minted = await runtime.runPromise(
-              Effect.flatMap(ExecutionService, (exec) =>
-                exec.createOpaqueCode({
-                  kind: "browser_open",
-                  payload: { path: targetPath },
-                  ttlMs: OPEN_CODE_MS,
-                }),
-              ),
+  // 11. open_library (opens universal localhost Web SPA via one-time `/open/<code>` link)
+  showsCard(
+    server.registerTool(
+      "open_library",
+      {
+        title: "Open Dig web library",
+        description:
+          "Open Dig's universal localhost Web SPA in the user's browser (library, dig reader, live research trail, setup wizard, sources, or settings) via a single-use http://127.0.0.1:<port>/open/<code> link. Never launches research.",
+        inputSchema: OpenLibraryInput,
+        outputSchema: OpenLibraryOutput,
+        annotations: READ_ONLY,
+      },
+      async ({ dig, view }, ctx) => {
+        try {
+          const cfg = await runtime.runPromise(Effect.flatMap(ConfigService, (c) => c.load()));
+          let resolvedHandle: string | null = null;
+          let resolvedFolder: string | null = null;
+          let resolvedDigId: string | null = null;
+          if (dig) {
+            const resolved = await runtime.runPromise(
+              Effect.flatMap(LibraryService, (lib) => lib.resolveHandle(dig)),
             );
+            resolvedHandle = resolved.handle;
+            resolvedFolder = resolved.folder;
+            resolvedDigId = resolved.dig;
           }
-          return `${hooks.origin()}/open/${minted.code}`;
-        };
+          const viewName = view ?? "library";
+          const targetPath =
+            resolvedHandle && resolvedFolder && resolvedDigId
+              ? viewName === "trail"
+                ? `/trail?dig=${encodeURIComponent(resolvedHandle)}`
+                : `/dig/${encodeURIComponent(resolvedFolder)}/${encodeURIComponent(resolvedDigId)}`
+              : viewName === "library"
+                ? "/"
+                : `/${viewName}`;
 
-        if (elicitationModes(asker.capabilities).url) {
-          const answer = await askUrl(runtime, asker, {
-            key: "library",
-            bind: targetPath,
-            message: "Dig would like to open its local web app in your browser.",
-            url: mintOpenUrl,
-          });
-          if (answer.kind === "pending") return answer.result;
-          if (answer.kind === "answered") {
-            return reply(
+          const asker = askerOf(context.era, server, ctx);
+
+          let minted: { readonly code: string; readonly expiresAt: string } | null = null;
+          const mintOpenUrl = async (): Promise<string> => {
+            if (!minted) {
+              minted = await runtime.runPromise(
+                Effect.flatMap(ExecutionService, (exec) =>
+                  exec.createOpaqueCode({
+                    kind: "browser_open",
+                    payload: { path: targetPath },
+                    ttlMs: OPEN_CODE_MS,
+                  }),
+                ),
+              );
+            }
+            return `${hooks.origin()}/open/${minted.code}`;
+          };
+
+          if (elicitationModes(asker.capabilities).url) {
+            const answer = await askUrl(runtime, asker, {
+              key: "library",
+              bind: targetPath,
+              message: "Dig would like to open its local web app in your browser.",
+              url: mintOpenUrl,
+            });
+            if (answer.kind === "pending") return answer.result;
+            if (answer.kind === "answered") {
+              return withCard(
+                reply(
+                  {
+                    view: viewName,
+                    dig: resolvedHandle,
+                    path: targetPath,
+                    library: cfg.library,
+                    opened: true,
+                  },
+                  `Opened Dig (${targetPath}) in the user's browser.`,
+                ),
+                cardForOpenLibrary({
+                  view: viewName,
+                  path: targetPath,
+                  dig: resolvedHandle,
+                  opened: true,
+                }),
+              );
+            }
+          }
+
+          const address = await mintOpenUrl();
+
+          return withCard(
+            reply(
               {
                 view: viewName,
                 dig: resolvedHandle,
                 path: targetPath,
                 library: cfg.library,
-                opened: true,
+                opened: false,
+                address,
+                expiresAt: minted!.expiresAt,
               },
-              `Opened Dig (${targetPath}) in the user's browser.`,
-            );
-          }
+              `Open Dig in your browser: ${address} (single-use, expires in ${plural(Math.round(OPEN_CODE_MS / 60_000), "minute")}, localhost only).`,
+            ),
+            cardForOpenLibrary({
+              view: viewName,
+              path: targetPath,
+              dig: resolvedHandle,
+              opened: false,
+              address,
+            }),
+          );
+        } catch (error) {
+          if (ctx.mcpReq.signal.aborted) throw error;
+          return refused(errorText(error));
         }
-
-        const address = await mintOpenUrl();
-
-        return reply(
-          {
-            view: viewName,
-            dig: resolvedHandle,
-            path: targetPath,
-            library: cfg.library,
-            opened: false,
-            address,
-            expiresAt: minted!.expiresAt,
-          },
-          `Open Dig in your browser: ${address} (single-use, expires in ${plural(Math.round(OPEN_CODE_MS / 60_000), "minute")}, localhost only).`,
-        );
-      } catch (error) {
-        if (ctx.mcpReq.signal.aborted) throw error;
-        return refused(errorText(error));
-      }
-    },
+      },
+    ),
   );
 
-  // ---- MCP Tasks Extension (`tasks/get`, `tasks/result`, `tasks/cancel`, `tasks/list`, `tasks/update`) ----
+  // ---- MCP Extensions (`io.modelcontextprotocol/tasks` + `io.modelcontextprotocol/ui`) ----
 
   const lookupTask = async (taskId: string, envelope: unknown): Promise<LedgerJob> => {
     if (context.era === "modern" && !declaresTasks(envelope)) throw needsTasksError();
@@ -1922,9 +2115,12 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
     return job;
   };
 
-  if (context.era === "modern") {
-    server.server.registerCapabilities({ extensions: { [TASKS_EXTENSION_ID]: {} } });
-  }
+  server.server.registerCapabilities({
+    extensions: {
+      ...(context.era === "modern" ? { [TASKS_EXTENSION_ID]: {} } : {}),
+      [UI_EXTENSION_ID]: {},
+    },
+  });
 
   server.server.setRequestHandler("tasks/get", { params: TaskIdParams }, async ({ taskId }, ctx) => {
     const job = await lookupTask(taskId, ctx.mcpReq.envelope);
@@ -1939,7 +2135,7 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
     if (job.status === "working" || job.status === "pending_approval") {
       throw new ProtocolError(-32602, `Task ${taskId} is still working.`);
     }
-    return jobResultContent(job);
+    return await attachJobCard(jobResultContent(job), job);
   });
 
   server.server.setRequestHandler("tasks/cancel", { params: TaskIdParams }, async ({ taskId }, ctx) => {
@@ -1979,192 +2175,231 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
   const sourceTools = new Map<SourceTool, RegisteredTool>();
 
   for (const tool of SOURCE_TOOLS) {
-    const registered = server.registerTool(
-      tool.name,
-      {
-        title: tool.source.label,
-        description: tool.description,
-        inputSchema: sourceInputs.get(tool.name)!,
-        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-      },
-      async (input, ctx): Promise<CallToolResult | InputRequiredResult> => {
-        try {
-          const cfg = await runtime.runPromise(Effect.flatMap(ConfigService, (c) => c.load()));
-          if (!cfg.sources.enabled.includes(tool.source.id)) {
-            return refused(`${tool.source.label} is disabled in Dig settings.`);
-          }
-
-          let dig;
+    const registered = showsCard(
+      server.registerTool(
+        tool.name,
+        {
+          title: tool.source.label,
+          description: tool.description,
+          inputSchema: sourceInputs.get(tool.name)!,
+          annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+        },
+        async (input, ctx): Promise<CallToolResult | InputRequiredResult> => {
           try {
-            dig = await runtime.runPromise(
-              Effect.flatMap(LibraryService, (lib) => lib.resolveHandle(input.dig)),
-            );
-          } catch {
-            return refused(NO_DIG);
-          }
+            const cfg = await runtime.runPromise(Effect.flatMap(ConfigService, (c) => c.load()));
+            if (!cfg.sources.enabled.includes(tool.source.id)) {
+              return refused(`${tool.source.label} is disabled in Dig settings.`);
+            }
 
-          const parsed = parseAction(tool, input.action, input.args);
-          if (!parsed.ok) return refused(parsed.error);
+            let dig;
+            try {
+              dig = await runtime.runPromise(
+                Effect.flatMap(LibraryService, (lib) => lib.resolveHandle(input.dig)),
+              );
+            } catch {
+              return refused(NO_DIG);
+            }
 
-          const { action, args } = parsed;
-          const fresh = input.fresh === true;
-          const unpaid = isUnpaidCall(action, args);
-          const hash = argsHash(args);
+            const parsed = parseAction(tool, input.action, input.args);
+            if (!parsed.ok) return refused(parsed.error);
 
-          // Check existing reusable job before running spend gate (a reused result pays nothing!).
-          const reusable = await runtime.runPromise(
-            Effect.flatMap(ExecutionService, (exec) =>
-              exec.findReusableJob(dig.handle, action.name, hash, fresh),
-            ),
-          );
-          if (reusable && reusable.status !== "working" && reusable.status !== "pending_approval") {
-            return repeatedJobResult(reusable);
-          }
+            const { action, args } = parsed;
+            const fresh = input.fresh === true;
+            const unpaid = isUnpaidCall(action, args);
+            const hash = argsHash(args);
 
-          // Multi-unit [spend] gate for new paid calls.
-          // Always gate `fresh: true` so a running job finishing between pre-check and dispatch cannot bypass spend caps.
-          if (!unpaid && (!reusable || fresh)) {
-            const gate = await runtime.runPromise(
+            // Check existing reusable job before running spend gate (a reused result pays nothing!).
+            const reusable = await runtime.runPromise(
               Effect.flatMap(ExecutionService, (exec) =>
-                exec.checkSpendGate({
-                  config: cfg,
+                exec.findReusableJob(dig.handle, action.name, hash, fresh),
+              ),
+            );
+            if (reusable && reusable.status !== "working" && reusable.status !== "pending_approval") {
+              return await attachJobCard(repeatedJobResult(reusable), reusable, { reused: true });
+            }
+
+            // Multi-unit [spend] gate for new paid calls.
+            // Always gate `fresh: true` so a running job finishing between pre-check and dispatch cannot bypass spend caps.
+            if (!unpaid && (!reusable || fresh)) {
+              const gate = await runtime.runPromise(
+                Effect.flatMap(ExecutionService, (exec) =>
+                  exec.checkSpendGate({
+                    config: cfg,
+                    dig,
+                    sourceLabel: tool.source.label,
+                    actionName: action.name,
+                    args,
+                  }),
+                ),
+              );
+
+              if (!gate.allow) {
+                const q = gate.question;
+                // Check if already approved once via browser `/approve/:code`
+                const preApproved = hooks.consumeApprovedBind?.(q.bind) ?? false;
+                if (!preApproved) {
+                  const asker = askerOf(context.era, server, ctx);
+                  const answer = await askForm(runtime, asker, q);
+
+                  if (answer.kind === "pending") return answer.result;
+
+                  if (answer.kind === "answered") {
+                    if (q.key === "ceiling" && answer.choice === "raise") {
+                      const target = answer.targetRaised ?? q.targetRaised ?? 0;
+                      await runtime.runPromise(
+                        Effect.flatMap(ExecutionService, (exec) =>
+                          exec.applySpendOverride(dig.handle, overridePatchForUnit(q.unit, target)),
+                        ),
+                      );
+                      // Re-verify spend gate after raising ceiling
+                      const recheck = await runtime.runPromise(
+                        Effect.flatMap(ExecutionService, (exec) =>
+                          exec.checkSpendGate({
+                            config: cfg,
+                            dig,
+                            sourceLabel: tool.source.label,
+                            actionName: action.name,
+                            args,
+                          }),
+                        ),
+                      );
+                      if (!recheck.allow) {
+                        return withCard(
+                          refused(recheck.refusalText),
+                          cardForSpendGate({
+                            sourceLabel: tool.source.label,
+                            actionName: action.name,
+                            title: q.title,
+                            reason: recheck.refusalText,
+                          }),
+                        );
+                      }
+                    } else if (q.key === "spend" && answer.choice === "send") {
+                      // Approved once; fall through to dispatch.
+                    } else if (q.key === "spend" && answer.choice === "send-dig") {
+                      await runtime.runPromise(
+                        Effect.flatMap(ExecutionService, (exec) =>
+                          exec.applySpendOverride(dig.handle, { dontAsk: true }),
+                        ),
+                      );
+                    } else {
+                      return withCard(
+                        refused(`The person chose to stop (${q.title}). ${gate.refusalText}`),
+                        cardForSpendGate({
+                          sourceLabel: tool.source.label,
+                          actionName: action.name,
+                          title: q.title,
+                          reason: gate.refusalText,
+                        }),
+                      );
+                    }
+                  } else if (answer.kind === "unavailable") {
+                    // Surface approval ONLY to the cookie-authenticated browser SPA over SSE (never return the code to the model or card!).
+                    await runtime.runPromise(
+                      Effect.gen(function* () {
+                        const exec = yield* ExecutionService;
+                        const hub = yield* ProgressHub;
+                        const res = yield* exec.createOpaqueCode({
+                          kind: "spend_approval",
+                          payload: {
+                            digHandle: dig.handle,
+                            key: q.key,
+                            unit: q.unit,
+                            bind: q.bind,
+                            title: q.title,
+                            message: q.message,
+                            choices: q.choices,
+                            targetRaised: q.targetRaised ?? null,
+                            sourceLabel: tool.source.label,
+                            actionName: action.name,
+                          },
+                          ttlMs: askTimeoutMs(),
+                        });
+                        yield* hub.publish({
+                          type: "approval_requested",
+                          code: res.code,
+                          dig: dig.handle,
+                          tool: action.name,
+                        });
+                      }),
+                    );
+                    return withCard(
+                      refused(
+                        `${gate.refusalText} Report this refusal to the user and stop; do not work around it. The user can approve it in the Dig web app (Live Trail) or adjust [spend] settings.`,
+                      ),
+                      cardForSpendGate({
+                        sourceLabel: tool.source.label,
+                        actionName: action.name,
+                        title: q.title,
+                        reason: gate.refusalText,
+                      }),
+                    );
+                  } else {
+                    return withCard(
+                      refused(
+                        `${answer.kind === "declined" ? "Declined" : answer.kind === "cancelled" ? "Dismissed" : "Unanswered"}. ${gate.refusalText}`,
+                      ),
+                      cardForSpendGate({
+                        sourceLabel: tool.source.label,
+                        actionName: action.name,
+                        title: q.title,
+                        reason: gate.refusalText,
+                      }),
+                    );
+                  }
+                }
+              }
+            }
+
+            const tasksRequested =
+              Boolean(action.slow) &&
+              ((context.era === "modern" && declaresTasks(ctx.mcpReq.envelope)) ||
+                Boolean((ctx.mcpReq as { task?: unknown }).task));
+
+            const notifyProgress = progressNotifierOf(ctx);
+            const dispatched = await runtime.runPromise(
+              Effect.flatMap(ExecutionService, (exec) =>
+                exec.dispatchCall({
+                  plugin: tool.source,
+                  action,
                   dig,
-                  sourceLabel: tool.source.label,
-                  actionName: action.name,
                   args,
+                  fresh,
+                  waitMs: tasksRequested ? 0 : action.slow ? inlineWaitMs() : Infinity,
+                  onProgress: notifyProgress,
+                  signal: ctx.mcpReq.signal,
                 }),
               ),
             );
 
-            if (!gate.allow) {
-              const q = gate.question;
-              // Check if already approved once via browser `/approve/:code`
-              const preApproved = hooks.consumeApprovedBind?.(q.bind) ?? false;
-              if (!preApproved) {
-                const asker = askerOf(context.era, server, ctx);
-                const answer = await askForm(runtime, asker, q);
-
-                if (answer.kind === "pending") return answer.result;
-
-                if (answer.kind === "answered") {
-                  if (q.key === "ceiling" && answer.choice === "raise") {
-                    const target = answer.targetRaised ?? q.targetRaised ?? 0;
-                    await runtime.runPromise(
-                      Effect.flatMap(ExecutionService, (exec) =>
-                        exec.applySpendOverride(dig.handle, overridePatchForUnit(q.unit, target)),
-                      ),
-                    );
-                    // Re-verify spend gate after raising ceiling
-                    const recheck = await runtime.runPromise(
-                      Effect.flatMap(ExecutionService, (exec) =>
-                        exec.checkSpendGate({
-                          config: cfg,
-                          dig,
-                          sourceLabel: tool.source.label,
-                          actionName: action.name,
-                          args,
-                        }),
-                      ),
-                    );
-                    if (!recheck.allow) return refused(recheck.refusalText);
-                  } else if (q.key === "spend" && answer.choice === "send") {
-                    // Approved once; fall through to dispatch.
-                  } else if (q.key === "spend" && answer.choice === "send-dig") {
-                    await runtime.runPromise(
-                      Effect.flatMap(ExecutionService, (exec) =>
-                        exec.applySpendOverride(dig.handle, { dontAsk: true }),
-                      ),
-                    );
-                  } else {
-                    return refused(
-                      `The person chose to stop (${q.title}). ${gate.refusalText}`,
-                    );
-                  }
-                } else if (answer.kind === "unavailable") {
-                  // Surface approval ONLY to the cookie-authenticated browser SPA over SSE (never return the code to the model!).
-                  await runtime.runPromise(
-                    Effect.gen(function* () {
-                      const exec = yield* ExecutionService;
-                      const hub = yield* ProgressHub;
-                      const res = yield* exec.createOpaqueCode({
-                        kind: "spend_approval",
-                        payload: {
-                          digHandle: dig.handle,
-                          key: q.key,
-                          unit: q.unit,
-                          bind: q.bind,
-                          title: q.title,
-                          message: q.message,
-                          choices: q.choices,
-                          targetRaised: q.targetRaised ?? null,
-                          sourceLabel: tool.source.label,
-                          actionName: action.name,
-                        },
-                        ttlMs: askTimeoutMs(),
-                      });
-                      yield* hub.publish({
-                        type: "approval_requested",
-                        code: res.code,
-                        dig: dig.handle,
-                        tool: action.name,
-                      });
-                    }),
-                  );
-                  return refused(
-                    `${gate.refusalText} Report this refusal to the user and stop; do not work around it. The user can approve it in the Dig web app (Live Trail) or adjust [spend] settings.`,
-                  );
-                } else {
-                  return refused(
-                    `${answer.kind === "declined" ? "Declined" : answer.kind === "cancelled" ? "Dismissed" : "Unanswered"}. ${gate.refusalText}`,
-                  );
-                }
-              }
+            if (tasksRequested && dispatched.stillWorking) {
+              const progress = await runtime.runPromise(
+                Effect.flatMap(ProgressHub, (hub) => hub.progressOf(dispatched.job.id)),
+              );
+              return taskAnswer(dispatched.job, progress);
             }
+
+            if (dispatched.stillWorking) {
+              const progress = await runtime.runPromise(
+                Effect.flatMap(ProgressHub, (hub) => hub.progressOf(dispatched.job.id)),
+              );
+              return await attachJobCard(stillRunningResult(dispatched.job, progress), dispatched.job, {
+                working: true,
+                progressMessage: progress?.message,
+              });
+            }
+
+            if (dispatched.reused) {
+              return await attachJobCard(repeatedJobResult(dispatched.job), dispatched.job, { reused: true });
+            }
+
+            return await attachJobCard(jobResultContent(dispatched.job), dispatched.job);
+          } catch (error) {
+            if (ctx.mcpReq.signal.aborted) throw error;
+            return refused(errorText(error));
           }
-
-          const tasksRequested =
-            Boolean(action.slow) &&
-            ((context.era === "modern" && declaresTasks(ctx.mcpReq.envelope)) ||
-              Boolean((ctx.mcpReq as { task?: unknown }).task));
-
-          const notifyProgress = progressNotifierOf(ctx);
-          const dispatched = await runtime.runPromise(
-            Effect.flatMap(ExecutionService, (exec) =>
-              exec.dispatchCall({
-                plugin: tool.source,
-                action,
-                dig,
-                args,
-                fresh,
-                waitMs: tasksRequested ? 0 : action.slow ? inlineWaitMs() : Infinity,
-                onProgress: notifyProgress,
-                signal: ctx.mcpReq.signal,
-              }),
-            ),
-          );
-
-          if (tasksRequested && dispatched.stillWorking) {
-            const progress = await runtime.runPromise(
-              Effect.flatMap(ProgressHub, (hub) => hub.progressOf(dispatched.job.id)),
-            );
-            return taskAnswer(dispatched.job, progress);
-          }
-
-          if (dispatched.stillWorking) {
-            const progress = await runtime.runPromise(
-              Effect.flatMap(ProgressHub, (hub) => hub.progressOf(dispatched.job.id)),
-            );
-            return stillRunningResult(dispatched.job, progress);
-          }
-
-          if (dispatched.reused) return repeatedJobResult(dispatched.job);
-
-          return jobResultContent(dispatched.job);
-        } catch (error) {
-          if (ctx.mcpReq.signal.aborted) throw error;
-          return refused(errorText(error));
-        }
-      },
+        },
+      ),
     );
 
     if (tool.hasSlowAction) {
@@ -2179,7 +2414,7 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
     sourceTools.set(tool, registered);
   }
 
-  // ---- Retained library resource template (`dig://library/{file}` — ZERO `ui://` resources!) ----
+  // ---- Retained library resource template (`dig://library/{file}`) + optional SEP-1865 event card ----
 
   server.registerResource(
     "retained-research",
@@ -2198,6 +2433,30 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
       );
       return { contents: [{ uri: uri.href, mimeType: mimeOf(data.file), text: data.text }] };
     },
+  );
+
+  onlyWhen(
+    server.registerResource(
+      "dig-card",
+      CARD_URI,
+      {
+        title: "Dig event card",
+        description: "Compact inline status card for Dig events (SEP-1865 MCP App).",
+        mimeType: UI_RESOURCE_MIME,
+        _meta: CARD_RESOURCE_META,
+      },
+      async () => ({
+        contents: [
+          {
+            uri: CARD_URI,
+            mimeType: UI_RESOURCE_MIME,
+            text: renderCardHtml(),
+            _meta: CARD_RESOURCE_META,
+          },
+        ],
+      }),
+    ),
+    ui,
   );
 
   // ---- Methods (Skills extension + Prompts + `method` tool) ----

@@ -1671,7 +1671,9 @@ export function makeExecutionLayer(
         Effect.gen(function* () {
           const nowIso = new Date().toISOString();
           const rows = yield* sql<{ n: number }>`
-            SELECT COUNT(*) AS n FROM deferred_tokens WHERE used = 0 AND expires_at > ${nowIso}
+            SELECT COUNT(*) AS n
+            FROM deferred_tokens
+            WHERE used = 0 AND expires_at > ${nowIso} AND kind IN ('keys', 'spend_approval')
           `.pipe(Effect.orElseSucceed(() => [{ n: 0 }]));
           return Number(rows[0]?.n ?? 0) > 0;
         });

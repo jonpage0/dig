@@ -112,18 +112,59 @@ export async function runStdioBridge(): Promise<void> {
   const pending = new Map<JsonRpcId, AbortController>();
   const initializing = new Set<JsonRpcId>();
 
-  const answer = (id: JsonRpcId, message: string) => {
+  const answer = (
+    id: JsonRpcId,
+    message: string,
+    code = -32603,
+    data?: unknown,
+  ) => {
     if (!pending.delete(id)) return;
-    void stdio.send({ jsonrpc: "2.0", id, error: { code: -32603, message } });
+    void stdio.send({
+      jsonrpc: "2.0",
+      id,
+      error: { code, message, ...(data !== undefined ? { data } : {}) },
+    });
   };
 
-  const answerError = (request: JSONRPCRequest, error: unknown) =>
+  const parseJsonRpcError = (
+    error: unknown,
+  ): { readonly code: number; readonly message: string; readonly data?: unknown } | null => {
+    if (!(error instanceof SdkHttpError)) return null;
+    try {
+      const body = JSON.parse(String(error.data.text)) as {
+        jsonrpc?: unknown;
+        error?: { code?: unknown; message?: unknown; data?: unknown };
+      };
+      if (
+        body?.jsonrpc === "2.0" &&
+        typeof body.error?.code === "number" &&
+        typeof body.error?.message === "string"
+      ) {
+        return {
+          code: body.error.code,
+          message: body.error.message,
+          ...(body.error.data !== undefined ? { data: body.error.data } : {}),
+        };
+      }
+    } catch {
+      // Fall through to generic transport error formatting.
+    }
+    return null;
+  };
+
+  const answerError = (request: JSONRPCRequest, error: unknown) => {
+    const rpcErr = parseJsonRpcError(error);
+    if (rpcErr) {
+      answer(request.id, rpcErr.message, rpcErr.code, rpcErr.data);
+      return;
+    }
     answer(
       request.id,
       isBrokenConnection(error)
         ? stoppedMessage(request)
         : `Dig's service could not be reached: ${error instanceof Error ? error.message : String(error)}`,
     );
+  };
 
   let handshake: JSONRPCRequest | undefined;
   let revision: string | undefined;
