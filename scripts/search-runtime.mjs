@@ -48,7 +48,7 @@ export async function buildSearchRuntime({
 } = {}) {
   const runtimeDir = join(root, 'runtime');
   const platformKey = `${platform}/${arch}`;
-  // The package's runtime/, beside dist/: the bundled service (dist/dig.mjs) and src/search/engine.mjs load it from there.
+  // The package's runtime/, beside dist/: the bundled service (dist/dig.mjs) and src/core/search-onnx.ts load it from there.
   await rm(runtimeDir, { recursive: true, force: true });
   await mkdir(join(runtimeDir, 'dist'), { recursive: true });
   // Keep the binding's ../bin path valid while bundling all JS dependencies, without node_modules in the package.

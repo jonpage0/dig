@@ -4,7 +4,6 @@ Dig is a research service that runs on your computer. Your assistant (ChatGPT de
 
 <p align="center">
 <img src="docs/logos/exa.svg" width="32" height="32" alt="Exa" title="Exa">
-<img src="docs/logos/perplexity.svg" width="32" height="32" alt="Perplexity" title="Perplexity">
 <img src="docs/logos/github.svg" width="32" height="32" alt="GitHub" title="GitHub">
 <img src="docs/logos/ycombinator.svg" width="32" height="32" alt="Hacker News" title="Hacker News">
 <img src="docs/logos/youtube.svg" width="32" height="32" alt="YouTube" title="YouTube">
@@ -21,7 +20,7 @@ Dig is a research service that runs on your computer. Your assistant (ChatGPT de
 
 ## Requirements
 
-- **[Node.js](https://nodejs.org) 22 or newer** (`node --version` to check).
+- **[Node.js](https://nodejs.org) 22.13 or newer** (`node --version` to check; uses built-in `node:sqlite`).
 - An MCP host: ChatGPT desktop, Codex, Claude Code, Antigravity or another client.
 - Optional local programs for some sources: [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) for YouTube search and transcripts, `ffmpeg` and `ffprobe` for video clips, `git` and `uv` for the Papers bridge.
 
@@ -88,20 +87,19 @@ then install `dig` from `dig-local` in Codex's plugin browser.
 
 ## First run
 
-1. **Turn sources on.** Ask your assistant to set Dig up: it reads the `setup` method, shows the sources and turns on the ones you choose through the `settings` tool. Hacker News is on from the start. Hacker News, DeepWiki, Polymarket, the Wayback Machine, SEC EDGAR and Bluesky need no key.
-2. **Enter keys.** For a source that needs one, your assistant calls the `keys` tool. Your host asks you to open a page that Dig serves on your computer, with one field per key; what you type there goes straight into `keys.env` and never into the conversation. If the host cannot open pages, the assistant gives you the address to open in a browser. Never paste a key into the chat.
+1. **Turn sources on.** Run `dig setup` in a terminal for the interactive SSH-safe onboarding wizard (or pass `--preset starter|research|social|all`), open the 4-step `/setup` wizard in the localhost web app (`dig open` or ask your assistant to call `open_library({ view: "setup" })`), or simply ask your assistant to set Dig up in chat. Hacker News is on from the start. Hacker News, DeepWiki, Polymarket, the Wayback Machine, SEC EDGAR and Bluesky need no key.
+2. **Enter keys.** Enter keys in `dig setup`, in the web `/setup` wizard, or through the `keys` tool (which opens a one-time localhost page writing straight to `keys.env` mode `0600` and never into the chat). Never paste a key into the chat.
 3. **Ask a question.** For example: **“Use Dig and Hacker News to research how developers approach local-first software. Show the strongest findings, disagreements and remaining gaps, and save the supporting research.”**
 
 ## Sources
 
-**28 sources and 2 shared tools · 33 research methods · 90 actions · 42 tools the model sees, with every source on**
+**27 sources and 2 shared tools · 38 methods · 86 actions · 41 tools the model sees, with every source on**
 
-Each source and each shared tool is one tool, named after it (`hackernews`, `x`, `papers`, `google_ads`). A call names one of its actions, such as `x_post` or `papers_openalex_search`. With every source on, the model sees those 30 tools, 11 of Dig's own and `open_library`: a tool list of about 94,000 characters. A host that shows Dig's views also gets the views' own tools.
+Each source and each shared tool is one tool, named after it (`hackernews`, `x`, `papers`, `google_ads`). A call names one of its actions, such as `x_post` or `papers_openalex_search`. With every source on, the model sees those 29 source/tool entries and 12 core Dig tools (including `open_library` and `method`).
 
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Source | What you get |
 | :---: | --- | --- |
-| <img src="docs/logos/exa.svg" width="22" height="22" alt=""> | **Exa** | Web search and page text |
-| <img src="docs/logos/perplexity.svg" width="22" height="22" alt=""> | **Perplexity** | Cited web answers |
+| <img src="docs/logos/exa.svg" width="22" height="22" alt=""> | **Exa** | Web search, page text, dynamic highlights and opt-in deep research |
 |  | **Firecrawl** | JS-rendered page scraping to Markdown and single-domain URL mapping |
 |  | **Wayback&nbsp;Machine** | What a web page said on a given date, from the Internet Archive |
 | <img src="docs/logos/github.svg" width="22" height="22" alt=""> | **GitHub** | Repositories, their activity and source code |
@@ -144,23 +142,22 @@ Ask for a method by name (“use Dig's x-judge method”) or let the assistant c
 
 - **Receipts.** Every call records what the provider reported it cost, in the provider's own units: US dollars, Firecrawl, ScrapeCreators or Scrape.do credits, OpenAlex credits, X post and account reads. Units are never converted or added together. A cost the provider did not report is unknown, never zero.
 - **Running cost.** Every result says what the call cost and what its dig has cost so far.
-- **Spending ceiling.** `[spend] dig_ceiling_usd` in Dig's settings caps what one dig may record in US dollars. When a dig reaches it, Dig asks you whether to raise it for that dig or stop.
-- **Ask first.** `[spend] ask_above_usd` makes Dig ask you before a paid call whose action has typically cost at least that much in your library, or has never been priced there.
-- **No double charge.** A call identical to one that just finished returns the earlier result instead of paying again.
+- **Spending caps.** `[spend]` supports independent per-dig caps without converting between units: `dig_ceiling_usd` (US dollars), `ask_above_usd` (ask before a paid call at or above its typical cost or unpriced), `max_credits`, `max_x_post_reads`, `max_x_account_reads`, and `max_unknown_calls`. When a cap triggers, Dig asks whether to raise it for that dig or stop.
+- **No double charge.** `PaidHttp` never retries failed paid requests, and an atomic SQLite ledger deduplicates concurrent or recent (10-minute) identical calls unless `fresh: true` is explicitly passed.
 
 Each provider bills you directly, separately from your ChatGPT or Claude plan. Dig does not count your assistant's own model use.
 
 ## Slow calls
 
-A slow action (a Grok search, a video analysis, deep research) runs as a job in Dig's service, not in the connection. A host that supports MCP tasks follows it as a task; in any other host, if it is still running after 40 seconds the result is a job id, and the assistant asks the `job` tool for the result.
+A slow action (a Grok search, a video analysis, Exa deep research, Papers bridge calls, DataForSEO) runs as a durable job in Dig's service, not in the connection. A host that supports MCP tasks follows it as a task; in any other host, if it is still running after 40 seconds the result is a job id, and the assistant asks the `job` tool for the result.
 
-## Views
+## Localhost web app
 
-Dig's views show the library, the current dig's trail and a card for each saved report or answer. A host that renders MCP Apps (ChatGPT desktop) shows them in the conversation; a client that names itself as Codex or ChatGPT gets them without declaring the MCP Apps extension. In a host that renders none, such as Claude Code, ask the assistant to open Dig's library: it calls `open_library`, and the host asks you to open the library in your browser. In a terminal, `dig open` does the same; use it in Codex in a terminal, which is given the views but cannot show them. Either way the browser gets a one-time address that works once, within 5 minutes.
+Dig serves one universal React 19 web application on `127.0.0.1` (`dist/web/`) for every host, with live Server-Sent Events (`/api/events`): the research library, side-by-side Markdown report and raw-evidence reader, live dig trail, sources & 90-day cost history, 4-step `/setup` wizard, and settings. Ask your assistant to open Dig (`open_library`), or run `dig open` in a terminal, to receive a one-time `/open/<code>` address valid for 5 minutes.
 
 ## Where things are
 
-Settings, keys, the library, jobs and the service's own files live in `~/.local/share/dig` (`DIG_STATE_DIR` chooses another folder). `dig status` says whether the service is running and lists running jobs; `dig stop` stops it. Local library commands inspect saved research without starting the service or calling providers: `dig list`, `dig read`, `dig search` and `dig stats` (`list`, `read` and `stats` write nothing; `search` is read-only on the library and refreshes the local search index cache as needed). See [getting started](docs/getting-started.md), [permissions](docs/permissions.md) and [the architecture](docs/architecture.md).
+Plain-file research reports, answers, receipts, raw originals, `config.toml` and `keys.env` (`0600`) live in `~/.local/share/dig` (`DIG_STATE_DIR` chooses another folder), alongside `dig.sqlite` (operational ledger + rebuildable SQLite FTS5/ONNX search index). `dig status` says whether the service is running and lists running jobs; `dig stop` stops it; `dig setup` runs the interactive terminal wizard. Local library commands inspect saved research without starting the service or calling providers: `dig list`, `dig read`, `dig search` and `dig stats` (`--json` supported). See [getting started](docs/getting-started.md), [permissions](docs/permissions.md) and [the architecture](docs/architecture.md).
 
 ## Development
 

@@ -36,7 +36,7 @@ try {
   const response = await call('hackernews', { dig: started.dig, action: 'hackernews', args: { query: 'local-first', type: 'comment', sort: 'relevance', days: 365, limit: 3 } });
   // Content only: the first line names the status and the receipt, then come the links to the receipts and the original.
   const first = response.content[0].text.split('\n', 1)[0];
-  const receiptId = /^Hacker News · hackernews · success · receipt (c-\S+) · cost: no charge recorded · dig so far: /.exec(first)?.[1];
+  const receiptId = /^Hacker News · hackernews · success · receipt (c-\S+) · cost: (?:free|no charge recorded) · dig so far: /.exec(first)?.[1];
   if (!receiptId) throw new Error(`Retrieval did not succeed with a receipt: ${first}`);
   const [calls, rawLink] = response.content.filter(block => block.type === 'resource_link');
   if (!calls?.uri.endsWith(encodeURIComponent('/calls.jsonl')) || !rawLink?.uri.endsWith(encodeURIComponent(`/raw/${receiptId}.json`))) throw new Error('The result does not link its receipts and its retained original');

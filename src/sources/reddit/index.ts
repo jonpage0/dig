@@ -1,0 +1,834 @@
+/**
+ * Public Reddit source plugin backed by ScrapeCreators' public Reddit endpoints (`PaidHttp`).
+ *
+ * Endpoints:
+ * - GET /v1/reddit/search: all of Reddit; filter posts|comments; sort relevance|new|top|comment_count;
+ *   timeframe all|day|week|month|year (posts only); `after` token pagination.
+ * - GET /v1/reddit/subreddit/search: one subreddit; sort relevance|hot|top|new|comments;
+ *   timeframe adds `hour`; opaque cursor; returns `posts` and `comments` together.
+ * - GET /v1/reddit/post/comments: post + top-level comments with nested replies and continuation cursors.
+ */
+import { Effect, Schema } from "effect";
+import type { PaidHttp } from "../../core/http.ts";
+import {
+  defineAction,
+  defineSource,
+  failed,
+  outcome,
+  type ActionContext,
+  type ActionOutcome,
+  type OutcomeStatus,
+  type SourcePlugin,
+} from "../../core/plugin.ts";
+import {
+  asArray,
+  asNumber,
+  asRecord,
+  asString,
+  clampInt,
+  cleanText,
+  CreditTally,
+  expectArray,
+  failText,
+  fmtMetric,
+  isoDate,
+  MISSING_SCRAPECREATORS_KEY,
+  SCRAPECREATORS_BILLING,
+  SCRAPECREATORS_PROVIDER,
+  scrapecreatorsBilling,
+  scrapecreatorsHeaders,
+  scrapecreatorsRequest,
+  truncate,
+  validateEnum,
+} from "../shared/scrapecreators.ts";
+
+const FILTER_VALUES = ["posts", "comments"] as const;
+const SORT_VALUES = ["relevance", "hot", "top", "new", "comments"] as const;
+const TIMEFRAME_VALUES = ["all", "hour", "day", "week", "month", "year"] as const;
+const COMMENT_SORTS = new Set<string>(["relevance", "top", "new"]);
+const GLOBAL_SORT_MAP: Record<(typeof SORT_VALUES)[number], string | null> = {
+  relevance: "relevance",
+  new: "new",
+  top: "top",
+  comments: "comment_count",
+  hot: null,
+};
+
+const DEFAULT_LIMIT = 15;
+const MAX_LIMIT = 40;
+const MAX_SUBREDDITS = 5;
+const DEFAULT_COMMENT_THREADS = 5;
+const MAX_COMMENT_THREADS = 10;
+const COMMENTS_PER_THREAD = 3;
+const COMMENT_CUT = 200;
+const COMMENT_HIT_CUT = 300;
+const REDDIT_ORIGIN = "https://www.reddit.com";
+const POST_COMMENTS_LABEL = "ScrapeCreators Reddit post comments";
+
+function outcomeStatus(errors: readonly string[], shown: number): OutcomeStatus {
+  return errors.length ? "partial" : shown ? "success" : "empty";
+}
+
+interface Thread {
+  readonly id: string;
+  readonly title: string;
+  readonly subreddit: string | null;
+  readonly author: string | null;
+  readonly score: number | null;
+  readonly numComments: number | null;
+  readonly upvoteRatio: number | null;
+  readonly date: string | null;
+  readonly url: string;
+  readonly selftext: string | null;
+  readonly flair: string | null;
+  readonly nsfw: boolean;
+  readonly stickied: boolean;
+  comments: string[];
+  commentNote: string | null;
+}
+
+interface CommentHit {
+  readonly id: string | null;
+  readonly body: string;
+  readonly author: string | null;
+  readonly score: number | null;
+  readonly date: string | null;
+  readonly url: string | null;
+  readonly subreddit: string | null;
+  readonly postTitle: string | null;
+  readonly postUrl: string | null;
+}
+
+function redditUrl(permalink: string | null, url: string | null): string {
+  if (permalink) {
+    return permalink.startsWith("http")
+      ? permalink
+      : `${REDDIT_ORIGIN}${permalink.startsWith("/") ? "" : "/"}${permalink}`;
+  }
+  return url ?? "";
+}
+
+function stripKind(id: string | null): string | null {
+  return id ? id.replace(/^t[135]_/, "") : null;
+}
+
+function subredditName(value: unknown): string | null {
+  if (typeof value === "string") return value.replace(/^r\//, "") || null;
+  const record = asRecord(value);
+  return asString(record?.name) ?? asString(record?.display_name) ?? null;
+}
+
+function normalizePost(raw: Record<string, unknown>): Thread | null {
+  const id = stripKind(asString(raw.id) ?? asString(raw.post_id) ?? asString(raw.name));
+  const title = cleanText(raw.title);
+  if (!id || !title) return null;
+  return {
+    id,
+    title,
+    subreddit:
+      subredditName(raw.subreddit) ??
+      (asString(raw.subreddit_name_prefixed)?.replace(/^r\//, "") ?? null),
+    author: asString(raw.author),
+    score: asNumber(raw.score) ?? asNumber(raw.ups) ?? asNumber(raw.votes),
+    numComments: asNumber(raw.num_comments),
+    upvoteRatio: asNumber(raw.upvote_ratio),
+    date: isoDate(raw.created_at_iso) ?? isoDate(asNumber(raw.created_utc)) ?? isoDate(raw.created_at),
+    url: redditUrl(asString(raw.permalink), asString(raw.url)),
+    selftext: cleanText(raw.selftext),
+    flair: cleanText(raw.link_flair_text),
+    nsfw: raw.over_18 === true || raw.nsfw === true,
+    stickied: raw.stickied === true,
+    comments: [],
+    commentNote: null,
+  };
+}
+
+function normalizeCommentHit(raw: Record<string, unknown>): CommentHit | null {
+  const body = cleanText(raw.body);
+  if (!body) return null;
+  const post = asRecord(raw.post);
+  return {
+    id: stripKind(asString(raw.id) ?? asString(raw.name)),
+    body,
+    author: asString(raw.author),
+    score: asNumber(raw.score) ?? asNumber(raw.ups) ?? asNumber(raw.votes),
+    date: isoDate(raw.created_at_iso) ?? isoDate(asNumber(raw.created_utc)) ?? isoDate(raw.created_at),
+    url:
+      asString(raw.url) ??
+      (asString(raw.permalink) ? redditUrl(asString(raw.permalink), null) : null),
+    subreddit:
+      subredditName(raw.subreddit) ??
+      asString(raw.subreddit_name_prefixed)?.replace(/^r\//, "") ??
+      null,
+    postTitle: cleanText(post?.title) ?? cleanText(raw.link_title) ?? cleanText(raw.post_title),
+    postUrl:
+      asString(post?.url) ??
+      (asString(post?.permalink) ? redditUrl(asString(post?.permalink), null) : null) ??
+      asString(raw.link_url),
+  };
+}
+
+function partitionComments(comments: unknown[]): {
+  readonly unreadable: number;
+  readonly removed: number;
+  readonly quotable: Record<string, unknown>[];
+} {
+  const readable = comments
+    .map(asRecord)
+    .filter((record): record is Record<string, unknown> => record !== null && cleanText(record.body) !== null);
+  const isRemoved = (record: Record<string, unknown>) =>
+    /^\[(?:removed|deleted)\]$/.test(cleanText(record.body) ?? "");
+  const quotable = readable.filter(
+    (record) =>
+      !isRemoved(record) &&
+      record.stickied !== true &&
+      record.distinguished !== "moderator" &&
+      asString(record.author) !== "AutoModerator",
+  );
+  return {
+    unreadable: comments.length - readable.length,
+    removed: readable.filter(isRemoved).length,
+    quotable,
+  };
+}
+
+function commentLine(record: Record<string, unknown>, indent: string): string {
+  const body = truncate(cleanText(record.body), COMMENT_CUT);
+  const score = asNumber(record.score) ?? asNumber(record.ups);
+  const author = asString(record.author) ?? "[unavailable]";
+  return `${indent}u/${author} (${score !== null ? `${score} pts` : "score n/a"}): ${body}`;
+}
+
+function replyCursor(record: Record<string, unknown>): string | null {
+  const more = asRecord(asRecord(record.replies)?.more);
+  return more?.has_more === true ? asString(more.cursor) : null;
+}
+
+function formatThread(thread: Thread, index: number): string {
+  const lines: string[] = [];
+  lines.push(
+    `${index + 1}. **${thread.id}** ${thread.subreddit ? `r/${thread.subreddit}` : "(subreddit unknown)"} — ${thread.title}${thread.stickied ? " [stickied]" : ""}${thread.nsfw ? " [NSFW]" : ""}`,
+  );
+  lines.push(
+    `   Score: ${fmtMetric(thread.score)} | Comments: ${fmtMetric(thread.numComments)} | Author: ${thread.author ? `u/${thread.author}` : "not returned"} | Date: ${thread.date ?? "unknown"}` +
+      `${thread.upvoteRatio !== null ? ` | Upvote ratio: ${thread.upvoteRatio}` : ""}${thread.flair ? ` | Flair: ${thread.flair}` : ""}`,
+  );
+  if (thread.url) lines.push(`   URL: ${thread.url}`);
+  if (thread.selftext) lines.push(`   Preview: ${truncate(thread.selftext, 200)}`);
+  if (thread.comments.length) {
+    lines.push("   Top comments:");
+    lines.push(...thread.comments);
+  } else if (thread.commentNote) {
+    lines.push(`   Comments: ${thread.commentNote}`);
+  }
+  return lines.join("\n");
+}
+
+function formatCommentHit(hit: CommentHit, index: number): string {
+  const lines: string[] = [];
+  lines.push(
+    `${index + 1}. ${hit.author ? `u/${hit.author}` : "(author not returned)"}${hit.subreddit ? ` in r/${hit.subreddit}` : ""} — ${truncate(hit.body, COMMENT_HIT_CUT)}`,
+  );
+  lines.push(
+    `   Score: ${fmtMetric(hit.score)} | Date: ${hit.date ?? "unknown"}${hit.postTitle ? ` | Thread: ${truncate(hit.postTitle, 120)}` : ""}`,
+  );
+  if (hit.url) lines.push(`   URL: ${hit.url}`);
+  else if (hit.postUrl) lines.push(`   Thread URL: ${hit.postUrl}`);
+  return lines.join("\n");
+}
+
+function normalizeRedditPostUrl(value: string): { readonly url: string } | { readonly error: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(/^https?:\/\//i.test(value.trim()) ? value.trim() : `https://${value.trim()}`);
+  } catch {
+    return {
+      error: "postUrl must be a Reddit post URL such as https://www.reddit.com/r/<subreddit>/comments/<id>/<slug>/.",
+    };
+  }
+  if (!/(^|\.)(reddit\.com|redd\.it)$/i.test(parsed.hostname)) {
+    return { error: "postUrl must be a reddit.com (or redd.it share) URL." };
+  }
+  return { url: parsed.toString() };
+}
+
+function postComments(
+  postUrl: string,
+  cursor: string | undefined,
+  limit: number,
+  headers: Record<string, string>,
+  ctx: Pick<ActionContext, "signal" | "keep">,
+): Effect.Effect<ActionOutcome, never, PaidHttp> {
+  return Effect.gen(function* () {
+    const response = yield* scrapecreatorsRequest(
+      "/v1/reddit/post/comments",
+      { url: postUrl, cursor },
+      headers,
+      ctx,
+      POST_COMMENTS_LABEL,
+    );
+    if (!response.ok) {
+      return outcome(response.cancelled ? "cancelled" : "failed", failText(response));
+    }
+    const listed = expectArray(response.payload, "comments", POST_COMMENTS_LABEL);
+    if (!listed.ok) return failed(listed.error);
+
+    const credits = new CreditTally();
+    credits.addAttempts(response.charges);
+    const post = asRecord(response.payload.post);
+    const thread = post ? normalizePost(post) : null;
+    const { unreadable, removed, quotable } = partitionComments(listed.items);
+    const all = listed.items.length;
+    const shown = quotable.slice(0, limit);
+    const more = asRecord(response.payload.more);
+    const nextCursor = more?.has_more === true ? asString(more.cursor) : null;
+    const replyTokens = shown
+      .map((record) => {
+        const token = replyCursor(record);
+        return token
+          ? {
+              id: stripKind(asString(record.id) ?? asString(record.name)),
+              author: asString(record.author),
+              cursor: token,
+            }
+          : null;
+      })
+      .filter(
+        (entry): entry is { id: string | null; author: string | null; cursor: string } => entry !== null,
+      );
+
+    const header = [
+      `Reddit post comments via ScrapeCreators: ${postUrl}${cursor ? " (continuation page)" : ""}`,
+      thread
+        ? `Post: **${thread.id}**${thread.subreddit ? ` r/${thread.subreddit}` : ""} — ${thread.title} | Score: ${fmtMetric(thread.score)} | Comments: ${fmtMetric(thread.numComments)} | Author: ${thread.author ? `u/${thread.author}` : "not returned"} | Date: ${thread.date ?? "unknown"}`
+        : cursor
+          ? "Post: not repeated on continuation pages"
+          : "Post: provider returned no post record",
+      credits.describe(),
+      `Comments: ${shown.length} shown of ${quotable.length} quotable top-level comments (${all} returned on this page; stickied/moderator/AutoModerator excluded${removed ? `; ${removed} removed/deleted skipped` : ""}${unreadable ? `; ${unreadable} without a readable body skipped` : ""}); provider order, no local re-ranking; comment text cut at ${COMMENT_CUT} characters`,
+      more?.has_more === true
+        ? nextCursor
+          ? `More top-level comments: pass postUrl with cursor="${nextCursor}"`
+          : "More top-level comments: provider reports more but returned no cursor"
+        : more?.has_more === false
+          ? "More top-level comments: provider reports none"
+          : "More top-level comments: not reported by the provider",
+      replyTokens.length
+        ? `Collapsed replies: ${replyTokens.length} comment${replyTokens.length === 1 ? "" : "s"} shown carry a replies cursor (listed under each; pass one at a time as cursor with the same postUrl)`
+        : "Collapsed replies: none reported on the shown comments",
+    ];
+    if (thread?.selftext) header.push(`Post text: ${truncate(thread.selftext, 400)}`);
+
+    const body = shown.map((record, index) => {
+      const lines = [commentLine(record, `${index + 1}. `)];
+      const date = isoDate(record.created_at_iso) ?? isoDate(asNumber(record.created_utc));
+      const url =
+        asString(record.url) ??
+        (asString(record.permalink) ? redditUrl(asString(record.permalink), null) : null);
+      lines.push(`   Date: ${date ?? "unknown"}${url ? ` | URL: ${url}` : ""}`);
+      const replies = asArray(asRecord(record.replies)?.items);
+      const nestedQuotable = partitionComments(replies).quotable.slice(0, 2);
+      for (const reply of nestedQuotable) lines.push(commentLine(reply, "     ↳ "));
+      if (replies.length > nestedQuotable.length) {
+        lines.push(
+          `     (${replies.length} direct repl${replies.length === 1 ? "y" : "ies"} returned; ${nestedQuotable.length} shown)`,
+        );
+      }
+      const token = replyCursor(record);
+      if (token) lines.push(`     Replies cursor: "${token}"`);
+      return lines.join("\n");
+    });
+
+    if (shown.length === 0) {
+      body.push(
+        all === 0
+          ? "The provider returned an empty comment list for this page."
+          : unreadable === all
+            ? `None of the ${all} returned comment${all === 1 ? "" : "s"} carried a readable body; this page is unreadable, not moderated or empty.`
+            : "Every returned comment with a readable body was stickied, a moderator notice, AutoModerator, or removed/deleted.",
+      );
+    }
+
+    return outcome(outcomeStatus([], shown.length), [header.join("\n"), ...body].join("\n\n"), {
+      provider: "scrapecreators",
+      mode: "post_comments",
+      post_url: postUrl,
+      post_id: thread?.id ?? null,
+      returned: all,
+      unreadable,
+      quotable: quotable.length,
+      shown: shown.length,
+      cursor: nextCursor,
+      has_more: typeof more?.has_more === "boolean" ? more.has_more : null,
+      reply_cursors: replyTokens,
+      credits: credits.details(),
+    });
+  });
+}
+
+const RedditSchema = Schema.Struct({
+  query: Schema.optionalKey(Schema.String).annotate({
+    description: "Search query. Required unless postUrl is given.",
+  }),
+  postUrl: Schema.optionalKey(Schema.String).annotate({
+    description:
+      "Reddit post URL to read comments from directly (post-comments mode); combine with cursor to continue.",
+  }),
+  filter: Schema.optionalKey(Schema.Literals(FILTER_VALUES)).annotate({
+    description:
+      "Search posts (default) or comment text. Inside subreddits one request returns both and both are shown, this one first.",
+  }),
+  sort: Schema.optionalKey(Schema.Literals(SORT_VALUES)).annotate({
+    description:
+      "Sort order. 'hot' works only inside subreddits; comment searches accept relevance, top, new.",
+  }),
+  timeframe: Schema.optionalKey(Schema.Literals(TIMEFRAME_VALUES)).annotate({
+    description: "Post-search time window. 'hour' works only inside subreddits.",
+  }),
+  subreddits: Schema.optionalKey(Schema.Array(Schema.String)).annotate({
+    description: "Optional subreddits to search (max 5, names without r/), one request each.",
+  }),
+  cursor: Schema.optionalKey(Schema.String).annotate({
+    description:
+      "Continuation token from a previous response: `after` for all-Reddit search, the cursor for a single-subreddit search, or a comments/replies cursor with postUrl.",
+  }),
+  limit: Schema.optionalKey(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_LIMIT })),
+  ).annotate({
+    description:
+      "Max results to display (default: 15, max: 40); inside subreddits, for posts and for comments each.",
+  }),
+  includeComments: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "Post searches only. Fetch the first top-level comments for the leading threads (default: true; 1 credit per thread).",
+  }),
+  commentThreads: Schema.optionalKey(
+    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: MAX_COMMENT_THREADS })),
+  ).annotate({
+    description: "How many threads to fetch comments for (default: 5, max: 10).",
+  }),
+  allowNsfw: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "Keep posts Reddit marks NSFW (default: false; exclusions are counted in the header).",
+  }),
+});
+
+export const redditAction = defineAction({
+  name: "reddit",
+  description:
+    "Public Reddit via ScrapeCreators. Search mode (query): /v1/reddit/search across Reddit or /v1/reddit/subreddit/search inside named subreddits, posts or comment text, with Reddit's own sort/timeframe and pagination tokens; inside subreddits one request returns posts and comments together, and both are shown. " +
+    "Post-comments mode (postUrl): one page of a thread's comments from /v1/reddit/post/comments with the provider's continuation cursors for more top-level comments and collapsed replies. " +
+    "Requires SCRAPECREATORS_API_KEY; 1 credit per request (search page, comment page, or enriched thread). Results keep Reddit's order. For TikHub-only Reddit surfaces use tikhub_reddit.",
+  schema: RedditSchema,
+  billing: scrapecreatorsBilling,
+  execute: (args, ctx) =>
+    Effect.gen(function* () {
+      const headers = scrapecreatorsHeaders();
+      if (!headers) return failed(`Reddit lookup failed: ${MISSING_SCRAPECREATORS_KEY}`);
+      const limit = clampInt(args.limit, DEFAULT_LIMIT, 1, MAX_LIMIT);
+      const cursor = args.cursor?.trim() || undefined;
+
+      const postUrlInput = args.postUrl?.trim();
+      if (postUrlInput) {
+        for (const [name, value] of Object.entries({
+          query: args.query,
+          filter: args.filter,
+          sort: args.sort,
+          timeframe: args.timeframe,
+          subreddits: args.subreddits,
+          includeComments: args.includeComments,
+          commentThreads: args.commentThreads,
+          allowNsfw: args.allowNsfw,
+        })) {
+          if (value !== undefined) {
+            return failed(
+              `${name} applies to search mode; postUrl mode takes only postUrl, cursor, and limit.`,
+            );
+          }
+        }
+        const normalized = normalizeRedditPostUrl(postUrlInput);
+        if ("error" in normalized) return failed(normalized.error);
+        return yield* postComments(normalized.url, cursor, limit, headers, ctx);
+      }
+
+      const query = cleanText(args.query);
+      if (!query) return failed("query is required (or pass postUrl for post-comments mode).");
+      const invalid =
+        validateEnum("filter", args.filter, FILTER_VALUES) ??
+        validateEnum("sort", args.sort, SORT_VALUES) ??
+        validateEnum("timeframe", args.timeframe, TIMEFRAME_VALUES);
+      if (invalid) return failed(invalid);
+
+      const filter = (args.filter ?? "posts") as (typeof FILTER_VALUES)[number];
+      const sort = (args.sort ?? "relevance") as (typeof SORT_VALUES)[number];
+      const timeframe = args.timeframe;
+      const subreddits = [
+        ...new Set(
+          asArray(args.subreddits)
+            .filter((name): name is string => typeof name === "string")
+            .map((name) => name.trim().replace(/^r\//i, ""))
+            .filter(Boolean),
+        ),
+      ];
+      if (subreddits.length > MAX_SUBREDDITS) {
+        return failed(`at most ${MAX_SUBREDDITS} subreddits per call.`);
+      }
+      const scoped = subreddits.length > 0;
+
+      if (filter === "comments" && !COMMENT_SORTS.has(sort)) {
+        return failed(`comment searches accept sort relevance, top, or new (got '${sort}').`);
+      }
+      if (!scoped) {
+        if (sort === "hot") {
+          return failed(
+            "sort 'hot' is only available inside subreddits; pass subreddits or choose relevance, new, top, or comments.",
+          );
+        }
+        if (timeframe === "hour") {
+          return failed(
+            "timeframe 'hour' is only available inside subreddits; all-Reddit search accepts all, day, week, month, year.",
+          );
+        }
+        if (filter === "comments" && timeframe !== undefined) {
+          return failed("timeframe applies to post searches only when searching all of Reddit.");
+        }
+      }
+      if (cursor && subreddits.length > 1) {
+        return failed("cursor pagination works with all-Reddit search or exactly one subreddit.");
+      }
+
+      const includeComments = args.includeComments ?? true;
+      const commentThreads = clampInt(
+        args.commentThreads,
+        DEFAULT_COMMENT_THREADS,
+        0,
+        MAX_COMMENT_THREADS,
+      );
+      const allowNsfw = args.allowNsfw === true;
+
+      const credits = new CreditTally();
+      const requestErrors: string[] = [];
+      const nextTokens: string[] = [];
+      const rawPosts: Record<string, unknown>[] = [];
+      const rawComments: Record<string, unknown>[] = [];
+      const bucketKey = filter === "comments" ? "comments" : "posts";
+      const otherKey = filter === "comments" ? "posts" : "comments";
+      const perSubreddit: Record<"posts" | "comments", Record<string, unknown>[][]> = {
+        posts: [],
+        comments: [],
+      };
+      const otherMissing: string[] = [];
+
+      if (scoped) {
+        for (const subreddit of subreddits) {
+          if (ctx.signal.aborted) {
+            return outcome(
+              "cancelled",
+              `ERROR: Cancelled: Reddit subreddit search stopped before r/${subreddit}.`,
+            );
+          }
+          const label = `ScrapeCreators Reddit r/${subreddit} search`;
+          const response = yield* scrapecreatorsRequest(
+            "/v1/reddit/subreddit/search",
+            { subreddit, query, sort, timeframe, cursor },
+            headers,
+            ctx,
+            label,
+          );
+          credits.addAttempts(response.charges);
+          if (!response.ok) {
+            if (response.cancelled) return outcome("cancelled", failText(response));
+            requestErrors.push(response.error);
+            continue;
+          }
+          const listed = expectArray(response.payload, bucketKey, label);
+          if (!listed.ok) {
+            requestErrors.push(listed.error);
+            continue;
+          }
+          const next = asString(response.payload.cursor);
+          if (next) nextTokens.push(`r/${subreddit}: cursor="${next}"`);
+          const records = (items: unknown[]) =>
+            items.map(asRecord).filter((record): record is Record<string, unknown> => record !== null);
+          perSubreddit[bucketKey].push(records(listed.items));
+          const other = response.payload[otherKey];
+          if (Array.isArray(other)) perSubreddit[otherKey].push(records(other));
+          else otherMissing.push(`r/${subreddit}`);
+        }
+        if (requestErrors.length === subreddits.length) {
+          return failed(`Reddit search failed: ${requestErrors.join("; ")}`);
+        }
+        for (const [lists, into] of [
+          [perSubreddit.posts, rawPosts],
+          [perSubreddit.comments, rawComments],
+        ] as const) {
+          for (let index = 0; lists.some((records) => index < records.length); index += 1) {
+            for (const records of lists) if (index < records.length) into.push(records[index]);
+          }
+        }
+      } else {
+        const label = "ScrapeCreators Reddit search";
+        const response = yield* scrapecreatorsRequest(
+          "/v1/reddit/search",
+          {
+            query,
+            filter,
+            sort: GLOBAL_SORT_MAP[sort] ?? undefined,
+            timeframe,
+            after: cursor,
+          },
+          headers,
+          ctx,
+          label,
+        );
+        if (!response.ok) {
+          return response.cancelled
+            ? outcome("cancelled", failText(response))
+            : failed(`Reddit search failed: ${response.error}`);
+        }
+        credits.addAttempts(response.charges);
+        const key =
+          filter === "comments" &&
+          !Array.isArray(response.payload.comments) &&
+          Array.isArray(response.payload.posts)
+            ? "posts"
+            : bucketKey;
+        const listed = expectArray(response.payload, key, label);
+        if (!listed.ok) return failed(`Reddit search failed: ${listed.error}`);
+        const after = asString(response.payload.after);
+        if (after) nextTokens.push(`after="${after}"`);
+        for (const entry of listed.items) {
+          const record = asRecord(entry);
+          if (record) (filter === "comments" ? rawComments : rawPosts).push(record);
+        }
+      }
+
+      const scopeLine = scoped
+        ? `Scope: ${subreddits.map((s) => `r/${s}`).join(", ")} (one request each; each response carries posts and comments together, so both lists below come from the same requests)`
+        : "Scope: all of Reddit";
+      const filterLine = `Filters: filter=${filter}${scoped ? " (listed first; no filter is sent inside subreddits)" : ""} | sort=${sort}${!scoped && sort === "comments" ? " (sent as comment_count)" : ""} | timeframe=${timeframe ?? "all (provider default)"}${cursor ? ` | cursor=${cursor}` : ""}`;
+      const pagingLine = nextTokens.length
+        ? `Next page: pass cursor with ${nextTokens.join("; ")}`
+        : "Next page: no pagination token returned";
+      const orderLine = `Order: as returned by Reddit for sort=${sort}; no local re-ranking${scoped && subreddits.length > 1 ? " (subreddit results interleaved one at a time in the order requested, each subreddit in its own order)" : ""}.`;
+      const answered = subreddits.length - requestErrors.length;
+      const missingNote = !otherMissing.length
+        ? ""
+        : otherMissing.length === answered
+          ? ` (no response carried a ${otherKey} list)`
+          : ` (${otherMissing.join(", ")} carried no ${otherKey} list)`;
+
+      const seenHits = new Set<string>();
+      const hits: CommentHit[] = [];
+      for (const raw of rawComments) {
+        const hit = normalizeCommentHit(raw);
+        if (!hit) continue;
+        const key = hit.id ?? hit.url ?? `${hit.author}:${hit.body}`;
+        if (seenHits.has(key)) continue;
+        seenHits.add(key);
+        hits.push(hit);
+      }
+      const shownHits = hits.slice(0, limit);
+      const hitsLine = `${filter === "comments" ? "Results" : "Comments in the same responses"}: ${shownHits.length} comments shown of ${hits.length} returned${rawComments.length > hits.length ? ` (${rawComments.length - hits.length} returned entries had no readable body or were duplicates)` : ""}; comment text cut at ${COMMENT_HIT_CUT} characters${filter === "comments" ? "" : missingNote}`;
+      const hitsBody = shownHits.length
+        ? shownHits.map(formatCommentHit)
+        : [
+            filter === "posts" && otherMissing.length === answered
+              ? "The provider's responses carried no comment list."
+              : "The provider returned an empty comment list for this query and filter set.",
+          ];
+
+      if (filter === "comments" && !scoped) {
+        const header = [
+          `Reddit comment search via ScrapeCreators: "${query}"`,
+          scopeLine,
+          filterLine,
+          orderLine,
+          hitsLine,
+          pagingLine,
+          credits.describe(),
+        ];
+        if (args.includeComments !== undefined || args.commentThreads !== undefined) {
+          header.push(
+            "includeComments/commentThreads apply to post searches; comment results are already comments.",
+          );
+        }
+        return outcome(outcomeStatus([], shownHits.length), [header.join("\n"), ...hitsBody].join("\n\n"), {
+          provider: "scrapecreators",
+          mode: "search",
+          filter,
+          query,
+          subreddits,
+          returned: hits.length,
+          shown: shownHits.length,
+          next_tokens: nextTokens,
+          credits: credits.details(),
+          errors: requestErrors,
+        });
+      }
+
+      const seen = new Set<string>();
+      const threads: Thread[] = [];
+      let nsfwExcluded = 0;
+      let unreadable = 0;
+      for (const raw of rawPosts) {
+        const thread = normalizePost(raw);
+        if (!thread) {
+          unreadable += 1;
+          continue;
+        }
+        if (seen.has(thread.id)) continue;
+        seen.add(thread.id);
+        if (thread.nsfw && !allowNsfw) {
+          nsfwExcluded += 1;
+          continue;
+        }
+        threads.push(thread);
+      }
+      const shown = threads.slice(0, limit);
+
+      let commentsFetched = 0;
+      let commentsRequested = 0;
+      const commentFailures: string[] = [];
+      if (filter === "posts" && includeComments && commentThreads > 0) {
+        for (const thread of shown.slice(0, commentThreads)) {
+          if (ctx.signal.aborted) {
+            return outcome(
+              "cancelled",
+              `ERROR: Cancelled: Reddit comment enrichment stopped after ${commentsFetched} of ${commentsRequested} threads; the search itself completed.`,
+            );
+          }
+          if (!thread.url) {
+            thread.commentNote = "no URL to fetch comments for";
+            continue;
+          }
+          commentsRequested += 1;
+          const response = yield* scrapecreatorsRequest(
+            "/v1/reddit/post/comments",
+            { url: thread.url },
+            headers,
+            ctx,
+            POST_COMMENTS_LABEL,
+          );
+          if (!response.ok) {
+            if (response.cancelled) {
+              return outcome(
+                "cancelled",
+                `ERROR: Cancelled: ${response.error} (${commentsFetched} threads enriched before cancellation)`,
+              );
+            }
+            credits.addAttempts(response.charges);
+            thread.commentNote = `fetch failed: ${response.error}`;
+            commentFailures.push(`${thread.url}: ${response.error}`);
+            continue;
+          }
+          credits.addAttempts(response.charges);
+          const listed = expectArray(response.payload, "comments", POST_COMMENTS_LABEL);
+          if (!listed.ok) {
+            thread.commentNote = `unreadable: ${listed.error}`;
+            commentFailures.push(`${thread.url}: ${listed.error}`);
+            continue;
+          }
+          commentsFetched += 1;
+          const { unreadable: uCount, removed, quotable } = partitionComments(listed.items);
+          const total = listed.items.length;
+          thread.comments = quotable
+            .slice(0, COMMENTS_PER_THREAD)
+            .map((record) => commentLine(record, "     "));
+          const more = asRecord(response.payload.more);
+          const moreCursor = more?.has_more === true ? asString(more.cursor) : null;
+          if (thread.comments.length === 0) {
+            thread.commentNote =
+              total === 0
+                ? "provider returned an empty comment list"
+                : uCount === total
+                  ? `${total} returned, none with a readable body (unreadable page, not moderation)`
+                  : `${total} returned, none quotable after excluding stickied/moderator/AutoModerator/removed/deleted${removed ? ` (${removed} removed/deleted)` : ""}${uCount ? ` (${uCount} without a readable body)` : ""}`;
+          } else if (moreCursor || total > thread.comments.length) {
+            thread.comments.push(
+              `     (first ${thread.comments.length} of ${total} top-level comments on this page${removed ? `; ${removed} removed/deleted skipped` : ""}${moreCursor ? `; continue with postUrl="${thread.url}" cursor="${moreCursor}"` : `; more via postUrl="${thread.url}"`})`,
+            );
+          }
+        }
+      }
+
+      const postsLine = `${filter === "posts" ? "Results" : "Posts in the same responses"}: ${shown.length} threads shown of ${threads.length} returned${nsfwExcluded ? ` (${nsfwExcluded} NSFW excluded; pass allowNsfw=true to include)` : ""}${unreadable ? ` (${unreadable} returned entries lacked an id or title and were skipped)` : ""}${filter === "posts" ? "" : missingNote}`;
+      const header = [
+        `Reddit ${filter === "posts" ? "post" : "comment"} search via ScrapeCreators: "${query}"`,
+        scopeLine,
+        filterLine,
+        orderLine,
+        ...(filter === "posts" ? [postsLine, ...(scoped ? [hitsLine] : [])] : [hitsLine, postsLine]),
+        pagingLine,
+        credits.describe(),
+        ...(filter === "comments"
+          ? []
+          : [
+              includeComments
+                ? `Comments: fetched for ${commentsFetched} of ${commentsRequested} requested threads (first ${COMMENTS_PER_THREAD} top-level comments as returned, stickied/moderator/AutoModerator and removed/deleted excluded, comment text cut at ${COMMENT_CUT} characters)${commentFailures.length ? `; ${commentFailures.length} failed` : ""}`
+                : "Comments: not requested",
+            ]),
+      ];
+      if (requestErrors.length) header.push(`Partial: ${requestErrors.join("; ")}`);
+      if (commentFailures.length) header.push(`Comment failures: ${commentFailures.join("; ")}`);
+      if (filter === "comments" && (args.includeComments !== undefined || args.commentThreads !== undefined)) {
+        header.push(
+          "includeComments/commentThreads apply to post searches; comment results are already comments.",
+        );
+      }
+      const postsBody = shown.length
+        ? shown.map(formatThread)
+        : [
+            filter === "comments" && otherMissing.length === answered
+              ? "The provider's responses carried no post list."
+              : `The provider returned an empty post list for this query and filter set${nsfwExcluded ? " after NSFW exclusion" : ""}.`,
+          ];
+      const body = !scoped
+        ? postsBody
+        : filter === "posts"
+          ? ["### Posts", ...postsBody, "### Comments", ...hitsBody]
+          : ["### Comments", ...hitsBody, "### Posts", ...postsBody];
+
+      return outcome(
+        outcomeStatus([...requestErrors, ...commentFailures], shown.length + (scoped ? shownHits.length : 0)),
+        [header.join("\n"), ...body].join("\n\n"),
+        {
+          provider: "scrapecreators",
+          mode: "search",
+          filter,
+          query,
+          subreddits,
+          returned: filter === "posts" ? threads.length : hits.length,
+          shown: filter === "posts" ? shown.length : shownHits.length,
+          nsfw_excluded: nsfwExcluded,
+          unreadable,
+          next_tokens: nextTokens,
+          credits: credits.details(),
+          comments: {
+            requested: commentsRequested,
+            fetched: commentsFetched,
+            failed: commentFailures.length,
+          },
+          errors: requestErrors,
+          thread_ids: shown.map((thread) => thread.id),
+        },
+      );
+    }),
+});
+
+export const redditSource: SourcePlugin = defineSource({
+  id: "reddit",
+  group: "social",
+  label: "Reddit",
+  description: "Public posts and comments via ScrapeCreators",
+  about: "Public Reddit posts and comments, searched across Reddit or inside the subreddits you name.",
+  providers: [SCRAPECREATORS_PROVIDER],
+  billing: SCRAPECREATORS_BILLING,
+  logo: "reddit",
+  env: ["SCRAPECREATORS_API_KEY"],
+  keys: ["SCRAPECREATORS_API_KEY"],
+  credential: "SCRAPECREATORS_API_KEY",
+  actions: [redditAction],
+});
+
+export default redditSource;

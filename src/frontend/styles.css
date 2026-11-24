@@ -1,0 +1,585 @@
+@import "tailwindcss";
+@source "./";
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  color-scheme: light dark;
+  --background: #f8f8f7;
+  --foreground: #14171a;
+  --card: #ffffff;
+  --card-foreground: #14171a;
+  --primary: #1d4a80;
+  --primary-foreground: #ffffff;
+  --secondary: #efeff0;
+  --secondary-foreground: #1c2024;
+  --muted: #eceee9;
+  --muted-foreground: #586069;
+  --accent: #e7eef7;
+  --accent-foreground: #163963;
+  --destructive: #c43737;
+  --destructive-foreground: #ffffff;
+  --success: #1b7a46;
+  --warning: #a36200;
+  --border: #dfe2e6;
+  --input: #d2d7dd;
+  --ring: #2563a8;
+  --radius: 10px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #101214;
+    --foreground: #eceff4;
+    --card: #16191d;
+    --card-foreground: #eceff4;
+    --primary: #63a4eb;
+    --primary-foreground: #0b1623;
+    --secondary: #1f242b;
+    --secondary-foreground: #e5e9f0;
+    --muted: #1e232a;
+    --muted-foreground: #98a2b0;
+    --accent: #19283b;
+    --accent-foreground: #b8d7fa;
+    --destructive: #e05c5c;
+    --destructive-foreground: #140707;
+    --success: #4cc280;
+    --warning: #e0a038;
+    --border: #282f38;
+    --input: #343d49;
+    --ring: #6aa9ee;
+  }
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  code, pre, kbd {
+    font-family: var(--font-mono);
+  }
+  [hidden] {
+    display: none !important;
+  }
+  button, a, input, select, summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+  a {
+    color: inherit;
+    text-underline-offset: 0.18em;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  button {
+    cursor: pointer;
+  }
+}
+
+/* Keep logo sprite out of layout without display:none so SVG gradients still paint. */
+.logo-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+@layer components {
+  .dig-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 34px;
+    border: 1px solid transparent;
+    border-radius: calc(var(--radius) - 3px);
+    padding: 6px 12px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--foreground);
+    background: var(--secondary);
+    text-align: center;
+    transition: background-color 120ms, border-color 120ms, color 120ms;
+    white-space: nowrap;
+  }
+  .dig-button:hover {
+    background: var(--muted);
+  }
+  .dig-button:disabled,
+  .dig-button[data-disabled] {
+    opacity: 0.48;
+    cursor: not-allowed;
+  }
+  .dig-button-default {
+    background: var(--foreground);
+    color: var(--background);
+  }
+  .dig-button-default:hover {
+    background: color-mix(in srgb, var(--foreground) 85%, var(--background));
+  }
+  .dig-button-outline {
+    border-color: var(--border);
+    background: var(--card);
+  }
+  .dig-button-outline:hover {
+    background: var(--secondary);
+  }
+  .dig-button-ghost {
+    background: transparent;
+  }
+  .dig-button-ghost:hover {
+    background: var(--secondary);
+  }
+  .dig-button-size-sm {
+    min-height: 30px;
+    padding: 4px 9px;
+    font-size: 12px;
+  }
+
+  .dig-card-description {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--muted-foreground);
+  }
+
+  .dig-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--foreground);
+    background: var(--muted);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .dig-badge[data-tone="success"] {
+    background: color-mix(in srgb, var(--success) 16%, transparent);
+    color: var(--success);
+  }
+  .dig-badge[data-tone="partial"] {
+    background: repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--warning) 14%, transparent) 0 2px,
+      transparent 2px 5px
+    ), color-mix(in srgb, var(--warning) 10%, transparent);
+    color: var(--warning);
+  }
+  .dig-badge[data-tone="warning"] {
+    background: color-mix(in srgb, var(--destructive) 15%, transparent);
+    color: var(--destructive);
+  }
+  .dig-badge[data-tone="muted"] {
+    background: var(--secondary);
+    color: var(--muted-foreground);
+  }
+
+  .dig-disclosure {
+    border-top: 1px solid var(--border);
+  }
+  .dig-disclosure-trigger {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 0;
+    border: 0;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    color: var(--foreground);
+    background: transparent;
+  }
+  .dig-chevron {
+    transition: transform 140ms;
+    color: var(--muted-foreground);
+  }
+  .dig-disclosure-trigger[data-panel-open] .dig-chevron {
+    transform: rotate(180deg);
+  }
+  .dig-disclosure-panel {
+    padding: 0 0 12px;
+  }
+
+  .dig-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgb(0 0 0 / 0.45);
+    backdrop-filter: blur(2px);
+  }
+  .dig-dialog {
+    position: fixed;
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    width: min(820px, calc(100vw - 24px));
+    max-height: calc(100dvh - 32px);
+    display: flex;
+    flex-direction: column;
+    background: var(--card);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 2px);
+    z-index: 101;
+    box-shadow: 0 24px 64px rgb(0 0 0 / 0.24);
+    overflow: hidden;
+  }
+  .dig-dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dig-dialog-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .dig-dialog-body {
+    overflow: auto;
+    padding: 20px;
+    min-height: 0;
+  }
+  .dig-dialog-footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .dig-tabs-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .dig-tabs-trigger {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 11px;
+    border-radius: 7px;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+  }
+  .dig-tabs-trigger[data-active] {
+    background: var(--muted);
+    color: var(--foreground);
+    font-weight: 500;
+  }
+  .dig-tabs-panel {
+    min-width: 0;
+  }
+
+  /* Base UI Switch, Select, and Input */
+  .dig-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 38px;
+    height: 22px;
+    padding: 2px;
+    border-radius: 999px;
+    border: 1px solid var(--input);
+    background: var(--muted);
+    transition: background-color 140ms, border-color 140ms;
+    flex-shrink: 0;
+  }
+  .dig-switch[data-checked] {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+  .dig-switch:disabled,
+  .dig-switch[data-disabled] {
+    opacity: 0.48;
+    cursor: not-allowed;
+  }
+  .dig-switch-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+    transition: transform 140ms;
+    transform: translateX(0);
+  }
+  .dig-switch[data-checked] .dig-switch-thumb {
+    transform: translateX(16px);
+  }
+
+  .dig-input {
+    width: 100%;
+    min-height: 34px;
+    padding: 6px 10px;
+    border: 1px solid var(--input);
+    border-radius: calc(var(--radius) - 3px);
+    background: var(--card);
+    color: var(--foreground);
+    font: inherit;
+    font-size: 13px;
+    transition: border-color 120ms, box-shadow 120ms;
+  }
+  .dig-input:focus {
+    border-color: var(--ring);
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent);
+  }
+  .dig-input[aria-invalid="true"] {
+    border-color: var(--destructive);
+  }
+  .dig-input:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .dig-select-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 150px;
+    min-height: 34px;
+    padding: 6px 10px;
+    border: 1px solid var(--input);
+    border-radius: calc(var(--radius) - 3px);
+    background: var(--card);
+    color: var(--foreground);
+    font: inherit;
+    font-size: 13px;
+  }
+  .dig-select-positioner {
+    z-index: 120;
+  }
+  .dig-select-popup {
+    min-width: var(--anchor-width, 160px);
+    max-height: 280px;
+    overflow: auto;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--card);
+    color: var(--foreground);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+  }
+  .dig-select-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .dig-select-item[data-highlighted] {
+    background: var(--secondary);
+  }
+
+  /* Pure Markdown prose typography */
+  .dig-prose {
+    color: var(--foreground);
+    font-size: 14px;
+    line-height: 1.68;
+    word-break: break-word;
+  }
+  .dig-prose > :first-child {
+    margin-top: 0;
+  }
+  .dig-prose > :last-child {
+    margin-bottom: 0;
+  }
+  .dig-prose h1,
+  .dig-prose h2,
+  .dig-prose h3,
+  .dig-prose h4,
+  .dig-prose h5,
+  .dig-prose h6 {
+    margin: 1.45em 0 0.55em;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    scroll-margin-top: 72px;
+  }
+  .dig-prose h3 { font-size: 1.18rem; }
+  .dig-prose h4 { font-size: 1.05rem; }
+  .dig-prose h5 { font-size: 0.96rem; }
+  .dig-prose h6 { font-size: 0.9rem; color: var(--muted-foreground); }
+  .dig-prose p {
+    margin: 0.75em 0;
+  }
+  .dig-prose a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+  }
+  .dig-prose a:hover {
+    text-decoration-thickness: 2px;
+  }
+  .dig-prose ul,
+  .dig-prose ol {
+    margin: 0.75em 0;
+    padding-left: 1.5rem;
+  }
+  .dig-prose ul {
+    list-style: disc;
+  }
+  .dig-prose ol {
+    list-style: decimal;
+  }
+  .dig-prose li {
+    margin: 0.3em 0;
+  }
+  .dig-prose li.dig-task-item {
+    list-style: none;
+    margin-left: -1.1rem;
+  }
+  .dig-prose blockquote {
+    margin: 1em 0;
+    padding: 0.35em 0 0.35em 1em;
+    border-left: 3px solid var(--border);
+    color: var(--muted-foreground);
+  }
+  .dig-prose code {
+    font-size: 0.87em;
+    padding: 0.14em 0.38em;
+    border-radius: 4px;
+    background: var(--secondary);
+  }
+  .dig-prose pre {
+    margin: 1em 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--secondary);
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+  }
+  .dig-prose pre code {
+    padding: 0;
+    background: transparent;
+    font-size: inherit;
+  }
+  .dig-prose hr {
+    margin: 1.5em 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+  .dig-prose .dig-table-scroll {
+    overflow-x: auto;
+    margin: 1em 0;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+  }
+  .dig-prose table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .dig-prose th,
+  .dig-prose td {
+    padding: 8px 11px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+  .dig-prose th {
+    font-weight: 600;
+    background: var(--secondary);
+    white-space: nowrap;
+  }
+  .dig-prose tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /* Subtle live indicator */
+  .dig-live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--muted-foreground);
+    flex-shrink: 0;
+  }
+  .dig-live-dot[data-state="open"] {
+    background: var(--success);
+  }
+  .dig-live-dot[data-state="running"] {
+    background: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
+    animation: dig-pulse 1.8s ease-in-out infinite;
+  }
+  .dig-live-dot[data-state="reconnecting"],
+  .dig-live-dot[data-state="connecting"] {
+    background: var(--warning);
+  }
+
+  /* Light tile behind brand logos so dark SVGs stay crisp in dark mode */
+  .dig-logo-tile {
+    background: #ffffff !important;
+    color: #14171a !important;
+    border-color: var(--border) !important;
+  }
+}
+
+@keyframes dig-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

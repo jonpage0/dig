@@ -1,6 +1,6 @@
 # Sources and their keys
 
-Dig has 28 research sources and 2 shared tools, with 90 actions between them and 33 research methods. Each source and each shared tool is one tool, named by its id with `-` written as `_` (`hackernews`, `tikhub_reddit`, `google_ads`). A call to it names the dig, one of its actions and that action's arguments:
+Dig has 27 research sources and 2 shared tools, with 86 actions between them and 32 research methods (38 methods total with helpers and core workflows). Each source and each shared tool is one tool, named by its id with `-` written as `_` (`hackernews`, `tikhub_reddit`, `google_ads`). A call to it names the dig, one of its actions and that action's arguments:
 
 ```json
 { "dig": "<the handle dig_start returned>", "action": "x_post", "args": { "posts": ["https://x.com/…/status/…"] } }
@@ -31,7 +31,6 @@ Actions marked † are slow and run as jobs (see [the architecture](architecture
 | Wayback Machine (`wayback`) | What a web page said on a given date | None | `wayback_snapshots`, `wayback_read` | `wayback` | Free |
 | GitHub (`github`) | Repositories, their activity and source | Optional `GH_TOKEN` or `GITHUB_TOKEN`, or a `gh` login | `github_search`, `github_inspect`, `github_read` | `github` | Free |
 | Exa (`exa`) | Web search, page text, similar pages, deep research | `EXA_API_KEY` | `exa_search` $, `exa_contents` $, `exa_similar` $, `exa_research` $ † | `exa` | US dollars, as Exa reports |
-| Perplexity (`perplexity`) | Cited answers and web search | `PERPLEXITY_API_KEY` | `perplexity_ask` $, `perplexity_search` $, `perplexity_research` $ †, `perplexity_reason` $ † | `perplexity` | US dollars for ask, reason and research; search reports none, so unknown |
 | Firecrawl (`firecrawl`) | JS-rendered page scraping to Markdown and single-domain URL mapping | `FIRECRAWL_API_KEY` | `firecrawl_scrape` $, `firecrawl_map` $ | `firecrawl` | Firecrawl credits |
 | Papers (`papers`) | Scholarly papers, citations, snippets, full text, PDFs and sections | Optional; see [Papers](#papers) | `papers_semantic_scholar_search`, `papers_semantic_scholar_recommendations`, `papers_semantic_scholar_snippets`, `papers_semantic_scholar_relations`, `papers_openalex_search` $, `papers_openalex_content` $, `papers_multi_search` $ †, `papers_sections` †, `papers_fulltext_read` $ †, `papers_pdf_download` $ † | `papers` | Mostly free; OpenAlex reports a US-dollar usage cost its free daily allowance can cover |
 | YouTube (`youtube`) | Video discovery, transcripts, comments and Gemini video understanding | Optional by route; see [YouTube](#youtube) | `youtube` †, `youtube_transcript` $, `youtube_comments` $, `youtube_analyze` $ †, `youtube_analysis_status` $ † | `youtube`, `youtube-video` (with the helper `youtube-summarizer`) | yt-dlp and Data API free; ScrapeCreators credits; Gemini unknown |
@@ -56,7 +55,7 @@ Actions marked † are slow and run as jobs (see [the architecture](architecture
 | Video analysis (`video`, shared tool) | A supplied video or clip, through Elorian Glimpse | `ELORIAN_API_KEY` | `video_analyze` $ † | helper `video-analyze` | Unknown (tokens shown) |
 | Evidence ranking (`evidence`, shared tool) | A reading order for supplied excerpts, through TypeSafe Jev | `TYPESAFE_API_KEY` | `evidence_rank` $ | helper `evidence-rank` | Unknown (tokens shown) |
 
-Counted from the catalog in `src/providers/modules.ts`: 30 entries (28 sources, 2 shared tools), 90 actions of which 29 are free and 14 slow, and 34 methods for the sources (33 research methods and the `youtube-summarizer` helper). With `dig`, `library`, `setup` and the two shared-tool helpers, Dig serves 39 methods.
+Counted from the catalog in `src/sources/index.ts`: 29 entries (27 research sources, 2 shared tools), 86 actions of which 29 are free and 12 slow, and 33 methods for the sources (32 research methods and the `youtube-summarizer` helper). With `dig`, `library`, `setup` and the two shared-tool helpers (`video-analyze`, `evidence-rank`), Dig serves 38 methods.
 
 A method is a set of instructions for researching one source: what to search, how to weigh it and how to write the report. Your assistant reads one with the `method` tool, or receives it from the host as a prompt or skill. One key can cover several sources: ScrapeCreators serves several social sources, the ad libraries and hosted YouTube transcripts; TikHub serves advanced Reddit, China social, TikTok ads and some X reads.
 
@@ -92,7 +91,7 @@ X has three ways in. `XAI_API_KEY` lets Grok search X (`xsearch`) and interpret 
 2. Set a spending limit there, because X does not report what each call costs.
 3. Create an app and copy its Bearer Token into `keys.env` as `X_BEARER_TOKEN`.
 
-X is ready with both keys and partly ready with one. X bills reads per post or account returned but reports no charge, so for the actions that read posts and accounts Dig records what X returned, as X post reads and X account reads: counts, not money. X's bill can be lower, since X charges a resource once per UTC day. Counts, X News, trends, Spaces, Lists and Communities record an unknown cost. `x_follows` returns every account it is asked for, and X bills each one, so ask for no more than you need. If a single post cannot be read through X's API (no token, no credits, a rate limit or an outage) and `TIKHUB_API_KEY` is set, Dig reads it through TikHub instead and says so.
+X is ready with both keys and partly ready with one. X bills reads per post or account returned (`docs.x.com/x-api/introduction`) but reports no dollar charge, so for the actions that read posts and accounts (including List reads via `x_explore` with `kind: "list"`) Dig records what X returned, as X post reads and X account reads: counts, not money. X's bill can be lower, since X charges a resource once per UTC day. Counts, X News, trends, Spaces and Communities record an unknown cost. `x_follows` returns every account it is asked for, and X bills each one, so ask for no more than you need. If a single post cannot be read through X's API (no token, no credits, a rate limit or an outage) and `TIKHUB_API_KEY` is set, Dig reads it through TikHub instead and says so.
 
 ### Optional: sign in as your own X account
 

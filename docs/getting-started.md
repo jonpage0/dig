@@ -4,7 +4,7 @@ Dig is a research service on your computer. Your assistant connects to it, searc
 
 ## 1. Install and connect
 
-You need Node.js 22 or newer. Build Dig from a checkout:
+You need Node.js 22.13 or newer. Build Dig from a checkout:
 
 ```sh
 git clone https://github.com/jonpage0/dig.git
@@ -36,7 +36,11 @@ Below, `dig` stands for `node /absolute/path/to/dig/dist/dig.mjs`: nothing insta
 
 ## 2. Turn on sources
 
-Ask: **“Set up Dig.”** The assistant reads Dig's `setup` method, shows you the sources, and turns on the ones you choose. It changes a setting only when you ask it to.
+Choose whichever setup flow fits your workflow:
+
+- **In a terminal (SSH-safe):** run `node /absolute/path/to/dig/dist/dig.mjs setup` for the interactive TUI wizard (or pass `--preset starter|research|social|all`).
+- **In a browser:** run `dig open` or ask your assistant to call `open_library({ view: "setup" })` to walk through the 4-step `/setup` wizard.
+- **In chat:** ask **“Set up Dig.”** The assistant reads Dig's `setup` method, shows you the sources, and turns on the ones you choose via `settings`. It changes a setting only when you ask it to.
 
 Hacker News is on from the start and needs no key. DeepWiki, Polymarket, the Wayback Machine, SEC EDGAR and Bluesky need no key either. GitHub and the direct Papers searches work without one, at lower limits. [Sources and their keys](sources.md) lists what each source needs.
 
@@ -70,7 +74,7 @@ You can name a method (“use Dig's x-judge method”), name sources, or let the
 ## 5. Read a report and its evidence
 
 - **In the conversation.** Ask the assistant to show you a report or to quote the original response behind a claim. It reads them with `library_read`.
-- **In the views.** In ChatGPT desktop, each saved report or answer shows a small card with an **Open** button, and Dig's library opens from the sidebar. In a host that shows no views, ask the assistant to open Dig's library: it calls `open_library`, and the host asks you to open the same library in your browser through a one-time address. In a terminal, `dig open` does the same.
+- **In the localhost web app.** Ask your assistant to open Dig's library (it calls `open_library`), or run `dig open` in a terminal. Dig serves one universal React web application on `127.0.0.1` with the library, side-by-side raw evidence reader, live SSE dig trail, sources/history catalog, `/setup` wizard, and settings, authenticated with a one-time `/open/<code>` link.
 - **On disk.** Reports and originals are ordinary files in the library folder (below).
 
 In the library view, select a question to read its answer, or its latest report when there is no answer. **Research details & activity** holds the coverage, the follow-up targets and the calls; **Retrievals** opens the original responses. **Steer research** prepares an instruction for the next step, which you send yourself.
@@ -91,10 +95,11 @@ To find earlier research, ask: “Use Dig to find what we already researched abo
 - A **reported subtotal** means part of a call was priced and part was not, so its total is unknown.
 - Figures are what providers reported, not an invoice, and leave out your assistant's own model use, which your ChatGPT or Claude plan covers.
 
-Two settings, both optional, both in US dollars:
+Optional spending controls under `[spend]` (each independent; Dig never converts between units):
 
-- **Spending ceiling per dig** (`spend_dig_ceiling_usd`): once one dig's calls have recorded that much, Dig asks before its next paid call whether to raise the ceiling for that dig or stop. Only dollar amounts count, and the call that crosses the ceiling completes.
+- **Spending ceiling per dig** (`spend_dig_ceiling_usd`): once one dig's calls have recorded that much in US dollars, Dig asks before its next paid call whether to raise the ceiling for that dig or stop.
 - **Ask before a paid call** (`spend_ask_above_usd`): Dig asks before a paid call whose action has typically cost at least that much in your library, or has no priced call there yet.
+- **Per-unit caps** (`spend_max_credits`, `spend_max_x_post_reads`, `spend_max_x_account_reads`, `spend_max_unknown_calls`): optional per-dig caps on provider credits, X API post/account reads, and unknown-cost calls.
 
 When the host cannot ask you, such as in a non-interactive run, Dig refuses the call and says why. A call identical to one that finished in the last 10 minutes returns the earlier result without paying again.
 
@@ -108,22 +113,20 @@ Everything lives in `~/.local/share/dig`, or the folder `DIG_STATE_DIR` names:
 | --- | --- |
 | `config.toml` | Settings: the library folder, the sources turned on, spending, retention, search and suggested helper models. |
 | `keys.env` | Your provider keys, readable only by you. |
-| `library/` | The research library (you can choose another folder). Each project has a folder; inside it, `digs/<dig>/` holds the question, the reports and the answer, and `sessions/<dig>/` the receipts (`calls.jsonl`) and original responses (`raw/`). |
-| `jobs/` | Slow and paid calls in progress or recently finished, and the answers you gave to Dig's spending questions for each dig. |
+| `library/` | The plain-file research archive (you can choose another folder). Each project has a folder; inside it, `digs/<dig>/` holds the question, the reports and the answer, and `sessions/<dig>/` the receipts (`calls.jsonl`) and original responses (`raw/`). |
+| `dig.sqlite` | Mode `0600` SQLite WAL database holding the paid-call ledger, per-dig spend approvals, browser sessions, and the rebuildable library & FTS5/ONNX search index. Deleting it loses no research files. |
 | `service.json`, `service.log` | The running service's port, token and version, and its log. |
-| `search/` | The local search index, which can be rebuilt. |
+| `search/` | Integrity-checked local semantic search model weights (when semantic search is enabled). |
 | `tools/` | The optional Papers bridge. |
 
 Changing the library setting selects another folder; it does not move existing research. `dig status` shows whether the service is running and its running jobs; `dig stop` stops it. Local library commands inspect saved research without starting the service or calling providers: `dig list`, `dig read`, `dig search` and `dig stats` (each supports `--json`; `list`, `read` and `stats` write nothing, while `search` refreshes the local search index cache as needed).
 
 ## Notes for each host
 
-**Claude Code** shows no views; ask it to open Dig's library and it asks you to open the library in your browser (or run `dig open` in a terminal). It declares that it can ask you questions, so Dig's spending questions and key page reach you there. Dig's methods appear as commands: type `/` and look for Dig's (named `/mcp__dig__<method>` when the server is called `dig`). In an interactive session, slow calls run as MCP tasks.
+**Claude Code** opens Dig's web library in your browser through `open_library` (or `dig open` in a terminal). It supports MCP elicitation for spending questions and the key page, exposes Dig's methods as `/` commands (`/mcp__dig__<method>`), and follows slow calls as MCP tasks.
 
-**ChatGPT desktop** shows Dig's views: the library, the current dig's trail and the saved-research cards. With the generated ChatGPT wrapper installed, Dig's methods also appear among ChatGPT's skills; otherwise ask for a method by name and the assistant reads it with the `method` tool.
+**ChatGPT desktop and Codex** connect to `dig mcp` (with `tool_timeout_sec = 600`) and open Dig's localhost web app via `open_library` or `dig open`. With the generated ChatGPT wrapper installed, Dig's methods also appear as Codex/ChatGPT skills; otherwise ask for a method by name and the assistant reads it with `method`.
 
-**Codex** in a terminal shows no views; use `dig open`. Ask for a method by name. Keep `tool_timeout_sec` at 600 or more in its configuration, since its default of 60 seconds is shorter than some calls.
+**Antigravity (`agy`)** connects via the generated plugin wrapper at `plugins/antigravity` (`timeoutSeconds: 600` and Dig's methods as skills, keeping source methods out of automatic invocation) and opens the web library via `open_library` or `dig open`.
 
-**Antigravity (`agy`)** shows no MCP Apps views; ask it to open Dig's library (`open_library`) or run `dig open` in a terminal. Installing the generated wrapper at `plugins/antigravity` configures the server with a 600-second timeout and installs Dig's methods as skills (keeping source methods out of automatic invocation).
-
-**Other hosts** reach every method through the `method` tool, and the views in a browser through `open_library` (or `dig open` in a terminal). A host that implements MCP's Skills, Tasks or Apps extensions gets Dig's methods, slow calls and views through them without any change to Dig.
+**Other hosts** reach every method through the `method` tool (or the MCP Skills extension), slow calls through `job` (or MCP Tasks), and the web app via `open_library` or `dig open`.

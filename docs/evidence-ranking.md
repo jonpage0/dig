@@ -8,7 +8,7 @@ Ask in the conversation:
 
 > Use Dig’s optional evidence-ranking helper to suggest a reading order for these excerpts against my question. Keep every candidate, highlight relevant contradictions, and identify which original sources still need reading.
 
-The helper uses the pinned `jev-1.13.0` provider model. That is separate from the model conducting the research; there is no Evidence ranking worker-model setting. A call names the dig, `action: "evidence_rank"` and the inputs below in `args`, like any source call. The assistant can call it directly or within a source method, using snippets already obtained from its assigned source; the `evidence-rank` method (read with `method`) says how. It is a paid call, so with a spending ceiling or `ask_above_usd` set Dig may ask you first, and an identical call within ten minutes returns the earlier result.
+The helper uses TypeSafe Jev via `@effect/ai-typesafe`, defaulting to `jev-latest` and displaying the exact resolved model version TypeSafe returns (for example `jev-1.14.0`). That is separate from the model conducting the research; there is no Evidence ranking worker-model setting. A call names the dig, `action: "evidence_rank"` and the inputs below in `args`, like any source call. The assistant can call it directly or within a source method, using snippets already obtained from its assigned source; the `evidence-rank` method (read with `method`) says how. It is a paid call, so with a spending cap or `ask_above_usd` set Dig may ask you first, and an identical call within ten minutes returns the earlier result.
 
 ## Inputs and boundaries
 

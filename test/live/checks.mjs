@@ -27,10 +27,6 @@ export const CHECKS = [
   { tool: 'exa_contents', args: { urls: ['https://www.sqlite.org/wal.html'], maxCharacters: 1000 } },
   { tool: 'exa_similar', args: { url: 'https://www.sqlite.org/wal.html', numResults: 1, contents: false } },
   { tool: 'exa_research', args: { query: 'When was SQLite first released, and by whom?', numResults: 1 } },
-  { tool: 'perplexity_ask', args: { messages: [{ role: 'user', content: 'In what year was SQLite first released?' }], search_context_size: 'low' } },
-  { tool: 'perplexity_search', args: { query: 'SQLite release history', max_results: 1 } },
-  { tool: 'perplexity_research', args: { messages: [{ role: 'user', content: 'When was SQLite first released, and by whom?' }], search_context_size: 'low' } },
-  { tool: 'perplexity_reason', args: { messages: [{ role: 'user', content: 'Is SQLite older than PostgreSQL? Answer in one sentence.' }], search_context_size: 'low' } },
   { tool: 'papers_semantic_scholar_search', args: { query: 'attention is all you need', limit: 2 } },
   { tool: 'papers_semantic_scholar_recommendations', args: { positivePaperIds: [PAPER], limit: 2 } },
   { tool: 'papers_semantic_scholar_snippets', args: { query: 'scaled dot-product attention', paperIds: [PAPER], limit: 2 } },
@@ -106,4 +102,4 @@ export const SKIPPED = [
 ];
 
 /** Deep-research and model-analysis calls: run only when named with --tool. */
-export const EXPENSIVE = ['exa_research', 'perplexity_research', 'perplexity_reason', 'xsearch', 'youtube_analyze', 'video_analyze'];
+export const EXPENSIVE = ['exa_research', 'xsearch', 'youtube_analyze', 'video_analyze'];

@@ -8,9 +8,9 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MODULES } from '../src/providers/modules.ts';
-import { GLYPHS, glyphFor, tileSvg } from '../src/glyphs.mjs';
-import { VERSION } from '../src/version.mjs';
+import { SOURCES, sourceSkills } from '../src/sources/index.ts';
+import { GLYPHS, glyphFor, tileSvg } from '../src/glyphs.ts';
+import { VERSION } from '../src/version.ts';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const at = path => join(ROOT, path);
@@ -63,7 +63,7 @@ const frontMatter = text => Object.fromEntries((/^---\r?\n([\s\S]*?)\r?\n---/.ex
 const shorten = (text, max = 72) => { const sentence = text.split(/(?<=\.)\s/)[0].replace(/\.$/, ''); if (sentence.length <= max) return sentence; const cut = sentence.slice(0, max - 1).replace(/[\s,;:]+\S*$/, ''); return `${cut}…`; };
 
 /** The catalog entry a method belongs to, as the service's methods module reads it; null for dig, library and setup. */
-const owner = new Map(MODULES.flatMap(m => [...(m.skills ?? (m.kind === 'tool' ? [] : [m.id])), ...(m.helpers ?? []), ...(m.helperSkill ? [m.helperSkill] : [])].map(name => [name, m])));
+const owner = new Map(SOURCES.flatMap(s => [...sourceSkills(s), ...(s.helpers ?? []), ...(s.helperSkill ? [s.helperSkill] : [])].map(name => [name, s])));
 const label = name => { const m = owner.get(name); if (!m) return name === 'dig' ? null : name[0].toUpperCase() + name.slice(1); return name === m.id || name === m.helperSkill ? m.label : `${m.label} ${name.startsWith(`${m.id}-`) ? name.slice(m.id.length + 1).replaceAll('-', ' ') : name.replaceAll('-', ' ')}`; };
 const glyph = name => OWN_GLYPHS[name] ?? glyphFor(owner.get(name)?.id, name);
 

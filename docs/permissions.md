@@ -8,8 +8,8 @@ Dig runs one service per computer, listening on `127.0.0.1` only (port 47811, or
 
 - **A token.** The service makes a random token the first time it starts and keeps it in `service.json` in Dig's folder, readable only by you. Every MCP request, and the `status`, `stop` and `open` requests the `dig` command makes, must carry it. `dig mcp` adds it itself, so a host launching `dig mcp` holds no credential; a host using the address form holds the token.
 - **No web page can call it.** A request must name the service's own address (`127.0.0.1` or `localhost` with its port) as its host, and a request that carries an `Origin` is refused unless it comes from the service itself.
-- **The key page** (`/keys/<code>`) needs no token: the code in its address is random, works for one submission and expires after 10 minutes. Its form posts only to itself, shows no key's value, runs no script and loads nothing from elsewhere.
-- **The views in a browser** need a session, which a one-time address gives: it works once, within 5 minutes. `dig open` asks the service for one with the token. `open_library`, called by a client that shows no views, makes one and asks the client to open it for you, or gives it in its result; so any client connected to Dig can get one, and the session gives nothing that client cannot already do with Dig's tools. Opening the address gives that browser a session cookie for 24 hours (or until the service restarts). The views' pages and the requests they make work only with that cookie and only from the service's own address, and they can call only the tools the views use, never a source.
+- **The key and approval pages** (`/keys/<code>`, `/approve/<code>`) need no bearer token: each code is 24 random bytes, works for one submission, and expires automatically (`10 minutes` for keys, `5 minutes` for spend approvals). Each form posts only to itself, runs zero JavaScript, and loads nothing external.
+- **The localhost web app** needs a session, granted by a one-time `/open/<code>` address valid for 5 minutes from `dig open` or `open_library`. Opening it sets an `HttpOnly; SameSite=Strict` cookie (`dig_session`, 24-hour TTL). Every SPA page, SSE event stream (`/api/events`), and `/api/*` route requires that cookie and same-origin headers for mutations, and can never invoke a provider source tool.
 - **`/health`** answers anyone on the computer with the service's name, version, build fingerprint and process id, and nothing else.
 
 ## Your host's permissions
@@ -26,22 +26,25 @@ Dig never repeats a paid request that got no response: its cost is recorded as u
 
 ## Spending
 
-Two settings, both optional, both in US dollars, under `[spend]` in `config.toml` (the `settings` tool calls them `spend_dig_ceiling_usd` and `spend_ask_above_usd`; 0 turns either off):
+Optional per-dig spending controls under `[spend]` in `config.toml` (`settings` prefixes them with `spend_`; `0` or `null` disables a cap). Each unit is enforced independently and never converted across currencies or providers:
 
-- **`dig_ceiling_usd`**, a ceiling per dig. Before a paid call in a dig whose calls have already recorded that much in US dollars, Dig asks you: **“Raise the ceiling for this dig by $…”** (the ceiling's own amount) or **“Stop here”**. Only dollar amounts count; credits, read counts and unknown costs are named in the question but not added. The call that crosses the ceiling completes, so the question comes before the next one.
-- **`ask_above_usd`**, ask first. Before a paid call whose action has typically cost at least that much in your library (the median of its priced calls over the last 90 days), or has no priced call there yet, Dig asks: **“Send it”**, **“Send it, and don’t ask again for this dig”** or **“Don’t send it”**.
+- **`dig_ceiling_usd`**: US-dollar ceiling per dig. Before a paid call once the dig's recorded USD total reaches it, Dig asks whether to raise the ceiling for this dig or stop.
+- **`ask_above_usd`**: ask first before any paid call whose 90-day median USD cost in your library meets or exceeds this threshold, or which has no priced call yet.
+- **`max_credits`**: per-dig cap on provider credits (Firecrawl, ScrapeCreators, Scrape.do, OpenAlex credits).
+- **`max_x_post_reads`** and **`max_x_account_reads`**: per-dig caps on X API post and account reads.
+- **`max_unknown_calls`**: per-dig cap on paid calls whose provider reports no per-call amount (`cost: null`).
 
-Your answers apply to that dig only and are kept in Dig's `jobs/digs/` folder, never in your settings. A free action, and a call a metered action makes at no charge (a DataForSEO sandbox request, a stored Grok answer read back), is never asked about or refused. When the host cannot ask (it declares no way to, or the run is not interactive), or you decline or dismiss the question, the call is refused with the reason and nothing is sent. With a host on the older, 2025-era protocol, Dig waits at most 5 minutes for an answer and then refuses the call the same way; it never waits indefinitely.
+Your answers apply to that dig only and are stored in `dig.sqlite` (`dig_spend_overrides`), never mutating `config.toml`. Free actions and zero-charge modes (DataForSEO sandbox, `xsearch` `recoverResponseId`) are never asked about or refused. When the host cannot elicit inline, Dig can offer a single-use localhost `/approve/<code>` page or refuse explicitly with the reason and totals; it never silently sends a paid request.
 
 ## Files Dig writes
 
 All in Dig's folder (`~/.local/share/dig`, or `DIG_STATE_DIR`), and nowhere else except the library folder you choose:
 
 - `config.toml`, when you or the assistant change a setting;
-- `keys.env`, only from the key page (or your own edits);
+- `keys.env` (mode `0600`), only from `dig setup`, the key page, or your own edits;
 - in the library: a dig's question, reports and answer, each written once and never overwritten; a receipt for every call; the provider's original response when `keep_raw` is on; YouTube transcripts and downloaded PDFs;
-- `jobs/`, a record of each paid or slow call (with its arguments, credentials removed) kept for 24 hours after it finishes, and your answers to the spending questions;
-- `service.json` and `service.log`, `search/` (the search index and, if you turn semantic search on, its model) and `tools/` (the Papers bridge, if you set it up).
+- `dig.sqlite` (mode `0600` WAL): the crash-safe `paid_call_ledger`, per-dig spend approvals, browser sessions, one-time codes, and the rebuildable library & FTS5/ONNX search index;
+- `service.json` and `service.log`, `search/models/` (pinned ONNX model weights when semantic search is enabled), and `tools/` (the Papers bridge, if installed).
 
 Video analysis reads a local file only inside the project folder of the dig. Papers section extraction reads only PDFs in the library. Dig never moves research when you change the library setting.
 

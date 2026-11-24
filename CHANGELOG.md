@@ -2,6 +2,38 @@
 
 Below, `dig` stands for `node <checkout>/dist/dig.mjs`: nothing installs a `dig` command, and on macOS and Linux that name is the DNS lookup tool.
 
+## 2.0.0 — 2026-11-23
+
+Dig 2.0 is a ground-up, 100% strict TypeScript (`allowJs: false`) rebuild on **Effect-TS 4.1.5** (`effect`, `@effect/platform-node`, `@effect/sql-sqlite-node`, `@effect/ai-typesafe`, `@effect/atom-react`) and **`@modelcontextprotocol/server` 2.4+**, preserving Dig's plain-file research archive (`dig.md`, reports, `answer.md`, `calls.jsonl`, `raw/*.json`, `config.toml`, `keys.env`) while replacing legacy infrastructure with a unified, crash-safe Effect runtime and localhost web application.
+
+### Highlights
+
+- **Effect 4.1.5 end-to-end architecture & zero legacy JS.**
+  - Rebuilt core, all 29 co-located source plugins (`src/sources/<id>/`), MCP/HTTP daemon (`src/service/`), CLI (`effect/cli`), and UI helpers (`src/ui/`) in strict TypeScript (`allowJs: false`).
+  - Removed `@sinclair/typebox`, `zod`, `@modelcontextprotocol/ext-apps`, `@modelcontextprotocol/node`, `@openai/mcp-extensions`, `@tanstack/react-query`, npm `overrides`, `src/providers/`, and all `.mjs` files under `src/`. All MCP tool and prompt schemas derive directly from `effect/Schema` (`Schema.toStandardSchemaV1` + `Schema.toStandardJSONSchemaV1`).
+- **Plain-file archive + local SQLite engine & FTS5/ONNX index (`dig.sqlite`).**
+  - Plain files on disk remain the canonical archive. `<state>/dig.sqlite` (`node:sqlite` WAL, mode `0600`) provides the crash-safe `paid_call_ledger` (atomic `BEGIN IMMEDIATE` deduplication with a partial unique active index preventing concurrent double-charges even with `fresh: true`), per-dig `dig_spend_overrides`, browser sessions/codes, and a rebuildable read/search index combining SQLite FTS5 with optional local BGE-small ONNX embeddings (`darwin/arm64` and `linux/x64`).
+  - Added read-only crash reconciliation (`reconcile()`): if the daemon stops mid-flight during a streaming `xsearch` pass, startup checks `GET /v1/responses/:id` without ever re-POSTing.
+- **One universal localhost React 19 web app (`dist/web/`) + SSH-safe `dig setup` TUI.**
+  - Replaced `ui://` MCP Apps and inline cards with a single localhost React 19 SPA (`@effect/atom-react`, `effect/reactivity`, TanStack Router, Tailwind CSS v4) with live Server-Sent Events (`/api/events`), side-by-side raw evidence inspection, live dig trail, sources/90-day cost history, settings editor, and a 4-step guided `/setup` wizard opened via `open_library` or `dig open`.
+  - Added `dig setup` (`effect/cli/Prompt`) for interactive terminal onboarding (including `--preset starter|research|social|all`), writing `config.toml` and `keys.env` (`0600`) safely over SSH.
+- **Multi-unit `[spend]` controls & `/approve/:code`.**
+  - Extended `[spend]` beyond USD with independent per-dig caps: `max_credits`, `max_x_post_reads`, `max_x_account_reads`, and `max_unknown_calls`, plus a zero-JS localhost `/approve/:code` approval page alongside MCP elicitation.
+- **Provider upgrades & Perplexity removal.**
+  - **Removed Perplexity** completely (source plugin, skill, logo, and notices). Dig now ships **27 research sources + 2 shared tools** (`29` entries, `86` actions, `38` methods, `41` tools with all sources enabled).
+  - **Exa 3.0:** `exa_research` defaults to `dynamicHighlights: true` and `highlightVerbosity: "medium"` with the `Exa-Beta` header, supports `mode: "auto" | "deep-lite" | "deep" | "deep-reasoning"` (default `"deep"`, `$0.012`; `"auto"` `$0.007` quick tier), and emits live progress updates; `exa_search` exposes `highlightVerbosity`.
+  - **TypeSafe Jev (`evidence_rank`):** Built on `@effect/ai-typesafe`, defaulting to `jev-latest` and displaying the exact resolved model returned by TypeSafe (for example `jev-1.14.0`).
+  - **X API:** Updated billing reference to `docs.x.com/x-api/introduction`, fixed `x_explore(kind: "list")` to record honest X post/account reads, and wired `xsearch` `remote_job_id` for read-only crash reconciliation.
+- **Security hardening.**
+  - Added `PaidHttp` (zero retries, `TracerPropagationEnabled = false`, streaming response byte caps, cross-origin credential header stripping on redirects, strict SSRF guard covering `2002::/16`, `2001::/32`, `::/96`, and redirect hops), `isResearchFile` read allowlist enforcement on all library reads, scoped subprocess environment for the Papers bridge, and secret redaction across progress events and logs.
+
+### Breaking changes from 1.3.0
+
+- **Node.js `>=22.13` required** (for built-in `node:sqlite`).
+- **Perplexity removed** (`perplexity` source, actions, and `skills/perplexity`). Remove `"perplexity"` from `[sources] enabled` in `config.toml` if present.
+- **`ui://` MCP Apps and `open_trail` removed** in favor of `open_library` / `dig open` opening the localhost web SPA (`dist/web/`).
+- **Existing research libraries, `config.toml`, and `keys.env` carry over intact.**
+
 ## 1.3.0 — 2026-11-23
 
 - **Three new research sources: Firecrawl, SEC EDGAR, and Bluesky.**

@@ -18,11 +18,15 @@ import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 
 await import('./typescript.mjs');
-const { providerTools } = await import('../src/providers/index.ts');
-const { MODULES } = await import('../src/providers/modules.ts');
-const { costSummary } = await import('../src/providers/library/cost.ts');
-const { costAmounts } = await import('../src/ui/format.mjs');
+const { SOURCES } = await import('../src/sources/index.ts');
+const { costSummary } = await import('../src/core/cost.ts');
+const { costAmounts } = await import('../src/ui/format.ts');
 const { CHECKS, SKIPPED, EXPENSIVE } = await import('../test/live/checks.mjs');
+
+const MODULES = SOURCES.map(source => ({ ...source, tools: source.actions.map(action => action.name) }));
+const providerTools = Object.fromEntries(
+  SOURCES.flatMap(source => source.actions.map(action => [action.name, { source, action, billing: action.billing === 'free' ? 'free' : 'paid' }])),
+);
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIG = join(root, 'dist/dig.mjs');

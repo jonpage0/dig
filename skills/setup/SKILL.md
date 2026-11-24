@@ -5,7 +5,7 @@ description: Set up Dig after installation or when the user asks to set up, onbo
 
 # Set up Dig
 
-Run this method after Dig is installed, and whenever the user asks to set up Dig, enable sources or check what Dig needs. You help the user choose research sources and tell them exactly what each still needs. You never run research here and never call a provider tool.
+Run this method after Dig is installed, and whenever the user asks to set up Dig, enable sources or check what Dig needs. You help the user choose research sources and tell them exactly what each still needs. You never run research here and never call a provider tool. The user can also run Dig's interactive setup directly at any time: `dig setup` in a terminal (SSH-safe TUI) or the browser setup wizard via `open_library({ view: "setup" })`.
 
 Use only this `dig` server's tools. Another Dig edition's server, CLI, configuration, keys and library are separate and stay untouched.
 
@@ -37,7 +37,7 @@ One source needs extra care:
 
 Call `settings` with `set` containing only the fields the user asked to change, for example `{ "set": { "exa_enabled": true, "reddit_enabled": true } }`; the tool's description names every field and what it means, and Dig validates the values. Field names are `<source id with underscores>_enabled`, plus `library`, `keep_raw`, the spending settings, the `x_` options, and the suggested worker fields (`worker_model` and `worker_effort` for every method, `<method with underscores>_worker_model` and `_worker_effort` for one). Confirm the result from the values `settings` returns, not from what you sent. If the update fails, report the error and change nothing else.
 
-Never change `library`, `keep_raw`, a spending setting or a worker suggestion unless the user asks. The spending settings are the per-dig ceiling and the typical call cost at or above which Dig asks the person before a paid call; Dig asks in the conversation, and a question the host cannot show refuses the call. Changing `library` selects a different folder; it does not move existing research. A worker suggestion is guidance for the conversation that starts source workers, not a setting that pins a model, and Dig does not check that the account offers the model named.
+Never change `library`, `keep_raw`, a spending setting or a worker suggestion unless the user asks. The spending settings cover the per-dig US-dollar ceiling (`spend_dig_ceiling_usd`), ask-before-paid threshold (`spend_ask_above_usd`), and optional per-dig non-dollar caps (`spend_max_credits`, `spend_max_x_post_reads`, `spend_max_x_account_reads`, `spend_max_unknown_calls`); Dig asks in the conversation (or via a localhost approval page when the client cannot elicit), and a declined question refuses the call. Changing `library` selects a different folder; it does not move existing research. A worker suggestion is guidance for the conversation that starts source workers, not a setting that pins a model, and Dig does not check that the account offers the model named.
 
 ## 5. Explain the remaining steps
 

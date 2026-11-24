@@ -4,17 +4,18 @@
 
 ## Layout
 
-- `src/service/`: the service, in TypeScript. `cli.ts` is the `dig` command (`serve`, `mcp`, `status`, `stop`, `open`, `list`, `read`, `search`, `stats`, `version`); `service.ts` the HTTP listener, its access rules, the key page and the views in a browser; `mcp.ts` the MCP server and the core tools; `surface.ts` the source tools derived from the catalog; `calls.ts` the call pipeline (gate, run, result) and dig handles; `jobs.ts` the job store and the Tasks extension; `ask.ts` the spending questions and the key page; `methods.ts` the methods (Skills extension, prompts, the `method` tool); `views.ts` the MCP Apps views.
-- `src/providers/`: the provider layer. `modules.ts` is the catalog of sources, actions, methods, keys and slow actions; `tools/` the provider tools (the actions); `schemas.ts` and its neighbours their argument schemas; `outcome.ts`, `secrets.ts` and `library/` the shared execution, redaction and cost rules.
-- `src/library.mjs`, `src/config.mjs`, `src/catalog.mjs`, `src/search/`: the research library, settings, source readiness and local report search.
-- `src/frontend/` and `src/ui/`: the React views and the plain helpers they share.
-- `skills/`: the methods, one folder each, written for any host.
+- `src/core/`: the Effect 4.1.5 foundation (`errors.ts`, `cost.ts`, `secrets.ts`, `ssrf.ts`, `http.ts` [`PaidHttp`/`FreeHttp`], `plugin.ts`, `progress.ts`, `db.ts` [`node:sqlite` WAL/FTS5], `config.ts`, `markdown.ts`, `library.ts`, `search-onnx.ts`, `search.ts`, `workflow.ts` [`ExecutionService` + `paid_call_ledger`], `setup.ts`, `runtime.ts`, `api-types.ts`).
+- `src/sources/`: 29 co-located `SourcePlugin` directories (`src/sources/<id>/` owning metadata, Effect schemas, actions, billing, and tests), `src/sources/shared/` helpers, and the single catalog registry `src/sources/index.ts`.
+- `src/service/`: the daemon, MCP server, HTTP/SSE API, and Effect CLI (`cli.ts`, `daemon.ts`, `http-api.ts`, `mcp.ts`, `surface.ts`, `methods.ts`, `setup-tui.ts`).
+- `src/frontend/` and `src/ui/`: the localhost React 19 Web SPA (`@effect/atom-react`, TanStack Router, Tailwind CSS v4, live SSE, `/setup` wizard) and the strict-TS formatting/evidence helpers they share.
+- `src/version.ts`, `src/status.ts`, `src/glyphs.ts`: shared version, status words, and Lucide glyph definitions (`allowJs: false` across all of `src/`).
+- `skills/`: the 38 methods, one folder each, written for any host.
 - `bridges/papers/`: the Papers bridge's setup and its maintained patches.
 - `assets/`: the logos the host wrappers carry.
 - `optional/dig-routing/`: an instruction-only companion that routes a question to the computer where Dig runs; `.agents/plugins/marketplace.json` lists it.
-- `dist/` (the `dig` command and the view pages), `runtime/` (the local search runtime) and `plugins/` (the host wrappers): build output, not tracked; never edit them by hand.
+- `dist/` (`dig.mjs` and the `dist/web/` SPA), `runtime/` (the local ONNX search runtime) and `plugins/` (the host wrappers): build output, not tracked; never edit them by hand.
 - `LICENSE`, `THIRD_PARTY_NOTICES.md` and the third-party licence files at the root; the build rewrites the notices and every licence file but `LICENSE` and `Lucide-LICENSE`.
-- `test/` and `test/service/`: offline tests; `test/live/`: the live-check calls and the record of when each action last worked.
+- `src/**/*.test.ts` and `test/*.test.ts`: offline tests; `test/live/`: the live-check manifest and the record of when each action last worked.
 
 ## Commands
 
@@ -37,4 +38,4 @@ npm run live-check   # one real call per free action; --paid and --keys run mete
 - **Nothing personal in the repository.** No local paths of a particular machine, no people's names, no quotes. The generated wrappers hold a checkout's path, which is one reason `plugins/` is not tracked.
 - **Methods and composition.** Source methods work inline or for ordinary workers. Composition belongs only to the initiating thread: no master composer or generated agent profiles. The initiating thread reads full reports and load-bearing originals before it answers.
 - **Live calls cost money.** Beyond `npm run smoke`'s one keyless call, make live provider calls only with the maintainer's go-ahead.
-- **Releases.** The version lives in `src/version.mjs`, `package.json` and `package-lock.json`; the build refuses a mismatch, and the wrappers take theirs from `src/version.mjs`. Add a `CHANGELOG.md` entry. Host behaviour (rendering, asking, tasks) needs evidence from the hosts themselves; tests do not establish it.
+- **Releases.** The version lives in `src/version.ts`, `package.json` and `package-lock.json`; the build refuses a mismatch, and the wrappers take theirs from `src/version.ts`. Add a `CHANGELOG.md` entry. Host behaviour (rendering, asking, tasks) needs evidence from the hosts themselves; tests do not establish it.
