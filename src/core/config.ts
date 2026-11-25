@@ -96,7 +96,8 @@ export interface CatalogMeta {
   readonly sourceIds: readonly string[];
   readonly methodNames: readonly string[];
   readonly envNames: readonly string[];
-  readonly requiredKeyNames: readonly string[];
+  /** Every declared credential name, required or optional: read from keys.env only, never inherited. */
+  readonly credentialKeyNames: readonly string[];
 }
 
 export function catalogMetaFromPlugins(plugins: readonly SourcePlugin[]): CatalogMeta {
@@ -111,9 +112,13 @@ export function catalogMetaFromPlugins(plugins: readonly SourcePlugin[]): Catalo
     }
   }
   const envNames = [...new Set(plugins.flatMap((p) => p.env ?? []))];
-  const requiredKeyNames = [...new Set(plugins.flatMap((p) => (p.keys ?? []).flat()))];
+  const credentialKeyNames = [
+    ...new Set(
+      plugins.flatMap((p) => [...(p.keys ?? []).flat(), ...(p.optionalKeys ?? []).flatMap((g) => g.names)]),
+    ),
+  ];
   registerCredentialEnvNames(envNames);
-  return { sourceIds, methodNames, envNames, requiredKeyNames };
+  return { sourceIds, methodNames, envNames, credentialKeyNames };
 }
 
 export function workerSetting(table: string, field: "model" | "effort"): string {
@@ -560,8 +565,8 @@ export function loadKeysIntoEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): void {
   const catalogSet = new Set(meta.envNames);
-  const requiredSet = new Set(meta.requiredKeyNames);
-  const isCred = (name: string) => SECRET_NAME_PATTERN.test(name) || requiredSet.has(name);
+  const credentialSet = new Set(meta.credentialKeyNames);
+  const isCred = (name: string) => SECRET_NAME_PATTERN.test(name) || credentialSet.has(name);
 
   let text = "";
   try {

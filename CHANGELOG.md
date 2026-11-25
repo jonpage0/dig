@@ -2,6 +2,12 @@
 
 Below, `dig` stands for `node <checkout>/dist/dig.mjs`: nothing installs a `dig` command, and on macOS and Linux that name is the DNS lookup tool.
 
+## 2.0.2 — 2026-11-25
+
+- **GitHub no longer reads as needing setup.** Without a token in `keys.env`, `source_info`, the web app and `dig setup` now show GitHub as `partial` and say what is true: public search and reads work anonymously or through an existing `gh` login, and a token or a `gh` login raises the limits and adds the review and issue-reply samples. A source can now declare a credential optional.
+- **The test suite no longer leaves a Dig service running.** A test that connected bridges to a service started inside the test process got that service replaced by a detached one that outlived the run; it now uses a service started from `dist/dig.mjs`, and the suite fails if any service it started is still running when it ends.
+- **A lost start race logs one plain line.** When several hosts start Dig at once, each `dig serve` that finds Dig already on its port writes `dig: Dig <version> (pid <n>) already serves port <port>; …` and exits 0 instead of logging `ERROR An error occurred`. A port held by something else is named, with `DIG_PORT`, and exits 1, and no command prints a bare "An error occurred" any more.
+
 ## 2.0.1 — 2026-11-24
 
 - **Minimal SEP-1865 inline event card (`ui://dig/card/v2.0.1.html`).** Added one static ~11 KB (~3.8 KB gzipped) zero-dependency read-only MCP App card (`src/service/card.ts`, `text/html;profile=mcp-app`, empty CSP `connectDomains: []` / `resourceDomains: []`, strict DOM construction with zero `innerHTML`, `ev.source === window.parent` check, and loopback-only `http://127.0.0.1:<port>/(open|keys)/...` `ui/open-link` allowlist) gated strictly on client `io.modelcontextprotocol/ui` capability. Attaches `_meta.ui.resourceUri` and best-effort `_meta.digCard` metadata on `research_save`, `dig_finish`, `keys`, `open_library`, `job`, and source provider calls—opening the full localhost Dig web SPA via `ui/open-link` while adding zero tools and zero `tools/list` overhead for non-UI clients. Spend-gate refusals render a safe pause card without ever exposing `/approve/:code`. *(Protocol and unit verified; not yet visually rendered in a live host.)*

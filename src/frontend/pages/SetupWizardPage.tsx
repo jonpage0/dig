@@ -749,8 +749,14 @@ export function SetupWizardPage() {
                                   <h3 className="m-0 text-sm font-semibold text-foreground">
                                     {acc.name}
                                   </h3>
-                                  <Badge tone={acc.ready ? "success" : "partial"}>
-                                    {acc.ready ? "Already set ✓" : "Key needed"}
+                                  <Badge
+                                    tone={acc.ready ? "success" : acc.keys.some((k) => k.required) ? "partial" : "muted"}
+                                  >
+                                    {acc.ready
+                                      ? "Already set ✓"
+                                      : acc.keys.some((k) => k.required)
+                                        ? "Key needed"
+                                        : "Optional"}
                                   </Badge>
                                 </div>
                                 <p className="m-0 text-xs text-muted-foreground">
@@ -785,8 +791,10 @@ export function SetupWizardPage() {
                                     </label>
                                     {k.set ? (
                                       <Badge tone="success">Already set ✓</Badge>
-                                    ) : (
+                                    ) : k.required ? (
                                       <Badge tone="warning">Required</Badge>
+                                    ) : (
+                                      <Badge tone="muted">Optional</Badge>
                                     )}
                                   </div>
                                   <input
@@ -1012,10 +1020,17 @@ export function SetupWizardPage() {
                                   Install {src.missingPrereqs.join(", ")}
                                 </div>
                               )}
+                              {src.notes.map((note) => (
+                                <div key={note} className="text-[11px] text-muted-foreground">
+                                  {note}
+                                </div>
+                              ))}
                             </div>
                           </div>
                           {src.readiness === "ready" ? (
                             <Badge tone="success">Ready ✓</Badge>
+                          ) : src.missingKeys.length === 0 && src.missingPrereqs.length === 0 ? (
+                            <Badge tone="partial">Works · key optional</Badge>
                           ) : src.missingKeys.length > 0 ? (
                             <button
                               type="button"

@@ -20,7 +20,13 @@ export const githubSource: SourcePlugin = defineSource({
     "Free. Works without a login at GitHub's lower anonymous limits; a token in keys.env or a gh login raises them and adds review and issue-reply samples.",
   logo: "github",
   env: ["GH_TOKEN", "GITHUB_TOKEN"],
-  keys: [["GH_TOKEN", "GITHUB_TOKEN"]],
+  optionalKeys: [
+    {
+      names: ["GH_TOKEN", "GITHUB_TOKEN"],
+      whenAbsent:
+        "No GH_TOKEN or GITHUB_TOKEN in keys.env. Public REST search and reads still work, anonymously or through an existing gh login; readiness does not run gh, so a gh login was not probed. A token, or a gh login, raises GitHub's rate limits and adds the review and issue-reply samples.",
+    },
+  ],
   credential: "GH_TOKEN or GITHUB_TOKEN, or an existing gh login",
   actions: [githubSearchAction, githubInspectAction, githubReadAction],
 });

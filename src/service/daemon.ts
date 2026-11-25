@@ -301,6 +301,45 @@ export async function openAddress(
   return response.json() as Promise<{ readonly address: string; readonly expiresAt: string; readonly path?: string }>;
 }
 
+/**
+ * `dig serve` could not bind its port. `holder` is the Dig service answering `/health` there, if any: then the
+ * service the caller wanted is already running (the usual end of a start race), and this start is not needed.
+ */
+export class PortInUseError extends Error {
+  constructor(
+    readonly port: number,
+    readonly holder: HealthResponse | null,
+  ) {
+    super(
+      holder
+        ? `Dig ${holder.version} (pid ${holder.pid}) already serves port ${port}`
+        : `Port ${port} on 127.0.0.1 is in use by something that is not Dig. Stop it, or set DIG_PORT to a free port for Dig.`,
+    );
+    this.name = "PortInUseError";
+  }
+}
+
+/** Whether a failure, or any of its causes, is a listen on a port that is already taken. */
+function isAddressInUse(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  for (let current = error; current && typeof current === "object" && !seen.has(current); ) {
+    seen.add(current);
+    if ((current as { code?: unknown }).code === "EADDRINUSE") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+/** The Dig service on `port`, asking for about two seconds while one that has just bound starts answering. */
+async function digHolding(port: number): Promise<HealthResponse | null> {
+  const end = Date.now() + 2_000;
+  for (;;) {
+    const found = await health(port);
+    if (found || Date.now() >= end) return found;
+    await pause(200);
+  }
+}
+
 export interface ServeOptions {
   readonly state?: string;
   readonly env?: NodeJS.ProcessEnv;
@@ -339,6 +378,12 @@ export async function serve(options: ServeOptions = {}): Promise<RunningService>
   const idleRaw = Number(env.DIG_IDLE_EXIT_MS);
   const idleMs = Number.isFinite(idleRaw) && idleRaw > 0 ? idleRaw : DEFAULT_IDLE_MS;
   const startedAt = new Date().toISOString();
+
+  // A Dig service already on the port settles it before this start opens any state: the usual end of a start race.
+  if (requestedPort !== 0) {
+    const holder = await health(requestedPort);
+    if (holder) throw new PortInUseError(requestedPort, holder);
+  }
 
   const ownsRuntime = !options.runtime;
   const runtime =
@@ -410,6 +455,9 @@ export async function serve(options: ServeOptions = {}): Promise<RunningService>
     await api.close().catch(() => {});
     await Effect.runPromise(Scope.close(serverScope, Exit.void)).catch(() => {});
     if (ownsRuntime) await runtime.dispose().catch(() => {});
+    if (requestedPort !== 0 && isAddressInUse(error)) {
+      throw new PortInUseError(requestedPort, await digHolding(requestedPort));
+    }
     throw error;
   }
 

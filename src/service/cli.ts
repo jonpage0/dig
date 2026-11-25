@@ -26,6 +26,7 @@ import {
 } from "@modelcontextprotocol/client";
 import { ConfigService, stateDirectory } from "../core/config.ts";
 import { costSummary } from "../core/cost.ts";
+import { errorMessage } from "../core/errors.ts";
 import { LibraryService, handleOf, projectFolder } from "../core/library.ts";
 import { bootDigRuntime } from "../core/runtime.ts";
 import { SearchService, type SearchMode } from "../core/search.ts";
@@ -35,6 +36,8 @@ import { costAmounts, costShort, costTotal, duration, plural, shortDate } from "
 import { toolHistory, usageOf } from "../ui/usage.ts";
 import { VERSION } from "../version.ts";
 import {
+  PortInUseError,
+  type RunningService,
   ensureService,
   health,
   openAddress,
@@ -162,7 +165,7 @@ export async function runStdioBridge(): Promise<void> {
       request.id,
       isBrokenConnection(error)
         ? stoppedMessage(request)
-        : `Dig's service could not be reached: ${error instanceof Error ? error.message : String(error)}`,
+        : `Dig's service could not be reached: ${errorMessage(error)}`,
     );
   };
 
@@ -319,7 +322,7 @@ export async function runStdioBridge(): Promise<void> {
     }
     http.send(message).catch((error) => {
       if (!sessionGone(error)) {
-        console.error(`dig mcp: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(`dig mcp: ${errorMessage(error)}`);
       }
     });
   };
@@ -358,13 +361,14 @@ async function withLocalRuntime<A>(
 const userFail = (message: string, cause?: unknown) =>
   Effect.fail(new CliError.UserError({ cause: cause ?? new Error(message), userMessage: message }));
 
+// `errorMessage` never returns an empty string, so the CLI never falls back to its bare "An error occurred".
 const tryUser = <A>(fn: () => Promise<A>): Effect.Effect<A, CliError.UserError> =>
   Effect.tryPromise({
     try: fn,
     catch: (e) =>
       new CliError.UserError({
         cause: e,
-        userMessage: e instanceof Error ? e.message : String(e),
+        userMessage: errorMessage(e),
       }),
   });
 
@@ -380,9 +384,19 @@ const serveCmd = Command.make(
   },
   ({ port }) =>
     tryUser(async () => {
-      const running = await serve({
-        ...(Option.isSome(port) ? { port: port.value } : {}),
-      });
+      let running: RunningService;
+      try {
+        running = await serve({
+          ...(Option.isSome(port) ? { port: port.value } : {}),
+        });
+      } catch (error) {
+        // Losing a start race to another Dig service is not a failure: the service the caller wanted is running.
+        if (error instanceof PortInUseError && error.holder) {
+          console.error(`dig: ${error.message}; this start (pid ${process.pid}) exits.`);
+          return;
+        }
+        throw error;
+      }
       await running.waitForStop;
     }),
 ).pipe(Command.withDescription("Run the local Dig HTTP/MCP/SPA daemon."));

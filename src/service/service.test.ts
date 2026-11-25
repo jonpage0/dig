@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
+import { createServer as createNetServer, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, it } from "node:test";
+import { join, resolve } from "node:path";
+import { after, describe, it } from "node:test";
 import { Effect } from "effect";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY } from "@modelcontextprotocol/server";
 import { keysPath } from "../core/config.ts";
+import { errorMessage } from "../core/errors.ts";
 import { ExecutionService } from "../core/workflow.ts";
 import { VERSION } from "../version.ts";
 import {
@@ -24,10 +27,131 @@ import {
   renderCardHtml,
 } from "./card.ts";
 import { runCli } from "./cli.ts";
-import { health, serve } from "./daemon.ts";
+import { health, readServiceFile, serve } from "./daemon.ts";
 import { loadMethods, methodFile, promptedMethods } from "./methods.ts";
 import { runSetupPreset, runSetupWizard } from "./setup-tui.ts";
 import { CORE_ORDER, SOURCE_TOOLS, parseAction, sourceToolOf } from "./surface.ts";
+
+// Every state folder this file starts a service or a bridge in is made by `serviceState` and removed by
+// `releaseState`, which first checks that no service is still running for it. A service found running then (or
+// for a folder a test never released) fails the suite in the `after` hook below. Only a service that answers
+// `/status` under that folder's own token, naming that folder and the pid its service.json records, counts, so
+// the check can neither see nor stop a service this file did not start.
+const serviceStates = new Set<string>();
+const leftRunning: string[] = [];
+
+async function serviceState(prefix: string): Promise<string> {
+  const state = await mkdtemp(join(tmpdir(), prefix));
+  serviceStates.add(state);
+  return state;
+}
+
+async function runningServiceOf(state: string): Promise<{ readonly pid: number; readonly port: number } | null> {
+  const file = await readServiceFile(state);
+  if (!file || typeof file.pid !== "number") return null;
+  try {
+    const response = await fetch(`http://127.0.0.1:${file.port}/status`, {
+      headers: { authorization: `Bearer ${file.token}` },
+      signal: AbortSignal.timeout(2_000),
+    });
+    if (!response.ok) return null;
+    const status = (await response.json()) as { pid?: unknown; stateDir?: unknown };
+    return status.pid === file.pid && typeof status.stateDir === "string" && resolve(status.stateDir) === resolve(state)
+      ? { pid: file.pid, port: file.port }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function releaseState(state: string): Promise<void> {
+  const left = await runningServiceOf(state);
+  if (left) {
+    leftRunning.push(`pid ${left.pid} on port ${left.port} for ${state}`);
+    if (left.pid !== process.pid) {
+      try {
+        process.kill(left.pid, "SIGTERM");
+      } catch {
+        // Already gone.
+      }
+      for (let i = 0; i < 100 && (await health(left.port))?.pid === left.pid; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+  }
+  serviceStates.delete(state);
+  await rm(state, { recursive: true, force: true });
+}
+
+after(async () => {
+  for (const state of [...serviceStates]) await releaseState(state);
+  assert.deepEqual(leftRunning, [], "A service this suite started was still running when its test ended");
+});
+
+function freePort(): Promise<number> {
+  return new Promise((done, fail) => {
+    const server = createNetServer();
+    server.once("error", fail);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as AddressInfo;
+      server.close(() => done(port));
+    });
+  });
+}
+
+const DIST_DIG = join(process.cwd(), "dist/dig.mjs");
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Stops the service running for `state` (only one `runningServiceOf` confirms) and waits until it has gone. */
+async function stopServiceIn(state: string): Promise<void> {
+  const running = await runningServiceOf(state);
+  if (!running || running.pid === process.pid) return;
+  process.kill(running.pid, "SIGTERM");
+  for (let i = 0; i < 100 && processAlive(running.pid); i++) await new Promise((r) => setTimeout(r, 100));
+}
+
+/** Starts `dist/dig.mjs serve` as this test's child, on a free port, and waits until it serves. */
+async function startDistService(
+  state: string,
+): Promise<{ readonly port: number; readonly pid: number; readonly stop: () => Promise<void> }> {
+  const port = await freePort();
+  const child = spawn(process.execPath, [DIST_DIG, "serve"], {
+    env: { ...process.env, DIG_STATE_DIR: state, DIG_PORT: String(port), DIG_IDLE_EXIT_MS: "600000" },
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += String(chunk);
+  });
+  const exited = new Promise<void>((done) => child.once("exit", () => done()));
+  const pid = child.pid;
+  assert.ok(pid, "dig serve started");
+  for (let i = 0; i < 300; i++) {
+    if ((await health(port))?.pid === pid && (await readServiceFile(state))?.pid === pid) {
+      return {
+        port,
+        pid,
+        stop: async () => {
+          if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+          await exited;
+        },
+      };
+    }
+    if (child.exitCode !== null) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  child.kill("SIGKILL");
+  await exited;
+  throw new Error(`dist/dig.mjs serve did not start: ${stderr}`);
+}
 
 function rawHttp(
   port: number,
@@ -109,7 +233,7 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
   });
 
   it("full daemon lifecycle: auth/host/origin guards, /open/:code, SPA JSON & SSE APIs, /keys/:code, /approve/:code, /mcp round-trip, and /stop", async () => {
-    const tmp = await mkdtemp(join(tmpdir(), "dig-svc-full-"));
+    const tmp = await serviceState("dig-svc-full-");
     const projectDir = await mkdtemp(join(tmpdir(), "dig-svc-proj-"));
     const service = await serve({
       state: tmp,
@@ -730,6 +854,34 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
         assert.equal(infoRes.structuredContent.sources[0].id, "hackernews");
         assert.equal(infoRes.structuredContent.sources[0].enabled, true);
 
+        // source_info: GitHub works without a token, so with none in keys.env it reads partial, not setup-required.
+        const enableGithub = (await plain.client.callTool({
+          name: "settings",
+          arguments: { set: { github_enabled: true } },
+        })) as { isError?: boolean };
+        assert.notEqual(enableGithub.isError, true);
+        const githubInfo = (await plain.client.callTool({
+          name: "source_info",
+          arguments: { source: "github" },
+        })) as {
+          structuredContent: {
+            sources: {
+              readiness: { status: string; message: string };
+              credentials: { name: string; available: boolean; required: boolean }[];
+            }[];
+          };
+        };
+        const githubReadiness = githubInfo.structuredContent.sources[0].readiness;
+        assert.equal(githubReadiness.status, "partial");
+        assert.doesNotMatch(githubReadiness.message, /Missing keys/);
+        assert.match(githubReadiness.message, /anonymously or through an existing gh login/);
+        assert.match(githubReadiness.message, /gh login was not probed/);
+        assert.deepEqual(githubInfo.structuredContent.sources[0].credentials, [
+          { name: "GH_TOKEN", available: false, required: false },
+          { name: "GITHUB_TOKEN", available: false, required: false },
+        ]);
+        await plain.client.callTool({ name: "settings", arguments: { set: { github_enabled: false } } });
+
         // tools/call: settings (reads & updates multi-unit caps)
         const mcpSettingsRes = (await plain.client.callTool({
           name: "settings",
@@ -979,13 +1131,13 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
       assert.equal(await health(port), null, "Service must stop responding after POST /stop");
     } finally {
       await service.stop("test-cleanup").catch(() => {});
-      await rm(tmp, { recursive: true, force: true });
+      await releaseState(tmp);
       await rm(projectDir, { recursive: true, force: true });
     }
   });
 
   it("static SPA asset server serves dist/web assets, handles client routes with dots, and blocks path traversal", async () => {
-    const tmp = await mkdtemp(join(tmpdir(), "dig-svc-web-"));
+    const tmp = await serviceState("dig-svc-web-");
     const webDir = join(tmp, "web");
     await mkdir(join(webDir, "assets"), { recursive: true });
     await writeFile(join(webDir, "index.html"), "<!doctype html><div id='root'>SPA</div>");
@@ -1032,7 +1184,7 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
       assert.equal(traversal.status, 404);
     } finally {
       await service.stop("test-cleanup").catch(() => {});
-      await rm(tmp, { recursive: true, force: true });
+      await releaseState(tmp);
     }
   });
 
@@ -1045,7 +1197,6 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
       const { safeRedirectPath } = await import("./http-api.ts");
       const { digRouteFromFile } = await import("../frontend/state/atoms.ts");
       const { symlink } = await import("node:fs/promises");
-      const { spawnSync } = await import("node:child_process");
 
       // 1. P0 #1 (Real dispatchCall): Secondary bootDigRuntime + listLibrary + dispose while a REAL paid
       //    call is actively in flight MUST NOT replay or fail the live call, leaving 1 real receipt and status='completed'!
@@ -1286,19 +1437,11 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
   });
 
   it("runStdioBridge (`dig mcp`) proxies both 2026-07-28 and 2025-era stdio clients cleanly", async () => {
-    const tmp = await mkdtemp(join(tmpdir(), "dig-svc-stdio-"));
-    const distDig = join(process.cwd(), "dist/dig.mjs");
-    const service = await serve({
-      state: tmp,
-      port: 0,
-      handleSignals: false,
-      env: { ...process.env, DIG_STATE_DIR: tmp, DIG_IDLE_EXIT_MS: "600000" },
-    });
-    const env = {
-      ...process.env,
-      DIG_STATE_DIR: tmp,
-      DIG_PORT: String(service.port),
-    };
+    // The service is dist/dig.mjs's own, as a host would find it: bridges replace an idle service of another
+    // build, so one started inside this test process would be swapped for a detached one and never tested.
+    const tmp = await serviceState("dig-svc-stdio-");
+    const service = await startDistService(tmp);
+    const env = { ...process.env, DIG_STATE_DIR: tmp, DIG_PORT: String(service.port) };
     const modernClient = new Client(
       { name: "dig-stdio-modern", version: "1.0.0" },
       {
@@ -1312,7 +1455,7 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
     );
     try {
       await modernClient.connect(
-        new StdioClientTransport({ command: process.execPath, args: [distDig, "mcp"], env, stderr: "pipe" }),
+        new StdioClientTransport({ command: process.execPath, args: [DIST_DIG, "mcp"], env, stderr: "pipe" }),
       );
       const modernTools = await modernClient.listTools();
       assert.ok(modernTools.tools.some((t) => t.name === "open_library"));
@@ -1322,15 +1465,121 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
       assert.equal(openTool._meta?.ui?.resourceUri, CARD_URI);
 
       await legacyClient.connect(
-        new StdioClientTransport({ command: process.execPath, args: [distDig, "mcp"], env, stderr: "pipe" }),
+        new StdioClientTransport({ command: process.execPath, args: [DIST_DIG, "mcp"], env, stderr: "pipe" }),
       );
       const legacyTools = await legacyClient.listTools();
       assert.ok(legacyTools.tools.some((t) => t.name === "open_library"));
+
+      assert.equal((await health(service.port))?.pid, service.pid, "both bridges used the service this test started");
+      assert.equal((await readServiceFile(tmp))?.pid, service.pid);
     } finally {
       await legacyClient.close().catch(() => {});
       await modernClient.close().catch(() => {});
-      await service.stop("test-cleanup").catch(() => {});
-      await rm(tmp, { recursive: true, force: true });
+      await service.stop();
+      await releaseState(tmp);
     }
+  });
+
+  it("bridges starting at once on an empty state folder share one service, and each losing start exits with one plain line", async () => {
+    const tmp = await serviceState("dig-svc-race-");
+    const port = await freePort();
+    const env = { ...process.env, DIG_STATE_DIR: tmp, DIG_PORT: String(port), DIG_IDLE_EXIT_MS: "600000" };
+    const clients = Array.from(
+      { length: 4 },
+      (_, i) => new Client({ name: `dig-race-${i}`, version: "1.0.0" }, { capabilities: {} }),
+    );
+    try {
+      await Promise.all(
+        clients.map((client) =>
+          client.connect(
+            new StdioClientTransport({ command: process.execPath, args: [DIST_DIG, "mcp"], env, stderr: "pipe" }),
+          ),
+        ),
+      );
+      // Each listing goes through its own bridge with the port and token that bridge's ensureService returned.
+      for (const client of clients) {
+        assert.ok((await client.listTools()).tools.some((t) => t.name === "dig_start"));
+      }
+      const file = await readServiceFile(tmp);
+      const running = await health(port);
+      assert.ok(file && running, "one service is running");
+      assert.equal(file.pid, running.pid);
+      assert.equal(file.port, port);
+
+      // Every `dig serve` the bridges spawned wrote exactly one line: the one that bound says it is listening,
+      // each loser names the running service and its own pid, and has exited.
+      const lines = async () =>
+        (await readFile(join(tmp, "service.log"), "utf8")).split("\n").filter((line) => line.trim() !== "");
+      const log = await lines();
+      assert.equal(log.filter((line) => /listening on/.test(line)).length, 1, log.join("\n"));
+      assert.match(log.find((line) => /listening on/.test(line)) ?? "", new RegExp(`\\(pid ${running.pid}\\)`));
+      for (const line of log.filter((l) => /already serves|could not|EADDRINUSE|ERROR|error/i.test(l))) {
+        const loser: RegExpExecArray | null = new RegExp(
+          `^dig: Dig ${VERSION.replaceAll(".", "\\.")} \\(pid ${running.pid}\\) already serves port ${port}; this start \\(pid (\\d+)\\) exits\\.$`,
+        ).exec(line);
+        assert.ok(loser, `Unexpected service.log line: ${line}`);
+        const loserPid: number = Number(loser[1]);
+        for (let i = 0; i < 50 && processAlive(loserPid); i++) await new Promise((r) => setTimeout(r, 100));
+        assert.equal(processAlive(loserPid), false, `losing start ${loserPid} has exited`);
+      }
+      assert.doesNotMatch(log.join("\n"), /ERROR|An error occurred|EADDRINUSE|\n\s+at /);
+    } finally {
+      await Promise.all(clients.map((client) => client.close().catch(() => {})));
+      await stopServiceIn(tmp);
+      await releaseState(tmp);
+    }
+  });
+
+  it("dig serve on a port Dig already serves writes one plain line and exits 0; on a port held by something else it names the port and DIG_PORT and exits 1", async () => {
+    const tmp = await serviceState("dig-svc-port-");
+    const other = await serviceState("dig-svc-port-other-");
+    const service = await startDistService(tmp);
+    const holder = createNetServer((socket) => socket.destroy());
+    await new Promise<void>((done) => holder.listen(0, "127.0.0.1", () => done()));
+    const heldPort = (holder.address() as AddressInfo).port;
+    try {
+      const again = spawnSync(process.execPath, [DIST_DIG, "serve"], {
+        env: { ...process.env, DIG_STATE_DIR: tmp, DIG_PORT: String(service.port) },
+        encoding: "utf8",
+        timeout: 30_000,
+      });
+      assert.equal(again.status, 0, again.stderr);
+      assert.equal(again.stdout, "");
+      assert.match(
+        again.stderr,
+        new RegExp(`^dig: Dig ${VERSION.replaceAll(".", "\\.")} \\(pid ${service.pid}\\) already serves port ${service.port}; this start \\(pid \\d+\\) exits\\.\n$`),
+      );
+      assert.equal((await health(service.port))?.pid, service.pid, "the running service is untouched");
+
+      const blocked = spawnSync(process.execPath, [DIST_DIG, "serve"], {
+        env: { ...process.env, DIG_STATE_DIR: other, DIG_PORT: String(heldPort) },
+        encoding: "utf8",
+        timeout: 30_000,
+      });
+      assert.equal(blocked.status, 1, blocked.stderr);
+      assert.match(blocked.stderr, new RegExp(`[Pp]ort ${heldPort}\\b.*not Dig`));
+      assert.match(blocked.stderr, /DIG_PORT/);
+      assert.doesNotMatch(blocked.stderr, /An error occurred|\n\s+at /);
+      assert.equal(await readServiceFile(other), null, "a start that did not bind writes no service.json");
+    } finally {
+      await new Promise<void>((done) => holder.close(() => done()));
+      await service.stop();
+      await releaseState(tmp);
+      await releaseState(other);
+    }
+  });
+
+  it("errorMessage gives a failure's own cause when its message is empty, so the CLI never prints a bare generic error", () => {
+    const bindFailure = Object.assign(new Error("listen EADDRINUSE: address already in use 127.0.0.1:1"), {
+      code: "EADDRINUSE",
+    });
+    const wrapper = Object.assign(new Error(""), { _tag: "ServeError", cause: bindFailure });
+    assert.equal(errorMessage(wrapper), "listen EADDRINUSE: address already in use 127.0.0.1:1");
+    assert.equal(errorMessage(new Error("plain")), "plain");
+    assert.equal(errorMessage("text"), "text");
+    assert.equal(errorMessage(Object.assign(new Error(""), { _tag: "Tagged" })), "Tagged (no message)");
+    assert.ok(errorMessage(new Error("")).length > 0);
+    assert.ok(errorMessage(undefined).length > 0);
+    assert.notEqual(errorMessage(new Error("")), "An error occurred");
   });
 });

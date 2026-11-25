@@ -23,8 +23,14 @@ export interface SourceStatus {
   readonly description: string;
   readonly enabled: boolean;
   readonly readiness: SourceReadiness;
+  /** Required credentials (`SourcePlugin.keys`) that are not set, each by its first name. */
   readonly missingKeys: readonly string[];
+  /** Required credentials that are set, each by the name found. */
   readonly presentKeys: readonly string[];
+  /** Optional credentials (`SourcePlugin.optionalKeys`), each by the name found or else its first name. */
+  readonly optionalKeys: readonly { readonly name: string; readonly set: boolean }[];
+  /** What is true of the source while an optional credential is not set. */
+  readonly notes: readonly string[];
   readonly missingPrereqs: readonly string[];
   readonly credential?: string;
   readonly billing: string;
@@ -37,7 +43,13 @@ export interface AccountStatus {
   readonly name: string;
   readonly signup: string;
   readonly billing: string;
-  readonly keys: readonly { readonly name: string; readonly aliases: readonly string[]; readonly set: boolean }[];
+  /** `required` is false only for a key its sources declare optional (`SourcePlugin.optionalKeys`) and none needs. */
+  readonly keys: readonly {
+    readonly name: string;
+    readonly aliases: readonly string[];
+    readonly set: boolean;
+    readonly required: boolean;
+  }[];
   readonly optional: readonly { readonly name: string; readonly set: boolean }[];
   readonly sources: readonly string[];
   readonly ready: boolean;
@@ -128,15 +140,24 @@ export function makeSetupLayer(
               if (found) presentKeys.push(found);
               else missingKeys.push(aliases[0]);
             }
+            const optionalKeys: { name: string; set: boolean }[] = [];
+            const notes: string[] = [];
+            for (const group of p.optionalKeys ?? []) {
+              const found = group.names.find((name) => keysSvc.has(name));
+              optionalKeys.push({ name: found ?? group.names[0], set: found !== undefined });
+              if (!found) notes.push(group.whenAbsent);
+            }
             const missingPrereqs = (p.requires ?? []).filter((r) => !prereqMap.get(r));
+            // Presence only: nothing is run or requested to decide readiness. A missing optional credential
+            // leaves a source `partial`; it never makes one need setup, nor stands in for a required one.
             const readiness: SourceReadiness =
               missingKeys.length === 0 && missingPrereqs.length === 0
-                ? "ready"
+                ? notes.length === 0
+                  ? "ready"
+                  : "partial"
                 : presentKeys.length > 0
                   ? "partial"
-                  : groups.length === 0 && missingPrereqs.length > 0
-                    ? "needs_setup"
-                    : "needs_setup";
+                  : "needs_setup";
 
             const methods =
               p.kind === "tool"
@@ -155,6 +176,8 @@ export function makeSetupLayer(
               readiness,
               missingKeys,
               presentKeys,
+              optionalKeys,
+              notes,
               missingPrereqs,
               credential: p.credential,
               billing: p.billing,
@@ -163,11 +186,16 @@ export function makeSetupLayer(
             };
           });
 
+          const requiredKeyNames = new Set(plugins.flatMap((p) => (p.keys ?? []).flat()));
+          const optionalKeyNames = new Set(
+            plugins.flatMap((p) => (p.optionalKeys ?? []).flatMap((g) => g.names)),
+          );
+          const isOptional = (name: string) => optionalKeyNames.has(name) && !requiredKeyNames.has(name);
           const accountStatuses: AccountStatus[] = accounts.map((acc) => {
             const keys = acc.keys.map((entry) => {
               const aliases = Array.isArray(entry) ? [...entry] : [entry as string];
               const set = aliases.some((n) => keysSvc.has(n));
-              return { name: aliases[0], aliases, set };
+              return { name: aliases[0], aliases, set, required: !aliases.every(isOptional) };
             });
             const optional = (acc.optional ?? []).map((name) => ({ name, set: keysSvc.has(name) }));
             const allAccKeyNames = new Set([

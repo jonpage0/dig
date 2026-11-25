@@ -16,7 +16,7 @@ The `dig` command (`src/service/cli.ts`, built with `effect/cli` and bundled as 
 
 | Command | What it does |
 | --- | --- |
-| `dig serve` | Runs the local HTTP/MCP/SPA daemon (`src/service/daemon.ts` + `http-api.ts`) until stopped or idle. Refuses to start when its port is in use. |
+| `dig serve` | Runs the local HTTP/MCP/SPA daemon (`src/service/daemon.ts` + `http-api.ts`) until stopped or idle. When a Dig service already holds its port (the end of a start race), it writes one line naming that service's version and PID and exits 0; when something else holds the port, it names the port and `DIG_PORT` and exits 1. |
 | `dig mcp` | What a host launches: a stdio front forwarding messages to the daemon over HTTP, starting `dig serve` when none is running and swapping an idle older build. |
 | `dig setup` | Interactive SSH-safe terminal onboarding wizard (`effect/cli/Prompt`) for presets/sources, `keys.env` (`0600`), and `[spend]` caps. Supports `--preset starter\|research\|social\|all` to apply a preset directly. |
 | `dig open [--no-browser]` | Starts the daemon if needed, requests a one-time `/open/<code>` address, and opens the localhost web SPA in the default browser (or prints the URL). |

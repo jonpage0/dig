@@ -111,6 +111,16 @@ export interface ProviderLink {
   readonly url?: string;
 }
 
+/**
+ * A credential the source's actions use when it is set but do not need: without it they still work, at lower
+ * limits, through a keyless fallback, or without an optional feature. `names` are interchangeable aliases.
+ */
+export interface OptionalKeyGroup {
+  readonly names: readonly string[];
+  /** What is true while none of `names` is set, shown as the source's readiness message. */
+  readonly whenAbsent: string;
+}
+
 export interface SourcePlugin {
   readonly id: string;
   readonly kind?: "tool";
@@ -125,7 +135,10 @@ export interface SourcePlugin {
   readonly helpers?: readonly string[];
   readonly helperSkill?: string;
   readonly env?: readonly string[];
+  /** Credentials the source needs: a source missing one of these groups is not ready. */
   readonly keys?: readonly (string | readonly string[])[];
+  /** Credentials the source works without: a missing one leaves it `partial`, never needing setup. */
+  readonly optionalKeys?: readonly OptionalKeyGroup[];
   readonly credential?: string;
   readonly requires?: readonly string[];
   readonly envSettings?: readonly EnvSettingMeta[];

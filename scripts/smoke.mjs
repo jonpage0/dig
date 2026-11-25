@@ -66,6 +66,8 @@ try {
 } finally {
   await client.close().catch(() => {});
   const stopped = await dig(['stop']);
-  if (stopped.code !== 0) { passed = false; console.error('Could not stop the service.'); }
+  // `dig stop` exits 0 even when the service outlived its wait, so the port itself must have stopped answering.
+  const answering = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(2_000) }).then(() => true, () => false);
+  if (stopped.code !== 0 || answering) { passed = false; console.error(`Could not stop the service on port ${port}.`); }
   if (passed) await rm(state, { recursive: true, force: true }); else { console.error(`Smoke run failed; its state folder is kept at ${state}`); process.exitCode = 1; }
 }

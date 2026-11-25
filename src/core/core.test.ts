@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -8,7 +8,7 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as SqlClient from "effect/sql/SqlClient";
-import { catalogMetaFromPlugins, makeConfigLayer, makeKeysLayer, ConfigService, KeysService } from "./config.ts";
+import { catalogMetaFromPlugins, keysPath, makeConfigLayer, makeKeysLayer, ConfigService, KeysService } from "./config.ts";
 import { dbPath, makeDigDbLayer } from "./db.ts";
 import { FreeHttp, makeFreeClient, makePaidClient, PaidHttp, paidRequest } from "./http.ts";
 import { LibraryService, makeLibraryLayer } from "./library.ts";
@@ -678,6 +678,78 @@ describe("Dig 2.0 Effect 4.1.5 Core Foundation", () => {
       } finally {
         await rt.dispose();
       }
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+  it("an optional key group leaves a source partial with its own message, never needing setup", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "dig-core-optkeys-"));
+    try {
+      const base = { group: "code" as const, about: "x", providers: [{ name: "x" }], billing: "Free", actions: [] };
+      const anonymous = defineSource({
+        ...base,
+        id: "anon",
+        label: "Anon",
+        description: "Works without its token",
+        env: ["ANON_TOKEN", "ANON_ALIAS_TOKEN"],
+        optionalKeys: [{ names: ["ANON_TOKEN", "ANON_ALIAS_TOKEN"], whenAbsent: "Works anonymously at lower limits." }],
+      });
+      const mixed = defineSource({
+        ...base,
+        id: "mixed",
+        label: "Mixed",
+        description: "Needs one key, can use another",
+        env: ["MIXED_REQUIRED_KEY", "MIXED_EXTRA_KEY"],
+        keys: ["MIXED_REQUIRED_KEY"],
+        optionalKeys: [{ names: ["MIXED_EXTRA_KEY"], whenAbsent: "Extras are off." }],
+      });
+      const plugins = [anonymous, mixed];
+      const meta = catalogMetaFromPlugins(plugins);
+      assert.ok(meta.credentialKeyNames.includes("ANON_ALIAS_TOKEN"), "optional keys are credentials too");
+      const env: NodeJS.ProcessEnv = {};
+      const keysLayer = makeKeysLayer(tmp, meta, env);
+      const accounts = [
+        { id: "anon-co", name: "Anon", signup: "https://example.com", billing: "Free", keys: [["ANON_TOKEN", "ANON_ALIAS_TOKEN"]] },
+        { id: "mixed-co", name: "Mixed", signup: "https://example.com", billing: "Paid", keys: ["MIXED_REQUIRED_KEY", "MIXED_EXTRA_KEY"] },
+      ];
+      const layer = makeSetupLayer(plugins, accounts).pipe(
+        Layer.provideMerge(Layer.mergeAll(makeConfigLayer(tmp, meta), keysLayer, ProgressHub.Live)),
+      );
+      const snapshotWith = (keysEnv: string) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* Effect.promise(() => writeFile(keysPath(tmp), keysEnv, { mode: 0o600 }));
+            yield* Effect.flatMap(KeysService, (k) => k.reload());
+            const snap = yield* Effect.flatMap(SetupService, (s) => s.snapshot());
+            assert.deepEqual(
+              snap.accounts.flatMap((a) => a.keys.map((k) => [k.name, k.required])),
+              [["ANON_TOKEN", false], ["MIXED_REQUIRED_KEY", true], ["MIXED_EXTRA_KEY", false]],
+            );
+            return new Map(snap.sources.map((s) => [s.id, s]));
+          }).pipe(Effect.provide(layer)),
+        );
+
+      const none = await snapshotWith("");
+      assert.equal(none.get("anon")?.readiness, "partial");
+      assert.deepEqual(none.get("anon")?.missingKeys, []);
+      assert.deepEqual(none.get("anon")?.optionalKeys, [{ name: "ANON_TOKEN", set: false }]);
+      assert.deepEqual(none.get("anon")?.notes, ["Works anonymously at lower limits."]);
+      assert.equal(none.get("mixed")?.readiness, "needs_setup");
+      assert.deepEqual(none.get("mixed")?.missingKeys, ["MIXED_REQUIRED_KEY"]);
+
+      const onlyOptional = await snapshotWith("ANON_ALIAS_TOKEN=a\nMIXED_EXTRA_KEY=b\n");
+      assert.equal(onlyOptional.get("anon")?.readiness, "ready");
+      assert.deepEqual(onlyOptional.get("anon")?.optionalKeys, [{ name: "ANON_ALIAS_TOKEN", set: true }]);
+      assert.deepEqual(onlyOptional.get("anon")?.notes, []);
+      assert.equal(onlyOptional.get("mixed")?.readiness, "needs_setup", "an optional key never stands in for a required one");
+
+      const requiredOnly = await snapshotWith("MIXED_REQUIRED_KEY=c\n");
+      assert.equal(requiredOnly.get("mixed")?.readiness, "partial");
+      assert.deepEqual(requiredOnly.get("mixed")?.missingKeys, []);
+      assert.deepEqual(requiredOnly.get("mixed")?.notes, ["Extras are off."]);
+
+      const both = await snapshotWith("MIXED_REQUIRED_KEY=c\nMIXED_EXTRA_KEY=b\n");
+      assert.equal(both.get("mixed")?.readiness, "ready");
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }

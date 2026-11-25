@@ -4,8 +4,9 @@
 import { Console, Effect, Redacted } from "effect";
 import * as CliError from "effect/cli/CliError";
 import * as Prompt from "effect/cli/Prompt";
+import { errorMessage } from "../core/errors.ts";
 import { bootDigRuntime } from "../core/runtime.ts";
-import { SETUP_PRESETS, SetupService, type SetupSnapshot } from "../core/setup.ts";
+import { SETUP_PRESETS, SetupService, type SetupSnapshot, type SourceStatus } from "../core/setup.ts";
 import { ACCOUNTS, SOURCES } from "../sources/index.ts";
 import { digCommand } from "./daemon.ts";
 
@@ -16,6 +17,18 @@ export interface SetupWizardOptions {
 }
 
 const VALID_PRESETS = Object.keys(SETUP_PRESETS);
+
+const unsetOptionalKeys = (source: SourceStatus): string[] =>
+  source.optionalKeys.filter((k) => !k.set).map((k) => k.name);
+
+const readinessLabel = (source: SourceStatus): string =>
+  source.readiness === "ready"
+    ? "ready"
+    : source.missingKeys.length
+      ? `needs ${source.missingKeys.join(", ")}`
+      : source.missingPrereqs.length === 0 && unsetOptionalKeys(source).length
+        ? `works; ${unsetOptionalKeys(source).join(", ")} optional`
+        : source.readiness;
 
 /** Apply a named setup preset non-interactively and print a concise summary. */
 export const runSetupPreset = (
@@ -53,13 +66,14 @@ export const runSetupPreset = (
       catch: (e) =>
         new CliError.UserError({
           cause: e,
-          userMessage: `Setup failed: ${e instanceof Error ? e.message : String(e)}`,
+          userMessage: `Setup failed: ${errorMessage(e)}`,
         }),
     });
 
     const enabled = snap.sources.filter((s) => s.enabled);
     const ready = enabled.filter((s) => s.readiness === "ready");
     const missingKeys = [...new Set(enabled.flatMap((s) => s.missingKeys))];
+    const optionalKeys = [...new Set(enabled.flatMap((s) => unsetOptionalKeys(s)))];
     yield* Console.log(
       `Applied "${preset}" preset: ${enabled.length} sources enabled (${ready.length} ready now).`,
     );
@@ -68,6 +82,13 @@ export const runSetupPreset = (
       yield* Console.log(
         `Missing API keys for enabled sources: ${missingKeys.join(", ")}`,
       );
+    }
+    if (optionalKeys.length) {
+      yield* Console.log(
+        `Optional keys (their sources work without them, with less): ${optionalKeys.join(", ")}`,
+      );
+    }
+    if (missingKeys.length || optionalKeys.length) {
       yield* Console.log(
         `Enter them safely via \`${digCommand()} setup\` in an interactive terminal, \`${digCommand()} open --path /setup\`, or ${snap.keysPath}.`,
       );
@@ -133,7 +154,7 @@ export const runSetupWizard = (
       catch: (e) =>
         new CliError.UserError({
           cause: e,
-          userMessage: `Could not open Dig state: ${e instanceof Error ? e.message : String(e)}`,
+          userMessage: `Could not open Dig state: ${errorMessage(e)}`,
         }),
     });
 
@@ -143,12 +164,36 @@ export const runSetupWizard = (
         catch: (e) =>
           new CliError.UserError({
             cause: e,
-            userMessage: e instanceof Error ? e.message : String(e),
+            userMessage: errorMessage(e),
           }),
       });
 
     const wizard = Effect.gen(function* () {
       let snap = yield* runRt(Effect.flatMap(SetupService, (s) => s.snapshot()));
+
+      // Masked prompts for each named credential; saves the entered ones to keys.env and refreshes `snap`.
+      const promptKeys = (byKey: ReadonlyMap<string, readonly string[]>) =>
+        Effect.gen(function* () {
+          const valuesToSave: Record<string, string> = {};
+          for (const [keyName, labels] of byKey) {
+            const account = snap.accounts.find((a) =>
+              a.keys.some((k) => k.name === keyName || k.aliases.includes(keyName)),
+            );
+            const hint = account?.signup ? ` · ${account.signup}` : "";
+            const secret: Redacted.Redacted<string> = yield* Prompt.Password({
+              message: `${keyName} (${labels.join(", ")}${hint}) — Enter to skip`,
+            });
+            const rawVal = Redacted.value(secret).trim();
+            if (rawVal) valuesToSave[keyName] = rawVal;
+          }
+          if (Object.keys(valuesToSave).length > 0) {
+            const { saved } = yield* runRt(
+              Effect.flatMap(SetupService, (s) => s.saveKeys(valuesToSave)),
+            );
+            yield* Console.log(`Saved ${saved.join(", ")} to ${snap.keysPath} (mode 0600).`);
+            snap = yield* runRt(Effect.flatMap(SetupService, (s) => s.snapshot()));
+          }
+        });
 
       yield* Console.log(`\nDig 2.0 Setup · Config: ${snap.configPath}\n`);
 
@@ -194,7 +239,7 @@ export const runSetupWizard = (
           message: "Select enabled research sources and shared tools",
           maxPerPage: 12,
           choices: snap.sources.map((s) => ({
-            title: `${s.label} [${s.readiness === "ready" ? "ready" : s.missingKeys.length ? `needs ${s.missingKeys.join(", ")}` : s.readiness}]`,
+            title: `${s.label} [${readinessLabel(s)}]`,
             value: s.id,
             description: s.description,
             selected: chosenSet.has(s.id),
@@ -207,11 +252,22 @@ export const runSetupWizard = (
       // Step 3: Enter missing API keys masked via Prompt.Password (Redacted)
       const enabledSources = snap.sources.filter((s) => s.enabled);
       const missingByKey = new Map<string, string[]>();
+      const optionalByKey = new Map<string, string[]>();
       for (const s of enabledSources) {
-        for (const keyName of s.missingKeys) {
-          const list = missingByKey.get(keyName) ?? [];
-          list.push(s.label);
-          missingByKey.set(keyName, list);
+        for (const [byKey, names] of [
+          [missingByKey, s.missingKeys],
+          [optionalByKey, unsetOptionalKeys(s)],
+        ] as const) {
+          for (const keyName of names) {
+            const list = byKey.get(keyName) ?? [];
+            list.push(s.label);
+            byKey.set(keyName, list);
+          }
+        }
+      }
+      for (const s of enabledSources) {
+        for (const note of s.notes) {
+          yield* Console.log(`${s.label}: ${note}`);
         }
       }
 
@@ -223,27 +279,14 @@ export const runSetupWizard = (
           message: "Enter missing API keys now? (Masked; saved only to keys.env with mode 0600)",
           initial: true,
         });
-        if (enterKeys) {
-          const valuesToSave: Record<string, string> = {};
-          for (const [keyName, labels] of missingByKey) {
-            const account = snap.accounts.find((a) =>
-              a.keys.some((k) => k.name === keyName || k.aliases.includes(keyName)),
-            );
-            const hint = account?.signup ? ` · ${account.signup}` : "";
-            const secret: Redacted.Redacted<string> = yield* Prompt.Password({
-              message: `${keyName} (${labels.join(", ")}${hint}) — Enter to skip`,
-            });
-            const rawVal = Redacted.value(secret).trim();
-            if (rawVal) valuesToSave[keyName] = rawVal;
-          }
-          if (Object.keys(valuesToSave).length > 0) {
-            const { saved } = yield* runRt(
-              Effect.flatMap(SetupService, (s) => s.saveKeys(valuesToSave)),
-            );
-            yield* Console.log(`Saved ${saved.join(", ")} to ${snap.keysPath} (mode 0600).`);
-            snap = yield* runRt(Effect.flatMap(SetupService, (s) => s.snapshot()));
-          }
-        }
+        if (enterKeys) yield* promptKeys(missingByKey);
+      }
+      if (optionalByKey.size > 0) {
+        const enterOptional = yield* Prompt.Confirm({
+          message: `Enter optional keys now (${[...optionalByKey.keys()].join(", ")})? Their sources work without them.`,
+          initial: false,
+        });
+        if (enterOptional) yield* promptKeys(optionalByKey);
       }
 
       // Step 4: Optional multi-unit [spend] caps

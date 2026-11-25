@@ -13,13 +13,13 @@ Use only this `dig` server's tools. Another Dig edition's server, CLI, configura
 
 Call `settings` without `set`, which returns every setting, and `source_info` with no arguments. From `source_info`, note each source's `enabled`, `readiness.status` and `readiness.message`, its `credentials` (names and whether each is set, never values), its `prerequisites`, and the top-level `configPath`, `keysPath` and `library`.
 
-Readiness means a credential name is set or a local prerequisite exists. It is not proof that a key is valid, has credit, or that the provider is up; say so when it matters.
+Readiness means a credential name is set or a local prerequisite exists. It is not proof that a key is valid, has credit, or that the provider is up; say so when it matters. A `partial` source with no missing required credential, such as GitHub without a token, works now: its `readiness.message` says what an optional credential would add.
 
 ## 2. Show where things stand
 
 Give a short overview, grouped by what the user would do next:
 
-- **Ready to use**: enabled and ready.
+- **Ready to use**: enabled and ready, or `partial` with no required credential or prerequisite missing (say what the optional one would add).
 - **Enabled but needs something**: name the missing credential or prerequisite.
 - **Available to turn on**: disabled sources, each with one line on what it researches. Hacker News, DeepWiki, Polymarket, the Wayback Machine, SEC EDGAR and Bluesky need no key. GitHub works without a login at lower limits (a login is optional; see step 5).
 

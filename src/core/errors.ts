@@ -50,3 +50,30 @@ export type DigError =
   | SsrfBlockedError
   | SpendLimitError
   | ProviderCallError;
+
+/**
+ * A failure's own text, never empty: its message, else the first non-empty message among its causes (an Effect
+ * platform error such as `ServeError` carries the real one, `listen EADDRINUSE …`, only in `cause`), else its tag.
+ */
+export function errorMessage(error: unknown): string {
+  const seen = new Set<unknown>();
+  let tag = "";
+  for (let current = error; current !== undefined && current !== null && !seen.has(current); ) {
+    seen.add(current);
+    if (typeof current !== "object") {
+      const text = String(current).trim();
+      if (text) return text;
+      break;
+    }
+    const { message, _tag, name, cause } = current as {
+      readonly message?: unknown;
+      readonly _tag?: unknown;
+      readonly name?: unknown;
+      readonly cause?: unknown;
+    };
+    if (typeof message === "string" && message.trim()) return message;
+    if (!tag) tag = typeof _tag === "string" ? _tag : typeof name === "string" && name !== "Error" ? name : "";
+    current = cause;
+  }
+  return `${tag || "Unexpected failure"} (no message)`;
+}

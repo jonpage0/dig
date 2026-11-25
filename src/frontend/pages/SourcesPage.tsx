@@ -254,10 +254,39 @@ function SourceCatalogCard({
             </div>
           )}
 
-          {source.presentKeys.length > 0 && (
+          {source.notes.length > 0 && (
+            <div className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-border bg-secondary/30 p-2.5 text-xs">
+              <div className="space-y-1 text-muted-foreground">
+                <span className="font-medium text-foreground">Optional keys: </span>
+                <span className="space-x-1">
+                  {source.optionalKeys
+                    .filter((k) => !k.set)
+                    .map((k) => (
+                      <code key={k.name} className="rounded bg-card px-1.5 py-0.5 text-[11px]">
+                        {k.name}
+                      </code>
+                    ))}
+                </span>
+                {source.notes.map((note) => (
+                  <p key={note} className="m-0">
+                    {note}
+                  </p>
+                ))}
+              </div>
+              <Link
+                to="/setup"
+                search={{ step: 3 }}
+                className="font-medium text-primary no-underline hover:underline"
+              >
+                Add in Setup →
+              </Link>
+            </div>
+          )}
+
+          {(source.presentKeys.length > 0 || source.optionalKeys.some((k) => k.set)) && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               <span>Configured keys:</span>
-              {source.presentKeys.map((k) => (
+              {[...source.presentKeys, ...source.optionalKeys.filter((k) => k.set).map((k) => k.name)].map((k) => (
                 <Badge key={k} tone="success">
                   {k} ✓
                 </Badge>
@@ -480,7 +509,7 @@ export function SourcesPage() {
     return sources.filter((s) => {
       if (filter === "enabled" && !s.enabled) return false;
       if (filter === "ready" && (!s.enabled || s.readiness !== "ready")) return false;
-      if (filter === "needs_setup" && s.readiness === "ready") return false;
+      if (filter === "needs_setup" && s.missingKeys.length === 0 && s.missingPrereqs.length === 0) return false;
       if (!q) return true;
       return (
         s.id.toLowerCase().includes(q) ||

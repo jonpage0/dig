@@ -173,15 +173,12 @@ export interface CredentialMeta {
   readonly required: boolean;
 }
 
-/** A source's credential env names: secret-shaped names plus any required login key. GitHub's are optional. */
+/** A source's credential env names: secret-shaped names plus every declared key; `optionalKeys` are not required. */
 export function credentialNamesFor(source: SourcePlugin): CredentialMeta[] {
-  const required = new Set(
-    (source.id === "github" ? [] : source.keys ?? []).flatMap((k) =>
-      typeof k === "string" ? [k] : [...k],
-    ),
-  );
+  const required = new Set((source.keys ?? []).flatMap((k) => (typeof k === "string" ? [k] : [...k])));
+  const optional = new Set((source.optionalKeys ?? []).flatMap((g) => g.names));
   return (source.env ?? [])
-    .filter((name) => SECRET_NAME_PATTERN.test(name) || required.has(name))
+    .filter((name) => SECRET_NAME_PATTERN.test(name) || required.has(name) || optional.has(name))
     .map((name) => ({ name, required: required.has(name) }));
 }
 
@@ -1131,6 +1128,7 @@ async function runSourceInfo(runtime: DigManagedRuntime, sourceFilter?: string):
           ...(st?.missingPrereqs.length
             ? [`Missing tools: ${st.missingPrereqs.join(", ")}.`]
             : []),
+          ...(st?.notes ?? []),
         ].join(" ");
         const readinessMessage = !enabled
           ? `Disabled in Dig settings.${missingDesc ? ` ${missingDesc}` : ""}`
