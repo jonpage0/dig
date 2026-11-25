@@ -83,8 +83,6 @@ import {
   cardForKeys,
   cardForOpenLibrary,
   cardForReportSaved,
-  cardForSourceCall,
-  cardForSpendGate,
   declaresUi,
   renderCardHtml,
   type DigCardPayload,
@@ -1318,8 +1316,7 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
       return undefined;
     }
   };
-  const digRouteOf = (digHandle: string, working = false): string => {
-    if (working) return `/trail?dig=${encodeURIComponent(digHandle)}`;
+  const digRouteOf = (digHandle: string): string => {
     const slash = digHandle.indexOf("/");
     if (slash > 0 && slash < digHandle.length - 1) {
       const folder = digHandle.slice(0, slash);
@@ -1328,49 +1325,6 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
     }
     return "/";
   };
-  const attachJobCard = async (
-    result: CallToolResult,
-    job: LedgerJob,
-    opts: { readonly reused?: boolean; readonly working?: boolean; readonly progressMessage?: string } = {},
-  ): Promise<CallToolResult> => {
-    if (!ui()) return result;
-    try {
-      const sourceLabel = SOURCES.find((s) => s.id === job.source)?.label ?? job.source;
-      const textBlock = result.content.find((b) => b.type === "text") as { text?: string } | undefined;
-      const rawLink = result.content.find(
-        (b) =>
-          b.type === "resource_link" &&
-          typeof (b as { uri?: string }).uri === "string" &&
-          (b as { uri: string }).uri.includes("/raw/"),
-      ) as { uri: string } | undefined;
-      const rawFile = rawLink?.uri.startsWith("dig://library/")
-        ? decodeURIComponent(rawLink.uri.slice("dig://library/".length))
-        : undefined;
-      const openUrl = await mintCardOpenUrl(digRouteOf(job.dig, Boolean(opts.working)));
-      return withCard(
-        result,
-        cardForSourceCall({
-          sourceLabel,
-          actionName: job.tool,
-          status: job.status,
-          jobId: job.id,
-          receiptId: job.receiptId,
-          dig: job.dig,
-          isError: result.isError,
-          reused: opts.reused,
-          working: opts.working,
-          progressMessage: opts.progressMessage,
-          resultText: textBlock?.text,
-          error: job.error,
-          rawFile,
-          openUrl,
-        }),
-      );
-    } catch {
-      return result;
-    }
-  };
-
   let initialConfig: DigConfig | null = null;
   try {
     initialConfig = await runtime.runPromise(Effect.flatMap(ConfigService, (c) => c.load()));
@@ -1895,42 +1849,61 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
   );
 
   // 10. job
-  showsCard(
-    server.registerTool(
-      "job",
-      {
-        title: "Follow a call's job",
-        description:
-          "Status of a slow or paid source call that answered with a job id, and once finished, the result the call returns. wait: true waits up to 40 seconds for the result. cancel: true asks a running job to stop (a paid call then records unknown cost). Do not repeat the source call while its job runs.",
-        inputSchema: JobInput,
-        annotations: { destructiveHint: false, openWorldHint: false },
-      },
-      async ({ id, wait, cancel }, ctx) => {
-        try {
-          let job = await runtime.runPromise(
-            Effect.flatMap(ExecutionService, (exec) => exec.getJob(id)),
+  server.registerTool(
+    "job",
+    {
+      title: "Follow a call's job",
+      description:
+        "Status of a slow or paid source call that answered with a job id, and once finished, the result the call returns. wait: true waits up to 40 seconds for the result. cancel: true asks a running job to stop (a paid call then records unknown cost). Do not repeat the source call while its job runs.",
+      inputSchema: JobInput,
+      annotations: { destructiveHint: false, openWorldHint: false },
+    },
+    async ({ id, wait, cancel }, ctx) => {
+      try {
+        let job = await runtime.runPromise(
+          Effect.flatMap(ExecutionService, (exec) => exec.getJob(id)),
+        );
+        if (!job) return refused(unknownJobText(id));
+
+        const getProgress = () =>
+          runtime.runPromise(Effect.flatMap(ProgressHub, (hub) => hub.progressOf(job!.id)));
+
+        const isWorking = (j: LedgerJob) => j.status === "working" || j.status === "pending_approval";
+
+        if (cancel) {
+          const cancelled = await runtime.runPromise(
+            Effect.flatMap(ExecutionService, (exec) => exec.cancelJob(job!.id)),
           );
-          if (!job) return refused(unknownJobText(id));
-
-          const getProgress = () =>
-            runtime.runPromise(Effect.flatMap(ProgressHub, (hub) => hub.progressOf(job!.id)));
-
-          const isWorking = (j: LedgerJob) => j.status === "working" || j.status === "pending_approval";
-
-          if (cancel) {
-            const cancelled = await runtime.runPromise(
-              Effect.flatMap(ExecutionService, (exec) => exec.cancelJob(job!.id)),
+          if (!cancelled) {
+            return withLeadingLine(
+              jobResultContent(job),
+              `Job ${job.id} had already finished (${job.status}); there was nothing to cancel.`,
             );
-            if (!cancelled) {
-              return await attachJobCard(
-                withLeadingLine(
-                  jobResultContent(job),
-                  `Job ${job.id} had already finished (${job.status}); there was nothing to cancel.`,
-                ),
-                job,
-              );
-            }
-            const deadline = Date.now() + Math.min(inlineWaitMs(), 10_000);
+          }
+          const deadline = Date.now() + Math.min(inlineWaitMs(), 10_000);
+          while (Date.now() < deadline && !ctx.mcpReq.signal.aborted) {
+            const cur = await runtime.runPromise(
+              Effect.flatMap(ExecutionService, (exec) => exec.getJob(job!.id)),
+            );
+            if (cur) job = cur;
+            if (!isWorking(job)) break;
+            await new Promise((r) => setTimeout(r, 50));
+          }
+          if (isWorking(job)) {
+            return withLeadingLine(
+              workingJobResult(job, await getProgress()),
+              `Cancellation of job ${job.id} was requested; it is stopping.`,
+            );
+          }
+        } else if (wait && isWorking(job)) {
+          const notify = progressNotifierOf(ctx);
+          const unsub = notify
+            ? await runtime.runPromise(
+                Effect.map(ProgressHub, (hub) => hub.subscribeCall(job!.id, notify)),
+              )
+            : undefined;
+          try {
+            const deadline = Date.now() + inlineWaitMs();
             while (Date.now() < deadline && !ctx.mcpReq.signal.aborted) {
               const cur = await runtime.runPromise(
                 Effect.flatMap(ExecutionService, (exec) => exec.getJob(job!.id)),
@@ -1939,52 +1912,19 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
               if (!isWorking(job)) break;
               await new Promise((r) => setTimeout(r, 50));
             }
-            if (isWorking(job)) {
-              const prog = await getProgress();
-              return await attachJobCard(
-                withLeadingLine(
-                  workingJobResult(job, prog),
-                  `Cancellation of job ${job.id} was requested; it is stopping.`,
-                ),
-                job,
-                { working: true, progressMessage: prog?.message },
-              );
-            }
-          } else if (wait && isWorking(job)) {
-            const notify = progressNotifierOf(ctx);
-            const unsub = notify
-              ? await runtime.runPromise(
-                  Effect.map(ProgressHub, (hub) => hub.subscribeCall(job!.id, notify)),
-                )
-              : undefined;
-            try {
-              const deadline = Date.now() + inlineWaitMs();
-              while (Date.now() < deadline && !ctx.mcpReq.signal.aborted) {
-                const cur = await runtime.runPromise(
-                  Effect.flatMap(ExecutionService, (exec) => exec.getJob(job!.id)),
-                );
-                if (cur) job = cur;
-                if (!isWorking(job)) break;
-                await new Promise((r) => setTimeout(r, 50));
-              }
-            } finally {
-              unsub?.();
-            }
+          } finally {
+            unsub?.();
           }
-
-          if (isWorking(job)) {
-            const prog = await getProgress();
-            return await attachJobCard(workingJobResult(job, prog), job, {
-              working: true,
-              progressMessage: prog?.message,
-            });
-          }
-          return await attachJobCard(jobResultContent(job), job);
-        } catch (error) {
-          return refused(errorText(error));
         }
-      },
-    ),
+
+        if (isWorking(job)) {
+          return workingJobResult(job, await getProgress());
+        }
+        return jobResultContent(job);
+      } catch (error) {
+        return refused(errorText(error));
+      }
+    },
   );
 
   // 11. open_library (opens universal localhost Web SPA via one-time `/open/<code>` link)
@@ -2133,7 +2073,7 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
     if (job.status === "working" || job.status === "pending_approval") {
       throw new ProtocolError(-32602, `Task ${taskId} is still working.`);
     }
-    return await attachJobCard(jobResultContent(job), job);
+    return jobResultContent(job);
   });
 
   server.server.setRequestHandler("tasks/cancel", { params: TaskIdParams }, async ({ taskId }, ctx) => {
@@ -2173,231 +2113,192 @@ export async function createDigServer(context: McpRequestContext, hooks: Service
   const sourceTools = new Map<SourceTool, RegisteredTool>();
 
   for (const tool of SOURCE_TOOLS) {
-    const registered = showsCard(
-      server.registerTool(
-        tool.name,
-        {
-          title: tool.source.label,
-          description: tool.description,
-          inputSchema: sourceInputs.get(tool.name)!,
-          annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-        },
-        async (input, ctx): Promise<CallToolResult | InputRequiredResult> => {
+    const registered = server.registerTool(
+      tool.name,
+      {
+        title: tool.source.label,
+        description: tool.description,
+        inputSchema: sourceInputs.get(tool.name)!,
+        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      },
+      async (input, ctx): Promise<CallToolResult | InputRequiredResult> => {
+        try {
+          const cfg = await runtime.runPromise(Effect.flatMap(ConfigService, (c) => c.load()));
+          if (!cfg.sources.enabled.includes(tool.source.id)) {
+            return refused(`${tool.source.label} is disabled in Dig settings.`);
+          }
+
+          let dig;
           try {
-            const cfg = await runtime.runPromise(Effect.flatMap(ConfigService, (c) => c.load()));
-            if (!cfg.sources.enabled.includes(tool.source.id)) {
-              return refused(`${tool.source.label} is disabled in Dig settings.`);
-            }
-
-            let dig;
-            try {
-              dig = await runtime.runPromise(
-                Effect.flatMap(LibraryService, (lib) => lib.resolveHandle(input.dig)),
-              );
-            } catch {
-              return refused(NO_DIG);
-            }
-
-            const parsed = parseAction(tool, input.action, input.args);
-            if (!parsed.ok) return refused(parsed.error);
-
-            const { action, args } = parsed;
-            const fresh = input.fresh === true;
-            const unpaid = isUnpaidCall(action, args);
-            const hash = argsHash(args);
-
-            // Check existing reusable job before running spend gate (a reused result pays nothing!).
-            const reusable = await runtime.runPromise(
-              Effect.flatMap(ExecutionService, (exec) =>
-                exec.findReusableJob(dig.handle, action.name, hash, fresh),
-              ),
+            dig = await runtime.runPromise(
+              Effect.flatMap(LibraryService, (lib) => lib.resolveHandle(input.dig)),
             );
-            if (reusable && reusable.status !== "working" && reusable.status !== "pending_approval") {
-              return await attachJobCard(repeatedJobResult(reusable), reusable, { reused: true });
-            }
+          } catch {
+            return refused(NO_DIG);
+          }
 
-            // Multi-unit [spend] gate for new paid calls.
-            // Always gate `fresh: true` so a running job finishing between pre-check and dispatch cannot bypass spend caps.
-            if (!unpaid && (!reusable || fresh)) {
-              const gate = await runtime.runPromise(
-                Effect.flatMap(ExecutionService, (exec) =>
-                  exec.checkSpendGate({
-                    config: cfg,
-                    dig,
-                    sourceLabel: tool.source.label,
-                    actionName: action.name,
-                    args,
-                  }),
-                ),
-              );
+          const parsed = parseAction(tool, input.action, input.args);
+          if (!parsed.ok) return refused(parsed.error);
 
-              if (!gate.allow) {
-                const q = gate.question;
-                // Check if already approved once via browser `/approve/:code`
-                const preApproved = hooks.consumeApprovedBind?.(q.bind) ?? false;
-                if (!preApproved) {
-                  const asker = askerOf(context.era, server, ctx);
-                  const answer = await askForm(runtime, asker, q);
+          const { action, args } = parsed;
+          const fresh = input.fresh === true;
+          const unpaid = isUnpaidCall(action, args);
+          const hash = argsHash(args);
 
-                  if (answer.kind === "pending") return answer.result;
+          // Check existing reusable job before running spend gate (a reused result pays nothing!).
+          const reusable = await runtime.runPromise(
+            Effect.flatMap(ExecutionService, (exec) =>
+              exec.findReusableJob(dig.handle, action.name, hash, fresh),
+            ),
+          );
+          if (reusable && reusable.status !== "working" && reusable.status !== "pending_approval") {
+            return repeatedJobResult(reusable);
+          }
 
-                  if (answer.kind === "answered") {
-                    if (q.key === "ceiling" && answer.choice === "raise") {
-                      const target = answer.targetRaised ?? q.targetRaised ?? 0;
-                      await runtime.runPromise(
-                        Effect.flatMap(ExecutionService, (exec) =>
-                          exec.applySpendOverride(dig.handle, overridePatchForUnit(q.unit, target)),
-                        ),
-                      );
-                      // Re-verify spend gate after raising ceiling
-                      const recheck = await runtime.runPromise(
-                        Effect.flatMap(ExecutionService, (exec) =>
-                          exec.checkSpendGate({
-                            config: cfg,
-                            dig,
-                            sourceLabel: tool.source.label,
-                            actionName: action.name,
-                            args,
-                          }),
-                        ),
-                      );
-                      if (!recheck.allow) {
-                        return withCard(
-                          refused(recheck.refusalText),
-                          cardForSpendGate({
-                            sourceLabel: tool.source.label,
-                            actionName: action.name,
-                            title: q.title,
-                            reason: recheck.refusalText,
-                          }),
-                        );
-                      }
-                    } else if (q.key === "spend" && answer.choice === "send") {
-                      // Approved once; fall through to dispatch.
-                    } else if (q.key === "spend" && answer.choice === "send-dig") {
-                      await runtime.runPromise(
-                        Effect.flatMap(ExecutionService, (exec) =>
-                          exec.applySpendOverride(dig.handle, { dontAsk: true }),
-                        ),
-                      );
-                    } else {
-                      return withCard(
-                        refused(`The person chose to stop (${q.title}). ${gate.refusalText}`),
-                        cardForSpendGate({
-                          sourceLabel: tool.source.label,
-                          actionName: action.name,
-                          title: q.title,
-                          reason: gate.refusalText,
-                        }),
-                      );
-                    }
-                  } else if (answer.kind === "unavailable") {
-                    // Surface approval ONLY to the cookie-authenticated browser SPA over SSE (never return the code to the model or card!).
-                    await runtime.runPromise(
-                      Effect.gen(function* () {
-                        const exec = yield* ExecutionService;
-                        const hub = yield* ProgressHub;
-                        const res = yield* exec.createOpaqueCode({
-                          kind: "spend_approval",
-                          payload: {
-                            digHandle: dig.handle,
-                            key: q.key,
-                            unit: q.unit,
-                            bind: q.bind,
-                            title: q.title,
-                            message: q.message,
-                            choices: q.choices,
-                            targetRaised: q.targetRaised ?? null,
-                            sourceLabel: tool.source.label,
-                            actionName: action.name,
-                          },
-                          ttlMs: askTimeoutMs(),
-                        });
-                        yield* hub.publish({
-                          type: "approval_requested",
-                          code: res.code,
-                          dig: dig.handle,
-                          tool: action.name,
-                        });
-                      }),
-                    );
-                    return withCard(
-                      refused(
-                        `${gate.refusalText} Report this refusal to the user and stop; do not work around it. The user can approve it in the Dig web app (Live Trail) or adjust [spend] settings.`,
-                      ),
-                      cardForSpendGate({
-                        sourceLabel: tool.source.label,
-                        actionName: action.name,
-                        title: q.title,
-                        reason: gate.refusalText,
-                      }),
-                    );
-                  } else {
-                    return withCard(
-                      refused(
-                        `${answer.kind === "declined" ? "Declined" : answer.kind === "cancelled" ? "Dismissed" : "Unanswered"}. ${gate.refusalText}`,
-                      ),
-                      cardForSpendGate({
-                        sourceLabel: tool.source.label,
-                        actionName: action.name,
-                        title: q.title,
-                        reason: gate.refusalText,
-                      }),
-                    );
-                  }
-                }
-              }
-            }
-
-            const tasksRequested =
-              Boolean(action.slow) &&
-              ((context.era === "modern" && declaresTasks(ctx.mcpReq.envelope)) ||
-                Boolean((ctx.mcpReq as { task?: unknown }).task));
-
-            const notifyProgress = progressNotifierOf(ctx);
-            const dispatched = await runtime.runPromise(
+          // Multi-unit [spend] gate for new paid calls.
+          // Always gate `fresh: true` so a running job finishing between pre-check and dispatch cannot bypass spend caps.
+          if (!unpaid && (!reusable || fresh)) {
+            const gate = await runtime.runPromise(
               Effect.flatMap(ExecutionService, (exec) =>
-                exec.dispatchCall({
-                  plugin: tool.source,
-                  action,
+                exec.checkSpendGate({
+                  config: cfg,
                   dig,
+                  sourceLabel: tool.source.label,
+                  actionName: action.name,
                   args,
-                  fresh,
-                  waitMs: tasksRequested ? 0 : action.slow ? inlineWaitMs() : Infinity,
-                  onProgress: notifyProgress,
-                  signal: ctx.mcpReq.signal,
                 }),
               ),
             );
 
-            if (tasksRequested && dispatched.stillWorking) {
-              const progress = await runtime.runPromise(
-                Effect.flatMap(ProgressHub, (hub) => hub.progressOf(dispatched.job.id)),
-              );
-              return taskAnswer(dispatched.job, progress);
-            }
+            if (!gate.allow) {
+              const q = gate.question;
+              // Check if already approved once via browser `/approve/:code`
+              const preApproved = hooks.consumeApprovedBind?.(q.bind) ?? false;
+              if (!preApproved) {
+                const asker = askerOf(context.era, server, ctx);
+                const answer = await askForm(runtime, asker, q);
 
-            if (dispatched.stillWorking) {
-              const progress = await runtime.runPromise(
-                Effect.flatMap(ProgressHub, (hub) => hub.progressOf(dispatched.job.id)),
-              );
-              return await attachJobCard(stillRunningResult(dispatched.job, progress), dispatched.job, {
-                working: true,
-                progressMessage: progress?.message,
-              });
-            }
+                if (answer.kind === "pending") return answer.result;
 
-            if (dispatched.reused) {
-              return await attachJobCard(repeatedJobResult(dispatched.job), dispatched.job, { reused: true });
+                if (answer.kind === "answered") {
+                  if (q.key === "ceiling" && answer.choice === "raise") {
+                    const target = answer.targetRaised ?? q.targetRaised ?? 0;
+                    await runtime.runPromise(
+                      Effect.flatMap(ExecutionService, (exec) =>
+                        exec.applySpendOverride(dig.handle, overridePatchForUnit(q.unit, target)),
+                      ),
+                    );
+                    // Re-verify spend gate after raising ceiling
+                    const recheck = await runtime.runPromise(
+                      Effect.flatMap(ExecutionService, (exec) =>
+                        exec.checkSpendGate({
+                          config: cfg,
+                          dig,
+                          sourceLabel: tool.source.label,
+                          actionName: action.name,
+                          args,
+                        }),
+                      ),
+                    );
+                    if (!recheck.allow) return refused(recheck.refusalText);
+                  } else if (q.key === "spend" && answer.choice === "send") {
+                    // Approved once; fall through to dispatch.
+                  } else if (q.key === "spend" && answer.choice === "send-dig") {
+                    await runtime.runPromise(
+                      Effect.flatMap(ExecutionService, (exec) =>
+                        exec.applySpendOverride(dig.handle, { dontAsk: true }),
+                      ),
+                    );
+                  } else {
+                    return refused(`The person chose to stop (${q.title}). ${gate.refusalText}`);
+                  }
+                } else if (answer.kind === "unavailable") {
+                  // Surface approval ONLY to the cookie-authenticated browser SPA over SSE (never return the code to the model or card!).
+                  await runtime.runPromise(
+                    Effect.gen(function* () {
+                      const exec = yield* ExecutionService;
+                      const hub = yield* ProgressHub;
+                      const res = yield* exec.createOpaqueCode({
+                        kind: "spend_approval",
+                        payload: {
+                          digHandle: dig.handle,
+                          key: q.key,
+                          unit: q.unit,
+                          bind: q.bind,
+                          title: q.title,
+                          message: q.message,
+                          choices: q.choices,
+                          targetRaised: q.targetRaised ?? null,
+                          sourceLabel: tool.source.label,
+                          actionName: action.name,
+                        },
+                        ttlMs: askTimeoutMs(),
+                      });
+                      yield* hub.publish({
+                        type: "approval_requested",
+                        code: res.code,
+                        dig: dig.handle,
+                        tool: action.name,
+                      });
+                    }),
+                  );
+                  return refused(
+                    `${gate.refusalText} Report this refusal to the user and stop; do not work around it. The user can approve it in the Dig web app (Live Trail) or adjust [spend] settings.`,
+                  );
+                } else {
+                  return refused(
+                    `${answer.kind === "declined" ? "Declined" : answer.kind === "cancelled" ? "Dismissed" : "Unanswered"}. ${gate.refusalText}`,
+                  );
+                }
+              }
             }
-
-            return await attachJobCard(jobResultContent(dispatched.job), dispatched.job);
-          } catch (error) {
-            if (ctx.mcpReq.signal.aborted) throw error;
-            return refused(errorText(error));
           }
-        },
-      ),
+
+          const tasksRequested =
+            Boolean(action.slow) &&
+            ((context.era === "modern" && declaresTasks(ctx.mcpReq.envelope)) ||
+              Boolean((ctx.mcpReq as { task?: unknown }).task));
+
+          const notifyProgress = progressNotifierOf(ctx);
+          const dispatched = await runtime.runPromise(
+            Effect.flatMap(ExecutionService, (exec) =>
+              exec.dispatchCall({
+                plugin: tool.source,
+                action,
+                dig,
+                args,
+                fresh,
+                waitMs: tasksRequested ? 0 : action.slow ? inlineWaitMs() : Infinity,
+                onProgress: notifyProgress,
+                signal: ctx.mcpReq.signal,
+              }),
+            ),
+          );
+
+          if (tasksRequested && dispatched.stillWorking) {
+            const progress = await runtime.runPromise(
+              Effect.flatMap(ProgressHub, (hub) => hub.progressOf(dispatched.job.id)),
+            );
+            return taskAnswer(dispatched.job, progress);
+          }
+
+          if (dispatched.stillWorking) {
+            const progress = await runtime.runPromise(
+              Effect.flatMap(ProgressHub, (hub) => hub.progressOf(dispatched.job.id)),
+            );
+            return stillRunningResult(dispatched.job, progress);
+          }
+
+          if (dispatched.reused) {
+            return repeatedJobResult(dispatched.job);
+          }
+
+          return jobResultContent(dispatched.job);
+        } catch (error) {
+          if (ctx.mcpReq.signal.aborted) throw error;
+          return refused(errorText(error));
+        }
+      },
     );
 
     if (tool.hasSlowAction) {

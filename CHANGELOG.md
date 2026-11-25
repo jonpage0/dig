@@ -2,6 +2,10 @@
 
 Below, `dig` stands for `node <checkout>/dist/dig.mjs`: nothing installs a `dig` command, and on macOS and Linux that name is the DNS lookup tool.
 
+## 2.0.3 — 2026-11-25
+
+- **Fewer cards in the conversation.** A host that renders Dig's inline card now shows it only for `research_save`, `dig_finish`, `keys` and `open_library`. Source calls and `job` show no card; their text is unchanged, and every call of a dig is still in the web app (`open_library`).
+
 ## 2.0.2 — 2026-11-25
 
 - **GitHub no longer reads as needing setup.** Without a token in `keys.env`, `source_info`, the web app and `dig setup` now show GitHub as `partial` and say what is true: public search and reads work anonymously or through an existing `gh` login, and a token or a `gh` login raises the limits and adds the review and issue-reply samples. A source can now declare a credential optional.

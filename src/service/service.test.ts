@@ -6,14 +6,20 @@ import { createServer as createNetServer, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { after, describe, it } from "node:test";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY } from "@modelcontextprotocol/server";
 import { keysPath } from "../core/config.ts";
 import { errorMessage } from "../core/errors.ts";
+import { FreeHttp, PaidHttp, makeFreeClient, makePaidClient } from "../core/http.ts";
+import { bootDigRuntime } from "../core/runtime.ts";
 import { ExecutionService } from "../core/workflow.ts";
+import { ACCOUNTS, SOURCES } from "../sources/index.ts";
 import { VERSION } from "../version.ts";
 import {
   CARD_URI,
@@ -21,8 +27,6 @@ import {
   UI_EXTENSION_ID,
   UI_RESOURCE_MIME,
   cardForKeys,
-  cardForSourceCall,
-  cardForSpendGate,
   declaresUi,
   renderCardHtml,
 } from "./card.ts";
@@ -961,7 +965,7 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
           },
         });
         const uiTools = await uiClient.client.listTools();
-        const cardToolNames = new Set(["research_save", "dig_finish", "keys", "job", "open_library", "hackernews", "exa"]);
+        const cardToolNames = new Set(["research_save", "dig_finish", "keys", "open_library"]);
         for (const t of uiTools.tools) {
           const uiMeta = (t as { _meta?: { ui?: { resourceUri?: string } } })._meta?.ui;
           if (cardToolNames.has(t.name)) {
@@ -1054,32 +1058,6 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
         assert.equal(SAFE_CARD_URL_RE.test("https://evil.example/keys/abc"), false);
         assert.equal(SAFE_CARD_URL_RE.test(`${origin}/approve/secretcode`), false);
 
-        const spendCard = cardForSpendGate({
-          sourceLabel: "Exa",
-          actionName: "exa_search",
-          title: "Confirm paid call",
-          reason: "Typical cost exceeds ask_above_usd.",
-        });
-        assert.equal(spendCard.card, "spend_gate");
-        assert.equal(spendCard.action, undefined);
-        assert.equal(JSON.stringify(spendCard).includes("/approve/"), false);
-
-        // Failed job with trailing period renders red (`err`) with clean badge & receipt
-        const failedCard = cardForSourceCall({
-          sourceLabel: "Exa",
-          actionName: "exa_search",
-          status: "failed",
-          jobId: "job-fail",
-          receiptId: null,
-          dig: digHandle,
-          isError: true,
-          resultText: "exa_search · job job-fail · failed · receipt c-999.\n\nProvider error.",
-          error: "Provider error.",
-        });
-        assert.equal(failedCard.tone, "err");
-        assert.equal(failedCard.badge, "failed");
-        assert.equal(failedCard.chips?.find((c) => c.label === "Receipt")?.value, "c-999");
-
         // Declined `keys` card shows refusal line and omits the "Open key page" action button
         const declinedKeysCard = cardForKeys({
           scopeLabel: "Exa",
@@ -1092,21 +1070,6 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
         assert.equal(declinedKeysCard.badge, "not opened");
         assert.equal(declinedKeysCard.action, undefined);
         assert.match(declinedKeysCard.title, /declined/);
-
-        const srcCard = cardForSourceCall({
-          sourceLabel: "X",
-          actionName: "x_web_search",
-          status: "completed",
-          jobId: "job-1",
-          receiptId: "c-1",
-          dig: digHandle,
-          reused: true,
-          resultText: "X · x_web_search · success · receipt c-1 · cost: 1 credit · dig so far: $0.01 + 2 credits",
-          rawFile: "proj/sessions/s1/raw/c-1.json",
-          openUrl: `${origin}/open/testcode`,
-        });
-        assert.equal(srcCard.badge, "reused");
-        assert.equal(srcCard.action?.label, "Inspect in Dig ↗");
 
         assert.equal(declaresUi({ extensions: { [UI_EXTENSION_ID]: {} } }), true);
         assert.equal(declaresUi({ extensions: { [UI_EXTENSION_ID]: { mimeTypes: [UI_RESOURCE_MIME] } } }), true);
@@ -1131,6 +1094,272 @@ describe("Dig 2.0 Service Layer (Effect 4.1.5)", () => {
       assert.equal(await health(port), null, "Service must stop responding after POST /stop");
     } finally {
       await service.stop("test-cleanup").catch(() => {});
+      await releaseState(tmp);
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it("a UI client gets the card on research_save, dig_finish, keys and open_library only: source calls and job carry none and mint no /open link", async () => {
+    const tmp = await serviceState("dig-svc-cards-");
+    const projectDir = await mkdtemp(join(tmpdir(), "dig-svc-cards-proj-"));
+    await writeFile(
+      join(tmp, "config.toml"),
+      '[sources]\nenabled = ["hackernews", "deepwiki", "exa"]\n\n[spend]\nask_above_usd = 0.01\n',
+    );
+    // A slow call answers with a job handle at once, so the "still running" path needs no wait.
+    const savedInlineWait = process.env.DIG_INLINE_WAIT_MS;
+    process.env.DIG_INLINE_WAIT_MS = "0";
+
+    const providerUrls: string[] = [];
+    let releaseDeepWiki!: () => void;
+    const deepWikiHeld = new Promise<void>((r) => {
+      releaseDeepWiki = r;
+    });
+    const provider = HttpClient.make((req) =>
+      Effect.gen(function* () {
+        providerUrls.push(req.url);
+        if (req.url.startsWith("https://mcp.deepwiki.com/")) {
+          yield* Effect.promise(() => deepWikiHeld);
+          return HttpClientResponse.fromWeb(req, new Response("unavailable", { status: 503 }));
+        }
+        if (req.url.startsWith("https://hn.algolia.com/api/v1/items/")) {
+          return HttpClientResponse.fromWeb(req, new Response("down", { status: 500 }));
+        }
+        return HttpClientResponse.fromWeb(
+          req,
+          new Response(JSON.stringify({ hits: [], nbHits: 0 }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }),
+    );
+    const runtime = await bootDigRuntime({
+      stateDir: tmp,
+      plugins: SOURCES,
+      accounts: ACCOUNTS,
+      loadKeys: false,
+      httpLayer: Layer.mergeAll(
+        Layer.succeed(PaidHttp, makePaidClient(provider, { resolveDns: false })),
+        Layer.succeed(FreeHttp, makeFreeClient(provider, { resolveDns: false, retries: 0 })),
+      ),
+    });
+    const service = await serve({
+      state: tmp,
+      port: 0,
+      runtime,
+      handleSignals: false,
+      env: { ...process.env, DIG_STATE_DIR: tmp, DIG_IDLE_EXIT_MS: "600000" },
+    });
+    const { origin, token } = service;
+    const connect = async (name: string, capabilities: Record<string, unknown>) => {
+      const client = new Client(
+        { name, version: "1.0.0" },
+        { capabilities, versionNegotiation: { mode: { pin: "2026-07-28" } } },
+      );
+      await client.connect(
+        new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), { authProvider: { token: async () => token } }),
+      );
+      return client;
+    };
+    // `/open/<code>` links are `browser_open` rows of the token store; minting one is a write there.
+    const openLinksMinted = async (): Promise<number> => {
+      const rows = await runtime.runPromise(
+        Effect.flatMap(
+          SqlClient.SqlClient,
+          (sql) => sql<{ n: number }>`SELECT COUNT(*) AS n FROM deferred_tokens WHERE kind = 'browser_open'`,
+        ),
+      );
+      return Number(rows[0]?.n ?? 0);
+    };
+    type Result = {
+      content: { type: string; text?: string }[];
+      isError?: boolean;
+      _meta?: { digCard?: { card: string } };
+    };
+    const firstText = (result: Result): string => result.content.find((b) => b.type === "text")?.text ?? "";
+
+    const uiCaps = { extensions: { [UI_EXTENSION_ID]: { mimeTypes: [UI_RESOURCE_MIME] } } };
+    const ui = await connect("dig-cards-ui", uiCaps);
+    const plain = await connect("dig-cards-plain", {});
+    try {
+      // tools/list: the four milestone tools carry the card; every source tool and job carry none.
+      const cardTools = ["research_save", "dig_finish", "keys", "open_library"];
+      const uiTools = (await ui.listTools()).tools as { name: string; _meta?: { ui?: { resourceUri?: string } } }[];
+      const listed = new Set(uiTools.map((t) => t.name));
+      for (const name of [...cardTools, "job", "hackernews", "deepwiki", "exa"]) {
+        assert.ok(listed.has(name), `${name} is listed`);
+      }
+      for (const t of uiTools) {
+        if (cardTools.includes(t.name)) {
+          assert.equal(t._meta?.ui?.resourceUri, CARD_URI, `${t.name} shows the card`);
+        } else {
+          assert.equal(t._meta?.ui, undefined, `${t.name} shows no card`);
+        }
+      }
+      const sourceToolNames = SOURCE_TOOLS.map((t) => t.name).filter((n) => listed.has(n));
+      assert.deepEqual(sourceToolNames.sort(), ["deepwiki", "exa", "hackernews"]);
+      for (const name of [...sourceToolNames, "job"]) {
+        assert.equal(uiTools.find((t) => t.name === name)?._meta?.ui, undefined, `${name} carries no _meta.ui`);
+      }
+
+      // A client without the extension: unchanged (no ui:// resource, no _meta.ui).
+      const plainTools = (await plain.listTools()).tools as { name: string; _meta?: Record<string, unknown> }[];
+      for (const t of plainTools) assert.equal(t._meta?.ui, undefined, `plain client: ${t.name} carries no _meta.ui`);
+      assert.equal((await plain.listResources()).resources.some((r) => r.uri.startsWith("ui://")), false);
+      assert.ok((await ui.listResources()).resources.some((r) => r.uri === CARD_URI));
+
+      const started = (await ui.callTool({
+        name: "dig_start",
+        arguments: { project: projectDir, question: "Which tools show the card?" },
+      })) as { structuredContent: { dig: string } };
+      const dig = started.structuredContent.dig;
+      assert.equal(await openLinksMinted(), 0);
+
+      // A finished free call.
+      const search = (await ui.callTool({
+        name: "hackernews",
+        arguments: { dig, action: "hackernews", args: { query: "cards" } },
+      })) as Result;
+      assert.notEqual(search.isError, true, firstText(search));
+      assert.match(firstText(search), /^Hacker News · hackernews · /);
+      assert.equal(search._meta?.digCard, undefined, "a finished source call carries no card");
+
+      // A failed call.
+      const failed = (await ui.callTool({
+        name: "hackernews",
+        arguments: { dig, action: "hackernews_read", args: { item: "999" } },
+      })) as Result;
+      assert.equal(failed.isError, true, firstText(failed));
+      assert.equal(failed._meta?.digCard, undefined, "a failed source call carries no card");
+
+      // A slow call that answers with a job handle while it runs, then `job` while it runs and once it ends.
+      const slowCall = {
+        name: "deepwiki",
+        arguments: { dig, action: "deepwiki_ask_question", args: { repoName: "facebook/react", question: "Cards?" } },
+      };
+      const slow = (await ui.callTool(slowCall)) as Result;
+      const jobId = /is still running as job (\S+) /.exec(firstText(slow))?.[1];
+      assert.ok(jobId, firstText(slow));
+      assert.equal(slow._meta?.digCard, undefined, "a still-running source call carries no card");
+      const attached = (await ui.callTool(slowCall)) as Result;
+      assert.match(firstText(attached), new RegExp(`is still running as job ${jobId} `), "an identical call attaches");
+      assert.equal(attached._meta?.digCard, undefined, "a call attached to a running job carries no card");
+      const running = (await ui.callTool({ name: "job", arguments: { id: jobId } })) as Result;
+      assert.match(firstText(running), new RegExp(`^Job ${jobId} \\(deepwiki_ask_question\\) is working`));
+      assert.equal(running._meta?.digCard, undefined, "a running job carries no card");
+
+      releaseDeepWiki();
+      for (let i = 0; i < 200; i++) {
+        const job = await runtime.runPromise(Effect.flatMap(ExecutionService, (exec) => exec.getJob(jobId)));
+        if (job && job.status !== "working" && job.status !== "pending_approval") break;
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      const finished = (await ui.callTool({ name: "job", arguments: { id: jobId } })) as Result;
+      assert.doesNotMatch(firstText(finished), /is working/);
+      assert.equal(finished._meta?.digCard, undefined, "a finished job carries no card");
+      const repeated = (await ui.callTool(slowCall)) as Result;
+      assert.match(firstText(repeated), /^This is the result of an identical call/);
+      assert.equal(repeated._meta?.digCard, undefined, "a call answered from an earlier result carries no card");
+      const cancelLate = (await ui.callTool({ name: "job", arguments: { id: jobId, cancel: true } })) as Result;
+      assert.match(firstText(cancelLate), /had already finished/);
+      assert.equal(cancelLate._meta?.digCard, undefined);
+
+      // The same job read as a task result, over a 2025-era session (where `tasks/result` lives) that declares the UI.
+      const legacy = async (body: Record<string, unknown>, sid?: string) => {
+        const res = await fetch(`${origin}/mcp`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            ...(sid ? { "mcp-session-id": sid } : {}),
+          },
+          body: JSON.stringify({ jsonrpc: "2.0", ...body }),
+        });
+        return { res, text: await res.text() };
+      };
+      const init = await legacy({
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-11-25", capabilities: uiCaps, clientInfo: { name: "dig-cards-legacy", version: "1.0.0" } },
+      });
+      const sid = init.res.headers.get("mcp-session-id") ?? undefined;
+      assert.ok(sid, init.text);
+      await legacy({ method: "notifications/initialized" }, sid);
+      try {
+        const legacyTools = await legacy({ id: 2, method: "tools/list", params: {} }, sid);
+        assert.match(legacyTools.text, new RegExp(`"name":"research_save"[^]*?"resourceUri":"${CARD_URI.replaceAll(".", "\\.")}"`));
+        const taskResult = await legacy({ id: 3, method: "tasks/result", params: { taskId: jobId } }, sid);
+        assert.equal(taskResult.res.status, 200, taskResult.text);
+        assert.match(taskResult.text, /deepwiki_ask_question/);
+        assert.doesNotMatch(taskResult.text, /digCard/, "a task result carries no card");
+      } finally {
+        await fetch(`${origin}/mcp`, {
+          method: "DELETE",
+          headers: { authorization: `Bearer ${token}`, "mcp-session-id": sid },
+        }).catch(() => {});
+      }
+
+      // A paid call the spending settings stop before any request.
+      const gated = (await ui.callTool({
+        name: "exa",
+        arguments: { dig, action: "exa_search", args: { query: "cards" } },
+      })) as Result;
+      assert.equal(gated.isError, true, firstText(gated));
+      assert.match(firstText(gated), /No request was sent/);
+      assert.equal(gated._meta?.digCard, undefined, "a call the spend gate stopped carries no card");
+      assert.equal(providerUrls.some((u) => u.includes("exa.ai")), false);
+
+      assert.equal(await openLinksMinted(), 0, "no source call or job minted an /open link");
+
+      // The plain client's source call is unchanged too.
+      const plainSearch = (await plain.callTool({
+        name: "hackernews",
+        arguments: { dig, action: "hackernews", args: { query: "plain" } },
+      })) as Result;
+      assert.match(firstText(plainSearch), /^Hacker News · hackernews · /);
+      assert.equal(plainSearch._meta?.digCard, undefined);
+
+      // The milestone tools still show it, and minting their link is what the count above would catch.
+      const saved = (await ui.callTool({
+        name: "research_save",
+        arguments: {
+          dig,
+          source: "hackernews",
+          content: [
+            "```yaml",
+            "source_card:",
+            "  source: hackernews",
+            "  status: complete",
+            "```",
+            "",
+            "# Which tools show the card",
+            "",
+            "## Summary",
+            "Four tools.",
+            "",
+            "## Evidence Highlights",
+            "- None.",
+            "",
+            "## Needs Follow-Up",
+            "- None.",
+            "",
+            "## Negative Evidence (when relevant)",
+            "- None.",
+          ].join("\n"),
+        },
+      })) as Result;
+      assert.equal(saved._meta?.digCard?.card, "report_saved");
+      assert.equal(await openLinksMinted(), 1, "research_save mints its one /open link");
+    } finally {
+      releaseDeepWiki();
+      await ui.close().catch(() => {});
+      await plain.close().catch(() => {});
+      await service.stop("test-cleanup").catch(() => {});
+      await runtime.dispose().catch(() => {});
+      if (savedInlineWait === undefined) delete process.env.DIG_INLINE_WAIT_MS;
+      else process.env.DIG_INLINE_WAIT_MS = savedInlineWait;
       await releaseState(tmp);
       await rm(projectDir, { recursive: true, force: true });
     }
